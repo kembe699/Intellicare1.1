@@ -23,27 +23,62 @@ const PORT = process.env.PORT || 3002;
 // req.ip/req.secure reflect the actual client rather than the proxy.
 app.set('trust proxy', 1);
 
-// CORS configuration for production
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow non-browser / server-to-server requests
-    const isLocalhost  = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    const isLAN        = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(origin);
-    // CORS_ORIGIN may be a single origin or a comma-separated list, e.g.
-    // "https://intellicare.nilehc.tech,https://www.intellicare.nilehc.tech"
-    const extraOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
-    const isProduction = [
-      'https://intellicare-obc.vercel.app',
-      'https://intellicare.nilehc.tech',
-      ...extraOrigins
-    ].includes(origin);
-    if (isLocalhost || isLAN || isProduction) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Branch-ID'],
-  optionsSuccessStatus: 200
+// CORS configuration.
+//
+// Two things here are deliberate and were both previously wrong:
+//
+//  1. The server's OWN origin is always allowed. Vite emits its asset tags with
+//     `crossorigin`, so the browser fetches index.css / index.js in CORS mode
+//     with an Origin header. When the deployed hostname wasn't on the allowlist
+//     the app 500'd on its own stylesheet and rendered a blank page — while curl
+//     (which sends no Origin) returned 200, hiding it. Comparing against the
+//     request's Host means this can never depend on remembering to set an env
+//     var after a rename or a new deploy target.
+//
+//  2. A disallowed origin is answered WITHOUT CORS headers, not with a thrown
+//     error. Throwing hands the request to the error handler, which turns a
+//     routine policy decision into a 500 on every asset. Omitting the header is
+//     what actually enforces the policy — the browser blocks the read itself.
+const STATIC_ALLOWED = [
+  'https://intellicare-obc.vercel.app',
+  'https://intellicare.nilehc.tech',
+];
+
+function isAllowedOrigin(origin, req) {
+  if (!origin) return true; // non-browser / server-to-server
+
+  // Same-origin: the browser is asking this very server for its own files.
+  const host = req && (req.headers['x-forwarded-host'] || req.headers.host);
+  if (host) {
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+    if (origin === `${proto}://${host}` || origin === `https://${host}` || origin === `http://${host}`) {
+      return true;
+    }
+  }
+
+  // Render sets this for every service; covers the origin even on a request
+  // that arrives without a usable Host header.
+  const renderHost = process.env.RENDER_EXTERNAL_HOSTNAME;
+  if (renderHost && (origin === `https://${renderHost}` || origin === `http://${renderHost}`)) return true;
+
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(origin)) return true;
+
+  // CORS_ORIGIN may be a single origin or a comma-separated list.
+  const extra = (process.env.CORS_ORIGIN || '').split(',').map((o) => o.trim()).filter(Boolean);
+  return [...STATIC_ALLOWED, ...extra].includes(origin);
+}
+
+// Delegate form (req, callback) rather than the plain options object, because
+// the same-origin check above needs to see the request's Host.
+const corsOptions = (req, callback) => {
+  callback(null, {
+    origin: isAllowedOrigin(req.header('Origin'), req),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Branch-ID'],
+    optionsSuccessStatus: 200,
+  });
 };
 
 app.use(compression());
