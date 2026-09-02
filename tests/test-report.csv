@@ -1,0 +1,11 @@
+Module,Tests,Passed,Failed,Skipped,PassRate,Duration(ms)
+performance.test.js,14,14,0,0,100%,3201
+dataIntegrity.test.js,41,41,0,0,100%,609
+completeWorkflow.test.js,12,12,0,0,100%,556
+insuranceClaims.test.js,16,16,0,0,100%,616
+currencies.test.js,25,25,0,0,100%,608
+ledgerIntegration.test.js,16,16,0,0,100%,531
+billing.test.js,10,10,0,0,100%,386
+invoices.test.js,14,14,0,0,100%,413
+multiCurrency.test.js,15,15,0,0,100%,443
+TOTAL,163,163,0,0,100%,7728

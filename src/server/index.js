@@ -1,0 +1,892 @@
+// ⚠️ MUST be first — load env vars before any other require
+const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.resolve(__dirname, '.env') });        // src/server/.env
+dotenv.config({ path: path.resolve(__dirname, 'production.env') }); // src/server/production.env
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });    // nodejs root .env
+
+const express = require('express');
+const cors = require('cors');
+const compression = require('compression');
+const { initializeDatabase } = require('./models');
+
+// Redis-backed response cache (falls back to in-memory when Redis is not configured)
+const redisCacheMiddleware = require('./middleware/redisCacheMiddleware');
+
+// Create Express app
+const app = express();
+const PORT = process.env.PORT || 3002;
+
+// Trust the first hop's X-Forwarded-* headers — needed behind a reverse
+// proxy (Hostinger, Render, etc.) so express-rate-limit sees the real client
+// IP instead of throwing on an unexpected X-Forwarded-For header, and so
+// req.ip/req.secure reflect the actual client rather than the proxy.
+app.set('trust proxy', 1);
+
+// CORS configuration for production
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow non-browser / server-to-server requests
+    const isLocalhost  = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const isLAN        = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(origin);
+    // CORS_ORIGIN may be a single origin or a comma-separated list, e.g.
+    // "https://intellicare.nilehc.tech,https://www.intellicare.nilehc.tech"
+    const extraOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
+    const isProduction = [
+      'https://intellicare-obc.vercel.app',
+      'https://intellicare.nilehc.tech',
+      ...extraOrigins
+    ].includes(origin);
+    if (isLocalhost || isLAN || isProduction) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Branch-ID'],
+  optionsSuccessStatus: 200
+};
+
+app.use(compression());
+app.use(cors(corsOptions));
+// Explicitly handle all CORS preflight requests before any other middleware.
+// This ensures OPTIONS responses always carry the correct headers even if the
+// DB is still initialising or a route throws during startup.
+app.options('*', cors(corsOptions));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Public routes (no authentication required)
+const currenciesRouter = require('./routes/currencies');
+app.use('/api/currencies', currenciesRouter);
+
+// Branches endpoint must be public for login page
+const facilitiesRouter = require('./routes/facilities');
+app.get('/api/facilities/branches/all', async (req, res, next) => {
+  try {
+    const { sequelize } = require('./models');
+    const [branches] = await sequelize.query(`
+      SELECT * FROM branches ORDER BY is_main_branch DESC, name ASC
+    `);
+    res.json({ success: true, data: branches });
+  } catch (error) {
+    console.error('Error fetching branches:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch branches' });
+  }
+});
+
+// Facility name endpoint must be public for login page
+app.get('/api/facilities/name', async (req, res) => {
+  try {
+    const { sequelize } = require('./models');
+    const [facilities] = await sequelize.query(`
+      SELECT name FROM facilities ORDER BY id LIMIT 1
+    `);
+    
+    if (facilities.length > 0) {
+      res.json({ success: true, name: facilities[0].name });
+    } else {
+      res.json({ success: true, name: 'IntelliCare' });
+    }
+  } catch (error) {
+    console.error('Error fetching facility name:', error);
+    res.json({ success: true, name: 'IntelliCare' });
+  }
+});
+
+// Branch verification endpoint must be public for login page
+const bcrypt = require('bcrypt');
+const { User } = require('./models');
+const { authLimiter, passwordResetLimiter } = require('./middleware/rateLimiters');
+app.post('/api/auth/verify-branch-access', authLimiter, async (req, res) => {
+  try {
+    const { email, password, branchId } = req.body;
+    const { sequelize } = require('./models');
+
+    if (!email || !password || !branchId) {
+      return res.status(400).json({ error: 'Email, password, and branch are required' });
+    }
+
+    const user = await User.findOne({ where: { email: email.toLowerCase() } });
+    if (!user || !user.is_active) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    try {
+      const [userBranches] = await sequelize.query(`
+        SELECT ub.branch_id FROM user_branches ub
+        WHERE ub.user_id = ? AND ub.branch_id = ? LIMIT 1
+      `, { replacements: [user.id, branchId] });
+
+      if (userBranches.length > 0 || user.branch_id === parseInt(branchId) || user.role === 'admin') {
+        return res.json({ success: true, message: 'Branch access verified' });
+      }
+
+      return res.status(403).json({ 
+        error: 'You do not have access to the selected branch. Please contact your administrator.' 
+      });
+    } catch (branchError) {
+      console.error('Branch verification error:', branchError);
+      if (user.branch_id) {
+        return res.json({ success: true, message: 'Branch access verified (fallback)' });
+      }
+      return res.status(403).json({ error: 'Unable to verify branch access' });
+    }
+  } catch (error) {
+    console.error('Branch access verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// Check if user has password endpoint (public - for first-time setup validation)
+app.post('/api/auth/check-user-password', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await User.findOne({ where: { email: email.toLowerCase() } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      hasPassword: !!user.password_hash 
+    });
+  } catch (error) {
+    console.error('Check user password error:', error);
+    res.status(500).json({ error: 'Failed to check user password' });
+  }
+});
+
+// Password reset endpoints must be public (before auth middleware) — which also means
+// there's no JWT yet to say which tenant this is for, so (like /login) they take the
+// instance `code` directly and resolve that tenant's own connection via getTenantConnection,
+// instead of the bare `require('./models')` these used before, which — with no tenant
+// context active on a public route — always silently resolved to the single default
+// tenant's database. That made this only ever work for the default tenant; every other
+// tenant's forgot-password request would run its query against the wrong database, find no
+// user, and return the same generic "if an account exists" response whether or not one
+// actually did. Also fixes a second, independent bug: `$1`/`bind` is Postgres bound-parameter
+// syntax and was never valid against this app's MySQL — every one of these queries was
+// throwing a SQL syntax error before either bug was ever exercised, caught by the outer
+// try/catch and surfaced as a generic 500.
+const crypto = require('crypto');
+const { sendPasswordResetEmail } = require('./utils/emailService');
+
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { code, email } = req.body;
+
+    if (!code || !email) {
+      return res.status(400).json({ error: 'Instance code and email are required' });
+    }
+
+    const { Client } = require('./models/platform');
+    const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
+    if (!client) {
+      return res.status(401).json({ error: 'Unknown instance code' });
+    }
+
+    const { getTenantConnection } = require('./tenantDb');
+    const { sequelize, models } = await getTenantConnection(client.db_name);
+
+    const user = await models.User.findOne({ where: { email: email.toLowerCase() } });
+
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If an account exists with this email, a password reset link has been sent.'
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await sequelize.query(`
+      INSERT INTO password_reset_tokens (user_id, token, expires_at)
+      VALUES (?, ?, ?)
+    `, {
+      replacements: [user.id, resetToken, expiresAt]
+    });
+
+    const emailResult = await sendPasswordResetEmail(email, resetToken, user.display_name || user.email, client.code);
+    if (!emailResult.delivered) {
+      // Client response stays generic on purpose (never confirm/deny account
+      // existence via delivery status), but a real non-delivery needs to be
+      // visible server-side instead of silently indistinguishable from success.
+      console.error(`Password reset email NOT delivered for ${email} (mode: ${emailResult.mode}${emailResult.error ? `, error: ${emailResult.error}` : ''})`);
+    }
+
+    res.json({
+      success: true,
+      message: 'If an account exists with this email, a password reset link has been sent.'
+    });
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+app.get('/api/auth/verify-reset-token/:token', passwordResetLimiter, async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { code } = req.query;
+    if (!code) {
+      return res.status(400).json({ error: 'Instance code is required' });
+    }
+
+    const { Client } = require('./models/platform');
+    const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
+    if (!client) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const { getTenantConnection } = require('./tenantDb');
+    const { sequelize } = await getTenantConnection(client.db_name);
+
+    const [tokens] = await sequelize.query(`
+      SELECT * FROM password_reset_tokens
+      WHERE token = ? AND used = FALSE AND expires_at > NOW()
+      LIMIT 1
+    `, {
+      replacements: [token]
+    });
+
+    if (tokens.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    res.json({ success: true, valid: true });
+  } catch (error) {
+    console.error('Token verification error:', error);
+    res.status(500).json({ error: 'Failed to verify token' });
+  }
+});
+
+app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { token, code, newPassword } = req.body;
+
+    if (!token || !code || !newPassword) {
+      return res.status(400).json({ error: 'Token, instance code, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const { Client } = require('./models/platform');
+    const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
+    if (!client) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const { getTenantConnection } = require('./tenantDb');
+    const { sequelize, models } = await getTenantConnection(client.db_name);
+
+    const [tokens] = await sequelize.query(`
+      SELECT * FROM password_reset_tokens
+      WHERE token = ? AND used = FALSE AND expires_at > NOW()
+      LIMIT 1
+    `, {
+      replacements: [token]
+    });
+
+    if (tokens.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const resetToken = tokens[0];
+    const user = await models.User.findByPk(resetToken.user_id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await user.update({ password_hash: hashedPassword });
+
+    await sequelize.query(`
+      UPDATE password_reset_tokens
+      SET used = TRUE
+      WHERE token = ?
+    `, {
+      replacements: [token]
+    });
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now login with your new password.'
+    });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Authentication middleware scoped to /api only — static files served without auth
+const { authenticateToken } = require('./middleware/auth');
+const { branchAccessControl } = require('./middleware/branchAccessControl');
+app.use('/api', authenticateToken);
+app.use('/api', branchAccessControl);
+// Redis cache runs after auth — keys include userId+branchId, no cross-user data leaks
+app.use('/api', redisCacheMiddleware());
+
+// Startup: add branch_id to tables that are missing it.
+// MySQL 8 doesn't support "ADD COLUMN IF NOT EXISTS" or "CREATE INDEX IF NOT EXISTS"
+// (both are silent no-ops on Postgres/MariaDB but a hard syntax error on MySQL) — this
+// used to use that syntax, so it threw immediately on every single table, every startup,
+// and the surrounding try/catch swallowed it silently. In practice this meant branch_id
+// was never actually added to whichever tables hadn't picked it up some other way,
+// and every INSERT that referenced branch_id on one of those tables 500'd at request
+// time instead (e.g. POST /inventory/physical-counts). Checking information_schema
+// first is the correct MySQL-safe idempotent pattern (see also patient_bills.visit_id
+// above in patientBills.js, which uses the same approach).
+(async () => {
+  try {
+    const { sequelize: _sq } = require('./models');
+    const tablesNeedingBranchId = [
+      'dispensing_records', 'lab_requests', 'lab_results',
+      'patient_bills', 'invoices', 'patient_queue',
+      'insurance_claims', 'pharmacy_prescriptions',
+      'inventory_batches', 'inventory_transactions', 'inventory_adjustments',
+      'physical_inventory_counts', 'stock_locations',
+      'dispensing_returns', 'pharmacy_charges'
+    ];
+    let added = 0;
+    for (const tbl of tablesNeedingBranchId) {
+      try {
+        const [[tableCheck]] = await _sq.query(
+          `SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = :tbl`,
+          { replacements: { tbl } }
+        );
+        if (!tableCheck.cnt) continue; // table doesn't exist yet
+
+        const [[colCheck]] = await _sq.query(
+          `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = :tbl AND column_name = 'branch_id'`,
+          { replacements: { tbl } }
+        );
+        if (colCheck.cnt) continue; // already has it
+
+        await _sq.query(`ALTER TABLE ${tbl} ADD COLUMN branch_id INTEGER NULL`);
+
+        const [[idxCheck]] = await _sq.query(
+          `SELECT COUNT(*) AS cnt FROM pg_indexes WHERE schemaname = current_schema() AND tablename = :tbl AND indexname = :idx`,
+          { replacements: { tbl, idx: `idx_${tbl.replace(/_/g, '')}_branch` } }
+        );
+        if (!idxCheck.cnt) {
+          await _sq.query(`CREATE INDEX idx_${tbl.replace(/_/g, '')}_branch ON ${tbl}(branch_id)`);
+        }
+        added++;
+      } catch (e) { console.warn(`Branch migration warning for ${tbl}:`, e.message); }
+    }
+    console.log(`✅ Branch ID columns ensured on all key tables${added > 0 ? ` (added to ${added} table(s) this run)` : ''}`);
+  } catch(e) { console.warn('Branch migration warning:', e.message); }
+})();
+
+// Startup: link inpatient_prescriptions to the prescription_lines row Pharmacy dispenses
+// against, so the ward UI can tell whether a drug has actually left the pharmacy yet.
+(async () => {
+  try {
+    const { sequelize: _sq } = require('./models');
+    const [[colCheck]] = await _sq.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'inpatient_prescriptions' AND column_name = 'pharmacy_line_id'`
+    );
+    if (!colCheck.cnt) {
+      await _sq.query(`ALTER TABLE inpatient_prescriptions ADD COLUMN pharmacy_line_id CHAR(36) NULL`);
+      console.log('✅ inpatient_prescriptions.pharmacy_line_id added');
+    }
+  } catch (e) { console.warn('inpatient_prescriptions.pharmacy_line_id migration warning:', e.message); }
+})();
+
+// Startup: auto-link services to Chart of Accounts revenue accounts by category
+(async () => {
+  try {
+    const { sequelize: _sq } = require('./models');
+    // Map service categories to account codes
+    const categoryMap = [
+      { pattern: 'lab',        code: '4110' },
+      { pattern: 'laboratory', code: '4110' },
+      { pattern: 'diagnostic', code: '4110' },
+      { pattern: 'pharmacy',   code: '4120' },
+      { pattern: 'drug',       code: '4120' },
+      { pattern: 'medication', code: '4120' },
+      { pattern: 'radiology',  code: '4130' },
+      { pattern: 'imaging',    code: '4130' },
+      { pattern: 'xray',       code: '4130' },
+      { pattern: 'scan',       code: '4130' },
+      { pattern: 'procedure',  code: '4140' },
+      { pattern: 'surgery',    code: '4140' },
+      { pattern: 'theater',    code: '4140' },
+      { pattern: 'theatre',    code: '4140' },
+    ];
+    // Apply specific category mappings (overrides any previous default mapping)
+    for (const { pattern, code } of categoryMap) {
+      await _sq.query(`
+        UPDATE services s
+        SET revenue_account_id = coa.id::text
+        FROM chart_of_accounts coa
+        WHERE coa.account_code = '${code}'
+          AND (LOWER(s.category) LIKE '%${pattern}%' OR LOWER(s.service_category) LIKE '%${pattern}%')
+      `).catch(() => {});
+    }
+    // Default: link any still-unlinked services to Patient Services Revenue (4100)
+    await _sq.query(`
+      UPDATE services s
+      SET revenue_account_id = coa.id::text
+      FROM chart_of_accounts coa
+      WHERE coa.account_code = '4100'
+        AND (s.revenue_account_id IS NULL OR s.revenue_account_id = '')
+    `).catch(() => {});
+    console.log('✅ Services linked to Chart of Accounts revenue accounts');
+  } catch(e) { console.warn('Service-CoA link warning:', e.message); }
+})();
+
+// Global mutation cache-buster: after any successful POST/PUT/PATCH/DELETE,
+// wipe all cached GET responses for that user+branch so data is always fresh.
+const redisCache = require('./services/RedisCache');
+app.use((req, res, next) => {
+  if (req.method === 'GET') return next();
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      const dbName   = req.tenantDbName || 'default';
+      const userId   = req.user?.id   || 'anon';
+      const branchId = req.branchContext?.branchId || req.user?.branchId || 'none';
+      redisCache.delPattern('ic|' + dbName + '|' + userId + '|' + branchId + '|').catch(() => {});
+    }
+    return originalJson(data);
+  };
+  next();
+});
+
+// Import route handlers
+const usersRouter = require('./routes/users');
+const patientsRouter = require('./routes/patients');
+const labTestsRouter = require('./routes/labTests');
+const authRouter = require('./routes/auth');
+const patientQueueRouter = require('./routes/patientQueue');
+const dashboardRouter = require('./routes/dashboard');
+const clinicalRouter = require('./routes/clinical');
+const pharmacyRouter = require('./routes/pharmacy');
+const patientBillsRouter = require('./routes/patientBills');
+const patientDepositsRouter = require('./routes/patientDeposits');
+const proformaInvoicesRouter = require('./routes/proformaInvoices');
+const clinicsRouter = require('./routes/clinics');
+const servicesRouter = require('./routes/services');
+const departmentsRouter = require('./routes/departments');
+const receiptsRouter = require('./routes/receipts');
+const visitsRouter = require('./routes/visits');
+const reportsRouter = require('./routes/reports');
+const ledgerAccountsRouter = require('./routes/ledger-accounts');
+const cashierRouter = require('./routes/cashier');
+const cashTransfersRouter = require('./routes/cash-transfers');
+const purchaseOrdersRouter = require('./routes/purchase-orders');
+const dailyExpensesRouter = require('./routes/daily-expenses');
+// facilitiesRouter already required at line 52 for public branches endpoint
+const accountingRouter = require('./routes/accounting');
+const procurementRouter = require('./routes/procurement');
+const approvalsRouter = require('./routes/approvals');
+const rolesRouter = require('./routes/roles');
+const inventoryRouter = require('./routes/inventory');
+const pharmacyModuleRouter = require('./routes/pharmacyModule');
+const billingEnhancedRouter = require('./routes/billingEnhanced');
+const schemesRouter = require('./routes/schemes');
+const invoicesRouter = require('./routes/invoices');
+const documentsRouter = require('./routes/documents');
+const insuranceClaimsRouter = require('./routes/insuranceClaims');
+const exchangeRatesRouter = require('./routes/exchangeRates');
+const inpatientRouter = require('./routes/inpatient');
+const lisModuleRouter = require('./routes/lisModule');
+const chiefComplaintsRouter = require('./routes/chiefComplaints');
+const clinicalDiagnosesRouter = require('./routes/clinicalDiagnoses');
+
+// Import lab routes
+const labRequestsRouter = require('./routes/labRequests');
+const labResultsRouter = require('./routes/labResults');
+const labIntegrationRouter = require('./routes/labIntegration');
+const apiConfigurationsRouter = require('./routes/apiConfigurations');
+
+// Platform admin routes (SaaS layer — create/suspend clients, manage billing).
+// Authenticated separately from every tenant route above (see
+// middleware/platformAuth.js) and mounted before the global authenticateToken
+// bypass check runs, so /api/platform/* never touches tenant data.
+const platformAuthRouter = require('./routes/platform/auth');
+const platformClientsRouter = require('./routes/platform/clients');
+const platformPlansRouter = require('./routes/platform/plans');
+const platformBillingRouter = require('./routes/platform/billing');
+const platformDashboardRouter = require('./routes/platform/dashboard');
+const platformAdminsRouter = require('./routes/platform/admins');
+
+// API Routes
+app.use('/api/platform/auth', platformAuthRouter);
+app.use('/api/platform/clients', platformClientsRouter);
+app.use('/api/platform/plans', platformPlansRouter);
+app.use('/api/platform/billing', platformBillingRouter);
+app.use('/api/platform/dashboard', platformDashboardRouter);
+app.use('/api/platform/admins', platformAdminsRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/patients', patientsRouter);
+app.use('/api/lab-tests', labTestsRouter);
+app.use('/api/lab-requests', labRequestsRouter);
+app.use('/api/lab-results', labResultsRouter);
+app.use('/api/lab-integration', labIntegrationRouter);
+app.use('/api/configurations', apiConfigurationsRouter);
+app.use('/api/patient-queue', patientQueueRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.use('/api/clinical', clinicalRouter);
+app.use('/api/pharmacy', pharmacyRouter);
+app.use('/api/patient-bills', patientBillsRouter);
+app.use('/api/patient-deposits', patientDepositsRouter);
+app.use('/api/proforma-invoices', proformaInvoicesRouter);
+app.use('/api/clinics', clinicsRouter);
+app.use('/api/services', servicesRouter);
+app.use('/api/departments', departmentsRouter);
+app.use('/api/receipts', receiptsRouter);
+app.use('/api/visits', visitsRouter);
+app.use('/api/reports', reportsRouter);
+app.use('/api/reports-v2/patients', require('./routes/reportPatients'));
+app.use('/api/reports-v2/billing-by-user', require('./routes/reportBillingByUser'));
+app.use('/api/reports-v2/laboratory', require('./routes/reportLaboratory'));
+app.use('/api/reports-v2/pharmacy', require('./routes/reportPharmacy'));
+app.use('/api/reports-v2/inventory', require('./routes/reportInventory'));
+app.use('/api/reports-v2/income-statement', require('./routes/reportIncomeStatement'));
+app.use('/api/reports-v2/overview', require('./routes/reportOverview'));
+app.use('/api/reports-v2/ar-aging', require('./routes/reportARAging'));
+app.use('/api/reports-v2/clinic-performance', require('./routes/reportClinicPerformance'));
+app.use('/api/reports-v2/doctor-performance', require('./routes/reportDoctorPerformance'));
+app.use('/api/reports-v2/occupancy', require('./routes/reportOccupancy'));
+app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));
+app.use('/api/reports-v2/audit-summary', require('./routes/reportAuditSummary'));
+app.use('/api/ledger-accounts', ledgerAccountsRouter);
+app.use('/api/cashier', cashierRouter);
+app.use('/api/cash-transfers', cashTransfersRouter);
+app.use('/api/purchase-orders', purchaseOrdersRouter);
+app.use('/api/daily-expenses', dailyExpensesRouter);
+// Note: /api/facilities/branches/all is handled as public route above (before auth)
+// Other facilities routes (like GET /api/facilities) require authentication
+app.use('/api/facilities', facilitiesRouter);
+
+// Database diagnostic route
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const { Sequelize } = require('sequelize');
+    const sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'mysql',
+      dialectOptions: {
+        charset: 'utf8mb4',
+        collate: 'utf8mb4_0900_ai_ci'
+      },
+      logging: false
+    });
+    
+    await sequelize.authenticate();
+    res.json({
+      success: true,
+      message: 'Database connection successful!',
+      databaseUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:[^:@]*@/, ':***@') : 'Not Set',
+      env_db_host: process.env.DB_HOST,
+      env_db_user: process.env.DB_USER,
+      env_db_name: process.env.DB_NAME
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Database connection failed',
+      error_name: error.name,
+      error_message: error.message,
+      error_stack: error.stack,
+      databaseUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:[^:@]*@/, ':***@') : 'Not Set',
+      env_db_host: process.env.DB_HOST,
+      env_db_user: process.env.DB_USER,
+      env_db_name: process.env.DB_NAME
+    });
+  }
+});
+
+app.use('/api/accounting', accountingRouter);
+app.use('/api/procurement', procurementRouter);
+app.use('/api/approvals', approvalsRouter);
+app.use('/api/roles', rolesRouter);
+app.use('/api/inventory', inventoryRouter);
+app.use('/api/pharmacy-module', pharmacyModuleRouter);
+app.use('/api/billing-enhanced', billingEnhancedRouter);
+app.use('/api/billing', billingEnhancedRouter);
+app.use('/api/schemes', schemesRouter);
+app.use('/api/invoices', invoicesRouter);
+app.use('/api/documents', documentsRouter);
+app.use('/api/insurance-claims', insuranceClaimsRouter);
+app.use('/api/exchange-rates', exchangeRatesRouter);
+app.use('/api/inpatient', inpatientRouter);
+app.use('/api/lis', lisModuleRouter);
+app.use('/api/chief-complaints', chiefComplaintsRouter);
+app.use('/api/clinical-diagnoses', clinicalDiagnosesRouter);
+
+// Health check endpoint — also used by keep-alive cron job to prevent Render cold starts
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    service: 'IntelliCare Backend API',
+    version: '2.0.0',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    uptime: Math.round(process.uptime()),
+    cache: process.env.REDIS_ENABLED === 'true' ? 'redis' : 'memory',
+  });
+});
+
+app.get('/api/status', (req, res) => {
+  res.json({
+    status: 'running',
+    database: 'connected',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// Serve React frontend (production) or return JSON 404 (development)
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../../dist');
+  app.use(express.static(distPath));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+  });
+}
+
+// ── Background migration runner ──────────────────────────────────────────────
+// Runs ALL migrations after the server is already accepting connections.
+// This means cold-start time drops from ~60-120s to ~2-3s.
+async function runBackgroundMigrations() {
+  console.log('⏳ Running background migrations (non-blocking)...');
+
+  const migrations = [
+    ['Accounting',        () => require('./scripts/migrateAccountingTables').setupAccountingModule()],
+    ['CashTransfers',     () => require('./scripts/migrateCashTransfers').migrateCashTransfers()],
+    ['Procurement',       () => require('./scripts/migrateProcurementTables').migrateProcurementTables()],
+    ['Inventory',         () => require('./scripts/migrateInventoryTables').migrateInventoryTables()],
+    ['Pharmacy',          () => require('./scripts/migratePharmacyTables').migratePharmacyTables()],
+    ['Billing',           () => require('./scripts/migrateBillingEnhancements').migrateBillingEnhancements()],
+    ['Schemes',           () => require('./scripts/migrateSchemes').migrateSchemes()],
+    ['Invoices',          () => require('./scripts/migrateInvoices').migrateInvoiceTables()],
+    ['InsuranceClaims',   () => require('./scripts/migrateInsuranceClaims')()],
+    ['MultiCurrency',     () => require('./scripts/migrateMultiCurrency').migrateMultiCurrency()],
+    ['Inpatient',         () => require('./scripts/migrateInpatientTables').migrateInpatientTables()],
+    ['Departments',       () => require('./scripts/migrateDepartments')()],
+    ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
+    ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],
+    ['LisBarcodeUnify',   async () => {
+      const { sequelize: sq } = require('./models');
+      const [[tableCheck]] = await sq.query(
+        `SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'lis_specimens'`
+      );
+      if (!tableCheck.cnt) return;
+      const { dropBarcodeUniqueConstraint } = require('./scripts/unifyOrderBarcodes');
+      await dropBarcodeUniqueConstraint(sq);
+    }],
+    ['AuditLogs',         async () => {
+      const { sequelize: sq } = require('./models');
+      await sq.query(`CREATE TABLE IF NOT EXISTS audit_logs (
+        id VARCHAR(36) PRIMARY KEY,
+        clinic_id INTEGER,
+        user_id VARCHAR(36),
+        user_name VARCHAR(255),
+        user_role VARCHAR(50),
+        module VARCHAR(100) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        entity_type VARCHAR(100),
+        entity_id VARCHAR(100),
+        description TEXT,
+        old_values TEXT,
+        new_values TEXT,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        status VARCHAR(20) DEFAULT 'success',
+        created_at TIMESTAMP DEFAULT NOW()
+      )`);
+      for (const [idxName, idxSql] of [
+        ['idx_audit_logs_created', 'CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC)'],
+        ['idx_audit_logs_module', 'CREATE INDEX idx_audit_logs_module ON audit_logs(module)'],
+        ['idx_audit_logs_user', 'CREATE INDEX idx_audit_logs_user ON audit_logs(user_id)'],
+      ]) {
+        try {
+          const [[idxCheck]] = await sq.query(
+            `SELECT COUNT(*) AS cnt FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'audit_logs' AND indexname = :idxName`,
+            { replacements: { idxName } }
+          );
+          if (!idxCheck.cnt) await sq.query(idxSql);
+        } catch (e) { /* index creation is best-effort */ }
+      }
+    }],
+  ];
+
+  for (const [name, run] of migrations) {
+    try {
+      await run();
+      console.log(`  ✅ ${name} migration done`);
+    } catch (err) {
+      console.log(`  ⚠️  ${name} migration skipped: ${err.message}`);
+    }
+  }
+
+  // Seed default admin user if none exists
+  try {
+    const bcrypt = require('bcrypt');
+    const { sequelize } = require('./models');
+    const [existing] = await sequelize.query(
+      `SELECT id FROM users WHERE email = 'kembe699@gmail.com' LIMIT 1`
+    );
+    if (!existing || existing.length === 0) {
+      // Never hardcode this: the previous literal password also happened to be
+      // the live database password, so anyone reading the repo had admin on
+      // every deployment that ran this seeder. Seeding is now opt-in via
+      // SEED_ADMIN_PASSWORD and is skipped entirely when it isn't set.
+      const seedPassword = process.env.SEED_ADMIN_PASSWORD;
+      if (!seedPassword) {
+        console.log('  ⏭  Default admin not seeded (set SEED_ADMIN_PASSWORD to enable)');
+        return;
+      }
+      const hash = await bcrypt.hash(seedPassword, 12);
+      const { v4: uuidv4 } = require('uuid');
+      await sequelize.query(
+        `INSERT INTO users (id, email, password_hash, display_name, role, clinic_id, status, is_active, created_at, updated_at)
+         VALUES (:id, 'kembe699@gmail.com', :hash, 'Admin Kembe', 'admin', 1, 'active', true, NOW(), NOW())`,
+        { replacements: { id: uuidv4(), hash } }
+      );
+      console.log('  ✅ Default admin user seeded');
+    }
+  } catch (seedErr) {
+    console.log('  ⚠️  Admin seed skipped:', seedErr.message);
+  }
+
+  console.log('✅ All background migrations complete');
+}
+
+// Start the server.
+// The HTTP server starts immediately so Render's health probe never times out.
+// DB initialisation is retried up to 5 times with exponential back-off.
+// If all retries fail the server keeps running (health endpoint still responds,
+// API routes return 503) instead of calling process.exit which causes an
+// infinite Render restart loop and persistent 502 errors for the frontend.
+async function startServer() {
+  await new Promise(resolve => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`💾 Cache mode: ${process.env.REDIS_ENABLED === 'true' ? 'Redis (Upstash)' : 'In-memory'}`);
+      const smtpConfigured = !!((process.env.EMAIL_USER || process.env.SMTP_USER) && (process.env.EMAIL_PASS || process.env.SMTP_PASS));
+      if (!smtpConfigured) {
+        const level = process.env.NODE_ENV === 'production' ? console.error : console.warn;
+        level(`${process.env.NODE_ENV === 'production' ? '🚨' : '⚠️ '} SMTP not configured — password reset emails will NOT be delivered (set EMAIL_USER/EMAIL_PASS or SMTP_USER/SMTP_PASS)`);
+      }
+      resolve();
+    });
+  });
+
+  // Retry DB init with exponential back-off (handles DB cold-start on free tier)
+  let dbReady = false;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      const ok = await initializeDatabase();
+      if (ok) { dbReady = true; break; }
+    } catch (err) {
+      console.error(`❌ DB init attempt ${attempt}/5 failed:`, err.message);
+    }
+    if (attempt < 5) {
+      const wait = attempt * 3000;
+      console.log(`⏳ Retrying DB connection in ${wait / 1000}s...`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+
+  if (dbReady) {
+    console.log('✅ Database ready — server is now accepting requests');
+    setImmediate(() => runBackgroundMigrations().catch(console.error));
+    setImmediate(() => {
+      require('./models/platform').initializePlatformDatabase()
+        .then(() => {
+          console.log('✅ Platform (control-plane) database ready');
+          // Auto-suspend any client whose paid coverage has lapsed with
+          // nothing renewed — checked once now, then on a recurring timer,
+          // the same dunning behavior a real SaaS billing system has.
+          const { checkAndSuspendOverdueClients } = require('./services/subscriptionBilling');
+          const runCheck = () => checkAndSuspendOverdueClients()
+            .then(({ suspendedCount }) => {
+              if (suspendedCount > 0) console.log(`⏳ Overdue check: suspended ${suspendedCount} client(s)`);
+            })
+            .catch((err) => console.error('⚠️  Overdue check failed:', err.message));
+          runCheck();
+          setInterval(runCheck, 15 * 60 * 1000); // every 15 minutes
+
+          // Snapshot every tenant's real database size so the client detail
+          // page's growth chart accumulates actual history over time, not
+          // just whatever the size happens to be the moment someone looks.
+          const { recordSnapshotsForAllClients } = require('./services/tenantUsage');
+          const runUsageSnapshot = () => recordSnapshotsForAllClients()
+            .then(({ recorded, total }) => console.log(`📊 DB usage snapshot: recorded ${recorded}/${total} client(s)`))
+            .catch((err) => console.error('⚠️  DB usage snapshot failed:', err.message));
+          runUsageSnapshot();
+          setInterval(runUsageSnapshot, 6 * 60 * 60 * 1000); // every 6 hours
+        })
+        .catch((err) => console.error('⚠️  Platform database init failed:', err.message));
+    });
+  } else {
+    console.error('⚠️  Database unavailable after 5 attempts — API routes will return 503 until DB recovers');
+  }
+}
+
+startServer().catch(err => {
+  console.error('Fatal server startup error:', err);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  process.exit(0);
+});
+
+// A promise rejection that nothing ever catches (e.g. a stray async call after a
+// transaction already committed/rolled back) is fatal by default on this Node version —
+// the process dies for every clinic at once with nothing but a bare stack trace. Logging
+// it clearly first at least tells ops WHAT broke before the same unavoidable exit happens,
+// instead of a silent/opaque crash.
+process.on('unhandledRejection', (reason) => {
+  console.error('🔥 UNHANDLED REJECTION — process will exit:', reason);
+  process.exit(1);
+});
+
+// A synchronous throw that unwound past every try/catch means the process is in an
+// unknown state — per Node's own guidance, never keep serving requests after this,
+// always exit and let the process manager restart cleanly.
+process.on('uncaughtException', (err) => {
+  console.error('🔥 UNCAUGHT EXCEPTION — process will exit:', err);
+  process.exit(1);
+});

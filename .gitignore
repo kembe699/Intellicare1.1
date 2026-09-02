@@ -1,0 +1,106 @@
+node_modules
+
+# Environment files - NEVER commit these
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+server/.env
+# Catches production.env and src/server/production.env — these carry real DB
+# credentials and the JWT signing secret, confirmed untracked but previously
+# unmatched by any pattern above (no leading dot, and .env.production doesn't
+# glob-match a file literally named production.env).
+production.env
+**/production.env
+
+# Build outputs
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Uploaded attachments (procurement quotations/invoices etc.) — user data, not source
+src/server/uploads/
+uploads/
+
+# Local AI tool config — not shared project config
+.claude/
+
+# Deploy backups / archives — never track binary deploy artifacts
+*.zip
+*.tar.gz
+
+# DB dumps/backups — may contain real patient & financial data, never commit
+/db_schema.sql
+/intellicare_backup.sql
+/intellicare_mysql_backup.sql
+/src/server/update_production_schema.sql
+
+# One-off local debug/scratch scripts — not part of the app
+/add_room.js
+/clean_data.js
+/fix-bill-services.js
+/fix_tsc_errors.js
+/po_e2e_test.tmp.js
+/query_receipt.js
+/repair_billing_currency.js
+/old_package.json
+/test-db.js
+/test-drugs.js
+/test_db.js
+/test_insert.js
+/src/server/test-db.js
+/src/server/test-services.js
+/src/server/test-visit.js
+
+# Accidental personal files
+*.code-workspace
+/WhatsApp*
+public/ChatGPT Image*
+
+# ── Added during the PostgreSQL migration ────────────────────────────────────
+
+# Database dumps — these carry REAL patient records and staff password hashes.
+# Never commit them; the migration reads them from disk (see scripts/mysql2pg.py).
+*.sql.gz
+u325388367_*.sql
+intellicare_backup.sql
+intellicare_mysql_backup.sql
+db_schema.sql
+
+# Local env backups (real credentials)
+.env.mysql-backup
+*.env.backup
+
+# Build/deploy archives — ~190MB of artifacts that don't belong in source control
+*.zip
+*.tar.gz
+
+# Test output
+test-results/
+playwright-report/
+blob-report/
+*.webm
+
+# One-off data import/export files
+ExportedProducts.csv
+ExportedServices.csv
+inventory_items_upload.csv
+
+# Runtime uploads
+src/server/uploads/*
+!src/server/uploads/.gitkeep
+
+# Local build logs
+build.log

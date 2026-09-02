@@ -1,0 +1,8 @@
+JWT_SECRET=8f1c2d9a4b6e7f1c3a9d0e2f5b8c1a7d4e6f9b2c5a8d1e3f6b7c0d9e2f4a6b1
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=intellicare_db
+DB_USER=root
+DB_PASSWORD=
+PORT=3002
+NODE_ENV=development

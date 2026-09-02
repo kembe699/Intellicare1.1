@@ -1,0 +1,11 @@
+id,department_name,department_code,description,is_active,clinic_id,branch_id
+6b4ec569-86ab-4196-802f-1ff9c5c3380c,Administration,ADMIN,Administrative and management,t,1,
+34a2536f-5c2d-490e-bcee-d12215afd561,Emergency Department,ER,Emergency and urgent care services,t,1,
+bde9c4e7-3289-420c-a422-037b9d627239,Inpatient Department,IPD,Inpatient care and admissions,t,1,
+d3e2902c-a0c1-495a-8f55-92ec99e587c1,Laboratory,LAB,Clinical laboratory services,t,1,
+e1b3e478-26eb-4268-abb0-b7d7f5be9d44,Obstetrics & Gynecology,OBGYN,Maternal and women health services,t,1,
+7f99e814-4919-4249-9ada-dcae0223fcf9,Outpatient Department,OPD,General outpatient consultations,t,1,
+6ef47170-9e97-4798-afec-676e0c5e281e,Pediatrics,PEDS,Child healthcare services,t,1,
+64227a62-55ad-4e05-bff2-e8a8a41f3e49,Pharmacy,PHARM,Pharmaceutical services,t,1,
+98a82570-4238-4715-b378-4767fc0acace,Radiology,RAD,Imaging and radiology services,t,1,
+749c60df-8c3e-4692-8491-6021a5e22963,Surgery,SURG,Surgical services,t,1,

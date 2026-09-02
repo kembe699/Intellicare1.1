@@ -1,0 +1,16 @@
+{
+  "name": "IntelliCare HMIS",
+  "short_name": "IntelliCare",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/hjd-icon.png",
+      "sizes": "358x358",
+      "type": "image/png"
+    }
+  ]
+}

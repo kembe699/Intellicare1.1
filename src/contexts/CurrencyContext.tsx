@@ -1,0 +1,66 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authFetch } from '@/api/apiClient';
+
+interface CurrencyData {
+  code: string;
+  symbol: string;
+  name: string;
+  decimal_places: number;
+}
+
+interface CurrencyContextValue {
+  currency: CurrencyData;
+  fmt: (amount: number | string) => string;
+}
+
+const DEFAULT_CURRENCY: CurrencyData = {
+  code: '',
+  symbol: '',
+  name: '',
+  decimal_places: 2,
+};
+
+const CurrencyContext = createContext<CurrencyContextValue>({
+  currency: DEFAULT_CURRENCY,
+  fmt: (amount) => parseFloat(String(amount || 0)).toFixed(2),
+});
+
+export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currency, setCurrency] = useState<CurrencyData>(DEFAULT_CURRENCY);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await authFetch('/api/currencies/base');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.code) {
+            setCurrency({
+              code: data.code,
+              symbol: data.symbol || data.code,
+              name: data.name || data.code,
+              decimal_places: data.decimal_places ?? 2,
+            });
+          }
+        }
+      } catch {
+        // leave defaults — will show no currency prefix until loaded
+      }
+    };
+    load();
+  }, []);
+
+  const fmt = (amount: number | string): string => {
+    const n = parseFloat(String(amount || 0)).toFixed(currency.decimal_places);
+    const label = currency.symbol || currency.code;
+    return label ? `${label} ${n}` : n;
+  };
+
+  return (
+    <CurrencyContext.Provider value={{ currency, fmt }}>
+      {children}
+    </CurrencyContext.Provider>
+  );
+};
+
+export const useCurrency = () => useContext(CurrencyContext);

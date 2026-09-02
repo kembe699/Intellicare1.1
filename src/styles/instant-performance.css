@@ -1,0 +1,107 @@
+/* Instant Performance CSS - Zero Delay Optimizations */
+/* Remove all transitions and animations for 0ms response */
+
+/* Remove all transition delays globally */
+* {
+  transition: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
+/* Instant button response */
+button,
+.btn,
+[role="button"] {
+  transition: none !important;
+  transform: none !important;
+}
+
+button:hover,
+.btn:hover,
+[role="button"]:hover {
+  transition: none !important;
+  transform: none !important;
+}
+
+button:active,
+.btn:active,
+[role="button"]:active {
+  transition: none !important;
+  transform: scale(0.98) !important;
+}
+
+/* Instant modal opening */
+[role="dialog"],
+.dialog,
+.modal {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Instant dropdown */
+[role="menu"],
+[role="listbox"],
+.dropdown-menu {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Instant input focus */
+input,
+textarea,
+select {
+  transition: none !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  transition: none !important;
+}
+
+/* Instant table row hover */
+tr:hover,
+.table-row:hover {
+  transition: none !important;
+}
+
+/* Remove spinner animations for instant feedback */
+.animate-spin {
+  animation: none !important;
+}
+
+/* Instant opacity changes */
+.opacity-0,
+.opacity-50,
+.opacity-100 {
+  transition: none !important;
+}
+
+/* Instant transform changes */
+.transform {
+  transition: none !important;
+}
+
+/* Remove all Radix UI animations */
+[data-radix-popper-content-wrapper] {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Instant toast notifications */
+[data-sonner-toast] {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Instant scroll behavior */
+* {
+  scroll-behavior: auto !important;
+}
+
+/* Instant backdrop */
+.backdrop,
+[data-backdrop] {
+  transition: none !important;
+  animation: none !important;
+}

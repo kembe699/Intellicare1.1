@@ -1,0 +1,210 @@
+id,test_name,test_code,category,price,service_id,linked_service_name,is_active,clinic_id
+2b762e7e-f578-4133-9c98-46c2595bbe13,Blood Group & Rh Factor,BG-RH,Blood Bank,15000.00,,,t,1
+c43267c1-86fb-49e6-ac3e-7e62d26fedb3,Blood Group & Rh Factor,BG-RH,Blood Bank,15000.00,,,t,1
+a54214cc-2798-4b67-89e9-6895186807c0,Blood Group & Rh Factor,BG-RH,Blood Bank,15000.00,,,t,1
+910b1701-e3d0-4bd0-93a9-13bb19407ea6,Cross Matching,XM,Blood Bank,30000.00,,,t,1
+90db7674-a14b-46ca-a9df-e79dfcc36e29,Cross Matching,XM,Blood Bank,30000.00,,,t,1
+0ff73ea7-5747-4c0b-be3a-1e83eaa1880d,Cross Matching,XM,Blood Bank,30000.00,,,t,1
+d8b34765-73bc-4c64-b258-78423c878952,Direct Coombs Test (DCT),DCT,Blood Bank,20000.00,,,t,1
+05063f5f-a60a-43e4-b064-077ab0bbc368,Direct Coombs Test (DCT),DCT,Blood Bank,20000.00,,,t,1
+4353d465-6152-47c2-a90c-3c062c2d88ca,Direct Coombs Test (DCT),DCT,Blood Bank,20000.00,,,t,1
+b03bd952-f486-481c-860a-ca7d0a8ef8c5,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,65000.00,,,t,1
+a33b6a76-e1c4-4208-9f0c-2a99a644410d,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,65000.00,,,t,1
+792f7056-fbfd-4003-8175-e2aed809b5f8,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,65000.00,,,t,1
+5cf92250-98f8-4512-9249-97ff8e685c9d,Troponin I (cTnI),TROP-I,Cardiac Marker,65000.00,,,t,1
+5ccb36fe-7b71-4acf-8200-87c626728549,Troponin I (cTnI),TROP-I,Cardiac Marker,65000.00,,,t,1
+a8be09ba-3b21-467f-9293-2a3791eedf3a,Troponin I (cTnI),TROP-I,Cardiac Marker,65000.00,,,t,1
+2cd51693-1f0a-4e90-bd9c-0b6ed69abf7d,Random Blood Glucose,RBG,Chemistry,0.00,f3282ea2-8efe-4046-8a0f-01e40eee2b97,RBG (Random Blood Glucose),t,1
+5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,0.00,f23f6b72-ed04-4ef2-b9f4-a996d6a6cdb9,RFT (Renal Function Test),t,1
+7e139b91-3913-479d-95a2-4598d8bf7a55,Uric Acid,URICACID,Chemistry,0.00,72f0e7e6-2483-4831-8207-a5a2f2ecf2ca,Uric Acid,t,1
+40ec4ad4-a8ae-4be5-b31d-bb7c3a58b82f,ALP (Alkaline Phosphatase),ALP,Clinical Chemistry,25000.00,,,t,1
+636274d3-2f5c-4bef-b8ae-0144a9ea82bd,ALP (Alkaline Phosphatase),ALP,Clinical Chemistry,25000.00,,,t,1
+2477576c-ab87-4119-ade0-04119abcc19b,ALP (Alkaline Phosphatase),ALP,Clinical Chemistry,25000.00,,,t,1
+e0676e3d-fb91-4056-bca3-a18b731d888c,ALT/SGPT (Alanine Aminotransferase),ALT,Clinical Chemistry,25000.00,,,t,1
+8e0194c3-1b77-435c-b8e8-4e8b8a2a9152,ALT/SGPT (Alanine Aminotransferase),ALT,Clinical Chemistry,25000.00,,,t,1
+13250760-7361-4aee-a21a-38212229ed84,ALT/SGPT (Alanine Aminotransferase),ALT,Clinical Chemistry,25000.00,,,t,1
+c1a5ae0e-ea84-4f52-839a-aca87a2143ab,AST/SGOT (Aspartate Aminotransferase),AST,Clinical Chemistry,25000.00,,,t,1
+cf08bbd3-cbc3-4707-b5f8-667439834bd8,AST/SGOT (Aspartate Aminotransferase),AST,Clinical Chemistry,25000.00,,,t,1
+6fd9cbd8-43a2-4e8f-bd45-45a0652bc546,AST/SGOT (Aspartate Aminotransferase),AST,Clinical Chemistry,25000.00,,,t,1
+d5361e77-0cb4-4aad-a7cc-c1599c13117a,GGT (Gamma-Glutamyl Transferase),GGT,Clinical Chemistry,35000.00,,,t,1
+2ab14491-e9ea-4bd4-be82-ccd4e251b8fe,GGT (Gamma-Glutamyl Transferase),GGT,Clinical Chemistry,35000.00,,,t,1
+3463fce0-727e-4280-9b4f-a40756102595,GGT (Gamma-Glutamyl Transferase),GGT,Clinical Chemistry,35000.00,,,t,1
+042b45e0-4434-4fcc-b8ec-d2f8450863f2,Serum Albumin,ALB,Clinical Chemistry,25000.00,,,t,1
+a2a956de-3c3e-40f4-a1aa-c9608777753e,Serum Albumin,ALB,Clinical Chemistry,25000.00,,,t,1
+a0c7daa9-ea24-4425-8b3c-a366d60766af,Serum Albumin,ALB,Clinical Chemistry,25000.00,,,t,1
+a773f51f-94e8-4f09-a1e8-7ae1f1ce4395,Serum Creatinine,CREAT,Clinical Chemistry,25000.00,,,t,1
+0180885f-7066-41c9-b129-12154bd62d9e,Serum Creatinine,CREAT,Clinical Chemistry,25000.00,,,t,1
+d6764fa1-066b-44ae-a51f-06e8af46a077,Serum Creatinine,CREAT,Clinical Chemistry,25000.00,,,t,1
+911a3b45-3ccf-482a-abc1-5dab8c101b1b,Total Bilirubin,TBIL,Clinical Chemistry,25000.00,,,t,1
+e3338726-273f-4442-ac11-9ace4163325f,Total Bilirubin,TBIL,Clinical Chemistry,25000.00,,,t,1
+a0d6f544-cb7e-4c6d-a4fa-c076cc64d067,Total Bilirubin,TBIL,Clinical Chemistry,25000.00,,,t,1
+4fa6d377-42da-415c-96fa-5d6a6d4f78cc,Total Protein,TP,Clinical Chemistry,25000.00,,,t,1
+ec1f330f-e5bc-49af-934a-7fca58916e2e,Total Protein,TP,Clinical Chemistry,25000.00,,,t,1
+70457526-3481-46ac-b45b-0d8faef6f723,Total Protein,TP,Clinical Chemistry,25000.00,,,t,1
+d1e433f9-e40c-494e-8126-0d64746344bd,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,25000.00,,,t,1
+dbe3f5a9-65b6-421f-b15f-3e0699d20efd,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,25000.00,,,t,1
+9ed4fa87-a6d0-4e3b-881e-0c69e204c8aa,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,25000.00,,,t,1
+75ca2ddc-ebda-45f5-8b40-f33b086b9153,Uric Acid,URIC,Clinical Chemistry,25000.00,,,t,1
+d439e745-a7a8-494b-8e9e-9a4dd5b2e7a1,Uric Acid,URIC,Clinical Chemistry,25000.00,,,t,1
+fd45e78f-abc8-4d34-899d-477b46928f8c,Uric Acid,URIC,Clinical Chemistry,25000.00,,,t,1
+8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,15000.00,,,t,1
+42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,15000.00,,,t,1
+3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,15000.00,,,t,1
+8711e962-fbc4-4d86-b43c-a8d9563ea592,CA-125 (Ovarian Tumour Marker),CA-125,Female Specific Tumour Markers,65000.00,,,t,1
+d6caa84a-9b1c-45b6-acd1-7f4e34d0e685,CA-125 (Ovarian Tumour Marker),CA-125,Female Specific Tumour Markers,65000.00,,,t,1
+e053a7d6-87c6-4170-86b2-c1344a4bc3d1,CA-125 (Ovarian Tumour Marker),CA-125,Female Specific Tumour Markers,65000.00,,,t,1
+d64daae1-dbba-4f11-922e-d9fe39a0a015,CA 19-9 (Pancreatic/GI Tumour Marker),CA19-9,Female Specific Tumour Markers,65000.00,,,t,1
+1dee14f2-8e42-4d0c-9be2-01c3c0817756,CA 19-9 (Pancreatic/GI Tumour Marker),CA19-9,Female Specific Tumour Markers,65000.00,,,t,1
+e564908d-beed-433b-aa46-5d81ea95b396,CA 19-9 (Pancreatic/GI Tumour Marker),CA19-9,Female Specific Tumour Markers,65000.00,,,t,1
+a4099d4d-c7eb-4533-8b1e-62c6a2933c9a,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,45000.00,,,t,1
+4e2f0ef0-20ea-4d94-8f34-05bc9faf0953,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,45000.00,,,t,1
+b1b36cca-ed35-45d8-b26d-e46927bc4fe9,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,45000.00,,,t,1
+951a1fe9-6aab-4a9b-b2bd-e6a5d9fbe1ce,AFP (Alpha-Fetoprotein),AFP,General Tumour Markers,65000.00,,,t,1
+edd71d19-770a-4fbd-951b-d09a52c25c47,AFP (Alpha-Fetoprotein),AFP,General Tumour Markers,65000.00,,,t,1
+d93001cb-9898-4532-a893-a118f6f15d26,AFP (Alpha-Fetoprotein),AFP,General Tumour Markers,65000.00,,,t,1
+2b02ce0c-6dc6-473b-a6c3-a21b21716f70,CA 15-3 (Breast Tumour Marker),CA15-3,General Tumour Markers,65000.00,,,t,1
+e9733008-f3a5-4608-9662-3cde00bd89f0,CA 15-3 (Breast Tumour Marker),CA15-3,General Tumour Markers,65000.00,,,t,1
+de5bcaa5-ea06-424e-a892-ceac9b31bc5d,CA 15-3 (Breast Tumour Marker),CA15-3,General Tumour Markers,65000.00,,,t,1
+125b0f72-1fec-4d32-beb7-5c28bbc865c3,CEA (Carcinoembryonic Antigen),CEA,General Tumour Markers,65000.00,,,t,1
+2e36b6b6-f7b9-40bc-9d37-0d44016f4e2b,CEA (Carcinoembryonic Antigen),CEA,General Tumour Markers,65000.00,,,t,1
+7f2819bf-3218-47aa-9381-de8d9a7f52b6,CEA (Carcinoembryonic Antigen),CEA,General Tumour Markers,65000.00,,,t,1
+1669bea5-76bb-44f6-99cf-b097947ff60c,Fasting Blood Sugar (FBS),FBS,Glucose,20000.00,,,t,1
+c84769d8-c26e-48ad-a4ea-41d983319406,Fasting Blood Sugar (FBS),FBS,Glucose,20000.00,,,t,1
+0c426381-4566-42c2-86a0-d44fdcac94ec,Fasting Blood Sugar (FBS),FBS,Glucose,20000.00,,,t,1
+cf98ceaf-b907-41eb-a45f-03a518dfeb31,Glucose Tolerance Test (OGTT),OGTT,Glucose,30000.00,,,t,1
+8b031627-e32c-42a1-a441-9540022e111c,Glucose Tolerance Test (OGTT),OGTT,Glucose,30000.00,,,t,1
+6ee9d161-ce2a-4beb-94c3-5fedae55014d,Glucose Tolerance Test (OGTT),OGTT,Glucose,30000.00,,,t,1
+6291a8bc-7fcb-40c5-a822-a4f50b5d1d13,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,45000.00,,,t,1
+e007c4d6-9994-4b4c-962d-e4d971d8e76f,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,45000.00,,,t,1
+8e687878-4338-4772-8993-280289ce357e,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,45000.00,,,t,1
+40afc7ca-1d30-4690-94ad-23a88779eefa,Random Blood Sugar (RBS),RBS,Glucose,20000.00,,,t,1
+27be099b-a2f2-4951-8b5f-e3ea66e2d814,Random Blood Sugar (RBS),RBS,Glucose,20000.00,,,t,1
+b593b057-922f-4935-8f53-2152c4bbdb88,Random Blood Sugar (RBS),RBS,Glucose,20000.00,,,t,1
+aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,30000.00,,,t,1
+1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,30000.00,,,t,1
+518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,30000.00,,,t,1
+11443632-0ebe-40d4-a37f-1acf1f36ac4e,ESR (Erythrocyte Sedimentation Rate),ESR,Haematology,15000.00,,,t,1
+3233b2bc-327a-403a-8b01-c7e3e5507dd4,ESR (Erythrocyte Sedimentation Rate),ESR,Haematology,15000.00,,,t,1
+0417ac1c-ab05-4a55-961e-3a9b62876312,ESR (Erythrocyte Sedimentation Rate),ESR,Haematology,15000.00,,,t,1
+431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,20000.00,,,t,1
+b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,20000.00,,,t,1
+da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,20000.00,,,t,1
+f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,20000.00,,,t,1
+6799d4bf-5c4b-4966-b5d4-0cefb2cbddc1,Peripheral Blood Film,PBF,Haematology,15000.00,,,t,1
+4656782e-5e44-4843-971a-677217d49f77,Peripheral Blood Film,PBF,Haematology,15000.00,,,t,1
+bdf20804-b1fd-4acd-8842-387437aa35a9,Peripheral Blood Film,PBF,Haematology,15000.00,,,t,1
+75fc4815-0722-4e86-881e-1d46932d3304,Blood Film for Malaria Parasites,BFFM,Hematology,0.00,45ce185e-9a90-4fb9-a334-a053a305ac21,BFFM,t,1
+059f4b88-7df0-4391-919d-efa81957aefe,Blood Group & Rh Factor,BLOODGRP,Hematology,0.00,9e948355-b87d-4536-a80b-518a03e5ff35,Blood Group,t,1
+beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,0.00,6e22fc77-7ced-4e12-88f0-96e6c60af14e,CBC (Complete Blood Count),t,1
+d89f82d4-c548-44c3-b759-b32b165e0eba,Erythrocyte Sedimentation Rate,ESR,Hematology,0.00,82311bf0-835f-4d0c-8c07-1a67c02cc959,ESR (Erythrocyte Sedimentation Rate) mm/hr,t,1
+33eb4979-f09a-46e8-967e-2665c917faed,Haemoglobin,HB,Hematology,0.00,c5b3f9e1-35ea-4104-b3ec-3a0d8171de88,HB (Haemoglobin),t,1
+4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,0.00,7f57b83b-bbd4-41fc-92cb-b2e1239db515,TWBC (Total White Blood Cell Count),t,1
+0ebb35d5-2712-4caf-a216-2122e4113c86,HDL Cholesterol,HDL,Lipid,35000.00,,,t,1
+4141a4ca-06fe-40d3-a0c0-382cc8765421,HDL Cholesterol,HDL,Lipid,35000.00,,,t,1
+1e576b49-474e-44db-8c49-98bf2e99a290,HDL Cholesterol,HDL,Lipid,35000.00,,,t,1
+f9b27dcd-45cf-4d0d-89c9-b17427de8640,Total Cholesterol,TCHOL,Lipid,35000.00,,,t,1
+82de9e4b-df55-401e-9c91-f08baf26ee57,Total Cholesterol,TCHOL,Lipid,35000.00,,,t,1
+ae8b38d1-83c0-4c7a-8d81-1a609fc87fd7,Total Cholesterol,TCHOL,Lipid,35000.00,,,t,1
+4637356b-5fbf-4947-a9f4-cd34f031ff45,Triglycerides,TG,Lipid,35000.00,,,t,1
+ab486d80-fef2-4d27-8bc9-579f08f918ea,Triglycerides,TG,Lipid,35000.00,,,t,1
+093a3e58-7654-4707-bb5b-af5bf7c8c8b4,Triglycerides,TG,Lipid,35000.00,,,t,1
+1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,0.00,6ef073e3-c604-4254-9872-ef52720d628f,Stool Analysis,t,1
+0c1521fe-3dd9-4da7-a2e0-2ec5a6204950,TB Test (Mantoux),TB,Microbiology,0.00,6b23c782-3db9-45bc-99af-9b912b078a31,TB Test,t,1
+1da9266b-4a4e-4275-905e-9b9ade7655e6,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,25000.00,,,t,1
+b108f322-fee3-4edd-9fae-da756200b32c,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,25000.00,,,t,1
+c71bf084-1445-4f94-b345-e4dbd2b19f0c,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,25000.00,,,t,1
+ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,20000.00,,,t,1
+8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,20000.00,,,t,1
+c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,20000.00,,,t,1
+f268f66d-8089-4bb0-9734-a434c38affb9,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,45000.00,,,t,1
+af7560ee-4f1e-441b-aa52-7e278011f759,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,45000.00,,,t,1
+3feac996-77ce-4f70-9022-206896df458c,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,45000.00,,,t,1
+0773420a-4320-4a97-972f-3552190fbd45,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,45000.00,,,t,1
+139b5226-a253-428e-a996-2633a4a22822,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,45000.00,,,t,1
+13271559-80e9-4b9f-88a7-c69d5f938b8c,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,45000.00,,,t,1
+c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,45000.00,,,t,1
+642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,45000.00,,,t,1
+53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,45000.00,,,t,1
+5d1f0d3a-1b71-4b30-9234-ee12b23a0a7b,Amylase,AMY,Pancreatic Profile,45000.00,,,t,1
+d2176985-7310-4375-a5c1-e0ec29f6f1bd,Amylase,AMY,Pancreatic Profile,45000.00,,,t,1
+b8ec8758-6e25-4f41-99a8-4a520ed2adc0,Amylase,AMY,Pancreatic Profile,45000.00,,,t,1
+e35b1da3-b259-4ce4-9ebb-f20059bcb300,Lipase,LIP,Pancreatic Profile,45000.00,,,t,1
+3b670ff2-9108-430c-9cb6-749494463ac0,Lipase,LIP,Pancreatic Profile,45000.00,,,t,1
+06748c24-2cc8-4b92-b291-b6fcba1f3105,Lipase,LIP,Pancreatic Profile,45000.00,,,t,1
+efd3cb46-926a-4e92-87dd-5604e042f617,Estradiol (E2),E2,Reproductive Hormones,45000.00,,,t,1
+494847ea-363e-4be9-8693-3cc09a543c91,Estradiol (E2),E2,Reproductive Hormones,45000.00,,,t,1
+12dac119-a0b0-4f97-bc16-882a551ad4bb,Estradiol (E2),E2,Reproductive Hormones,45000.00,,,t,1
+923c7bc5-d35c-46cd-b339-f73ec687a5d7,FSH (Follicle Stimulating Hormone),FSH,Reproductive Hormones,45000.00,,,t,1
+241cabcf-6e8e-4d6d-8df7-cb5bd678b01a,FSH (Follicle Stimulating Hormone),FSH,Reproductive Hormones,45000.00,,,t,1
+e61724fd-288a-44e1-ad1c-6d2d96a5c31b,FSH (Follicle Stimulating Hormone),FSH,Reproductive Hormones,45000.00,,,t,1
+1b3e7d91-94a5-4c33-9fa5-c32d1126f617,LH (Luteinizing Hormone),LH,Reproductive Hormones,45000.00,,,t,1
+85ba5e21-6e6d-4127-9e68-51c5bcd87afc,LH (Luteinizing Hormone),LH,Reproductive Hormones,45000.00,,,t,1
+055ead28-1c26-4ca0-a0ed-cda0d2adfd91,LH (Luteinizing Hormone),LH,Reproductive Hormones,45000.00,,,t,1
+ad074a12-f720-4c63-8c9f-2e212b10685e,Progesterone,PROG,Reproductive Hormones,45000.00,,,t,1
+8d4e86c4-d961-464b-b562-2feaa5178589,Progesterone,PROG,Reproductive Hormones,45000.00,,,t,1
+5e1b69ab-bfe8-427e-905a-8d790bc94075,Progesterone,PROG,Reproductive Hormones,45000.00,,,t,1
+c7e897ce-c0be-4486-97ce-531dae2d0f64,Prolactin,PROL,Reproductive Hormones,45000.00,,,t,1
+275a1470-0bcf-424b-b69c-89018a640b44,Prolactin,PROL,Reproductive Hormones,45000.00,,,t,1
+2b8ec9f7-1a2d-454c-883d-395741efa6e3,Prolactin,PROL,Reproductive Hormones,45000.00,,,t,1
+376352b8-0ea5-4f05-a8e5-94786c018120,Serum Beta-HCG (Pregnancy),BHCG,Reproductive Hormones,30000.00,,,t,1
+b9779030-44f8-4caf-813f-d7b6c9a91ac0,Serum Beta-HCG (Pregnancy),BHCG,Reproductive Hormones,30000.00,,,t,1
+73ecf8cf-ab2f-411e-ae7b-06d3743e29bd,Serum Beta-HCG (Pregnancy),BHCG,Reproductive Hormones,30000.00,,,t,1
+e021e962-e74c-46e3-af1c-ce5a52ee713e,Testosterone (Total),TESTO,Reproductive Hormones,45000.00,,,t,1
+6df5e37b-22c3-4d8a-855b-83ee980bfa3d,Testosterone (Total),TESTO,Reproductive Hormones,45000.00,,,t,1
+2f692bd3-ee41-4f7b-8778-d85219fc1f80,Testosterone (Total),TESTO,Reproductive Hormones,45000.00,,,t,1
+06feef98-5027-46e2-810f-2db3aebb6120,COVID-19 Antigen Test,COVID19,RIDT,45000.00,,,t,1
+c3cfb025-16df-4b52-a707-e1933771a5d1,COVID-19 Antigen Test,COVID19,RIDT,45000.00,,,t,1
+c567a8bc-dd59-404a-98da-e1e8bbf79647,COVID-19 Antigen Test,COVID19,RIDT,45000.00,,,t,1
+66427c45-5048-407e-9bc3-12ef4a76c06c,HCG Pregnancy Test (Rapid),HCG-RAPID,RIDT,20000.00,,,t,1
+20debdaf-98e1-4849-8e9c-56f26a40063d,HCG Pregnancy Test (Rapid),HCG-RAPID,RIDT,20000.00,,,t,1
+8f159780-f0a6-490c-854f-7b0a25539b1e,HCG Pregnancy Test (Rapid),HCG-RAPID,RIDT,20000.00,,,t,1
+96a1c5d6-649b-4dcb-9fef-b8342b559c2c,Malaria Antigen Test (RDT),MALARIA,RIDT,20000.00,,,t,1
+71d18108-f25e-4d21-91ed-8a81b12f939f,Malaria Antigen Test (RDT),MALARIA,RIDT,20000.00,,,t,1
+d912cde7-3c9f-4e8d-94ad-e426f7090fa7,Malaria Antigen Test (RDT),MALARIA,RIDT,20000.00,,,t,1
+b87120c5-a04b-4322-9e26-0f2433a7572d,Strep A (Group A Streptococcus),STREP-A,RIDT,30000.00,,,t,1
+a2c3128b-4d3d-4b57-ac53-713a83d74b6a,Strep A (Group A Streptococcus),STREP-A,RIDT,30000.00,,,t,1
+76d2e583-c790-4b94-bbcb-153c2ea30678,Strep A (Group A Streptococcus),STREP-A,RIDT,30000.00,,,t,1
+c269f087-2d6d-41ab-b187-4473f63f01d9,HCG Pregnancy Test,HCG,Serology,0.00,40516435-4df6-4fc0-8282-db84a0f3b89e,HCG,t,1
+92dcfd59-4364-472d-889b-f093e05f408a,Hepatitis B Surface Antigen,HBsAG,Serology,0.00,8769bcdd-2645-4c17-96b1-b4d86596aa3c,HBs Ag (Hepatitis B Surface Antigen),t,1
+a6b39204-34a5-4f18-8fd2-09a72dbd5fac,Hepatitis C Virus Antibody,HCV,Serology,0.00,c031b1f8-b475-4a85-ae83-f2a46b34cd3a,HCV (Hepatitis C Virus),t,1
+8a0d9b69-6f20-422b-ac41-689c4bc38668,HIV P24 Antigen Test,P24,Serology,0.00,4ccf3d43-eb31-4072-9c6a-8b75c83ef607,P24,t,1
+db70fe20-7061-4f44-a1f7-c719385780e0,VDRL (Syphilis Screening),VDRL,Serology,0.00,a9ca2020-b0ee-4e81-b1d2-69af482a0ee4,VDRL,t,1
+fc364740-9868-4679-81dc-0baf1275accf,Widal Test,WIDAL,Serology,0.00,5b60ca27-d9de-4555-8816-02508add025d,Widal Test for Enteric,t,1
+73d3ac7b-e95f-4a1d-b5dc-37612d6f8817,Widal Test for Brucellosis,BRUCELLA,Serology,0.00,,,t,1
+0f92cda5-ccb1-4ace-88de-a04ad1760b06,Anti-CCP (Anti-Cyclic Citrullinated Peptide),ANTI-CCP,Serology & Immunology,45000.00,,,t,1
+b13d25f0-4fb5-40ed-aeb4-152112abaaa2,Anti-CCP (Anti-Cyclic Citrullinated Peptide),ANTI-CCP,Serology & Immunology,45000.00,,,t,1
+964a3daf-84de-42f1-a07e-52cf74fd0043,Anti-CCP (Anti-Cyclic Citrullinated Peptide),ANTI-CCP,Serology & Immunology,45000.00,,,t,1
+0a94241c-9a82-439e-8229-96c899bd222d,CRP (C-Reactive Protein),CRP,Serology & Immunology,30000.00,,,t,1
+f6957378-1008-43ba-b238-4b78b7441740,CRP (C-Reactive Protein),CRP,Serology & Immunology,30000.00,,,t,1
+a3e84ddf-94a3-4925-820a-334196df5d8e,CRP (C-Reactive Protein),CRP,Serology & Immunology,30000.00,,,t,1
+52f22e09-136a-4b70-9b01-7c876a76eb4e,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,45000.00,,,t,1
+c2389ad2-8997-408d-a64d-89324ce228c9,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,45000.00,,,t,1
+de4ab780-0f0d-48af-b57c-ddfc12007bb4,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,45000.00,,,t,1
+1b9029a7-f93e-4fc4-9163-306c92279da5,Hepatitis B Surface Antigen (HBsAg),HBSAG,Serology & Immunology,15000.00,,,t,1
+a8d5efe6-8db7-4770-803e-537fef558b68,Hepatitis B Surface Antigen (HBsAg),HBSAG,Serology & Immunology,15000.00,,,t,1
+bac78434-3c18-4d5c-ac61-2822fce970b1,Hepatitis B Surface Antigen (HBsAg),HBSAG,Serology & Immunology,15000.00,,,t,1
+c32d7ea9-d3c2-4693-a0d1-2ac5b8232e4f,Hepatitis C Antibody (Anti-HCV),HCV,Serology & Immunology,15000.00,,,t,1
+15d5eb96-e076-4fd8-ac77-d343d7e8e409,Hepatitis C Antibody (Anti-HCV),HCV,Serology & Immunology,15000.00,,,t,1
+5bcdd403-1715-4bb7-9961-3ea0726152ed,Hepatitis C Antibody (Anti-HCV),HCV,Serology & Immunology,15000.00,,,t,1
+dd37bae4-917a-4236-b222-a4064071e42e,HIV Test (HIV 1 & 2),HIV,Serology & Immunology,15000.00,,,t,1
+390b4ffb-3162-40f2-b2fb-b465bb040f19,HIV Test (HIV 1 & 2),HIV,Serology & Immunology,15000.00,,,t,1
+81cbafbe-925e-4366-b1c2-27a1feda3945,HIV Test (HIV 1 & 2),HIV,Serology & Immunology,15000.00,,,t,1
+77d6ebb2-b00e-4ea0-a130-39719648574a,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,30000.00,,,t,1
+44890a68-c1b2-4227-b612-472f6e6569ca,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,30000.00,,,t,1
+5f4b7a1e-9e01-4098-a41f-4ef2eb32eb53,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,30000.00,,,t,1
+05c67555-b921-4eed-a32f-1ee948cffc57,Procalcitonin (PCT),PCT,Serology & Immunology,65000.00,,,t,1
+f93eb7a1-009f-4310-b72e-3afd7689aea1,Procalcitonin (PCT),PCT,Serology & Immunology,65000.00,,,t,1
+3cca0319-fbeb-441b-b2b6-4b5510b93742,Procalcitonin (PCT),PCT,Serology & Immunology,65000.00,,,t,1
+3945cec0-83a0-4d15-839d-4c0cea69cc2f,Rheumatoid Factor (RF),RF,Serology & Immunology,30000.00,,,t,1
+8493df8c-32c9-4404-8687-9c0b4b11a43b,Rheumatoid Factor (RF),RF,Serology & Immunology,30000.00,,,t,1
+09015d3f-d985-4ddb-ae4c-acd51d01b528,Rheumatoid Factor (RF),RF,Serology & Immunology,30000.00,,,t,1
+874c4962-2779-4913-a10d-0940e35242b2,Widal Test (Typhoid),WIDAL,Serology & Immunology,30000.00,,,t,1
+3336ee96-13f7-427c-baa6-aafbf5adc3e6,Widal Test (Typhoid),WIDAL,Serology & Immunology,30000.00,,,t,1
+a22ce37f-28cd-4274-b0ea-1c5d488e74cc,Widal Test (Typhoid),WIDAL,Serology & Immunology,30000.00,,,t,1
+47263123-84cb-4e6c-b398-70b07937627f,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,45000.00,,,t,1
+ab4389bf-1263-461b-8a7e-e1a81dda1aae,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,45000.00,,,t,1
+137b8fce-14a2-42b6-beb3-c56ce6500a5d,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,45000.00,,,t,1
+120e04f9-e869-48c9-8d17-349417f3220e,TSH (Thyroid Stimulating Hormone),TSH,Thyroid Function Test,45000.00,,,t,1
+ad5ca077-ba63-449d-9343-c196929a4899,TSH (Thyroid Stimulating Hormone),TSH,Thyroid Function Test,45000.00,,,t,1
+bbd79e80-6a75-4b83-8619-a5ef7800ecca,TSH (Thyroid Stimulating Hormone),TSH,Thyroid Function Test,45000.00,,,t,1
+410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,0.00,7df1856e-69fb-4097-8523-fa2d7073414b,Urine Analysis,t,1

@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-08-08T14:58:13.073Z",
+  "totalTests": 49,
+  "passed": 49,
+  "failed": 0,
+  "skipped": 0,
+  "passRate": 100,
+  "duration": 27244,
+  "success": false,
+  "modules": [
+    {
+      "name": "currencies.test.js",
+      "tests": 25,
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 13015
+    },
+    {
+      "name": "invoices.test.js",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 11170
+    },
+    {
+      "name": "billing.test.js",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1995
+    }
+  ],
+  "errors": [],
+  "recommendations": [
+    "Pass rate is above 95% – system is ready for staging"
+  ]
+}

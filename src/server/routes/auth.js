@@ -1,0 +1,441 @@
+const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { Client } = require('../models/platform');
+const { getTenantConnection } = require('../tenantDb');
+const { authLimiter } = require('../middleware/rateLimiters');
+const router = express.Router();
+
+// JWT secret - MUST be set in environment
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set');
+  process.exit(1);
+}
+
+// Ensure password_reset_tokens table exists — bootstrap runs once at boot
+// against the app's own default database only. Any newly-provisioned tenant
+// database already has this table (it's cloned from that same default
+// database's current schema — see scripts/provisionTenant.js).
+(async () => {
+  try {
+    const { sequelize } = require('../models');
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        token VARCHAR(255) NOT NULL UNIQUE,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token)
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id)
+    `);
+  } catch (error) {
+    console.error('Error creating password_reset_tokens table:', error);
+  }
+})();
+
+async function loadUserBranchContext(sequelize, user) {
+  try {
+    const [rows] = await sequelize.query(`
+      SELECT b.id, b.name, b.facility_id, COALESCE(ub.is_primary, false) AS is_primary
+      FROM user_branches ub
+      INNER JOIN branches b ON b.id = ub.branch_id
+      WHERE ub.user_id = ?
+      ORDER BY ub.is_primary DESC, b.name ASC
+    `, {
+      replacements: [user.id]
+    });
+
+    if (rows.length > 0) {
+      const branches = rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        facilityId: row.facility_id,
+        isPrimary: !!row.is_primary,
+      }));
+      const primaryBranch = branches.find((branch) => branch.isPrimary) || branches[0];
+      return { branches, primaryBranch };
+    }
+  } catch (error) {
+    console.log('Auth branch context fallback:', error.message);
+  }
+
+  if (user.branch_id) {
+    try {
+      const [fallbackRows] = await sequelize.query(`
+        SELECT id, name, facility_id
+        FROM branches
+        WHERE id = ?
+        LIMIT 1
+      `, {
+        replacements: [user.branch_id]
+      });
+
+      if (fallbackRows.length > 0) {
+        const fallbackBranch = {
+          id: fallbackRows[0].id,
+          name: fallbackRows[0].name,
+          facilityId: fallbackRows[0].facility_id,
+          isPrimary: true,
+        };
+        return { branches: [fallbackBranch], primaryBranch: fallbackBranch };
+      }
+    } catch (error) {
+      console.log('Auth branch name lookup fallback:', error.message);
+    }
+
+    const fallbackBranch = {
+      id: user.branch_id,
+      name: `Branch ${user.branch_id}`,
+      facilityId: null,
+      isPrimary: true,
+    };
+    return { branches: [fallbackBranch], primaryBranch: fallbackBranch };
+  }
+
+  return { branches: [], primaryBranch: null };
+}
+
+function buildUserResponse(user, branchContext) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.display_name,
+    role: user.role,
+    clinicId: user.clinic_id,
+    clinic: user.clinic_id,
+    branchId: branchContext.primaryBranch?.id || user.branch_id || null,
+    primaryBranchId: branchContext.primaryBranch?.id || user.branch_id || null,
+    primaryBranchName: branchContext.primaryBranch?.name || null,
+    accessibleBranches: branchContext.branches,
+    isAdmin: user.role === 'admin',
+    status: user.status,
+    currentRoomId: user.current_room_id || null,
+  };
+}
+
+// Note: /verify-branch-access, /forgot-password, /verify-reset-token, and
+// /reset-password used to each be implemented twice — once here, once as a
+// standalone app.post/app.get handler in index.js registered BEFORE this
+// router is mounted. Express matches the first-registered route and stops,
+// so the copies that were here were permanently unreachable dead code — a
+// real drift risk, since a future fix applied only to the dead copy would
+// silently not take effect. Removed; the live implementations are in index.js.
+
+// Login endpoint — code selects which client/instance to authenticate against
+// (typed on the login page, e.g. "nationmc"); email/password are then checked
+// against that client's own, fully separate database.
+router.post('/login', authLimiter, async (req, res) => {
+  try {
+    const { code, email, password } = req.body;
+
+    if (!code || !email || !password) {
+      return res.status(400).json({ error: 'Code, email, and password are required' });
+    }
+
+    const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
+    if (!client) {
+      return res.status(401).json({ error: 'Unknown instance code' });
+    }
+    // No self-service reactivation path here (billing is admin-managed, not
+    // client-paid) — a suspended client's login is simply blocked.
+    if (client.status !== 'active') {
+      return res.status(403).json({ error: 'This account has been suspended. Please contact support.' });
+    }
+
+    let tenantConnection;
+    try {
+      tenantConnection = await getTenantConnection(client.db_name);
+    } catch (connErr) {
+      console.error('Tenant connection error:', connErr);
+      return res.status(503).json({ error: 'Could not connect to your instance, please try again shortly' });
+    }
+    const { sequelize, models } = tenantConnection;
+
+    // Find user by email
+    const user = await models.User.findOne({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Check if user is active
+    if (!user.is_active) {
+      return res.status(401).json({ error: 'Account is disabled' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const branchContext = await loadUserBranchContext(sequelize, user);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        clinicId: user.clinic_id,
+        branchId: branchContext.primaryBranch?.id || user.branch_id || null,
+        dbName: client.db_name
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Return user data and token
+    res.json({
+      token,
+      user: buildUserResponse(user, branchContext),
+      client: { name: client.name, code: client.code }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Verify token endpoint
+router.get('/verify', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { sequelize, models } = await getTenantConnection(decoded.dbName);
+
+    // Get fresh user data
+    const user = await models.User.findByPk(decoded.userId);
+    if (!user || !user.is_active) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const branchContext = await loadUserBranchContext(sequelize, user);
+
+    // If role or branch changed since token was issued, issue a fresh token
+    const freshToken = (decoded.role !== user.role || decoded.branchId !== (branchContext.primaryBranch?.id || user.branch_id || null))
+      ? jwt.sign(
+          {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            clinicId: user.clinic_id,
+            branchId: branchContext.primaryBranch?.id || user.branch_id || null,
+            dbName: decoded.dbName
+          },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        )
+      : null;
+
+    res.json({
+      user: buildUserResponse(user, branchContext),
+      ...(freshToken && { token: freshToken })
+    });
+  } catch (error) {
+    console.error('Token verification error:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+// Note: /forgot-password, /verify-reset-token/:token, and /reset-password
+// were also dead here for the same reason as /verify-branch-access above —
+// index.js registers its own copies first. Removed.
+
+// Setup password endpoint for first-time users
+router.post('/setup-password', authLimiter, async (req, res) => {
+  try {
+    const { code, email, password } = req.body;
+
+    if (!code || !email || !password) {
+      return res.status(400).json({ error: 'Code, email, and password are required' });
+    }
+
+    const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
+    if (!client) return res.status(404).json({ error: 'Unknown instance code' });
+    const { models } = await getTenantConnection(client.db_name);
+
+    // Find user by email
+    const user = await models.User.findOne({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Security check: Only allow password setup if user doesn't have a password yet
+    if (user.password_hash) {
+      return res.status(403).json({
+        error: 'Password already set. Please use the "Forgot Password" option to reset your password.'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Update password and status
+    await user.update({
+      password_hash: passwordHash,
+      status: 'active',
+      password_set_at: new Date()
+    });
+
+    res.json({ message: 'Password set successfully' });
+  } catch (error) {
+    console.error('Setup password error:', error.message);
+    res.status(500).json({ error: 'Failed to setup password' });
+  }
+});
+
+// Change password endpoint
+router.post('/change-password', authLimiter, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    const { currentPassword, newPassword } = req.body;
+
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { models } = await getTenantConnection(decoded.dbName);
+    const user = await models.User.findByPk(decoded.userId);
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    await user.update({ password_hash: newPasswordHash });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error.message);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// Verify password (for reports gate)
+router.post('/verify-password', authLimiter, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token provided' });
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { models } = await getTenantConnection(decoded.dbName);
+    const user = await models.User.findByPk(decoded.userId);
+    if (!user) return res.status(401).json({ error: 'User not found' });
+
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password required' });
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+
+    // The reports step-up gate used to be enforced only by a client-set
+    // sessionStorage flag with no server involvement at all — any user could
+    // grant themselves access via devtools with no password required. Issue a
+    // short-lived, server-signed token instead, so possession of it actually
+    // proves this endpoint was called and the password was verified.
+    const stepUpToken = jwt.sign({ userId: user.id, reportsAccess: true }, JWT_SECRET, { expiresIn: '30m' });
+    res.json({ success: true, stepUpToken });
+  } catch (error) {
+    console.error('Verify password error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// Verify a reports step-up token is a genuine, unexpired token issued by
+// verify-password above for the currently-authenticated user (not just a
+// truthy client-side flag).
+router.post('/verify-step-up', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token provided' });
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const { stepUpToken } = req.body;
+    if (!stepUpToken) return res.status(401).json({ valid: false, error: 'No step-up token provided' });
+
+    let stepUpDecoded;
+    try {
+      stepUpDecoded = jwt.verify(stepUpToken, JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ valid: false, error: 'Step-up token invalid or expired' });
+    }
+    if (!stepUpDecoded.reportsAccess || stepUpDecoded.userId !== decoded.userId) {
+      return res.status(401).json({ valid: false, error: 'Step-up token does not match current user' });
+    }
+    res.json({ valid: true });
+  } catch (error) {
+    res.status(401).json({ valid: false, error: 'Verification failed' });
+  }
+});
+
+// GET /me — return current user's profile including signature
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token provided' });
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { sequelize } = await getTenantConnection(decoded.dbName);
+    const [[user]] = await sequelize.query(
+      'SELECT id, display_name, email, role, signature FROM users WHERE id = ? LIMIT 1',
+      { replacements: [decoded.userId] }
+    );
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ id: user.id, displayName: user.display_name, email: user.email, role: user.role, signature: user.signature || null });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Logout endpoint (client-side token removal)
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (token) {
+      const jwt2 = require('jsonwebtoken');
+      const d = jwt2.decode(token);
+      if (d?.userId) {
+        const rr = require('./reports');
+        await rr.logAudit({ user_id: d.userId, user_name: d.display_name || d.email, user_role: d.role, module: 'Authentication', action: 'LOGOUT', entity_type: 'User', entity_id: String(d.userId), description: `User logged out`, ip_address: req.ip, status: 'success' });
+      }
+    }
+  } catch(e) {}
+  res.json({ message: 'Logged out successfully' });
+});
+
+module.exports = router;

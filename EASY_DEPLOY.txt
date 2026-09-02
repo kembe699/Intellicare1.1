@@ -1,0 +1,74 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║        🏥 UNIVERSAL HOSPITAL - SUPER EASY DEPLOYMENT 🏥       ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+📋 STEP 1: Fix Docker Compose (One-Time Only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run this command to fix the docker-compose error:
+
+    sudo apt install -y python3-distutils
+
+That's it! This fixes the "No module named 'distutils'" error.
+
+
+🚀 STEP 2: Deploy the Application
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go to the project folder and run:
+
+    cd ~/Downloads/universal-hospital-deployment-20260402
+    chmod +x deploy/simple-deploy.sh
+    ./deploy/simple-deploy.sh
+
+
+✅ THAT'S IT! Wait 2-3 minutes and it's done!
+
+
+🌐 STEP 3: Access the Application
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open your browser and go to:
+
+    http://localhost:3003
+
+Login with:
+    Email:    admin@universalhospital.com
+    Password: admin123
+
+
+═══════════════════════════════════════════════════════════════════
+
+🔧 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If you see "docker-compose" errors:
+    sudo apt install -y python3-distutils
+
+If port 3003 is busy:
+    docker compose down
+    # Then edit docker-compose.yml and change port
+
+View logs:
+    docker compose logs -f
+
+Stop everything:
+    docker compose down
+
+Restart:
+    docker compose restart
+
+
+═══════════════════════════════════════════════════════════════════
+
+💡 QUICK NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Docker is already installed on your machine
+✓ Containers are already running (from previous attempt)
+✓ You just need to fix docker-compose and redeploy
+✓ All data (37 users, 65 lab tests) will be restored automatically
+
+═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,346 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Touch target sizing */
+  .min-h-touch {
+    min-height: 48px;
+  }
+
+  .min-w-touch {
+    min-width: 48px;
+  }
+
+  /* Responsive spacing */
+  @media (max-width: 640px) {
+    .space-y-mobile {
+      margin-bottom: 12px;
+    }
+
+    .px-mobile {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
+    .py-mobile {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
+  }
+
+  /* Responsive font sizes */
+  @media (max-width: 640px) {
+    .text-responsive-xl {
+      font-size: 20px;
+      line-height: 28px;
+    }
+
+    .text-responsive-lg {
+      font-size: 18px;
+      line-height: 24px;
+    }
+
+    .text-responsive-base {
+      font-size: 16px;
+      line-height: 20px;
+    }
+  }
+}
+
+@layer base {
+  :root {
+    /* Page & card backgrounds */
+    --background: 210 40% 98%;    /* #F8FAFC slate-50 */
+    --foreground: 222 47% 11%;    /* #0F172A deep navy */
+
+    --card: 0 0% 100%;            /* #FFFFFF white cards */
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand primary: #1A7A75 = hsl(177, 65%, 29%) */
+    --primary: 177 65% 29%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;     /* #F1F5F9 slate-100 */
+    --secondary-foreground: 215 25% 27%; /* #334155 slate-700 */
+
+    --muted: 210 40% 96%;         /* slate-100 */
+    --muted-foreground: 215 16% 47%; /* #64748B slate-500 */
+
+    --accent: 177 65% 29%;        /* same as primary */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;     /* #DC2626 red-600 */
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;       /* green-500 */
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;        /* amber-500 */
+    --warning-foreground: 0 0% 10%;
+
+    /* Borders & inputs */
+    --border: 214 32% 91%;        /* #E2E8F0 slate-200 */
+    --input: 214 32% 91%;         /* slate-200 — visible input borders */
+    --ring: 177 65% 29%;          /* teal focus ring */
+
+    /* Border radius base — 8px (buttons, inputs, badges) */
+    --radius: 0.5rem;
+
+    --sidebar-background: 189 44% 32%;  /* #2d6a75 */
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 189 44% 32%;
+    --sidebar-accent: 189 43% 42%;      /* #3D8A97 */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 189 43% 42%;
+    --sidebar-ring: 189 43% 42%;
+
+    --clinic-teal: 177 65% 29%;
+    --clinic-teal-light: 174 62% 94%;
+    --clinic-amber: 38 92% 50%;
+    --clinic-red: 0 72% 51%;
+    --clinic-green: 142 71% 45%;
+  }
+
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 177 65% 29%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 39% 17%;
+    --secondary-foreground: 210 40% 86%;
+
+    --muted: 222 39% 14%;
+    --muted-foreground: 215 16% 55%;
+
+    --accent: 177 65% 29%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 39% 17%;
+    --input: 222 39% 20%;
+    --ring: 177 65% 29%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: 13px;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* ── Highlighted dropdown / select / menu items ──
+     Every menu primitive already switches the item itself to
+     --accent-foreground (white) when highlighted, but a descendant carrying its
+     own colour — a muted secondary line, a coloured icon, a status badge —
+     keeps that colour and turns unreadable against the dark accent background.
+     Forcing the whole subtree here rather than in each component's class list
+     covers Radix (select, dropdown, context menu, menubar) and cmdk (command,
+     combobox) in one place, and so applies to every dropdown in the app. */
+  [role='option'][data-highlighted],
+  [role='option'][data-highlighted] *,
+  [role='menuitem'][data-highlighted],
+  [role='menuitem'][data-highlighted] *,
+  [role='menuitemcheckbox'][data-highlighted],
+  [role='menuitemcheckbox'][data-highlighted] *,
+  [role='menuitemradio'][data-highlighted],
+  [role='menuitemradio'][data-highlighted] *,
+  [cmdk-item][data-selected='true'],
+  [cmdk-item][data-selected='true'] * {
+    color: hsl(var(--accent-foreground));
+  }
+
+  /* ── Stat / info card ── */
+  .ic-stat-card {
+    @apply bg-card rounded-lg border border-border px-4 py-3 shadow-sm transition-colors hover:shadow-md;
+  }
+
+  /* ── Module page header ── */
+  .ic-page-header {
+    @apply flex items-center justify-between pb-2 border-b border-border mb-3;
+  }
+
+  /* ── Primary action button (teal) ── */
+  .ic-btn-primary {
+    @apply inline-flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white rounded-lg bg-primary hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  /* ── Standard table ── */
+  .ic-table {
+    @apply w-full text-[13px] border-collapse;
+  }
+  .ic-table thead tr {
+    @apply border-b border-border;
+    background-color: rgba(46, 196, 182, 0.06);
+  }
+  .ic-table thead th {
+    @apply px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap;
+  }
+  .ic-table thead th.center {
+    @apply text-center;
+  }
+  .ic-table tbody tr {
+    @apply border-b border-border transition-colors hover:bg-muted/40 cursor-pointer;
+  }
+  .ic-table tbody td {
+    @apply px-3 py-2.5 text-[13px] text-foreground;
+  }
+  .ic-table tbody td.muted {
+    @apply text-muted-foreground;
+  }
+
+  /* ── IC Card / panel ── */
+  .ic-card {
+    @apply bg-primary/10 rounded-xl border border-primary/15 shadow-sm overflow-hidden;
+  }
+  .ic-card-header {
+    @apply flex items-center justify-between px-5 py-3 border-b border-border;
+    background-color: rgba(46, 196, 182, 0.04);
+  }
+  .ic-card-title {
+    @apply flex items-center gap-2 text-sm font-semibold text-foreground;
+  }
+  .ic-card-body {
+    @apply px-5 py-4;
+  }
+
+  /* ── Form field wrapper ── */
+  .ic-form-field {
+    @apply flex flex-col gap-1;
+  }
+  .ic-form-label {
+    @apply text-[11px] font-semibold text-muted-foreground;
+  }
+  .ic-form-input {
+    @apply h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0
+           disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
+  }
+  .ic-form-error {
+    @apply text-[11px] text-destructive mt-0.5;
+  }
+  .ic-select {
+    @apply h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground
+           focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0
+           disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
+  }
+
+  /* ── Semantic status badges ── */
+  .ic-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border;
+  }
+  .ic-badge-success  { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
+  .ic-badge-warning  { @apply bg-amber-50 text-amber-700 border-amber-200; }
+  .ic-badge-danger   { @apply bg-red-50 text-red-700 border-red-200; }
+  .ic-badge-neutral  { @apply bg-slate-100 text-slate-600 border-slate-200; }
+  .ic-badge-primary  { @apply bg-primary/10 text-primary border-primary/20; }
+  .ic-badge-info     { @apply bg-sky-50 text-sky-700 border-sky-200; }
+
+  /* ── Legacy class aliases (keep for backward compat) ── */
+  .stat-card     { @apply ic-stat-card; }
+  .module-header { @apply ic-page-header; }
+  .data-table    { @apply ic-table; }
+  .form-field    { @apply ic-form-field; }
+  .form-label    { @apply ic-form-label; }
+  .form-input    { @apply ic-form-input; }
+  .badge-success { @apply ic-badge ic-badge-success; }
+  .badge-warning { @apply ic-badge ic-badge-warning; }
+  .badge-danger  { @apply ic-badge ic-badge-danger; }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Scrollbar styling for mobile */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Safe area for notched devices */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background-color: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  button, .btn {
+    border: 1px solid black;
+    background-color: white;
+    color: black;
+  }
+}

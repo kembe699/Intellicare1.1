@@ -1,0 +1,74 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: intellicare-app:latest
+    container_name: intellicare-app
+    ports:
+      - "${APP_PORT:-3002}:3002"
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      # Database — points to the 'db' service by hostname
+      DATABASE_URL: postgresql://${DB_USER:-hmis_user}:${DB_PASSWORD:-hmis_pass}@db:5432/${DB_NAME:-intellicare_hmis}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-intellicare_hmis}
+      DB_USER: ${DB_USER:-hmis_user}
+      DB_PASSWORD: ${DB_PASSWORD:-hmis_pass}
+      DB_SSL: "false"
+      # Auth — CHANGE THESE in production!
+      JWT_SECRET: ${JWT_SECRET:-intellicare_jwt_secret_change_in_production}
+      SESSION_SECRET: ${SESSION_SECRET:-intellicare_session_secret_change_in_production}
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      # Uploads
+      UPLOAD_PATH: /app/uploads
+      # Redis cache (optional — set REDIS_URL if you add a redis service)
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_URL: ${REDIS_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - intellicare-net
+
+  db:
+    image: postgres:16-alpine
+    container_name: intellicare-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-intellicare_hmis}
+      POSTGRES_USER: ${DB_USER:-hmis_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hmis_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hmis_user} -d ${DB_NAME:-intellicare_hmis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - intellicare-net
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  intellicare-net:
+    driver: bridge

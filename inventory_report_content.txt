@@ -1,0 +1,145 @@
+          <TabsContent value="inventory-report" className="space-y-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Items</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{inventory.length}</div>
+                  <p className="text-xs text-muted-foreground mt-1">Unique drugs in stock</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Stock Value</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    SSP {inventory.reduce((sum, item) => sum + (item.current_stock * parseFloat(item.selling_price || '0')), 0).toFixed(2)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Based on selling price</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Low Stock Items</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-600">
+                    {inventory.filter(item => item.current_stock <= item.reorder_level).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Need reordering</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Out of Stock</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">
+                    {inventory.filter(item => item.current_stock === 0).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Items unavailable</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Detailed Inventory Report */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Complete Inventory Report</CardTitle>
+                <CardDescription>All inventory items with stock levels and values</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {inventory.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No inventory items available
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left p-2 font-semibold">Drug Name</th>
+                          <th className="text-left p-2 font-semibold">Generic Name</th>
+                          <th className="text-left p-2 font-semibold">Stock</th>
+                          <th className="text-left p-2 font-semibold">Unit</th>
+                          <th className="text-left p-2 font-semibold">Reorder Level</th>
+                          <th className="text-left p-2 font-semibold">Purchase Price</th>
+                          <th className="text-left p-2 font-semibold">Selling Price</th>
+                          <th className="text-left p-2 font-semibold">Stock Value</th>
+                          <th className="text-left p-2 font-semibold">Batch</th>
+                          <th className="text-left p-2 font-semibold">Expiry</th>
+                          <th className="text-left p-2 font-semibold">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inventory.map((item) => {
+                          const stockValue = item.current_stock * parseFloat(item.selling_price || '0');
+                          const isLowStock = item.current_stock <= item.reorder_level;
+                          const isOutOfStock = item.current_stock === 0;
+                          const daysUntilExpiry = item.expiry_date 
+                            ? Math.ceil((new Date(item.expiry_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                            : null;
+                          const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry <= 30 && daysUntilExpiry >= 0;
+                          const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
+
+                          return (
+                            <tr key={item.id} className="border-b hover:bg-muted/30">
+                              <td className="p-2 font-medium">{item.drug_name}</td>
+                              <td className="p-2 text-muted-foreground">{item.generic_name || '-'}</td>
+                              <td className="p-2">
+                                <span className={`font-semibold ${
+                                  isOutOfStock ? 'text-red-600' : 
+                                  isLowStock ? 'text-orange-600' : 
+                                  'text-green-600'
+                                }`}>
+                                  {item.current_stock}
+                                </span>
+                              </td>
+                              <td className="p-2">{item.unit_of_measure}</td>
+                              <td className="p-2">{item.reorder_level}</td>
+                              <td className="p-2">SSP {parseFloat(item.purchase_price || '0').toFixed(2)}</td>
+                              <td className="p-2">SSP {parseFloat(item.selling_price || '0').toFixed(2)}</td>
+                              <td className="p-2 font-semibold">SSP {stockValue.toFixed(2)}</td>
+                              <td className="p-2 text-xs">{item.batch_number || '-'}</td>
+                              <td className="p-2 text-xs">
+                                {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-'}
+                              </td>
+                              <td className="p-2">
+                                {isExpired ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                    Expired
+                                  </span>
+                                ) : isExpiringSoon ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                    Expiring Soon
+                                  </span>
+                                ) : isOutOfStock ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                    Out of Stock
+                                  </span>
+                                ) : isLowStock ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                    Low Stock
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    In Stock
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>

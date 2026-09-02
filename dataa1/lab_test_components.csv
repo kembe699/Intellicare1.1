@@ -1,0 +1,541 @@
+id,lab_test_id,test_name,test_code,category,component_name,unit,reference_range,display_order,clinic_id
+1aa5ebe7-4738-4981-bd6c-6bb25d44dfaf,2b762e7e-f578-4133-9c98-46c2595bbe13,Blood Group & Rh Factor,BG-RH,Blood Bank,ABO Blood Group,"",A / B / AB / O,0,1
+4d2f670f-42f6-430c-9d6b-c48951de4634,a54214cc-2798-4b67-89e9-6895186807c0,Blood Group & Rh Factor,BG-RH,Blood Bank,Rh Factor,"",Positive / Negative,0,1
+d9c7f76d-e80b-4e2a-8f83-a5a2b06cb33c,a54214cc-2798-4b67-89e9-6895186807c0,Blood Group & Rh Factor,BG-RH,Blood Bank,ABO Blood Group,"",A / B / AB / O,0,1
+951dfaa5-5070-49be-9f79-cfba2765edd1,2b762e7e-f578-4133-9c98-46c2595bbe13,Blood Group & Rh Factor,BG-RH,Blood Bank,Rh Factor,"",Positive / Negative,0,1
+47d61de5-49de-44b7-a099-6e3fec9f2b08,c43267c1-86fb-49e6-ac3e-7e62d26fedb3,Blood Group & Rh Factor,BG-RH,Blood Bank,ABO Blood Group,"",A / B / AB / O,1,1
+2124610c-bb6e-4717-ae4b-b4e0d3e7d6c0,c43267c1-86fb-49e6-ac3e-7e62d26fedb3,Blood Group & Rh Factor,BG-RH,Blood Bank,Rh Factor,"",Positive / Negative,2,1
+7dcc38c5-df9d-4283-bba8-83c42465897d,0ff73ea7-5747-4c0b-be3a-1e83eaa1880d,Cross Matching,XM,Blood Bank,Minor Cross Match,"",Compatible,0,1
+c84b6ade-f1ff-4b64-83df-44a1bd4326cb,0ff73ea7-5747-4c0b-be3a-1e83eaa1880d,Cross Matching,XM,Blood Bank,Major Cross Match,"",Compatible,0,1
+1f1a29d7-754d-4e15-a9a3-7688845d7657,90db7674-a14b-46ca-a9df-e79dfcc36e29,Cross Matching,XM,Blood Bank,Major Cross Match,"",Compatible,0,1
+743a4520-7269-4f91-b266-ee2433bcf2d9,90db7674-a14b-46ca-a9df-e79dfcc36e29,Cross Matching,XM,Blood Bank,Minor Cross Match,"",Compatible,0,1
+940b2082-619e-4093-aabd-d5d971feaf71,910b1701-e3d0-4bd0-93a9-13bb19407ea6,Cross Matching,XM,Blood Bank,Major Cross Match,"",Compatible,1,1
+79e43f43-5772-4751-88c3-acbd5214f25a,910b1701-e3d0-4bd0-93a9-13bb19407ea6,Cross Matching,XM,Blood Bank,Minor Cross Match,"",Compatible,2,1
+f1e60d12-fab1-4edb-8ae7-101bf80e02b9,d8b34765-73bc-4c64-b258-78423c878952,Direct Coombs Test (DCT),DCT,Blood Bank,Direct Coombs Test,"",Negative,0,1
+35f90599-d462-48af-8a16-2f1ce6da9151,4353d465-6152-47c2-a90c-3c062c2d88ca,Direct Coombs Test (DCT),DCT,Blood Bank,Direct Coombs Test,"",Negative,0,1
+486002fb-978a-44f4-844e-86ef23ab9922,05063f5f-a60a-43e4-b064-077ab0bbc368,Direct Coombs Test (DCT),DCT,Blood Bank,Direct Coombs Test,"",Negative,1,1
+1478633b-7b34-42f8-89e1-c33b27cad7b6,b03bd952-f486-481c-860a-ca7d0a8ef8c5,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK-MB Index,%,< 3.5,0,1
+108a85ea-e7cf-4872-a255-1d72f73e4575,b03bd952-f486-481c-860a-ca7d0a8ef8c5,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK Total,U/L,M:52-336 | F:38-176,0,1
+051b7780-3968-447a-b561-95476f559c80,b03bd952-f486-481c-860a-ca7d0a8ef8c5,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK-MB,U/L,< 25,0,1
+4d0e9b12-09db-4e59-bcdb-9daafa7e5fe8,792f7056-fbfd-4003-8175-e2aed809b5f8,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK-MB Index,%,< 3.5,0,1
+ba65e26c-6158-48ea-b016-bb708a40b95f,792f7056-fbfd-4003-8175-e2aed809b5f8,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK Total,U/L,M:52-336 | F:38-176,0,1
+955afcfc-da41-483c-963b-a6a881045a9c,792f7056-fbfd-4003-8175-e2aed809b5f8,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK-MB,U/L,< 25,0,1
+daf914f4-5dd4-4e93-addf-8ada2b07c6e3,a33b6a76-e1c4-4208-9f0c-2a99a644410d,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK-MB,U/L,< 25,1,1
+b7a62525-d01f-45e0-acf6-54e8787ec344,a33b6a76-e1c4-4208-9f0c-2a99a644410d,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK Total,U/L,M:52-336 | F:38-176,2,1
+89d189f1-2a66-4486-a6f6-5dd8b570eeae,a33b6a76-e1c4-4208-9f0c-2a99a644410d,CK-MB (Creatine Kinase-MB),CKMB,Cardiac Marker,CK-MB Index,%,< 3.5,3,1
+d2463d68-d687-4b37-8f99-6868e3720f1a,5cf92250-98f8-4512-9249-97ff8e685c9d,Troponin I (cTnI),TROP-I,Cardiac Marker,Troponin I (cTnI),ng/mL,Normal:<0.04 | Elevated:>=0.04,0,1
+433ffd61-5c4d-431a-b2d1-7acaf2a14585,5ccb36fe-7b71-4acf-8200-87c626728549,Troponin I (cTnI),TROP-I,Cardiac Marker,Troponin I (cTnI),ng/mL,Normal:<0.04 | Elevated:>=0.04,0,1
+be70e254-5bbe-4a16-bee0-d6bfe8f8df67,a8be09ba-3b21-467f-9293-2a3791eedf3a,Troponin I (cTnI),TROP-I,Cardiac Marker,Troponin I (cTnI),ng/mL,Normal:<0.04 | Elevated:>=0.04,1,1
+91137a65-69d5-4611-982e-a5d3bfd4479a,2cd51693-1f0a-4e90-bd9c-0b6ed69abf7d,Random Blood Glucose,RBG,Chemistry,Blood Glucose (Random),mg/dL,70-140,1,1
+b7ab9417-d2f7-4423-951f-1ff826c6bebe,5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,Urea,mg/dL,15-45,1,1
+0679c098-23ba-4ce5-b507-ed924e197295,5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,Creatinine,mg/dL,Male: 0.7-1.2 | Female: 0.5-1.1,2,1
+f6f3df36-093a-42a1-bfed-80ef1051603f,5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,Sodium,mmol/L,135-145,3,1
+2725ed09-d39c-428f-9df3-e59a5a8b87d9,5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,Potassium,mmol/L,3.5-5.0,4,1
+fec83ef1-7212-4920-87ae-e6063ef2a510,5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,Chloride,mmol/L,98-107,5,1
+3299b364-0ad1-43ac-8aee-76764f24c308,5b8cd13a-bc3b-4858-aad6-13d08d167c60,Renal Function Test,RFT,Chemistry,Bicarbonate,mmol/L,22-29,6,1
+9d28f835-c57a-4ef8-9201-e6377eb6e74c,7e139b91-3913-479d-95a2-4598d8bf7a55,Uric Acid,URICACID,Chemistry,Uric Acid,mg/dL,Male: 3.5-7.2 | Female: 2.5-6.0,1,1
+f33894ba-faa2-477d-a279-252f903ec33f,2477576c-ab87-4119-ade0-04119abcc19b,ALP (Alkaline Phosphatase),ALP,Clinical Chemistry,ALP,U/L,44 - 147,0,1
+eb84ceef-b339-47a0-b54f-b345998a5bfa,40ec4ad4-a8ae-4be5-b31d-bb7c3a58b82f,ALP (Alkaline Phosphatase),ALP,Clinical Chemistry,ALP,U/L,44 - 147,0,1
+3649e960-892f-49ba-9133-42046d307b66,636274d3-2f5c-4bef-b8ae-0144a9ea82bd,ALP (Alkaline Phosphatase),ALP,Clinical Chemistry,ALP,U/L,44 - 147,1,1
+2b7550a3-b901-414b-894e-926c28972b3b,8e0194c3-1b77-435c-b8e8-4e8b8a2a9152,ALT/SGPT (Alanine Aminotransferase),ALT,Clinical Chemistry,ALT (SGPT),U/L,M:7-56 | F:7-45,0,1
+34e41796-daa0-4d31-a984-1bc84cd973c6,e0676e3d-fb91-4056-bca3-a18b731d888c,ALT/SGPT (Alanine Aminotransferase),ALT,Clinical Chemistry,ALT (SGPT),U/L,M:7-56 | F:7-45,0,1
+25883f36-7fb9-4296-b02b-7d9eae429848,13250760-7361-4aee-a21a-38212229ed84,ALT/SGPT (Alanine Aminotransferase),ALT,Clinical Chemistry,ALT (SGPT),U/L,M:7-56 | F:7-45,1,1
+bd3d160f-226e-4d31-8cf6-770ca08817f3,c1a5ae0e-ea84-4f52-839a-aca87a2143ab,AST/SGOT (Aspartate Aminotransferase),AST,Clinical Chemistry,AST (SGOT),U/L,M:10-40 | F:9-32,0,1
+87e81440-c516-472a-a372-bb7dfc54fc6b,cf08bbd3-cbc3-4707-b5f8-667439834bd8,AST/SGOT (Aspartate Aminotransferase),AST,Clinical Chemistry,AST (SGOT),U/L,M:10-40 | F:9-32,0,1
+2807c821-bb75-451b-b5d2-4f33593beeeb,6fd9cbd8-43a2-4e8f-bd45-45a0652bc546,AST/SGOT (Aspartate Aminotransferase),AST,Clinical Chemistry,AST (SGOT),U/L,M:10-40 | F:9-32,1,1
+06127e8c-5d2f-410c-ab1f-c70095185f8f,3463fce0-727e-4280-9b4f-a40756102595,GGT (Gamma-Glutamyl Transferase),GGT,Clinical Chemistry,GGT,U/L,M:9-48 | F:5-29,0,1
+c60f3981-72c5-427b-ac95-a2d5708c6303,2ab14491-e9ea-4bd4-be82-ccd4e251b8fe,GGT (Gamma-Glutamyl Transferase),GGT,Clinical Chemistry,GGT,U/L,M:9-48 | F:5-29,0,1
+49ed2d64-9bbc-49fd-ba08-0f8d134f8b73,d5361e77-0cb4-4aad-a7cc-c1599c13117a,GGT (Gamma-Glutamyl Transferase),GGT,Clinical Chemistry,GGT,U/L,M:9-48 | F:5-29,1,1
+e62b9ce5-5b80-4469-885a-63cd852159f0,a2a956de-3c3e-40f4-a1aa-c9608777753e,Serum Albumin,ALB,Clinical Chemistry,Albumin,g/dL,3.5 - 5.0,0,1
+4bb04756-2c21-4913-9e73-0aec330a644a,a0c7daa9-ea24-4425-8b3c-a366d60766af,Serum Albumin,ALB,Clinical Chemistry,Albumin,g/dL,3.5 - 5.0,0,1
+3a90bcf0-af45-48cb-9c5d-c98f2daabc09,042b45e0-4434-4fcc-b8ec-d2f8450863f2,Serum Albumin,ALB,Clinical Chemistry,Albumin,g/dL,3.5 - 5.0,1,1
+9544e5ff-f652-4f68-b54d-943ef65b1434,0180885f-7066-41c9-b129-12154bd62d9e,Serum Creatinine,CREAT,Clinical Chemistry,Serum Creatinine,mg/dL,M:0.7-1.3 | F:0.6-1.1,0,1
+b144d9a8-6c24-4eba-ac25-b812efdb0e2c,a773f51f-94e8-4f09-a1e8-7ae1f1ce4395,Serum Creatinine,CREAT,Clinical Chemistry,eGFR,mL/min/1.73m²,> 60,0,1
+2e887aa3-27eb-48b3-b788-d4e1626ce39e,a773f51f-94e8-4f09-a1e8-7ae1f1ce4395,Serum Creatinine,CREAT,Clinical Chemistry,Serum Creatinine,mg/dL,M:0.7-1.3 | F:0.6-1.1,0,1
+4e746a80-94c7-4c6a-9d82-76cc0d229d03,0180885f-7066-41c9-b129-12154bd62d9e,Serum Creatinine,CREAT,Clinical Chemistry,eGFR,mL/min/1.73m²,> 60,0,1
+4bc549d0-f1ff-4518-891e-419827bec48a,d6764fa1-066b-44ae-a51f-06e8af46a077,Serum Creatinine,CREAT,Clinical Chemistry,Serum Creatinine,mg/dL,M:0.7-1.3 | F:0.6-1.1,1,1
+94248c6a-c65d-41ac-bf34-d0c7550f1c56,d6764fa1-066b-44ae-a51f-06e8af46a077,Serum Creatinine,CREAT,Clinical Chemistry,eGFR,mL/min/1.73m²,> 60,2,1
+9b793e0d-8414-47e7-aae1-7d62907e660c,911a3b45-3ccf-482a-abc1-5dab8c101b1b,Total Bilirubin,TBIL,Clinical Chemistry,Direct Bilirubin,mg/dL,0.0 - 0.3,0,1
+3b395eda-8962-4431-b32e-6ce7cb1cb766,e3338726-273f-4442-ac11-9ace4163325f,Total Bilirubin,TBIL,Clinical Chemistry,Total Bilirubin,mg/dL,0.2 - 1.2,0,1
+c975e39f-e4a6-437e-8a1b-604325726568,911a3b45-3ccf-482a-abc1-5dab8c101b1b,Total Bilirubin,TBIL,Clinical Chemistry,Indirect Bilirubin,mg/dL,0.1 - 1.0,0,1
+49547c35-1920-4946-95c9-ddb03073c2be,911a3b45-3ccf-482a-abc1-5dab8c101b1b,Total Bilirubin,TBIL,Clinical Chemistry,Total Bilirubin,mg/dL,0.2 - 1.2,0,1
+06602372-f2e7-4cbd-9b79-d8ff99305a35,e3338726-273f-4442-ac11-9ace4163325f,Total Bilirubin,TBIL,Clinical Chemistry,Indirect Bilirubin,mg/dL,0.1 - 1.0,0,1
+d2142da7-891b-445d-b1d5-7181752aaa42,e3338726-273f-4442-ac11-9ace4163325f,Total Bilirubin,TBIL,Clinical Chemistry,Direct Bilirubin,mg/dL,0.0 - 0.3,0,1
+af782f8a-483a-4592-808b-682563480c94,a0d6f544-cb7e-4c6d-a4fa-c076cc64d067,Total Bilirubin,TBIL,Clinical Chemistry,Total Bilirubin,mg/dL,0.2 - 1.2,1,1
+934062ee-8d3f-4961-8a37-760cf114f010,a0d6f544-cb7e-4c6d-a4fa-c076cc64d067,Total Bilirubin,TBIL,Clinical Chemistry,Direct Bilirubin,mg/dL,0.0 - 0.3,2,1
+2152e45b-053a-45d5-ae45-b423f1d4a8bc,a0d6f544-cb7e-4c6d-a4fa-c076cc64d067,Total Bilirubin,TBIL,Clinical Chemistry,Indirect Bilirubin,mg/dL,0.1 - 1.0,3,1
+dbe06bb4-26a8-4d4e-b61e-e0785abb61ab,70457526-3481-46ac-b45b-0d8faef6f723,Total Protein,TP,Clinical Chemistry,A/G Ratio,"",1.1 - 2.5,0,1
+ece9c367-9509-4a68-8b78-10b95002df5b,4fa6d377-42da-415c-96fa-5d6a6d4f78cc,Total Protein,TP,Clinical Chemistry,A/G Ratio,"",1.1 - 2.5,0,1
+a85db944-6f39-4a0f-a231-39b886faab6d,4fa6d377-42da-415c-96fa-5d6a6d4f78cc,Total Protein,TP,Clinical Chemistry,Globulin,g/dL,2.3 - 3.5,0,1
+9a4be372-6af9-4666-a1cb-1e6f9acfe5f5,4fa6d377-42da-415c-96fa-5d6a6d4f78cc,Total Protein,TP,Clinical Chemistry,Albumin,g/dL,3.5 - 5.0,0,1
+c27b7281-029f-488a-a2df-35d7f79dc807,4fa6d377-42da-415c-96fa-5d6a6d4f78cc,Total Protein,TP,Clinical Chemistry,Total Protein,g/dL,6.4 - 8.3,0,1
+36d88525-5719-4504-8208-ebe3f4939fc4,70457526-3481-46ac-b45b-0d8faef6f723,Total Protein,TP,Clinical Chemistry,Globulin,g/dL,2.3 - 3.5,0,1
+53339297-d59c-47d6-8794-7f04d8bc2423,70457526-3481-46ac-b45b-0d8faef6f723,Total Protein,TP,Clinical Chemistry,Albumin,g/dL,3.5 - 5.0,0,1
+ea2a80ed-e6e5-4107-9e3b-326cc04f35e8,70457526-3481-46ac-b45b-0d8faef6f723,Total Protein,TP,Clinical Chemistry,Total Protein,g/dL,6.4 - 8.3,0,1
+f6104fd1-3ea2-41f6-86aa-7930f212d317,ec1f330f-e5bc-49af-934a-7fca58916e2e,Total Protein,TP,Clinical Chemistry,Total Protein,g/dL,6.4 - 8.3,1,1
+7243128e-1f24-4424-96d8-0451e40c45cb,ec1f330f-e5bc-49af-934a-7fca58916e2e,Total Protein,TP,Clinical Chemistry,Albumin,g/dL,3.5 - 5.0,2,1
+da9624bf-d880-47b9-862c-a11d5fc5fe33,ec1f330f-e5bc-49af-934a-7fca58916e2e,Total Protein,TP,Clinical Chemistry,Globulin,g/dL,2.3 - 3.5,3,1
+efc3a23e-a1de-47ba-a5dd-146af8a48ae6,ec1f330f-e5bc-49af-934a-7fca58916e2e,Total Protein,TP,Clinical Chemistry,A/G Ratio,"",1.1 - 2.5,4,1
+8c90bc1a-65e2-412d-abc5-e101a4ba4d67,dbe3f5a9-65b6-421f-b15f-3e0699d20efd,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,Blood Urea,mg/dL,15 - 45,0,1
+65e4b9ba-1205-4b6d-9f72-b498dd5a66b6,d1e433f9-e40c-494e-8126-0d64746344bd,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,Blood Urea,mg/dL,15 - 45,0,1
+ba48fac4-9227-40b3-b2e9-891c5cd1489f,dbe3f5a9-65b6-421f-b15f-3e0699d20efd,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,BUN,mg/dL,7 - 20,0,1
+4c04c940-c52e-4549-a99c-a1ee11ffa554,d1e433f9-e40c-494e-8126-0d64746344bd,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,BUN,mg/dL,7 - 20,0,1
+0b5032e1-5b4e-4003-9ada-0c1cbde1ce4c,9ed4fa87-a6d0-4e3b-881e-0c69e204c8aa,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,Blood Urea,mg/dL,15 - 45,1,1
+a8c20084-0a24-4f9e-b240-59e84cb10a89,9ed4fa87-a6d0-4e3b-881e-0c69e204c8aa,Urea (Blood Urea Nitrogen),UREA,Clinical Chemistry,BUN,mg/dL,7 - 20,2,1
+4217f26c-f6c0-49b1-a9a7-cbf5f7796c9c,75ca2ddc-ebda-45f5-8b40-f33b086b9153,Uric Acid,URIC,Clinical Chemistry,Uric Acid,mg/dL,M:3.4-7.0 | F:2.4-6.0,0,1
+4c33dcb7-55bb-4df0-aa8d-eb8ca8028b7c,fd45e78f-abc8-4d34-899d-477b46928f8c,Uric Acid,URIC,Clinical Chemistry,Uric Acid,mg/dL,M:3.4-7.0 | F:2.4-6.0,0,1
+83147469-825a-4bb7-a524-770b813d6625,d439e745-a7a8-494b-8e9e-9a4dd5b2e7a1,Uric Acid,URIC,Clinical Chemistry,Uric Acid,mg/dL,M:3.4-7.0 | F:2.4-6.0,1,1
+aba33d02-3f28-4f90-b405-0dc5c757c297,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Colour,"",Pale Yellow - Amber,0,1
+7798837e-a612-45a8-a61c-c9e31954c461,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Clarity,"",Clear,0,1
+e6d6ffcb-2b27-40a7-8f92-d0a81abbc0d2,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Glucose,"",Negative,0,1
+5f4b5dfe-9481-4f29-ac52-27da392d2671,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Bacteria,"",None/Rare,0,1
+e0064398-449a-4dfe-a777-9f26246c1f26,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Casts,"",None,0,1
+35568a84-97b1-46e3-8d68-6dcb6f91198d,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Epithelial Cells,/HPF,0 - 5,0,1
+85537535-61ec-4912-b0d8-9040a80b0ca4,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,RBC (Microscopy),/HPF,0 - 2,0,1
+710d873f-acdb-4c76-a87d-29c0eea0876e,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,WBC (Microscopy),/HPF,0 - 5,0,1
+e8df61c6-e011-4365-92e9-7e5ba353a055,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Leukocyte Esterase,"",Negative,0,1
+a9dccba0-3424-4b43-bd32-975cebd46dcc,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Nitrite,"",Negative,0,1
+457f50a6-0131-4964-993f-5a4418cb602c,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Urobilinogen,EU/dL,0.1 - 1.0,0,1
+62afcc03-ad51-4d53-9680-2d26804e80c3,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Bilirubin,"",Negative,0,1
+cb93ee2c-c069-469c-8e86-878dd849bc85,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Blood,"",Negative,0,1
+a451db1d-21e8-4836-9ce6-6d74d4e5634a,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Ketones,"",Negative,0,1
+4c6bc320-ca32-4406-aab6-e3bfc8a20b31,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Glucose,"",Negative,0,1
+e56245e0-e3a5-4caf-bec3-eefb171cf9b9,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Protein,"",Negative,0,1
+4024e973-af52-44b6-b56d-d66466ec21a4,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Specific Gravity,"",1.005 - 1.030,0,1
+dceeec70-ad6c-4b24-b58a-0c67f43748ba,3e7fb754-ea43-4fee-aa59-f733a3f7bb01,Urine Analysis (Urinalysis),UA,Clinical Chemistry,pH,"",4.5 - 8.0,0,1
+b4f483fd-58a2-42e9-888f-716e71d1588f,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Bacteria,"",None/Rare,0,1
+adf45133-e979-48c8-9312-83a13daa1da2,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Casts,"",None,0,1
+e3651b9c-e74c-402a-a7be-8f6586f45ab3,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Epithelial Cells,/HPF,0 - 5,0,1
+f01a524b-eaf1-44cc-ad90-fcaa36bb309a,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,RBC (Microscopy),/HPF,0 - 2,0,1
+a3c6815c-71f1-4f7d-9aa7-cddf0e619fed,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,WBC (Microscopy),/HPF,0 - 5,0,1
+68e391b1-d551-4dcb-a61a-379d720bf035,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Leukocyte Esterase,"",Negative,0,1
+d63f8c36-0548-4304-a7ba-3f75f16a1b72,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Nitrite,"",Negative,0,1
+2fb00b72-e931-4253-b08b-5d9efa37562e,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Urobilinogen,EU/dL,0.1 - 1.0,0,1
+e653f22e-d525-479e-a462-c52733d7391e,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Bilirubin,"",Negative,0,1
+a8e5878d-041b-4cd8-a040-c0e0bf717ccc,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Blood,"",Negative,0,1
+bc1050d7-9908-4298-b462-c22381b47e9e,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Ketones,"",Negative,0,1
+4767c479-d2da-48ab-bb33-05044117c2f0,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Protein,"",Negative,0,1
+54c16534-249f-4f29-a3bf-65c72ff9f332,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Specific Gravity,"",1.005 - 1.030,0,1
+f379bbeb-e774-4f48-a33a-733363091de5,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,pH,"",4.5 - 8.0,0,1
+2fb9afd5-ef2d-46c9-8263-82b0738a6003,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Clarity,"",Clear,0,1
+b3006232-b5cb-4270-9af7-f2734b8d4ba9,42e50f50-2f27-49d5-82af-545409001fb1,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Colour,"",Pale Yellow - Amber,0,1
+07cbde5b-228e-4ed4-8086-64632fcbc134,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Colour,"",Pale Yellow - Amber,1,1
+b2dc0d8c-ae9a-4b69-9f72-c1c9bf937cb1,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Clarity,"",Clear,2,1
+d1351569-ab16-483b-a54f-4dc9e5cf734c,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,pH,"",4.5 - 8.0,3,1
+62055fef-b309-4cb1-8f38-4457dd12db5f,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Specific Gravity,"",1.005 - 1.030,4,1
+2f115f82-09e3-45e6-b0ef-5907f623b1ec,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Protein,"",Negative,5,1
+fb474d56-e137-4d72-ab06-f673343ac400,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Glucose,"",Negative,6,1
+2742f957-3672-48e7-833a-2138083c3dd7,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Ketones,"",Negative,7,1
+7b41d71f-3b42-4051-91d6-5025a7948ec9,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Blood,"",Negative,8,1
+e62dfaf5-8235-43dd-bee1-b832a0c42ff9,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Bilirubin,"",Negative,9,1
+896d4dbd-0185-4a7d-b0f2-5c1bc594eadc,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Urobilinogen,EU/dL,0.1 - 1.0,10,1
+c165e648-9279-43b1-a345-dfbcd5a93a51,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Nitrite,"",Negative,11,1
+b352fcc0-bf69-402a-a4f9-6ade4566bd32,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Leukocyte Esterase,"",Negative,12,1
+a6d03f98-0aa3-44b4-862c-bfff660715ea,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,WBC (Microscopy),/HPF,0 - 5,13,1
+b223708d-1ae3-4485-b344-08f39c12b4b3,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,RBC (Microscopy),/HPF,0 - 2,14,1
+939ac279-4c63-4b5c-87d3-8d228320db23,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Epithelial Cells,/HPF,0 - 5,15,1
+60a4ca30-a4c2-4375-ae7b-22108f2cd83c,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Casts,"",None,16,1
+6d311a51-fcc0-4e8e-8b47-5107c8c175e2,8d2e544d-7fcd-4c88-9623-bc9f1fdeb838,Urine Analysis (Urinalysis),UA,Clinical Chemistry,Bacteria,"",None/Rare,17,1
+272a8c31-940a-4345-a822-6fb54ef45592,8711e962-fbc4-4d86-b43c-a8d9563ea592,CA-125 (Ovarian Tumour Marker),CA-125,Female Specific Tumour Markers,CA-125,U/mL,< 35,0,1
+6334afca-aefa-4ceb-ad86-5999b2cdc5f9,d6caa84a-9b1c-45b6-acd1-7f4e34d0e685,CA-125 (Ovarian Tumour Marker),CA-125,Female Specific Tumour Markers,CA-125,U/mL,< 35,0,1
+78d2ef8e-073c-462f-a239-411849ed25f6,e053a7d6-87c6-4170-86b2-c1344a4bc3d1,CA-125 (Ovarian Tumour Marker),CA-125,Female Specific Tumour Markers,CA-125,U/mL,< 35,1,1
+a18231b3-3cc1-43d4-9236-0961970df2be,1dee14f2-8e42-4d0c-9be2-01c3c0817756,CA 19-9 (Pancreatic/GI Tumour Marker),CA19-9,Female Specific Tumour Markers,CA 19-9,U/mL,< 37,0,1
+df1e68c7-1b94-4307-93d0-b63e922fe434,e564908d-beed-433b-aa46-5d81ea95b396,CA 19-9 (Pancreatic/GI Tumour Marker),CA19-9,Female Specific Tumour Markers,CA 19-9,U/mL,< 37,0,1
+19045db1-a412-43d2-9395-f82c7d01acb6,d64daae1-dbba-4f11-922e-d9fe39a0a015,CA 19-9 (Pancreatic/GI Tumour Marker),CA19-9,Female Specific Tumour Markers,CA 19-9,U/mL,< 37,1,1
+54f1ff74-c20e-4530-8f01-864501854f5e,b1b36cca-ed35-45d8-b26d-e46927bc4fe9,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Total PSA,ng/mL,< 4.0,0,1
+bd4e6f1b-bd23-4fab-9db4-3efc8b56f7e1,b1b36cca-ed35-45d8-b26d-e46927bc4fe9,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Free/Total PSA Ratio,%,> 25%,0,1
+37c3f7fc-5ff8-40f3-9d71-d8e348d7805c,4e2f0ef0-20ea-4d94-8f34-05bc9faf0953,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Total PSA,ng/mL,< 4.0,0,1
+ce2b9cb1-3b4c-4eda-b98f-3dff5f82dbc0,4e2f0ef0-20ea-4d94-8f34-05bc9faf0953,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Free PSA,ng/mL,> 25% of Total PSA,0,1
+5cd8a6cb-ab2d-496b-9b29-3fdeb3a32226,4e2f0ef0-20ea-4d94-8f34-05bc9faf0953,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Free/Total PSA Ratio,%,> 25%,0,1
+a3e0883b-f640-4990-9c86-abc18b8f0999,b1b36cca-ed35-45d8-b26d-e46927bc4fe9,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Free PSA,ng/mL,> 25% of Total PSA,0,1
+66620261-326c-46e0-a646-42c6d29961bd,a4099d4d-c7eb-4533-8b1e-62c6a2933c9a,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Total PSA,ng/mL,< 4.0,1,1
+db51ff85-21dc-40d8-be3f-8e739c261b46,a4099d4d-c7eb-4533-8b1e-62c6a2933c9a,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Free PSA,ng/mL,> 25% of Total PSA,2,1
+18db26b4-faae-4f70-b4ed-dcd38d30658a,a4099d4d-c7eb-4533-8b1e-62c6a2933c9a,PSA (Prostate Specific Antigen),PSA,Fertility & Pregnancy Hormones,Free/Total PSA Ratio,%,> 25%,3,1
+8f4df116-b43c-4adc-bf8a-adaf2f2cb87e,d93001cb-9898-4532-a893-a118f6f15d26,AFP (Alpha-Fetoprotein),AFP,General Tumour Markers,AFP,ng/mL,< 7.0,0,1
+89f90587-a95c-4aa9-8721-9f8b983e4bb4,951a1fe9-6aab-4a9b-b2bd-e6a5d9fbe1ce,AFP (Alpha-Fetoprotein),AFP,General Tumour Markers,AFP,ng/mL,< 7.0,0,1
+75613fd6-5df6-45e0-a2ef-12d048734fc4,edd71d19-770a-4fbd-951b-d09a52c25c47,AFP (Alpha-Fetoprotein),AFP,General Tumour Markers,AFP,ng/mL,< 7.0,1,1
+269c1371-9f5c-4275-ac84-8f537d7e581d,2b02ce0c-6dc6-473b-a6c3-a21b21716f70,CA 15-3 (Breast Tumour Marker),CA15-3,General Tumour Markers,CA 15-3,U/mL,< 31.3,0,1
+c28a0b80-8982-47a9-bd83-7e084fa56c05,e9733008-f3a5-4608-9662-3cde00bd89f0,CA 15-3 (Breast Tumour Marker),CA15-3,General Tumour Markers,CA 15-3,U/mL,< 31.3,0,1
+22c3a303-c09a-4857-b50a-337a69972246,de5bcaa5-ea06-424e-a892-ceac9b31bc5d,CA 15-3 (Breast Tumour Marker),CA15-3,General Tumour Markers,CA 15-3,U/mL,< 31.3,1,1
+e80bcf5d-f496-4e0a-951b-78d2a0cec832,2e36b6b6-f7b9-40bc-9d37-0d44016f4e2b,CEA (Carcinoembryonic Antigen),CEA,General Tumour Markers,CEA,ng/mL,Non-smoker: < 3.0 | Smoker: < 5.0,0,1
+7eec06a0-8d2f-48c5-affa-b042dcb18e3f,7f2819bf-3218-47aa-9381-de8d9a7f52b6,CEA (Carcinoembryonic Antigen),CEA,General Tumour Markers,CEA,ng/mL,Non-smoker: < 3.0 | Smoker: < 5.0,0,1
+1d5a388c-915e-4497-8a99-732bf7dc00a1,125b0f72-1fec-4d32-beb7-5c28bbc865c3,CEA (Carcinoembryonic Antigen),CEA,General Tumour Markers,CEA,ng/mL,Non-smoker: < 3.0 | Smoker: < 5.0,1,1
+9df1a9c7-f8d5-4f96-b3e8-bc742d573261,c84769d8-c26e-48ad-a4ea-41d983319406,Fasting Blood Sugar (FBS),FBS,Glucose,Fasting Blood Sugar,mg/dL,Normal:70-99 | Pre-DM:100-125 | DM:>=126,0,1
+f2c4bdbd-5cd5-4f9e-b518-6fb0ac7f6a31,1669bea5-76bb-44f6-99cf-b097947ff60c,Fasting Blood Sugar (FBS),FBS,Glucose,Fasting Blood Sugar,mg/dL,Normal:70-99 | Pre-DM:100-125 | DM:>=126,0,1
+f7b6f71d-6976-4a0d-8076-0875be6c9c3f,0c426381-4566-42c2-86a0-d44fdcac94ec,Fasting Blood Sugar (FBS),FBS,Glucose,Fasting Blood Sugar,mg/dL,Normal:70-99 | Pre-DM:100-125 | DM:>=126,1,1
+d4e538f2-1426-4347-800f-98e34b4a25ef,8b031627-e32c-42a1-a441-9540022e111c,Glucose Tolerance Test (OGTT),OGTT,Glucose,2 Hours,mg/dL,Normal:<140 | Pre-DM:140-199 | DM:>=200,0,1
+a7a8554d-99ad-4db4-986c-c77e3fe6cb86,cf98ceaf-b907-41eb-a45f-03a518dfeb31,Glucose Tolerance Test (OGTT),OGTT,Glucose,2 Hours,mg/dL,Normal:<140 | Pre-DM:140-199 | DM:>=200,0,1
+00d0055d-1edc-4cc2-b321-930823cd2784,cf98ceaf-b907-41eb-a45f-03a518dfeb31,Glucose Tolerance Test (OGTT),OGTT,Glucose,Fasting (0 hr),mg/dL,70 - 99,0,1
+c6d1d4a5-c708-4437-82a3-9751b2093615,cf98ceaf-b907-41eb-a45f-03a518dfeb31,Glucose Tolerance Test (OGTT),OGTT,Glucose,1 Hour,mg/dL,< 180,0,1
+6c4c6101-683a-4c92-b8f3-e8e44cc545d9,8b031627-e32c-42a1-a441-9540022e111c,Glucose Tolerance Test (OGTT),OGTT,Glucose,Fasting (0 hr),mg/dL,70 - 99,0,1
+9fb19958-b64f-4643-9650-d800666bbb94,8b031627-e32c-42a1-a441-9540022e111c,Glucose Tolerance Test (OGTT),OGTT,Glucose,1 Hour,mg/dL,< 180,0,1
+9c9c4a63-9d16-4652-9e94-b7e5fc4efd29,6ee9d161-ce2a-4beb-94c3-5fedae55014d,Glucose Tolerance Test (OGTT),OGTT,Glucose,Fasting (0 hr),mg/dL,70 - 99,1,1
+d161b15d-0d13-4265-a30e-848a2596b632,6ee9d161-ce2a-4beb-94c3-5fedae55014d,Glucose Tolerance Test (OGTT),OGTT,Glucose,1 Hour,mg/dL,< 180,2,1
+4350ce6f-e0ec-4139-8b27-c61a216538e1,6ee9d161-ce2a-4beb-94c3-5fedae55014d,Glucose Tolerance Test (OGTT),OGTT,Glucose,2 Hours,mg/dL,Normal:<140 | Pre-DM:140-199 | DM:>=200,3,1
+7c226825-c004-4ebf-b4c7-61929baf8e86,8e687878-4338-4772-8993-280289ce357e,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,HbA1c,%,Normal:<5.7 | Pre-DM:5.7-6.4 | DM:>=6.5,0,1
+e78b15a7-cd16-4710-a44b-f0320482356b,e007c4d6-9994-4b4c-962d-e4d971d8e76f,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,HbA1c,%,Normal:<5.7 | Pre-DM:5.7-6.4 | DM:>=6.5,0,1
+708dd2cd-b43f-45c6-bb6f-dc9d8c3c5632,8e687878-4338-4772-8993-280289ce357e,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,Estimated Average Glucose (eAG),mg/dL,< 114,0,1
+40a9f547-e326-4ff9-a6e8-ccefb41063ca,e007c4d6-9994-4b4c-962d-e4d971d8e76f,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,Estimated Average Glucose (eAG),mg/dL,< 114,0,1
+6e17b243-8dbf-4aeb-a5fc-e25896343e6d,6291a8bc-7fcb-40c5-a822-a4f50b5d1d13,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,HbA1c,%,Normal:<5.7 | Pre-DM:5.7-6.4 | DM:>=6.5,1,1
+b4117815-e13e-4c58-8b4c-479895a8fd3d,6291a8bc-7fcb-40c5-a822-a4f50b5d1d13,HbA1c (Glycated Haemoglobin),HBA1C,Glucose,Estimated Average Glucose (eAG),mg/dL,< 114,2,1
+b9ca27cd-99bf-476d-88f5-af3a577b11a8,40afc7ca-1d30-4690-94ad-23a88779eefa,Random Blood Sugar (RBS),RBS,Glucose,Random Blood Sugar,mg/dL,Normal: < 200,0,1
+9d13e44a-6dd7-4313-b821-7ef842c3387f,b593b057-922f-4935-8f53-2152c4bbdb88,Random Blood Sugar (RBS),RBS,Glucose,Random Blood Sugar,mg/dL,Normal: < 200,0,1
+c61d0e69-4776-4dc7-8a92-d2883bbc691c,27be099b-a2f2-4951-8b5f-e3ea66e2d814,Random Blood Sugar (RBS),RBS,Glucose,Random Blood Sugar,mg/dL,Normal: < 200,1,1
+0e45a74a-b9cb-4f0a-b004-29df824ffddc,1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,INR,"",0.8 - 1.2,0,1
+8aaefb75-5bf9-4739-b1ea-6c495f7bb3d6,518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,Clotting Time (CT),minutes,5 - 11,0,1
+c800e207-f51e-4dd3-a977-7fbd06d783c2,518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,Bleeding Time (BT),minutes,2 - 7,0,1
+f7647919-f1d7-4510-ad35-401cb606fcda,518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,Fibrinogen,mg/dL,200 - 400,0,1
+9d897bd6-0140-4166-985b-3ec0f2b14834,518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,INR,"",0.8 - 1.2,0,1
+5e5906f6-2fb2-401e-9f58-9070f401da5b,518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,APTT,seconds,25 - 35,0,1
+71fb6ba0-dc20-4630-a26f-56f5efb83178,518d1d97-3221-4edc-a25e-f24f1b10155b,Coagulation Profile,COAG,Haematology,PT (Prothrombin Time),seconds,11.0 - 13.5,0,1
+e344d058-2e8a-4094-a514-789577ad11c1,1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,PT (Prothrombin Time),seconds,11.0 - 13.5,0,1
+63e6c6d5-5adc-4fd9-8064-d0e84b9c6409,1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,APTT,seconds,25 - 35,0,1
+2b061770-bba7-423c-8b0a-32d93af9bada,1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,Fibrinogen,mg/dL,200 - 400,0,1
+9eee7178-aecc-4086-aa5a-65f8ba9ca676,1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,Bleeding Time (BT),minutes,2 - 7,0,1
+d477d3f6-590b-484a-af5b-ef1d6bf20d54,1faf37f0-3508-4204-a34c-cf3ffa87b6a5,Coagulation Profile,COAG,Haematology,Clotting Time (CT),minutes,5 - 11,0,1
+87cfc785-6693-47b8-8520-0e9f9701f11d,aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,PT (Prothrombin Time),seconds,11.0 - 13.5,1,1
+37637efd-c3db-4023-9b65-bdf6289c3895,aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,APTT,seconds,25 - 35,2,1
+11e4b09a-12ba-4f09-b0ee-e43e2ba644cb,aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,INR,"",0.8 - 1.2,3,1
+cc5dbe43-394a-4e3d-a1c1-2a5b23fd34f3,aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,Fibrinogen,mg/dL,200 - 400,4,1
+1416a025-751b-45bd-8fda-670a110ac749,aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,Bleeding Time (BT),minutes,2 - 7,5,1
+647891df-26db-496f-9920-dee3f89a909e,aeea679b-56f2-4e46-99b4-1f81b66f03e2,Coagulation Profile,COAG,Haematology,Clotting Time (CT),minutes,5 - 11,6,1
+773e4b4c-9977-4efa-9b51-5feac6a55c94,0417ac1c-ab05-4a55-961e-3a9b62876312,ESR (Erythrocyte Sedimentation Rate),ESR,Haematology,ESR,mm/hr,M:0-15 | F:0-20,0,1
+d1016815-4915-4c46-b79e-afc807f0373d,3233b2bc-327a-403a-8b01-c7e3e5507dd4,ESR (Erythrocyte Sedimentation Rate),ESR,Haematology,ESR,mm/hr,M:0-15 | F:0-20,0,1
+7cff8403-c7d4-45ba-8ed9-38e46e2c6b85,11443632-0ebe-40d4-a37f-1acf1f36ac4e,ESR (Erythrocyte Sedimentation Rate),ESR,Haematology,ESR,mm/hr,M:0-15 | F:0-20,1,1
+32a9bed9-f45d-49cc-9d0d-2db4a48aa0b7,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Monocytes,%,2 - 8,0,1
+89f12033-813a-442c-9dd7-ff524457c349,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Eosinophils,%,1 - 4,0,1
+c6fa8e1c-441b-4f46-ad53-b4bdea34f106,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Basophils,%,0 - 1,0,1
+30c49f5b-cbca-4f0a-802e-c9aa31bd2ed6,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Basophils (Abs),x10³/µL,0.0 - 0.2,0,1
+68c720c5-dae8-4937-a549-771d3ce1f0f2,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,MCH,pg,27 - 33,0,1
+0c1dd496-2413-4374-aaee-ff08a79423ed,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,MCV,fL,80 - 100,0,1
+efe70a0f-4c8c-4bae-bf82-dc0a921f6f5e,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Neutrophils,%,50 - 70,0,1
+362dd03c-b10e-481e-9913-104154e03e33,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Neutrophils (Abs),x10³/µL,1.8 - 7.7,0,1
+c7686c94-a3e8-4499-9995-4155b629234a,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Haematocrit (HCT),%,M: 41-53 | F: 36-46,0,1
+48cea7bd-f33e-4202-b186-9177dc0beb81,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Haemoglobin (HGB),g/dL,M: 13.5-17.5 | F: 12.0-16.0,0,1
+1fba4e21-d440-4838-a671-92a76c4ed847,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,RBC (Red Blood Cells),x10⁶/µL,M: 4.5-5.5 | F: 3.8-5.2,0,1
+36538148-1331-413a-ac6e-99c856e1d1d5,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,WBC (White Blood Cells),x10³/µL,4.5 - 11.0,0,1
+1aab3f23-a0f6-4c00-b717-976d05e884f2,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Eosinophils,%,1 - 4,0,1
+e8b7357e-8d19-44c0-b38f-35083294d7fd,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,MCHC,g/dL,32 - 36,0,1
+6229f5c4-6595-46cd-9fff-91c578c438fe,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Platelets (PLT),x10³/µL,150 - 400,0,1
+46a26993-ff25-4160-acf2-f07d74feba82,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Neutrophils,%,50 - 70,0,1
+acb19076-6a58-40ce-8213-5de4da732d36,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,MCHC,g/dL,32 - 36,0,1
+ed76361e-8e9f-4677-b3da-eaf3c81aa7c9,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,RDW,%,11.5 - 14.5,0,1
+72cd4a38-682f-4f39-bed5-ea22a7c22ec2,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Platelets (PLT),x10³/µL,150 - 400,0,1
+66efb06f-88ca-4482-a5d9-a91dca579718,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,MPV (Mean Platelet Volume),fL,7.5 - 12.5,0,1
+6e82cd72-d857-4e49-88f4-643dcabbd62e,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Lymphocytes,%,20 - 40,0,1
+3fc8f35a-4f3c-4990-9755-750240a1ee77,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,WBC,x10³/µL,4.5 - 11.0,0,1
+ee61ec8e-954e-495e-9bd7-18b59eb0db08,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,RBC,x10⁶/µL,M:4.5-5.5 | F:3.8-5.2,0,1
+4290a85d-df6e-4597-b5c0-16f053b8f397,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Haemoglobin (HGB),g/dL,M:13.5-17.5 | F:12.0-16.0,0,1
+622149a0-1d3d-4631-a704-8b265e36cac7,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Haematocrit (HCT),%,M:41-53 | F:36-46,0,1
+eafc93d2-7113-4ee9-a89c-8e22544a3e5b,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,MCV,fL,80 - 100,0,1
+fe954dee-f0c9-4647-9452-1cf3fecee053,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,MCH,pg,27 - 33,0,1
+b7345d71-828f-493f-afc5-4a653ac25a00,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,MCHC,g/dL,32 - 36,0,1
+9f9d6f4c-78df-4564-8296-7e748019464d,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Platelets (PLT),x10³/µL,150 - 400,0,1
+3dfe0886-0a6f-40ec-8dfd-4eeccbc66dfb,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Neutrophils,%,50 - 70,0,1
+ae34c21f-6cfe-4b7a-bb86-7c5cc124a804,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Lymphocytes,%,20 - 40,0,1
+2b4764b2-3cdc-4a1c-bd40-602484b84f8a,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Monocytes,%,2 - 8,0,1
+ea85cb68-7079-4f45-b3f3-f07129e27bb6,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Eosinophils,%,1 - 4,0,1
+52674110-9595-4716-b232-19a3d0b8cc93,b007c199-b388-4d3a-a4e7-4dc258d56c95,Full Blood Count (FBC),FBC,Haematology,Basophils,%,0 - 1,0,1
+ff252911-6a76-41fe-82bc-9c3049d0816e,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Basophils,%,0 - 1,0,1
+017211e9-48cf-40a4-a83e-86f14ccf2c46,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Eosinophils (Abs),x10³/µL,0.0 - 0.45,0,1
+02754da8-8151-4f36-8f7a-5cdf5ff1c76d,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Lymphocytes,%,20 - 40,0,1
+1a2ed2d1-44b6-404b-ac2c-ba12f781655b,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Lymphocytes (Abs),x10³/µL,1.0 - 4.8,0,1
+ef15977b-4707-4dfe-8200-e8087d859580,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Monocytes,%,2 - 8,0,1
+8f789033-9e30-491d-a056-9c9f77f6ee60,f171c102-7227-45f7-a9f4-0326e774a4f9,Full Blood Count (FBC),FBC,Haematology,Monocytes (Abs),x10³/µL,0.0 - 0.8,0,1
+053bc9e0-10f1-4954-b815-f93944219081,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,MCH,pg,27 - 33,0,1
+acc43fd6-b35d-48d0-bd74-c5de7cd5a16b,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,WBC,x10³/µL,4.5 - 11.0,0,1
+993feb56-b3e1-4063-97aa-f096fcaefa52,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,RBC,x10⁶/µL,M:4.5-5.5 | F:3.8-5.2,0,1
+0ccee1c3-d1f0-4f4d-b28c-34210285c128,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Haemoglobin (HGB),g/dL,M:13.5-17.5 | F:12.0-16.0,0,1
+42777b66-9b4b-4496-af6e-636ea180dc35,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,Haematocrit (HCT),%,M:41-53 | F:36-46,0,1
+ea23a834-e2ea-49ac-a536-dbcb5ba5f419,431ffd05-fa8d-47e7-9d10-1ce1686d1704,Full Blood Count (FBC),FBC,Haematology,MCV,fL,80 - 100,0,1
+1ea53e46-ff23-4d48-86aa-038611344426,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,WBC,x10³/µL,4.5 - 11.0,1,1
+9dff7efa-a53b-4654-b6cc-4562e71fe531,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,RBC,x10⁶/µL,M:4.5-5.5 | F:3.8-5.2,2,1
+6181ffe0-a7cb-409f-a066-e460a859c578,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Haemoglobin (HGB),g/dL,M:13.5-17.5 | F:12.0-16.0,3,1
+e8d16f43-6665-4f89-988d-d64e9398224f,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Haematocrit (HCT),%,M:41-53 | F:36-46,4,1
+ed8e85eb-9077-4afd-8ff9-0053bb2b669e,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,MCV,fL,80 - 100,5,1
+c0e9d043-c025-47e8-a226-b68faeea46f9,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,MCH,pg,27 - 33,6,1
+b4266203-ccb8-4fb7-b5ab-bad8c46b7325,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,MCHC,g/dL,32 - 36,7,1
+c904c73d-4f63-4b7b-bca9-e863f2dadad1,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Platelets (PLT),x10³/µL,150 - 400,8,1
+e215625e-6f9b-4e5a-a353-039ebea77983,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Neutrophils,%,50 - 70,9,1
+f52bfc69-92d3-4770-b6b1-8e9b8f0c3714,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Lymphocytes,%,20 - 40,10,1
+06bd7bfb-7896-499e-8950-774058e347b6,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Monocytes,%,2 - 8,11,1
+103ce2b3-4877-42e7-95c0-293f34163032,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Eosinophils,%,1 - 4,12,1
+a665f648-9849-4dfa-80da-6fc9bc044493,da14677c-f3a2-428a-b0ca-9183cf6bf50e,Full Blood Count (FBC),FBC,Haematology,Basophils,%,0 - 1,13,1
+d2bb0b7b-16e9-48d1-bd80-13689b63b404,4656782e-5e44-4843-971a-677217d49f77,Peripheral Blood Film,PBF,Haematology,Platelet Estimate,"",Adequate,0,1
+ba0a0a25-2217-43d2-913b-c7ad08ddd879,4656782e-5e44-4843-971a-677217d49f77,Peripheral Blood Film,PBF,Haematology,WBC Morphology,"",Normal,0,1
+af6bca63-4789-4a15-a97b-42f26499f79e,4656782e-5e44-4843-971a-677217d49f77,Peripheral Blood Film,PBF,Haematology,RBC Morphology,"",Normal,0,1
+ec41e66a-9b01-410e-ae81-657da9974e4f,bdf20804-b1fd-4acd-8842-387437aa35a9,Peripheral Blood Film,PBF,Haematology,WBC Morphology,"",Normal,0,1
+1c09cf8b-9456-456d-91fb-a23caed0d18b,bdf20804-b1fd-4acd-8842-387437aa35a9,Peripheral Blood Film,PBF,Haematology,Platelet Estimate,"",Adequate,0,1
+5e37a763-fec2-4ada-81e8-22c67645faf1,bdf20804-b1fd-4acd-8842-387437aa35a9,Peripheral Blood Film,PBF,Haematology,RBC Morphology,"",Normal,0,1
+2322e6f7-34ca-4c23-b1d9-933abaed1442,bdf20804-b1fd-4acd-8842-387437aa35a9,Peripheral Blood Film,PBF,Haematology,Parasites,"",None Seen,0,1
+2bfaeaf6-ed66-4ac2-aae3-ff63189cc391,4656782e-5e44-4843-971a-677217d49f77,Peripheral Blood Film,PBF,Haematology,Parasites,"",None Seen,0,1
+a608a9ea-f8cf-4a43-9af7-be9570844e90,6799d4bf-5c4b-4966-b5d4-0cefb2cbddc1,Peripheral Blood Film,PBF,Haematology,RBC Morphology,"",Normal,1,1
+6c75da38-372b-4f36-adc8-97e38b9b1eb9,6799d4bf-5c4b-4966-b5d4-0cefb2cbddc1,Peripheral Blood Film,PBF,Haematology,WBC Morphology,"",Normal,2,1
+28dd2deb-6920-4e1c-8a08-f4d570937d1a,6799d4bf-5c4b-4966-b5d4-0cefb2cbddc1,Peripheral Blood Film,PBF,Haematology,Platelet Estimate,"",Adequate,3,1
+279e47c1-09ba-492a-b0af-4123092aa902,6799d4bf-5c4b-4966-b5d4-0cefb2cbddc1,Peripheral Blood Film,PBF,Haematology,Parasites,"",None Seen,4,1
+0ff89c15-422d-43fa-b02d-6804fa7316ce,75fc4815-0722-4e86-881e-1d46932d3304,Blood Film for Malaria Parasites,BFFM,Hematology,Malaria Parasites,,Negative,1,1
+1075d8b6-d9c6-43fc-ba23-14e7119732d0,75fc4815-0722-4e86-881e-1d46932d3304,Blood Film for Malaria Parasites,BFFM,Hematology,Species Identified,,None,2,1
+980c95dc-5f52-4054-bf7c-0f590eb26d45,75fc4815-0722-4e86-881e-1d46932d3304,Blood Film for Malaria Parasites,BFFM,Hematology,Parasitemia,parasites/UL,Negative,3,1
+94419dc2-09b0-42ed-bcc2-ae15c8a70f1b,059f4b88-7df0-4391-919d-efa81957aefe,Blood Group & Rh Factor,BLOODGRP,Hematology,Blood Group,,A / B / AB / O,1,1
+ca2dd85c-d452-4eb9-864f-6473394fc013,059f4b88-7df0-4391-919d-efa81957aefe,Blood Group & Rh Factor,BLOODGRP,Hematology,Rh Factor,,Positive / Negative,2,1
+8c783249-83f2-4637-8773-ca387fd87463,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Hemoglobin,g/dL,Male: 13.5-17.5 | Female: 12.0-16.0,1,1
+aa4e3f6d-1daf-4e25-b0b9-75c69bc97abe,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Hematocrit,%,Male: 41-53 | Female: 36-45,2,1
+c7370564-c2dc-4d30-a1e7-afa66771e135,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,RBC Count,10^12/L,Male: 4.5-5.9 | Female: 4.0-5.2,3,1
+bca699e8-e227-4259-9586-1bb9932412f5,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,MCV,fL,80-100,4,1
+11572f74-c9be-4d33-a684-30c3192f1bd5,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,MCH,pg,27-32,5,1
+ac24bfe1-f486-41f2-968e-62dc40e714b1,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,MCHC,g/dL,32-36,6,1
+e607757b-e681-4c2e-a3ae-9f0b97e816b4,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,RDW,%,11.5-14.5,7,1
+0f62df1c-6ab0-4ae9-9678-1abbda3182ec,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,WBC Count,10^9/L,4.0-11.0,8,1
+f38219d3-9ff2-4d9f-9535-bd3fdb2372d2,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Neutrophils,%,40-70,9,1
+922043cb-bb1a-4fe9-af48-29f0a19a5c10,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Lymphocytes,%,20-40,10,1
+0dd1d272-6450-4763-a89d-538839d79bda,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Monocytes,%,2-8,11,1
+c48c9998-e096-49c9-9597-b9dc518e9dd1,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Eosinophils,%,1-4,12,1
+cf82d433-675e-46a0-967a-9d3159c6d701,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Basophils,%,0-1,13,1
+4abfefd6-61e4-4a12-9d8f-d231f3b1efcb,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Neutrophils Absolute,10^9/L,2.0-7.5,14,1
+4e60a34a-a850-4cfa-b4eb-0abb70c30777,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Lymphocytes Absolute,10^9/L,1.0-4.0,15,1
+1a9bba9d-e71a-4ae2-aef2-b1938cb8561f,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Monocytes Absolute,10^9/L,0.2-1.0,16,1
+1d794708-ec78-45e1-90e2-fb4ffad2f875,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Eosinophils Absolute,10^9/L,0.0-0.5,17,1
+6ea4d069-db2a-4f25-8243-dc9b82210426,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Basophils Absolute,10^9/L,0.0-0.1,18,1
+c58b3d9c-4166-4442-828a-eddca06470de,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,Platelet Count,10^9/L,150-400,19,1
+4ae21904-e611-4564-a168-6845b43c60ad,beecaa29-eb1f-4fe4-bf3f-e6b4cac11826,Complete Blood Count,CBC,Hematology,MPV,fL,7.5-11.5,20,1
+cd6fb9e1-87ee-4fce-9a4e-d6840f1f2ef2,d89f82d4-c548-44c3-b759-b32b165e0eba,Erythrocyte Sedimentation Rate,ESR,Hematology,ESR,mm/hr,Male: 0-15 | Female: 0-20,1,1
+8d0c15f8-e76d-407d-82a9-1322e67e75a2,33eb4979-f09a-46e8-967e-2665c917faed,Haemoglobin,HB,Hematology,Hemoglobin,g/dL,Male: 13.5-17.5 | Female: 12.0-16.0,1,1
+5ac8e2e9-202a-4a5a-84e6-1fdf6641de2f,33eb4979-f09a-46e8-967e-2665c917faed,Haemoglobin,HB,Hematology,Hematocrit,%,Male: 41-53 | Female: 36-45,2,1
+8c8ed6fc-00df-4734-875b-0587757ec937,4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,WBC Count,cu/mm,4000-11000,1,1
+450302cf-0917-4f81-aee8-29f115eb732a,4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,Neutrophils,%,40-70,2,1
+4ad741ee-fcb8-4818-ae7b-aee23bc4c0a7,4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,Lymphocytes,%,20-40,3,1
+6f7929b1-903f-4fc2-9a8d-a3a6376279ac,4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,Monocytes,%,2-8,4,1
+216dac78-8bc4-4e9b-8c97-534080c3a3ac,4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,Eosinophils,%,1-4,5,1
+cb302fbe-819a-4f64-9cbe-c3d3f2fbf134,4e74b0d0-0f63-4cea-a35e-b115b39ed7f1,Total White Blood Cell Count,TWBC,Hematology,Basophils,%,0-1,6,1
+4ee0d9a3-7a7d-469b-9f27-b55a67dac1e3,1e576b49-474e-44db-8c49-98bf2e99a290,HDL Cholesterol,HDL,Lipid,TC/HDL Ratio,"",< 5.0,0,1
+aae3b9c8-2824-48e9-8511-53428c92767c,1e576b49-474e-44db-8c49-98bf2e99a290,HDL Cholesterol,HDL,Lipid,HDL Cholesterol,mg/dL,M:>40 | F:>50 (Higher is better),0,1
+25baff29-a0ac-49de-b9e3-8bf41c7123dc,1e576b49-474e-44db-8c49-98bf2e99a290,HDL Cholesterol,HDL,Lipid,LDL Cholesterol,mg/dL,Optimal:<100 | Near Optimal:100-129,0,1
+1b73b368-b80c-4157-9d3c-338f6a03dc3c,4141a4ca-06fe-40d3-a0c0-382cc8765421,HDL Cholesterol,HDL,Lipid,HDL Cholesterol,mg/dL,M:>40 | F:>50 (Higher is better),0,1
+50c5527d-a9f6-48af-beb2-b72415e85fcd,4141a4ca-06fe-40d3-a0c0-382cc8765421,HDL Cholesterol,HDL,Lipid,LDL Cholesterol,mg/dL,Optimal:<100 | Near Optimal:100-129,0,1
+b9c52fda-f831-417e-9922-f604683760e5,4141a4ca-06fe-40d3-a0c0-382cc8765421,HDL Cholesterol,HDL,Lipid,VLDL,mg/dL,5 - 40,0,1
+363329bf-f7e4-4fbb-8a07-f86c522ac2ae,4141a4ca-06fe-40d3-a0c0-382cc8765421,HDL Cholesterol,HDL,Lipid,TC/HDL Ratio,"",< 5.0,0,1
+e7b740e4-c360-4fe1-9e4c-f4644b711294,1e576b49-474e-44db-8c49-98bf2e99a290,HDL Cholesterol,HDL,Lipid,VLDL,mg/dL,5 - 40,0,1
+f976ad48-49c3-4bd1-a5b9-1680793a86b2,0ebb35d5-2712-4caf-a216-2122e4113c86,HDL Cholesterol,HDL,Lipid,HDL Cholesterol,mg/dL,M:>40 | F:>50 (Higher is better),1,1
+ffa71347-4321-415f-91a2-30ad24a4a754,0ebb35d5-2712-4caf-a216-2122e4113c86,HDL Cholesterol,HDL,Lipid,LDL Cholesterol,mg/dL,Optimal:<100 | Near Optimal:100-129,2,1
+b56ae065-66a8-4209-a27e-85b6a0d2d6b8,0ebb35d5-2712-4caf-a216-2122e4113c86,HDL Cholesterol,HDL,Lipid,VLDL,mg/dL,5 - 40,3,1
+4e9a36fd-a750-4df0-9bad-05339c791a44,0ebb35d5-2712-4caf-a216-2122e4113c86,HDL Cholesterol,HDL,Lipid,TC/HDL Ratio,"",< 5.0,4,1
+0b32c002-da90-4e49-88e8-1fd5c5797f3d,ae8b38d1-83c0-4c7a-8d81-1a609fc87fd7,Total Cholesterol,TCHOL,Lipid,Total Cholesterol,mg/dL,Desirable:<200 | Borderline:200-239 | High:>=240,0,1
+773ab446-3ec9-49fa-b487-b7bb2da95ace,f9b27dcd-45cf-4d0d-89c9-b17427de8640,Total Cholesterol,TCHOL,Lipid,Total Cholesterol,mg/dL,Desirable:<200 | Borderline:200-239 | High:>=240,0,1
+6e3d858e-a878-4b0c-a2e1-f3640cad5868,82de9e4b-df55-401e-9c91-f08baf26ee57,Total Cholesterol,TCHOL,Lipid,Total Cholesterol,mg/dL,Desirable:<200 | Borderline:200-239 | High:>=240,1,1
+372a0c06-cdb1-4b32-a18b-3395a98e49ff,093a3e58-7654-4707-bb5b-af5bf7c8c8b4,Triglycerides,TG,Lipid,Triglycerides,mg/dL,Normal:<150 | Borderline:150-199 | High:200-499,0,1
+e88401fc-34a0-4765-b0f7-2a3e071a903c,4637356b-5fbf-4947-a9f4-cd34f031ff45,Triglycerides,TG,Lipid,Triglycerides,mg/dL,Normal:<150 | Borderline:150-199 | High:200-499,0,1
+58ea6338-ad9f-4a76-85b8-2dbc4e39dbb6,ab486d80-fef2-4d27-8bc9-579f08f918ea,Triglycerides,TG,Lipid,Triglycerides,mg/dL,Normal:<150 | Borderline:150-199 | High:200-499,1,1
+e28a521e-7656-4444-853c-4c6a8297492a,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Color,,Brown,1,1
+9a376746-2eb6-4f33-9bc3-e6991b3ef7bc,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Consistency,,Formed,2,1
+6ab9dadc-fb96-46f0-9605-f5e0260e9524,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Undigested Food,,Negative,3,1
+a8eebfe4-867d-45c5-beb3-3a38aa2f33cc,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Mucus,,Negative,4,1
+5e64098c-eec8-4705-b855-fdea633efcf0,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Blood,,Negative,5,1
+62dc8d53-1347-4839-b1b9-5a811a66ac54,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Pus Cells,cells/HPF,0-5,6,1
+2196ea05-1ae2-434c-b0e2-d3b23f5577a4,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,RBCs,cells/HPF,Not Seen,7,1
+4af586b8-0975-4044-8c5a-405bd78dbd8a,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Parasites,,Not Seen,8,1
+a6eafdc0-7b5a-43fc-a69e-47920cbc3c92,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Ova,,Not Seen,9,1
+646d3940-304f-4605-922e-bfc3bd211aa7,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Cysts,,Not Seen,10,1
+09a5e0eb-fd06-4ab0-bc4c-3b8cefdd7cd8,1c38fd38-78fd-42c1-a3d5-f9ae7fc203d9,Stool Analysis,STOOL,Microbiology,Others,,Not Seen,11,1
+3ecc488f-88bb-4d4c-a48c-12a034762a05,0c1521fe-3dd9-4da7-a2e0-2ec5a6204950,TB Test (Mantoux),TB,Microbiology,Induration,mm,< 5mm: Negative | 5-9mm: Borderline | ≥10mm: Positive,1,1
+e49d185a-50e4-49f6-b806-ae697580d7c9,b108f322-fee3-4edd-9fae-da756200b32c,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,Sputum Quality,"",Adequate/Mucoid,0,1
+fc5406f8-dd26-48cb-bc2d-a9ca94f65329,b108f322-fee3-4edd-9fae-da756200b32c,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,AFB Smear (ZN Stain),"",Negative (No AFB Seen),0,1
+34dfbfb0-0313-4fc2-a85f-01c6e91155d2,1da9266b-4a4e-4275-905e-9b9ade7655e6,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,AFB Smear (ZN Stain),"",Negative (No AFB Seen),0,1
+70aa9ec2-d30c-4e95-a59f-7ede6ef3d635,1da9266b-4a4e-4275-905e-9b9ade7655e6,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,Sputum Quality,"",Adequate/Mucoid,0,1
+28aeed7b-9a96-473c-a462-85bfb56704ab,c71bf084-1445-4f94-b345-e4dbd2b19f0c,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,AFB Smear (ZN Stain),"",Negative (No AFB Seen),1,1
+f19a10f2-ad2c-4a25-bea8-d43072919fec,c71bf084-1445-4f94-b345-e4dbd2b19f0c,Sputum AFB (Acid-Fast Bacilli),AFB,Microbiology & Parasitology,Sputum Quality,"",Adequate/Mucoid,2,1
+78748002-84af-458e-a0ca-c2049bed77b1,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Occult Blood,"",Negative,0,1
+35707bab-5854-46eb-bded-17ec81a4dd9d,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,WBC,/HPF,0 - 2,0,1
+3d74ce98-d8dd-4733-b67d-b651675c5ba7,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,RBC,/HPF,0 - 2,0,1
+9e89ef3a-7cb2-4156-b27a-c059f3f6cd4d,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Consistency,"",Formed,0,1
+ca54bc41-1036-4d6b-8993-9132f278b072,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Colour,"",Brown,0,1
+92434eda-5881-411e-8cc4-0323692f0528,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Blood,"",Negative,0,1
+a224c758-4bdc-493f-857b-ce2f33b5affb,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Mucus,"",Negative,0,1
+6aa06c7c-c60b-49ee-ba01-28faa543d200,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Ova / Cysts,"",None Seen,0,1
+25dfa7e6-b58e-4441-ba30-ce641ac006d1,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Parasites,"",None Seen,0,1
+81f90905-f0bb-4064-8d38-5e940d8f45d6,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Occult Blood,"",Negative,0,1
+596035c0-da94-495b-bdb9-5e00bb266bd6,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,WBC,/HPF,0 - 2,0,1
+aac07dc8-3f7e-4e03-9d09-64a98af8622f,8ff34c60-0d8f-4685-9a1e-6b2feec953c2,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,RBC,/HPF,0 - 2,0,1
+0775528a-f6ab-48ea-aa68-c5c7fd232b7e,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Consistency,"",Formed,0,1
+08341ccd-06de-4115-a90d-3362decd8cd4,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Colour,"",Brown,0,1
+2cef7b99-db96-41a1-9ab3-dc0724105ce4,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Blood,"",Negative,0,1
+00ec422e-9b6c-459b-9fe9-8a74bf3f6097,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Mucus,"",Negative,0,1
+10af7fea-2d7c-4ea7-b50b-408b271dbccf,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Ova / Cysts,"",None Seen,0,1
+17ad0a50-7d95-40b1-93c7-607b2c93c020,ce7c2710-f32a-4239-9d8e-52ccf1b7e716,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Parasites,"",None Seen,0,1
+98df7132-b72d-4207-a281-aba05e7fb16b,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Consistency,"",Formed,1,1
+7a31365c-581d-4316-8aa4-92655e7f7750,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Colour,"",Brown,2,1
+233ec0eb-15e8-4e67-91c1-d4b67ef29f04,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Blood,"",Negative,3,1
+afc6a30b-9c3e-4a44-b6b7-9a185284a1a9,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Mucus,"",Negative,4,1
+66d1ecc3-e614-4d4c-a329-badca3aa5535,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Ova / Cysts,"",None Seen,5,1
+ef7fc48f-ba02-4ba0-bfae-eb38a61c4b65,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Parasites,"",None Seen,6,1
+da1e7104-0b62-45ed-b38d-2cf0f19c7fed,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,Occult Blood,"",Negative,7,1
+fb7a9539-494a-408d-88b0-64be77aa6207,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,WBC,/HPF,0 - 2,8,1
+2209132e-5b49-4db3-8e3b-6e463d12345b,c8ef0ce7-30cb-4f5e-b2f1-4f6bc41180b5,Stool Microscopy & Examination (M/E),STOOL-ME,Microbiology & Parasitology,RBC,/HPF,0 - 2,9,1
+ffd85dd1-e3ca-4cd4-a569-710061e84415,af7560ee-4f1e-441b-aa52-7e278011f759,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,MTB Detection,"",Not Detected,0,1
+0411db5f-9ffb-4bdd-94da-2d3357955bbf,f268f66d-8089-4bb0-9734-a434c38affb9,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,MTB Detection,"",Not Detected,0,1
+b36143d9-7c19-4a3a-b971-854d57543691,f268f66d-8089-4bb0-9734-a434c38affb9,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,Rifampicin Resistance,"",Not Detected,0,1
+d11c4c04-1b0e-4dd3-82a1-69be0ebee8e0,af7560ee-4f1e-441b-aa52-7e278011f759,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,Rifampicin Resistance,"",Not Detected,0,1
+255662e7-3305-4c2e-bb64-1bab87bcf0f6,3feac996-77ce-4f70-9022-206896df458c,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,MTB Detection,"",Not Detected,1,1
+7d10901d-9e59-44f6-8b87-aacd787adebc,3feac996-77ce-4f70-9022-206896df458c,TB Gene Xpert (MTB/RIF),GENEXPERT,Microbiology & Parasitology,Rifampicin Resistance,"",Not Detected,2,1
+c6b36ad0-a75e-4c40-94b0-1417b64e6281,0773420a-4320-4a97-972f-3552190fbd45,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Antibiotic Sensitivity,"",N/A,0,1
+f030a21e-37bb-4355-a3b0-adcbdf547ad5,13271559-80e9-4b9f-88a7-c69d5f938b8c,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Antibiotic Sensitivity,"",N/A,0,1
+87f8c40d-57f1-4e0e-a8ab-6851e10f3449,0773420a-4320-4a97-972f-3552190fbd45,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Organism Identified,"",No Growth,0,1
+e6359587-7969-42ae-96e7-a2ed68cdb4e4,13271559-80e9-4b9f-88a7-c69d5f938b8c,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Colony Count,CFU/mL,"< 10,000 (No Significant Growth)",0,1
+c5547f96-f506-4d9f-8f31-55b9f33531b2,0773420a-4320-4a97-972f-3552190fbd45,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Colony Count,CFU/mL,"< 10,000 (No Significant Growth)",0,1
+defa355a-53d1-4e80-9db5-b948754602d7,13271559-80e9-4b9f-88a7-c69d5f938b8c,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Organism Identified,"",No Growth,0,1
+68eef2fb-9fe4-438f-a06d-61513f91dcef,139b5226-a253-428e-a996-2633a4a22822,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Colony Count,CFU/mL,"< 10,000 (No Significant Growth)",1,1
+0592bbfb-47b6-4e6e-a975-c46316bf59e1,139b5226-a253-428e-a996-2633a4a22822,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Organism Identified,"",No Growth,2,1
+08f5831c-16d0-4722-9088-73b53881890b,139b5226-a253-428e-a996-2633a4a22822,Urine Culture & Sensitivity,UCS,Microbiology & Parasitology,Antibiotic Sensitivity,"",N/A,3,1
+2753db79-823b-4f0a-8f2b-645fd54b7fef,53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Gram Stain,"",Normal Flora,0,1
+4cc010ad-72e8-4b50-9a4a-410e7bba5603,53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Clue Cells,"",Absent,0,1
+ac7de71a-ef3c-4c1a-a377-e9e0abc945b7,53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Antibiotic Sensitivity,"",N/A,0,1
+f2e786e1-063e-40ab-8116-5cbe0e3f7557,53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Organism Identified,"",None,0,1
+17160bca-b963-4edc-b034-ff385b79722e,53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Culture Result,"",No Significant Growth,0,1
+58e50a06-54ed-47a4-a9bc-fbb2005dc905,53165506-0d9c-4b71-a6a0-462593597c0c,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Yeast/Hyphae,"",Not Seen,0,1
+baf73265-3dd6-400a-90f1-7bda7a1c7c1e,642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Yeast/Hyphae,"",Not Seen,0,1
+15af0d9e-663b-4725-86ce-77d7ef409c51,642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Clue Cells,"",Absent,0,1
+5e39de98-1311-418f-bbf9-814840da5ff1,642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Antibiotic Sensitivity,"",N/A,0,1
+5e091d0a-0a58-47ed-baf9-ef03f76b04c6,642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Organism Identified,"",None,0,1
+de235a1b-2727-47e2-983a-bfd9619fbd93,642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Culture Result,"",No Significant Growth,0,1
+29907662-5c28-4e5b-b841-1a77130da35b,642f6942-4d58-4e27-91cc-8a26a2e001c0,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Gram Stain,"",Normal Flora,0,1
+26e90df0-6055-4f52-bbc6-73659d721fb1,c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Gram Stain,"",Normal Flora,1,1
+571b817d-7a9c-414c-9407-be81bd05f263,c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Culture Result,"",No Significant Growth,2,1
+02331568-ef4c-4ebb-a7a9-a5cca3584157,c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Organism Identified,"",None,3,1
+c96ff7dd-5708-4613-8e4e-a805d2c5cad6,c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Antibiotic Sensitivity,"",N/A,4,1
+c987cd1c-1cb9-4fcf-8185-953be68becee,c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Clue Cells,"",Absent,5,1
+bbf958e0-cfc4-4626-9e8b-eaf277ae0898,c251c015-9223-4659-9683-e8d257d7967e,Vaginal Culture & Sensitivity,VAG-CS,Microbiology & Parasitology,Yeast/Hyphae,"",Not Seen,6,1
+37757229-38e1-4fd8-b6da-b316873c2c73,5d1f0d3a-1b71-4b30-9234-ee12b23a0a7b,Amylase,AMY,Pancreatic Profile,Serum Amylase,U/L,28 - 100,0,1
+5d433f70-1967-4799-ba22-695525146221,d2176985-7310-4375-a5c1-e0ec29f6f1bd,Amylase,AMY,Pancreatic Profile,Serum Amylase,U/L,28 - 100,0,1
+c6a1a61d-ea0e-4e32-b1ce-62ce8dd7c647,b8ec8758-6e25-4f41-99a8-4a520ed2adc0,Amylase,AMY,Pancreatic Profile,Serum Amylase,U/L,28 - 100,1,1
+435f97af-00fa-4209-8123-09d9d2d0b0cb,06748c24-2cc8-4b92-b291-b6fcba1f3105,Lipase,LIP,Pancreatic Profile,Serum Lipase,U/L,10 - 140,0,1
+de777fbc-8fea-4b9e-b939-4fc10e6f82ce,e35b1da3-b259-4ce4-9ebb-f20059bcb300,Lipase,LIP,Pancreatic Profile,Serum Lipase,U/L,10 - 140,0,1
+62a7f0d3-dc2a-4b11-bac3-737e6190e344,3b670ff2-9108-430c-9cb6-749494463ac0,Lipase,LIP,Pancreatic Profile,Serum Lipase,U/L,10 - 140,1,1
+2e690d3f-52fa-457c-9673-27292c19f726,494847ea-363e-4be9-8693-3cc09a543c91,Estradiol (E2),E2,Reproductive Hormones,Estradiol (E2),pg/mL,M:20-55 | F-Fol:20-350 | F-Mid:135-860 | F-Lut:35-570 | PM:<20,0,1
+16686235-7223-494e-87d5-1b036ea5662c,12dac119-a0b0-4f97-bc16-882a551ad4bb,Estradiol (E2),E2,Reproductive Hormones,Estradiol (E2),pg/mL,M:20-55 | F-Fol:20-350 | F-Mid:135-860 | F-Lut:35-570 | PM:<20,0,1
+089ffe5f-275b-4057-9fc9-7888b09f04e1,efd3cb46-926a-4e92-87dd-5604e042f617,Estradiol (E2),E2,Reproductive Hormones,Estradiol (E2),pg/mL,M:20-55 | F-Fol:20-350 | F-Mid:135-860 | F-Lut:35-570 | PM:<20,1,1
+92cd82b2-e7a2-48c9-b9e1-ea470ce14772,923c7bc5-d35c-46cd-b339-f73ec687a5d7,FSH (Follicle Stimulating Hormone),FSH,Reproductive Hormones,FSH,mIU/mL,M:1.5-12.4 | F-Fol:3.5-12.5 | F-Mid:4.7-21.5 | F-Lut:1.7-7.7 | PM:25.8-134.8,0,1
+c24cef08-b96d-40e8-af1a-43d0c44f09f4,241cabcf-6e8e-4d6d-8df7-cb5bd678b01a,FSH (Follicle Stimulating Hormone),FSH,Reproductive Hormones,FSH,mIU/mL,M:1.5-12.4 | F-Fol:3.5-12.5 | F-Mid:4.7-21.5 | F-Lut:1.7-7.7 | PM:25.8-134.8,0,1
+59274a70-d0ae-4d17-8f58-ad17a0e80b39,e61724fd-288a-44e1-ad1c-6d2d96a5c31b,FSH (Follicle Stimulating Hormone),FSH,Reproductive Hormones,FSH,mIU/mL,M:1.5-12.4 | F-Fol:3.5-12.5 | F-Mid:4.7-21.5 | F-Lut:1.7-7.7 | PM:25.8-134.8,1,1
+50acf896-786a-4888-8a65-cfd787be9258,85ba5e21-6e6d-4127-9e68-51c5bcd87afc,LH (Luteinizing Hormone),LH,Reproductive Hormones,LH,mIU/mL,M:1.7-8.6 | F-Fol:2.4-12.6 | F-Mid:14.0-95.6 | F-Lut:1.0-11.4 | PM:7.7-58.5,0,1
+b29ac1f7-ca0b-41f1-84fc-b96f4120f892,1b3e7d91-94a5-4c33-9fa5-c32d1126f617,LH (Luteinizing Hormone),LH,Reproductive Hormones,LH,mIU/mL,M:1.7-8.6 | F-Fol:2.4-12.6 | F-Mid:14.0-95.6 | F-Lut:1.0-11.4 | PM:7.7-58.5,0,1
+c9608b4d-61d2-449d-b623-66a2c8624119,055ead28-1c26-4ca0-a0ed-cda0d2adfd91,LH (Luteinizing Hormone),LH,Reproductive Hormones,LH,mIU/mL,M:1.7-8.6 | F-Fol:2.4-12.6 | F-Mid:14.0-95.6 | F-Lut:1.0-11.4 | PM:7.7-58.5,1,1
+ac61416e-d305-4e0a-bf53-56f757f3cc28,ad074a12-f720-4c63-8c9f-2e212b10685e,Progesterone,PROG,Reproductive Hormones,Progesterone,ng/mL,M:0.2-1.4 | F-Fol:0.1-0.9 | F-Lut:1.8-24.0 | PM:0.1-0.8,0,1
+892c80f3-6b92-4023-a0af-ccc78687f2e8,5e1b69ab-bfe8-427e-905a-8d790bc94075,Progesterone,PROG,Reproductive Hormones,Progesterone,ng/mL,M:0.2-1.4 | F-Fol:0.1-0.9 | F-Lut:1.8-24.0 | PM:0.1-0.8,0,1
+b839a7ea-bc19-489a-b1e5-ffd4f211ea90,8d4e86c4-d961-464b-b562-2feaa5178589,Progesterone,PROG,Reproductive Hormones,Progesterone,ng/mL,M:0.2-1.4 | F-Fol:0.1-0.9 | F-Lut:1.8-24.0 | PM:0.1-0.8,1,1
+c129551a-3149-41b4-ac43-ed619198a062,c7e897ce-c0be-4486-97ce-531dae2d0f64,Prolactin,PROL,Reproductive Hormones,Prolactin,ng/mL,M:2.0-18.0 | F:2.8-29.2 | Pregnant:10-209,0,1
+63567133-ab8e-4953-950b-2bd9175dae80,2b8ec9f7-1a2d-454c-883d-395741efa6e3,Prolactin,PROL,Reproductive Hormones,Prolactin,ng/mL,M:2.0-18.0 | F:2.8-29.2 | Pregnant:10-209,0,1
+00910d70-100a-4785-a1b7-46b77ddd1127,275a1470-0bcf-424b-b69c-89018a640b44,Prolactin,PROL,Reproductive Hormones,Prolactin,ng/mL,M:2.0-18.0 | F:2.8-29.2 | Pregnant:10-209,1,1
+e64449bc-98bc-464d-958f-6a43e2b99cb6,376352b8-0ea5-4f05-a8e5-94786c018120,Serum Beta-HCG (Pregnancy),BHCG,Reproductive Hormones,Beta-HCG,mIU/mL,Non-Pregnant: < 5 | Varies by gestational week,0,1
+850abdf3-7167-426f-9115-8a47e93b0e68,b9779030-44f8-4caf-813f-d7b6c9a91ac0,Serum Beta-HCG (Pregnancy),BHCG,Reproductive Hormones,Beta-HCG,mIU/mL,Non-Pregnant: < 5 | Varies by gestational week,0,1
+05490681-c3a8-4adf-a593-824bc90da642,73ecf8cf-ab2f-411e-ae7b-06d3743e29bd,Serum Beta-HCG (Pregnancy),BHCG,Reproductive Hormones,Beta-HCG,mIU/mL,Non-Pregnant: < 5 | Varies by gestational week,1,1
+fbc38d1d-5b8d-4552-a0dc-69842e9b42fe,2f692bd3-ee41-4f7b-8778-d85219fc1f80,Testosterone (Total),TESTO,Reproductive Hormones,Total Testosterone,ng/dL,M:300-1000 | F:15-70,0,1
+8988492e-2e92-401c-8ada-71946c87e12c,6df5e37b-22c3-4d8a-855b-83ee980bfa3d,Testosterone (Total),TESTO,Reproductive Hormones,Total Testosterone,ng/dL,M:300-1000 | F:15-70,0,1
+c990106c-e2dc-4f51-812e-85f918f9cff5,e021e962-e74c-46e3-af1c-ce5a52ee713e,Testosterone (Total),TESTO,Reproductive Hormones,Total Testosterone,ng/dL,M:300-1000 | F:15-70,1,1
+b093e781-1d80-4309-bfbe-723c6441537e,c567a8bc-dd59-404a-98da-e1e8bbf79647,COVID-19 Antigen Test,COVID19,RIDT,SARS-CoV-2 Antigen,"",Negative,0,1
+2d2dfe9a-4ebc-4e4c-921e-9f477c6c68e4,c3cfb025-16df-4b52-a707-e1933771a5d1,COVID-19 Antigen Test,COVID19,RIDT,SARS-CoV-2 Antigen,"",Negative,0,1
+e9e2dad6-243e-438e-bae1-45a50387864f,06feef98-5027-46e2-810f-2db3aebb6120,COVID-19 Antigen Test,COVID19,RIDT,SARS-CoV-2 Antigen,"",Negative,1,1
+e099bacc-1290-40bd-ba3f-f28b02a63665,8f159780-f0a6-490c-854f-7b0a25539b1e,HCG Pregnancy Test (Rapid),HCG-RAPID,RIDT,HCG (Urine),"",Negative (Non-Pregnant),0,1
+276853bf-83dd-4886-ab73-2a5049d6329f,66427c45-5048-407e-9bc3-12ef4a76c06c,HCG Pregnancy Test (Rapid),HCG-RAPID,RIDT,HCG (Urine),"",Negative (Non-Pregnant),0,1
+f732e0b9-c560-4f5d-81c8-36160ed04ee8,20debdaf-98e1-4849-8e9c-56f26a40063d,HCG Pregnancy Test (Rapid),HCG-RAPID,RIDT,HCG (Urine),"",Negative (Non-Pregnant),1,1
+430e9415-7aac-4047-b99d-c9df46c66761,96a1c5d6-649b-4dcb-9fef-b8342b559c2c,Malaria Antigen Test (RDT),MALARIA,RIDT,Plasmodium falciparum,"",Negative,0,1
+9b6b5822-8a4b-4124-a68f-c83da7262149,71d18108-f25e-4d21-91ed-8a81b12f939f,Malaria Antigen Test (RDT),MALARIA,RIDT,Plasmodium falciparum,"",Negative,0,1
+12dc058f-904f-45e9-a83c-b5877b5e195c,71d18108-f25e-4d21-91ed-8a81b12f939f,Malaria Antigen Test (RDT),MALARIA,RIDT,Plasmodium vivax,"",Negative,0,1
+85bcd251-1801-4544-a84b-126a1407bd79,71d18108-f25e-4d21-91ed-8a81b12f939f,Malaria Antigen Test (RDT),MALARIA,RIDT,Pan-Plasmodium,"",Negative,0,1
+b72a1fa5-c5e7-43bf-9764-c6f7ae6b30bd,96a1c5d6-649b-4dcb-9fef-b8342b559c2c,Malaria Antigen Test (RDT),MALARIA,RIDT,Pan-Plasmodium,"",Negative,0,1
+1fb56bfe-3060-4088-b329-e787227e68de,96a1c5d6-649b-4dcb-9fef-b8342b559c2c,Malaria Antigen Test (RDT),MALARIA,RIDT,Plasmodium vivax,"",Negative,0,1
+3804b8de-f03d-4d0e-acfb-e6b2814ed4e3,d912cde7-3c9f-4e8d-94ad-e426f7090fa7,Malaria Antigen Test (RDT),MALARIA,RIDT,Plasmodium falciparum,"",Negative,1,1
+581404fa-7612-434e-acc2-c53b471e9aed,d912cde7-3c9f-4e8d-94ad-e426f7090fa7,Malaria Antigen Test (RDT),MALARIA,RIDT,Plasmodium vivax,"",Negative,2,1
+120620cc-2dd4-4d9f-beb2-d870ac41691e,d912cde7-3c9f-4e8d-94ad-e426f7090fa7,Malaria Antigen Test (RDT),MALARIA,RIDT,Pan-Plasmodium,"",Negative,3,1
+0f1a4244-a56a-4fc5-bb17-3da7761f0a21,a2c3128b-4d3d-4b57-ac53-713a83d74b6a,Strep A (Group A Streptococcus),STREP-A,RIDT,Group A Streptococcus Antigen,"",Negative,0,1
+2636c034-9464-4047-a879-8bb0bf5e83b3,b87120c5-a04b-4322-9e26-0f2433a7572d,Strep A (Group A Streptococcus),STREP-A,RIDT,Group A Streptococcus Antigen,"",Negative,0,1
+c2733ff0-4b3d-4090-8bcc-807bc2f0cf40,76d2e583-c790-4b94-bbcb-153c2ea30678,Strep A (Group A Streptococcus),STREP-A,RIDT,Group A Streptococcus Antigen,"",Negative,1,1
+e45adf8c-2363-40f0-9146-e78de2cf342e,c269f087-2d6d-41ab-b187-4473f63f01d9,HCG Pregnancy Test,HCG,Serology,Beta-HCG,,Negative (Non-Pregnant),1,1
+27c54dd6-dc40-461e-be3c-a30b276a0154,92dcfd59-4364-472d-889b-f093e05f408a,Hepatitis B Surface Antigen,HBsAG,Serology,Anti-HCV,,Non-Reactive,1,1
+19422ed2-14d7-48fd-b926-f2df014628f6,92dcfd59-4364-472d-889b-f093e05f408a,Hepatitis B Surface Antigen,HBsAG,Serology,HBs Ag,,Non-Reactive,1,1
+a84dcf81-395c-4729-a8e9-802d1938f1cd,a6b39204-34a5-4f18-8fd2-09a72dbd5fac,Hepatitis C Virus Antibody,HCV,Serology,HCV Antigen,,Non-Reactive,1,1
+02f45333-9afb-4236-8081-ad725b0f44fd,8a0d9b69-6f20-422b-ac41-689c4bc38668,HIV P24 Antigen Test,P24,Serology,HIV P24 Antigen,,Non-Reactive,1,1
+ae739da7-7236-48db-be06-cee56cce3512,8a0d9b69-6f20-422b-ac41-689c4bc38668,HIV P24 Antigen Test,P24,Serology,HIV 1/2 Antibody,,Non-Reactive,2,1
+a4728bf1-d3e5-4d74-afa3-c0e7f4cc77c0,db70fe20-7061-4f44-a1f7-c719385780e0,VDRL (Syphilis Screening),VDRL,Serology,VDRL,,Reactive / Non-Reactive,1,1
+697ebe73-a4d4-4d0e-a8fb-128b615bd5c1,fc364740-9868-4679-81dc-0baf1275accf,Widal Test,WIDAL,Serology,S. Typhi O,titre,< 1:80,1,1
+7bea68e8-2e59-4c9a-912f-cea00f5b4a45,fc364740-9868-4679-81dc-0baf1275accf,Widal Test,WIDAL,Serology,S. Typhi H,titre,< 1:80,2,1
+c4a370ad-6cf8-4107-a28e-1fd21357b9e5,fc364740-9868-4679-81dc-0baf1275accf,Widal Test,WIDAL,Serology,S. Paratyphi AO,titre,< 1:80,3,1
+d27b4e4b-ae78-4f27-922a-5c1198c5274e,fc364740-9868-4679-81dc-0baf1275accf,Widal Test,WIDAL,Serology,S. Paratyphi BO,titre,< 1:80,4,1
+20d54225-c721-439e-b904-f49f64f3d0f3,73d3ac7b-e95f-4a1d-b5dc-37612d6f8817,Widal Test for Brucellosis,BRUCELLA,Serology,B. Abortus,titre,< 1:80,1,1
+f82d0568-0eb7-4577-b2fe-9329c5f18530,73d3ac7b-e95f-4a1d-b5dc-37612d6f8817,Widal Test for Brucellosis,BRUCELLA,Serology,B. Melitensis,titre,< 1:80,2,1
+6ada10ba-af76-48f9-b7da-fea15d9790ba,0f92cda5-ccb1-4ace-88de-a04ad1760b06,Anti-CCP (Anti-Cyclic Citrullinated Peptide),ANTI-CCP,Serology & Immunology,Anti-CCP,U/mL,Negative: < 20,0,1
+87f6c779-1a81-4a35-9c5b-e05643f42510,b13d25f0-4fb5-40ed-aeb4-152112abaaa2,Anti-CCP (Anti-Cyclic Citrullinated Peptide),ANTI-CCP,Serology & Immunology,Anti-CCP,U/mL,Negative: < 20,0,1
+a9b144d5-de60-4b03-acb3-530b370c7fe8,964a3daf-84de-42f1-a07e-52cf74fd0043,Anti-CCP (Anti-Cyclic Citrullinated Peptide),ANTI-CCP,Serology & Immunology,Anti-CCP,U/mL,Negative: < 20,1,1
+d1ba161b-e14f-494f-80ed-ab3644b2d95f,0a94241c-9a82-439e-8229-96c899bd222d,CRP (C-Reactive Protein),CRP,Serology & Immunology,CRP Quantitative,mg/L,< 6.0,0,1
+0d65074e-6959-42de-9c63-be7453f68646,f6957378-1008-43ba-b238-4b78b7441740,CRP (C-Reactive Protein),CRP,Serology & Immunology,CRP Quantitative,mg/L,< 6.0,0,1
+bea6f8ae-a6f0-439a-86e0-a0bb9d035eed,f6957378-1008-43ba-b238-4b78b7441740,CRP (C-Reactive Protein),CRP,Serology & Immunology,CRP Qualitative,"",Negative,0,1
+9d629446-b021-4bcb-b2ba-aa20a6340607,0a94241c-9a82-439e-8229-96c899bd222d,CRP (C-Reactive Protein),CRP,Serology & Immunology,CRP Qualitative,"",Negative,0,1
+6357a663-f668-4c36-a2b9-8bdf010fe238,a3e84ddf-94a3-4925-820a-334196df5d8e,CRP (C-Reactive Protein),CRP,Serology & Immunology,CRP Qualitative,"",Negative,1,1
+e77f7858-f8c0-4e42-a818-9f93d0944020,a3e84ddf-94a3-4925-820a-334196df5d8e,CRP (C-Reactive Protein),CRP,Serology & Immunology,CRP Quantitative,mg/L,< 6.0,2,1
+f223d201-6358-4f16-8c61-79fcefb7068f,c2389ad2-8997-408d-a64d-89324ce228c9,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue IgM Antibody,"",Non-Reactive,0,1
+8f7ef4fc-a85f-42ae-9d1e-727266e4aaa7,c2389ad2-8997-408d-a64d-89324ce228c9,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue IgG Antibody,"",Non-Reactive,0,1
+2834c4d1-c0ba-48e4-99d2-fb19c7c8d183,de4ab780-0f0d-48af-b57c-ddfc12007bb4,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue NS1 Antigen,"",Non-Reactive,0,1
+4bdd5fec-e692-4b70-9c6e-831970b6fc95,de4ab780-0f0d-48af-b57c-ddfc12007bb4,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue IgM Antibody,"",Non-Reactive,0,1
+a3092324-1a5b-40fe-af64-cd4191d60f06,de4ab780-0f0d-48af-b57c-ddfc12007bb4,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue IgG Antibody,"",Non-Reactive,0,1
+55982f78-0b9e-4c75-99f4-d1d317989075,c2389ad2-8997-408d-a64d-89324ce228c9,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue NS1 Antigen,"",Non-Reactive,0,1
+01b3ab44-0211-470f-bd51-5809179d7b79,52f22e09-136a-4b70-9b01-7c876a76eb4e,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue NS1 Antigen,"",Non-Reactive,1,1
+bca5d013-9f89-4589-ba53-f6b217f3b521,52f22e09-136a-4b70-9b01-7c876a76eb4e,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue IgM Antibody,"",Non-Reactive,2,1
+d281679f-c576-40a0-b606-a0ca35b46cfd,52f22e09-136a-4b70-9b01-7c876a76eb4e,Dengue NS1 Antigen & Antibody,DENGUE,Serology & Immunology,Dengue IgG Antibody,"",Non-Reactive,3,1
+033d9fe3-f46d-4501-a31b-fce83b321fba,1b9029a7-f93e-4fc4-9163-306c92279da5,Hepatitis B Surface Antigen (HBsAg),HBSAG,Serology & Immunology,HBsAg,"",Non-Reactive,0,1
+07c17ce2-0e2e-4567-ad27-9f80fae2bfdd,a8d5efe6-8db7-4770-803e-537fef558b68,Hepatitis B Surface Antigen (HBsAg),HBSAG,Serology & Immunology,HBsAg,"",Non-Reactive,0,1
+faf47338-7f4e-4ce5-90b7-76fe201cabfb,bac78434-3c18-4d5c-ac61-2822fce970b1,Hepatitis B Surface Antigen (HBsAg),HBSAG,Serology & Immunology,HBsAg,"",Non-Reactive,1,1
+ad892549-1fff-4500-af28-d21500cbd4f6,5bcdd403-1715-4bb7-9961-3ea0726152ed,Hepatitis C Antibody (Anti-HCV),HCV,Serology & Immunology,Anti-HCV Antibodies,"",Non-Reactive,0,1
+fe7cd1ee-326d-44b1-8c5c-da9a90d32f7a,15d5eb96-e076-4fd8-ac77-d343d7e8e409,Hepatitis C Antibody (Anti-HCV),HCV,Serology & Immunology,Anti-HCV Antibodies,"",Non-Reactive,0,1
+2cd88fd9-8505-4a0d-84b7-d15a8f265952,c32d7ea9-d3c2-4693-a0d1-2ac5b8232e4f,Hepatitis C Antibody (Anti-HCV),HCV,Serology & Immunology,Anti-HCV Antibodies,"",Non-Reactive,1,1
+ebe33610-65a9-423e-a7b6-05bb428a3a91,dd37bae4-917a-4236-b222-a4064071e42e,HIV Test (HIV 1 & 2),HIV,Serology & Immunology,HIV 1/2 Antibodies,"",Non-Reactive,0,1
+55e256fd-0f15-4acb-bc42-00f1391a82a6,390b4ffb-3162-40f2-b2fb-b465bb040f19,HIV Test (HIV 1 & 2),HIV,Serology & Immunology,HIV 1/2 Antibodies,"",Non-Reactive,0,1
+9032fef5-032b-46fe-9895-1062870a0bec,81cbafbe-925e-4366-b1c2-27a1feda3945,HIV Test (HIV 1 & 2),HIV,Serology & Immunology,HIV 1/2 Antibodies,"",Non-Reactive,1,1
+944d312a-b5d3-460b-80ed-050d324a720e,44890a68-c1b2-4227-b612-472f6e6569ca,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,H. Pylori Stool Antigen,"",Negative,0,1
+b97d72ae-85c2-46ef-9398-d0f38c8a9df7,77d6ebb2-b00e-4ea0-a130-39719648574a,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,H. Pylori IgG Antibody,U/mL,Negative: < 12,0,1
+ce29a6a9-1a98-47d6-b63e-ffbe100ed5e7,44890a68-c1b2-4227-b612-472f6e6569ca,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,H. Pylori IgG Antibody,U/mL,Negative: < 12,0,1
+01836566-1be9-4e06-9d67-799e7abd9ecf,77d6ebb2-b00e-4ea0-a130-39719648574a,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,H. Pylori Stool Antigen,"",Negative,0,1
+5617fbfb-82cd-418a-9e77-b3d24df5e43e,5f4b7a1e-9e01-4098-a41f-4ef2eb32eb53,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,H. Pylori IgG Antibody,U/mL,Negative: < 12,1,1
+d3e215cd-bda9-467d-ac46-04ef0ba4b23f,5f4b7a1e-9e01-4098-a41f-4ef2eb32eb53,H. Pylori (Helicobacter Pylori),H-PYLORI,Serology & Immunology,H. Pylori Stool Antigen,"",Negative,2,1
+7a9ae519-ffe6-42f6-aec1-44d085fb1beb,3cca0319-fbeb-441b-b2b6-4b5510b93742,Procalcitonin (PCT),PCT,Serology & Immunology,Procalcitonin,ng/mL,Normal:<0.5 | Possible Sepsis:0.5-2.0 | High Sepsis:>2.0,0,1
+bf843ea3-8d08-4f57-9bc2-31a89032a6d5,f93eb7a1-009f-4310-b72e-3afd7689aea1,Procalcitonin (PCT),PCT,Serology & Immunology,Procalcitonin,ng/mL,Normal:<0.5 | Possible Sepsis:0.5-2.0 | High Sepsis:>2.0,0,1
+e23d2fb1-1c7e-48ee-acc3-0af6c63293e9,05c67555-b921-4eed-a32f-1ee948cffc57,Procalcitonin (PCT),PCT,Serology & Immunology,Procalcitonin,ng/mL,Normal:<0.5 | Possible Sepsis:0.5-2.0 | High Sepsis:>2.0,1,1
+711cdbdf-5d1a-4bb7-908b-64d616edf2ec,09015d3f-d985-4ddb-ae4c-acd51d01b528,Rheumatoid Factor (RF),RF,Serology & Immunology,Rheumatoid Factor,IU/mL,Negative: < 14,0,1
+b0094707-bafa-4950-86e2-9aac93f4b55f,3945cec0-83a0-4d15-839d-4c0cea69cc2f,Rheumatoid Factor (RF),RF,Serology & Immunology,Rheumatoid Factor,IU/mL,Negative: < 14,0,1
+c6493363-080b-4b08-ab17-071deb56a38f,8493df8c-32c9-4404-8687-9c0b4b11a43b,Rheumatoid Factor (RF),RF,Serology & Immunology,Rheumatoid Factor,IU/mL,Negative: < 14,1,1
+c33998bc-8afb-49f0-9121-a9419a7414a4,3336ee96-13f7-427c-baa6-aafbf5adc3e6,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. paratyphi BH,Titre,< 1:80 (Negative),0,1
+e19d73fc-53d8-425a-82fc-24cee2c513ce,3336ee96-13f7-427c-baa6-aafbf5adc3e6,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. paratyphi AO,Titre,< 1:80 (Negative),0,1
+505427b3-0fce-419b-aac2-a93517c4cfe6,3336ee96-13f7-427c-baa6-aafbf5adc3e6,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. typhi H,Titre,< 1:80 (Negative),0,1
+d5276c34-6388-43a5-a69e-b11332620f8e,3336ee96-13f7-427c-baa6-aafbf5adc3e6,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. typhi O,Titre,< 1:80 (Negative),0,1
+f00f914a-7ec1-460a-afd1-e98f48f93ced,874c4962-2779-4913-a10d-0940e35242b2,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. paratyphi BH,Titre,< 1:80 (Negative),0,1
+30c399d1-db46-4276-a4fe-f4169a806780,874c4962-2779-4913-a10d-0940e35242b2,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. paratyphi AO,Titre,< 1:80 (Negative),0,1
+e32d8627-d762-4574-a2db-286e922814f7,874c4962-2779-4913-a10d-0940e35242b2,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. typhi H,Titre,< 1:80 (Negative),0,1
+b2a60a08-837c-427a-8a06-b9d94c6583da,874c4962-2779-4913-a10d-0940e35242b2,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. typhi O,Titre,< 1:80 (Negative),0,1
+7551768a-cc46-40fd-867d-88e1e8b49bf5,a22ce37f-28cd-4274-b0ea-1c5d488e74cc,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. typhi O,Titre,< 1:80 (Negative),1,1
+a99548a5-482c-4cf3-b736-a609855b3410,a22ce37f-28cd-4274-b0ea-1c5d488e74cc,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. typhi H,Titre,< 1:80 (Negative),2,1
+73d2744d-43ed-43c1-8ef0-8261ec18de66,a22ce37f-28cd-4274-b0ea-1c5d488e74cc,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. paratyphi AO,Titre,< 1:80 (Negative),3,1
+f5f9fac0-01f4-42da-a0c0-2a49efc12192,a22ce37f-28cd-4274-b0ea-1c5d488e74cc,Widal Test (Typhoid),WIDAL,Serology & Immunology,S. paratyphi BH,Titre,< 1:80 (Negative),4,1
+1b8ffcb2-ea1e-4c0c-b384-524bebce4fe8,47263123-84cb-4e6c-b398-70b07937627f,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,Free T4,pmol/L,9.0 - 24.0,0,1
+a12d0588-e842-4e9b-a361-cca18173f4bf,47263123-84cb-4e6c-b398-70b07937627f,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,Free T3,pmol/L,3.5 - 7.8,0,1
+9a93e586-8919-4cbd-a7ca-2a2c40eb0fa0,137b8fce-14a2-42b6-beb3-c56ce6500a5d,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,Free T3,pmol/L,3.5 - 7.8,0,1
+14cf03c8-081b-4fe4-af3d-5f54d1e49ece,137b8fce-14a2-42b6-beb3-c56ce6500a5d,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,Free T4,pmol/L,9.0 - 24.0,0,1
+a516f222-cd29-48cf-aa25-03d4b0cb31f8,ab4389bf-1263-461b-8a7e-e1a81dda1aae,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,Free T4,pmol/L,9.0 - 24.0,1,1
+5bad94b0-fca9-40bd-b003-64c36520fe18,ab4389bf-1263-461b-8a7e-e1a81dda1aae,Free T4 (Free Thyroxine),FT4,Thyroid Function Test,Free T3,pmol/L,3.5 - 7.8,2,1
+68a44340-1ab8-49bb-be67-bbfcbd92d1c0,bbd79e80-6a75-4b83-8619-a5ef7800ecca,TSH (Thyroid Stimulating Hormone),TSH,Thyroid Function Test,TSH,mIU/L,0.4 - 4.0,0,1
+66b94c65-647b-4e4c-85d4-6ff5829c3f2e,120e04f9-e869-48c9-8d17-349417f3220e,TSH (Thyroid Stimulating Hormone),TSH,Thyroid Function Test,TSH,mIU/L,0.4 - 4.0,0,1
+7bff496f-8c41-4307-b6a7-3f8c693954bb,ad5ca077-ba63-449d-9343-c196929a4899,TSH (Thyroid Stimulating Hormone),TSH,Thyroid Function Test,TSH,mIU/L,0.4 - 4.0,1,1
+d7cd56df-b05d-45ea-b85c-9151e032c3b3,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Color,,Yellow,1,1
+d799c9b0-ac55-42f4-baa5-54ca7b34070c,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Appearance,,Clear,2,1
+5b9ab50e-dc91-4f76-948d-35a53b06b1da,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Protein,,Negative,3,1
+759c2ad2-770e-4e59-87bc-4a542537f4e9,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Sugar/Glucose,,Negative,4,1
+f9599acd-941a-4a13-bf8d-63babf898d15,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Acetone/Ketones,,Negative,5,1
+218bbdd9-915a-4597-aa36-3156692d013d,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Leucocytes,,Negative,6,1
+f831af4d-d45f-4e8d-bc89-11341129ced6,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Worms,,Not Seen,7,1
+2a151d0b-cd69-4d6b-848c-d5808831c4d9,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Specific Gravity,,1.005-1.030,8,1
+e6496349-e1fc-4eb5-b5b0-f6902c52df58,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,pH,,4.5-8.0,9,1
+e9ab8902-e37b-4260-8de7-186621744b13,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Blood,,Negative,10,1
+d404ed52-22d6-42f0-a1ce-ced377901e76,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Pus Cells,cells/HPF,0-5,11,1
+422b5a10-21fb-405c-addc-fa04d8ce892c,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,RBCs,cells/HPF,0-2,12,1
+b1119b80-1b38-44da-ad7e-344f4f4a265f,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Epithelial Cells,cells/HPF,Occasional,13,1
+6a9df76b-b25b-4c43-8e0f-044fa827da07,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Bacteria,,Not Seen,14,1
+4ffccf8d-8411-4393-ac9a-0ad1d9a5c26e,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Casts,,Not Seen,15,1
+bd7a45ae-39af-4edc-a59e-f33a33c1c25a,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Ova,,Not Seen,16,1
+516553d5-c021-486f-a692-46f9ddf836bb,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Cysts,,Not Seen,17,1
+eb734b5f-c7f1-4156-a5ef-fe103a6828d8,410cdcf7-b84a-4e98-a500-f391b93c8746,Urine Analysis,URINE,Urinalysis,Others,,Not Seen,18,1

@@ -1,0 +1,42 @@
+# Dependencies (rebuilt inside Docker)
+node_modules
+src/server/node_modules
+
+# Built frontend (rebuilt inside Docker via multi-stage build)
+dist/
+
+# Git
+.git
+.gitignore
+
+# Environment files (pass via docker-compose env or secrets)
+.env
+src/server/.env
+src/server/env_config.txt
+
+# Deploy folder (contains large .tar/.zip files — not needed for build)
+deploy/
+
+# Uploads (user files — mounted as Docker volume anyway)
+uploads/
+
+# Large binary files (never needed in build)
+*.tar
+*.tar.gz
+*.zip
+*.gz
+
+# Dev/test files
+*.log
+tests/
+*.sql
+
+# IDE
+.windsurf
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
