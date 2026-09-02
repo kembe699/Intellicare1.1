@@ -666,8 +666,31 @@ app.use((err, req, res, next) => {
 // Serve React frontend (production) or return JSON 404 (development)
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../../dist');
-  app.use(express.static(distPath));
+
+  // Vite fingerprints every asset, so they can be cached forever — but
+  // index.html must never be, because it is what names the current build's
+  // assets. A cached index.html pointing at a previous deploy's filenames is
+  // exactly how you get "refused to apply style ... MIME type" and 404s on
+  // /assets/* right after a deploy: the browser asks for files that no longer
+  // exist and gets the SPA shell back instead.
+  app.use(express.static(distPath, {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+
+  // Anything that looks like a file must 404 rather than fall through to the
+  // SPA shell. Handing HTML back for a missing .css/.js makes the browser
+  // reject it with a confusing MIME-type error instead of a plain "not found".
+  const STATIC_FILE = /\.(js|mjs|css|map|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot|json|txt|xml|csv|pdf|webmanifest)$/i;
   app.get('*', (req, res) => {
+    if (req.path.startsWith('/assets/') || STATIC_FILE.test(req.path)) {
+      return res.status(404).end();
+    }
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
