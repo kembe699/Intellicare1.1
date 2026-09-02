@@ -5,7 +5,7 @@ export const getApiUrl = (path: string = '') => {
   
   const baseUrl = isLocalhost 
     ? window.location.origin 
-    : (import.meta.env.VITE_API_URL || 'https://api.nilehc.tech');
+    : (import.meta.env.VITE_API_URL || window.location.origin);
   
   // Ensure path starts with /api if not already included
   if (path && !path.startsWith('/api')) {

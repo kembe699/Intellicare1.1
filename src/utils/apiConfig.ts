@@ -7,7 +7,7 @@ export const getApiBaseUrl = () => {
     return `${window.location.origin}/api`;
   } else {
     // For production, use VITE_API_URL env variable pointing to Render backend
-    const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://api.nilehc.tech';
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || window.location.origin;
     return `${apiUrl}/api`;
   }
 };

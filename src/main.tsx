@@ -9,7 +9,7 @@ import App from './App';
 const _hostname = window.location.hostname;
 const _isLocal = _hostname === 'localhost' || _hostname === '127.0.0.1';
 if (!_isLocal) {
-  const _backendBase = (import.meta.env.VITE_API_URL as string) || 'https://api.nilehc.tech';
+  const _backendBase = (import.meta.env.VITE_API_URL as string) || window.location.origin;
   const _origFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     if (typeof input === 'string' && (input.startsWith('/api') || input.startsWith('/health'))) {

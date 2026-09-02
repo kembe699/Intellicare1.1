@@ -4,14 +4,13 @@
 // this module has its own minimal auth-aware fetch that leaves Content-Type alone for
 // FormData bodies, mirroring authFetch's base-URL resolution and token handling.
 
-const RENDER_BACKEND = 'https://api.nilehc.tech';
 const getApiBase = () => {
   const hostname = window.location.hostname;
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
   if (isLocalhost) return '';
   const isPrivateIP = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(hostname);
   if (isPrivateIP) return `http://${hostname}:3002`;
-  return import.meta.env.VITE_API_URL || RENDER_BACKEND;
+  return import.meta.env.VITE_API_URL || window.location.origin;
 };
 
 const authHeaders = (): HeadersInit => {

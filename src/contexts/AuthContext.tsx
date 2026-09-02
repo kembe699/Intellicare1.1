@@ -33,7 +33,7 @@ class AuthApiClient {
     // Private/LAN IP — route to local backend on same host/port
     const isPrivateIP = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(hostname);
     if (isPrivateIP) return `${window.location.origin}/api/auth`;
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://api.nilehc.tech';
+    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
     return `${apiUrl}/api/auth`;
   }
   

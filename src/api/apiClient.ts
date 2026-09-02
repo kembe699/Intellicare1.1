@@ -6,7 +6,6 @@
 import { User, Patient, LabTest, Visit, Diagnosis, DrugInventory } from "@/types";
 
 // ── Production-safe base URL ────────────────────────────────────────────────
-const RENDER_BACKEND = 'https://api.nilehc.tech';
 const getProductionBase = () => {
   const hostname = window.location.hostname;
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
@@ -14,7 +13,8 @@ const getProductionBase = () => {
   // Private/LAN IP — route to the local backend on port 3002 (same host)
   const isPrivateIP = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(hostname);
   if (isPrivateIP) return `http://${hostname}:3002`;
-  return import.meta.env.VITE_API_URL || RENDER_BACKEND;
+  // Same origin by default: the Express server serves this bundle AND the API.
+  return import.meta.env.VITE_API_URL || window.location.origin;
 };
 
 // ── Auth-aware fetch ─────────────────────────────────────────────────────────

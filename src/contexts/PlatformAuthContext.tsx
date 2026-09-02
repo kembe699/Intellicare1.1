@@ -30,7 +30,7 @@ function apiBase() {
   const hostname = window.location.hostname;
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
   if (isLocal) return `${window.location.origin}/api/platform`;
-  const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://api.nilehc.tech';
+  const apiUrl = (import.meta as any).env?.VITE_API_URL || window.location.origin;
   return `${apiUrl}/api/platform`;
 }
 
