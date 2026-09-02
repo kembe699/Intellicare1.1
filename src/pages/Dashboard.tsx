@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { dashboardApi, authFetch } from '@/api/apiClient';
 import {
   Stethoscope, FlaskConical, Pill,
@@ -65,6 +66,7 @@ type Period = (typeof PERIODS)[number]['value'];
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const facilityInfo = useFacilityInfo();
   const { fmt } = useCurrency();
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0, todayPatients: 0, todayVisits: 0,
@@ -180,7 +182,10 @@ const Dashboard: React.FC = () => {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{greetingDate}</p>
           <h1 className="mt-1 text-2xl font-bold text-foreground">
-            Welcome back{firstName ? `, ${firstName}` : ''} — <span className="text-primary">{user?.clinic}</span>
+            Welcome back{firstName ? `, ${firstName}` : ''}
+            {facilityInfo.facilityName && (
+              <> — <span className="text-primary">{facilityInfo.facilityName}</span></>
+            )}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Here's what's happening across the clinic right now.</p>
         </div>
