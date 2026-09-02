@@ -36,15 +36,41 @@ when writing new queries.
 | `DATE_FORMAT`, `DATEDIFF`, `IFNULL`, `IF()`, `DATABASE()` | `to_char`, date subtraction, `COALESCE`, `CASE WHEN`, `current_schema()` | converted by `scripts/pg_codemod.py`, `pg_datefns.py`, `pg_concat.py` |
 | non-numeric id in a numeric column coerces to 0 | hard error | `/route/:id` with a non-numeric id now 500s instead of returning empty. Worth validating ids at the route layer. |
 
+## Multi-tenancy: one database, one schema per tenant
+
+Everything lives in a single database:
+
+| Schema | Contents |
+|---|---|
+| `public` | control plane — `clients`, `platform_admins`, `subscription_plans`, `invoices`, `db_usage_snapshots` |
+| `tenant_<code>` | one hospital's data (~202 tables) |
+| `tenant_template` | empty structure + reference data; new tenants are cloned from it |
+
+Isolation comes from `search_path`: `buildSequelize(schema)` pins it in an
+`afterConnect` hook, so every query on that pool — model or raw SQL — is scoped
+to one schema and cannot reach another. `tenantDb.js` caches one such connection
+per tenant; the JWT carries `schemaName`.
+
+Creating a tenant from **/platform-admin** runs `scripts/provisionTenant.js`,
+which does `CREATE SCHEMA`, clones every table from the template with
+`LIKE ... INCLUDING ALL`, replays the foreign keys, copies the reference
+catalogues, then seeds the facility, main branch, first admin and chart of
+accounts. Deleting a client does `DROP SCHEMA ... CASCADE`.
+
+None of this needs elevated privileges — which is precisely why it works on
+Render, where the app's role cannot `CREATE DATABASE`.
+
+To add something every future tenant should start with, insert it into
+`tenant_template` and list the table in `TENANT_SEED_TABLES`.
+
 ## Known remaining work
 
 - **16 `ON DUPLICATE KEY UPDATE` statements** still need `ON CONFLICT … DO UPDATE`
   (schemes, roles, procurement, exchangeRates, patientDeposits, approvals).
   Reads work; those specific writes will fail.
-- **Tenant provisioning** (`scripts/provisionTenant.js`) still uses
-  `CREATE DATABASE` and `SHOW CREATE TABLE`. Worth deciding between
-  database-per-tenant and schema-per-tenant before converting — schema-per-tenant
-  is usually the better fit on managed Postgres.
+- Schema changes made by boot migrations land in `tenant_template` (the default
+  connection points there), so *new* tenants pick them up — existing tenant
+  schemas do not. A migration runner that loops over `clients` is the next step.
 - Boot migrations still emit ~17 harmless warnings (`ALTER … MODIFY`,
   `AUTO_INCREMENT`, `ADD COLUMN … AFTER`) — idempotent patches the migrated
   schema already satisfies.

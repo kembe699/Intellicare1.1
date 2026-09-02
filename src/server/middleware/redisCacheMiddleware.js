@@ -1,7 +1,7 @@
 /**
  * Redis-backed response cache middleware.
  *
- * Cache key = tenant dbName | userId | branchId | full URL (path + query string)
+ * Cache key = tenant schemaName | userId | branchId | full URL (path + query string)
  * Only caches successful GET responses (status 200).
  * POST / PUT / DELETE / PATCH bypass the cache entirely.
  *
@@ -23,15 +23,15 @@ function redisCacheMiddleware(ttlSeconds = DEFAULT_TTL) {
     if (req.method !== 'GET') return next();
     if (NOCACHE_PREFIXES.some(p => req.originalUrl.startsWith(p))) return next();
 
-    // dbName scopes the key to this tenant's own database — without it, two
+    // schemaName scopes the key to this tenant's own database — without it, two
     // different tenants whose user/branch ids happen to coincide (e.g. every
     // freshly-provisioned tenant's first admin/branch, which nearly always
     // land on the same small auto-increment values) would silently share
     // cached responses across tenants.
-    const dbName   = req.tenantDbName || 'default';
+    const schemaName   = req.tenantSchema || 'default';
     const userId   = req.user?.id   || 'anon';
     const branchId = req.branchContext?.branchId || req.user?.branchId || 'none';
-    const key = `ic|${dbName}|${userId}|${branchId}|${req.originalUrl}`;
+    const key = `ic|${schemaName}|${userId}|${branchId}|${req.originalUrl}`;
 
     const cached = await redisCache.get(key);
     if (cached !== null) {

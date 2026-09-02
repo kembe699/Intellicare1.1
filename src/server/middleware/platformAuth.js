@@ -4,7 +4,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // Verifies the platform-admin JWT (routes/platform/auth.js). Deliberately
 // separate from middleware/auth.js's authenticateToken — a platform-admin
-// token carries no dbName/tenant context at all, so it can never be used to
+// token carries no schemaName/tenant context at all, so it can never be used to
 // reach any tenant's hospital data, and a tenant-user token can never pass
 // this check to reach the platform admin panel.
 function authenticatePlatformAdmin(req, res, next) {

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 // Deliberately separate from AuthContext (the tenant-user auth) — different
-// localStorage key, different token shape (isPlatformAdmin, no dbName), and
+// localStorage key, different token shape (isPlatformAdmin, no schemaName), and
 // never shares state with it, so a platform admin session and a tenant
 // session can't be confused with one another.
 interface PlatformAdmin {

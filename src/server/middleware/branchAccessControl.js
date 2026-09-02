@@ -104,10 +104,10 @@ async function branchAccessControl(req, res, next) {
   try {
     const isAdmin = req.user.role === 'admin';
     const sequelize = req.models?.sequelize;
-    // Cache key includes dbName — user ids are only unique within a single
+    // Cache key includes schemaName — user ids are only unique within a single
     // tenant's own database, so a key of userId alone would serve one
     // tenant's cached branch list to another tenant's same-numbered user id.
-    const branchCacheKey = `${req.tenantDbName}:${req.user.id}`;
+    const branchCacheKey = `${req.tenantSchema}:${req.user.id}`;
 
     // Use cached branch context to avoid a DB query on every request
     let accessibleBranches = branchCtxCache.get(branchCacheKey);

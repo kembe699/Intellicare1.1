@@ -197,7 +197,7 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
     }
 
     const { getTenantConnection } = require('./tenantDb');
-    const { sequelize, models } = await getTenantConnection(client.db_name);
+    const { sequelize, models } = await getTenantConnection(client.schema_name);
 
     const user = await models.User.findOne({ where: { email: email.toLowerCase() } });
 
@@ -251,7 +251,7 @@ app.get('/api/auth/verify-reset-token/:token', passwordResetLimiter, async (req,
     }
 
     const { getTenantConnection } = require('./tenantDb');
-    const { sequelize } = await getTenantConnection(client.db_name);
+    const { sequelize } = await getTenantConnection(client.schema_name);
 
     const [tokens] = await sequelize.query(`
       SELECT * FROM password_reset_tokens
@@ -291,7 +291,7 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
     }
 
     const { getTenantConnection } = require('./tenantDb');
-    const { sequelize, models } = await getTenantConnection(client.db_name);
+    const { sequelize, models } = await getTenantConnection(client.schema_name);
 
     const [tokens] = await sequelize.query(`
       SELECT * FROM password_reset_tokens
@@ -459,10 +459,10 @@ app.use((req, res, next) => {
   const originalJson = res.json.bind(res);
   res.json = function(data) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      const dbName   = req.tenantDbName || 'default';
+      const schemaName   = req.tenantSchema || 'default';
       const userId   = req.user?.id   || 'anon';
       const branchId = req.branchContext?.branchId || req.user?.branchId || 'none';
-      redisCache.delPattern('ic|' + dbName + '|' + userId + '|' + branchId + '|').catch(() => {});
+      redisCache.delPattern('ic|' + schemaName + '|' + userId + '|' + branchId + '|').catch(() => {});
     }
     return originalJson(data);
   };

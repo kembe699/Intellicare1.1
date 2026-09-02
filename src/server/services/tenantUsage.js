@@ -2,7 +2,7 @@
 // information_schema.tables — a real measurement (row/index bytes MySQL is
 // actually storing), not an estimate. information_schema is a virtual,
 // server-wide catalog, so this reads it through the platform's own
-// connection scoped to the tenant's db_name — no per-tenant connection
+// connection scoped to the tenant's schema_name — no per-tenant connection
 // needed just to ask "how big is this database."
 const { Client, DbUsageSnapshot } = require('../models/platform');
 const { getTenantConnection } = require('../tenantDb');
@@ -32,7 +32,7 @@ const USAGE_CATEGORIES = [
 ];
 
 async function getDataBreakdown(client) {
-  const { sequelize: tenantSequelize } = await getTenantConnection(client.db_name);
+  const { sequelize: tenantSequelize } = await getTenantConnection(client.schema_name);
 
   const results = await Promise.all(USAGE_CATEGORIES.map(async ({ label, table }) => {
     try {
@@ -48,26 +48,26 @@ async function getDataBreakdown(client) {
   return results;
 }
 
-async function measureDbSize(dbName) {
-  // Queried through the tenant's own connection, not the platform's shared
-  // one — information_schema only shows a MySQL user the databases it
-  // actually has privileges on, and on hosts where every database has its
-  // own dedicated user (e.g. Hostinger shared hosting), the platform user
-  // can't see a tenant's information_schema rows at all.
-  const { sequelize: tenantSequelize } = await getTenantConnection(dbName);
+async function measureDbSize(schemaName) {
+  // pg_total_relation_size includes the table, its indexes and any TOAST data,
+  // which is the closest equivalent to MySQL's data_length + index_length.
+  // Measured through the tenant's own connection so the schema is already on
+  // the search_path.
+  const { sequelize: tenantSequelize } = await getTenantConnection(schemaName);
   const [[row]] = await tenantSequelize.query(
     `SELECT
-       COALESCE(SUM(data_length + index_length), 0) AS size_bytes,
+       COALESCE(SUM(pg_total_relation_size(c.oid)), 0) AS size_bytes,
        COUNT(*) AS table_count
-     FROM information_schema.tables
-     WHERE table_schema = :dbName`,
-    { replacements: { dbName } }
+     FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = :schemaName AND c.relkind = 'r'`,
+    { replacements: { schemaName } }
   );
   return { sizeBytes: Number(row.size_bytes), tableCount: Number(row.table_count) };
 }
 
 async function recordSnapshotForClient(client) {
-  const { sizeBytes, tableCount } = await measureDbSize(client.db_name);
+  const { sizeBytes, tableCount } = await measureDbSize(client.schema_name);
   return DbUsageSnapshot.create({
     client_id: client.id,
     size_bytes: sizeBytes,

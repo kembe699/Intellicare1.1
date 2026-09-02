@@ -24,9 +24,9 @@ const verifyIntegrationToken = async (req, res, next) => {
       // This route is public (see publicPaths in middleware/auth.js — the Lab Agent has
       // no session/JWT to resolve a tenant from), so `sequelize` above is always the
       // Proxy's no-context fallback: the app's single hardcoded default database. A
-      // token minted with the new ic-<prefix>:<dbName>:<random> format (see
+      // token minted with the new ic-<prefix>:<schemaName>:<random> format (see
       // apiConfigurations.js) carries its own tenant, which we resolve explicitly here
-      // instead. An older ic-<prefix>:<random> token (2 segments, no dbName — issued
+      // instead. An older ic-<prefix>:<random> token (2 segments, no schemaName — issued
       // before this fix) has no tenant to recover and keeps working exactly as before,
       // checked only against the default database.
       const segments = raw.split(':');

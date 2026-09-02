@@ -13,54 +13,27 @@ try {
 }
 
 
-const { Sequelize } = require('sequelize');
+const { buildSequelize } = require('./dbConnectionOptions');
 
-const rawHost = process.env.DB_HOST || '127.0.0.1';
-const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
-const port = parseInt(process.env.DB_PORT || '5432', 10);
-const db   = process.env.DB_NAME;
-const user = process.env.DB_USER;
-const pass = process.env.DB_PASSWORD || '';
+// The default (non-request-scoped) connection.
+//
+// Every real request runs inside a tenant context and uses that tenant's own
+// schema-scoped connection (see tenantDb.js). This one is what boot-time
+// migrations and standalone scripts fall back to, so it points at the tenant
+// TEMPLATE schema: schema changes made at boot land in the template, and every
+// tenant provisioned afterwards inherits them. It deliberately does NOT point
+// at `public`, which holds only the control plane (clients, plans, invoices).
+const defaultSchema = process.env.DEFAULT_SCHEMA || process.env.TENANT_TEMPLATE_SCHEMA || 'tenant_template';
 
-if (!db || !user) {
-  console.error('❌ CRITICAL: DB_NAME and DB_USER must be set');
-  process.exit(1);
-}
+console.log(`🔌 Initializing PostgreSQL connection → schema "${defaultSchema}"`);
 
-console.log(`🔌 Initializing PostgreSQL connection → ${user}@${host}:${port}/${db}`);
-
-const sequelize = new Sequelize(db, user, pass, {
-  host,
-  port,
-  dialect: 'postgres',
-  dialectOptions: {
-    // Managed Postgres (Render) terminates TLS; a local container doesn't offer
-    // it, so this follows DB_SSL instead of being hardcoded either way.
-    ...(['true', 'require'].includes(String(process.env.DB_SSL || '').toLowerCase())
-      ? { ssl: { require: true, rejectUnauthorized: false } }
-      : {}),
-  },
-  // max: 5 was too small once billing writes started holding a connection for the
-  // duration of a row-locked transaction (see billingResolver.js) instead of a single
-  // auto-committed query — a handful of concurrent writes to the same bill could exhaust
-  // the pool and fail with a connection-acquire timeout instead of just waiting briefly
-  // for the row lock. The DB itself allows up to 151 connections; 15 leaves generous
-  // headroom for this single app process while fixing the observed contention.
-  pool: {
-    max: 15,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
-  },
-  logging: process.env.NODE_ENV === 'development' ? console.log : false,
-  timezone: '+00:00'
-});
+const sequelize = buildSequelize(defaultSchema);
 
 (async () => {
   try {
     await sequelize.authenticate();
-    const [[row]] = await sequelize.query('SELECT current_user AS user, current_database() AS database_name;');
-    console.log(`✅ PostgreSQL connection successful | Connected as: ${row.user} | DB: ${row.database_name}`);
+    const [[row]] = await sequelize.query('SELECT current_user AS user, current_database() AS database_name, current_schema() AS schema;');
+    console.log(`✅ PostgreSQL connection successful | ${row.user}@${row.database_name} | schema: ${row.schema}`);
   } catch (error) {
     console.error(`❌ PostgreSQL connection failed:`, error.message);
     console.error(`💡 DB_HOST=${host} | DB_USER=${user} | DB_NAME=${db}`);

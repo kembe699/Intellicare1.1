@@ -153,7 +153,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     let tenantConnection;
     try {
-      tenantConnection = await getTenantConnection(client.db_name);
+      tenantConnection = await getTenantConnection(client.schema_name);
     } catch (connErr) {
       console.error('Tenant connection error:', connErr);
       return res.status(503).json({ error: 'Could not connect to your instance, please try again shortly' });
@@ -190,7 +190,7 @@ router.post('/login', authLimiter, async (req, res) => {
         role: user.role,
         clinicId: user.clinic_id,
         branchId: branchContext.primaryBranch?.id || user.branch_id || null,
-        dbName: client.db_name
+        schemaName: client.schema_name
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -218,8 +218,8 @@ router.get('/verify', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
-    const { sequelize, models } = await getTenantConnection(decoded.dbName);
+    if (!decoded.schemaName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { sequelize, models } = await getTenantConnection(decoded.schemaName);
 
     // Get fresh user data
     const user = await models.User.findByPk(decoded.userId);
@@ -238,7 +238,7 @@ router.get('/verify', async (req, res) => {
             role: user.role,
             clinicId: user.clinic_id,
             branchId: branchContext.primaryBranch?.id || user.branch_id || null,
-            dbName: decoded.dbName
+            schemaName: decoded.schemaName
           },
           JWT_SECRET,
           { expiresIn: '24h' }
@@ -270,7 +270,7 @@ router.post('/setup-password', authLimiter, async (req, res) => {
 
     const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
     if (!client) return res.status(404).json({ error: 'Unknown instance code' });
-    const { models } = await getTenantConnection(client.db_name);
+    const { models } = await getTenantConnection(client.schema_name);
 
     // Find user by email
     const user = await models.User.findOne({
@@ -317,8 +317,8 @@ router.post('/change-password', authLimiter, async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
-    const { models } = await getTenantConnection(decoded.dbName);
+    if (!decoded.schemaName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { models } = await getTenantConnection(decoded.schemaName);
     const user = await models.User.findByPk(decoded.userId);
 
     if (!user) {
@@ -352,8 +352,8 @@ router.post('/verify-password', authLimiter, async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
-    const { models } = await getTenantConnection(decoded.dbName);
+    if (!decoded.schemaName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { models } = await getTenantConnection(decoded.schemaName);
     const user = await models.User.findByPk(decoded.userId);
     if (!user) return res.status(401).json({ error: 'User not found' });
 
@@ -409,8 +409,8 @@ router.get('/me', async (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (!token) return res.status(401).json({ error: 'No token provided' });
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.dbName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
-    const { sequelize } = await getTenantConnection(decoded.dbName);
+    if (!decoded.schemaName) return res.status(401).json({ error: 'Session is out of date, please log in again' });
+    const { sequelize } = await getTenantConnection(decoded.schemaName);
     const [[user]] = await sequelize.query(
       'SELECT id, display_name, email, role, signature FROM users WHERE id = ? LIMIT 1',
       { replacements: [decoded.userId] }

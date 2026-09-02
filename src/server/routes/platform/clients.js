@@ -2,7 +2,6 @@ const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-const mysql2 = require('mysql2/promise');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { connectionHost } = require('../../config/dbConnectionOptions');
@@ -17,7 +16,9 @@ const router = express.Router();
 router.use(authenticatePlatformAdmin);
 
 const CODE_PATTERN = /^[a-z][a-z0-9]{2,29}$/; // lowercase slug, 3-30 chars, starts with a letter
-const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'intellicare_client_';
+// Tenants are schemas in the shared database; the prefix keeps them clearly
+// namespaced and gives the delete path a safe pattern to check against.
+const TENANT_SCHEMA_PREFIX = process.env.TENANT_SCHEMA_PREFIX || 'tenant_';
 
 function generateTempPassword() {
   // 12 chars, mixed case + digits + one symbol — readable enough to read off
@@ -53,7 +54,7 @@ router.get('/', async (req, res) => {
 // form — computed from the same prefix + code convention used below.
 // Registered before /:id so "db-name-prefix" is never swallowed as an id.
 router.get('/db-name-prefix', async (req, res) => {
-  res.json({ prefix: TENANT_DB_PREFIX });
+  res.json({ prefix: TENANT_SCHEMA_PREFIX });
 });
 
 router.get('/:id', async (req, res) => {
@@ -80,7 +81,7 @@ router.get('/:id/db-usage', async (req, res) => {
     // the periodic snapshots recorded in the background (see
     // services/tenantUsage.js) — otherwise every page view would need to
     // wait on/duplicate that same measurement just to show "now."
-    const current = await measureDbSize(client.db_name);
+    const current = await measureDbSize(client.schema_name);
     const history = await DbUsageSnapshot.findAll({
       where: { client_id: client.id },
       order: [['recorded_at', 'ASC']],
@@ -113,7 +114,7 @@ router.get('/:id/data-breakdown', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, code, adminName, adminEmail, plan_id, dbUser, dbPassword } = req.body;
+    const { name, code, adminName, adminEmail, plan_id } = req.body;
     if (!name || !code || !adminName || !adminEmail) {
       return res.status(400).json({ error: 'name, code, adminName, and adminEmail are all required' });
     }
@@ -138,57 +139,17 @@ router.post('/', async (req, res) => {
       if (!plan) return res.status(404).json({ error: 'Plan not found' });
     }
 
-    const dbName = `${TENANT_DB_PREFIX}${normalizedCode}`;
-
-    // This app never runs CREATE DATABASE — on hosts like Hostinger shared
-    // hosting, every database has its own dedicated MySQL user with no
-    // cross-database grant available, so neither the platform user nor a
-    // shared app-wide user can be assumed to reach a brand-new tenant
-    // database. The target database must already exist (created manually,
-    // e.g. via hPanel's MySQL Databases page, with its own user granted full
-    // privileges on it) before a client can be provisioned into it — the
-    // check below connects with exactly the credentials that will actually
-    // be used going forward (dbUser/dbPassword if given, else the shared
-    // DB_USER/DB_PASSWORD — matching how tenantDb.js resolves a connection),
-    // so a missing database or a wrong/ungranted user fails fast here with a
-    // clear message instead of a slow, cryptic child-process timeout.
-    let checkConn;
-    try {
-      checkConn = await mysql2.createConnection({
-        host: connectionHost(),
-        port: parseInt(process.env.DB_PORT || '3306', 10),
-        user: dbUser || process.env.DB_USER,
-        password: dbPassword || process.env.DB_PASSWORD || '',
-      });
-    } catch (connErr) {
-      return res.status(400).json({ error: `Could not connect with the given DB credentials: ${connErr.message}` });
-    }
-    try {
-      const [schemaCheck] = await checkConn.query(
-        'SELECT 1 FROM information_schema.schemata WHERE schema_name = ?',
-        [dbName]
-      );
-      if (schemaCheck.length === 0) {
-        return res.status(400).json({
-          error: `Database "${dbName}" doesn't exist yet, or the given DB user can't see it. Create it first via your hosting panel's MySQL Databases page and grant that user full privileges on it, then try again.`,
-          expectedDbName: dbName,
-        });
-      }
-    } finally {
-      await checkConn.end();
-    }
+    const schemaName = `${TENANT_SCHEMA_PREFIX}${normalizedCode}`;
 
     const tempPassword = generateTempPassword();
     const adminPasswordHash = await bcrypt.hash(tempPassword, 12);
 
     const provisionArgs = JSON.stringify({
-      dbName,
+      schemaName,
       facilityName: name,
       adminName,
       adminEmail: adminEmail.toLowerCase(),
       adminPasswordHash,
-      dbUser: dbUser || undefined,
-      dbPassword: dbPassword || undefined,
     });
 
     try {
@@ -225,17 +186,15 @@ router.post('/', async (req, res) => {
     }
 
     // Make sure any stale connection from a previous failed attempt at this
-    // exact db_name isn't reused now that the database has been rebuilt.
-    evictTenantConnection(dbName);
+    // exact schema isn't reused now that the schema has been rebuilt.
+    evictTenantConnection(schemaName);
 
     const client = await Client.create({
       name,
       code: normalizedCode,
-      db_name: dbName,
+      schema_name: schemaName,
       admin_email: adminEmail.toLowerCase(),
       status: 'active',
-      db_user: dbUser || null,
-      db_password: dbPassword || null,
     });
 
     let invoice = null;
@@ -274,39 +233,26 @@ router.delete('/:id', async (req, res) => {
     // Defensive: only ever drop a database that actually matches the
     // provisioning naming convention, never whatever raw string happens to
     // be sitting in the client row.
-    if (!client.db_name || !client.db_name.startsWith(TENANT_DB_PREFIX) || !/^[a-z0-9_]+$/.test(client.db_name)) {
-      return res.status(500).json({ error: 'Refusing to delete: unexpected database name on this client' });
+    if (!client.schema_name || !client.schema_name.startsWith(TENANT_SCHEMA_PREFIX) || !/^[a-z0-9_]+$/.test(client.schema_name)) {
+      return res.status(500).json({ error: 'Refusing to delete: unexpected schema name on this client' });
     }
 
-    // Close the pooled tenant connection first so it isn't holding the
-    // database open when we try to drop it below.
-    evictTenantConnection(client.db_name);
+    // Close the pooled tenant connection first so it isn't holding the schema
+    // open when we drop it below.
+    evictTenantConnection(client.schema_name);
 
-    // Dropped using the tenant's own credentials, not the platform
-    // connection's — on hosts where every database has its own dedicated
-    // user (e.g. Hostinger shared hosting), the platform user has no
-    // privileges on a tenant's database at all. A database-scoped
-    // "ALL PRIVILEGES" grant does include DROP DATABASE for that specific
-    // database (confirmed — unlike CREATE DATABASE, which needs a broader
-    // server-level privilege scoped users don't have), so this works even
-    // on hosts where CREATE DATABASE never would.
-    const dropConn = await mysql2.createConnection({
-      host: connectionHost(),
-      port: parseInt(process.env.DB_PORT || '3306', 10),
-      user: client.db_user || process.env.DB_USER,
-      password: client.db_password || process.env.DB_PASSWORD || '',
-    });
-    try {
-      await dropConn.query(`DROP DATABASE IF EXISTS \`${client.db_name}\``);
-    } finally {
-      await dropConn.end();
-    }
+    // DROP SCHEMA ... CASCADE removes the tenant's tables and data in one step.
+    // Unlike DROP DATABASE this needs no elevated privilege — the app's own role
+    // owns the schema it created, which is what makes tenant lifecycle work on
+    // managed Postgres.
+    const platformSequelize = require('../../config/platformDatabase');
+    await platformSequelize.query(`DROP SCHEMA IF EXISTS "${client.schema_name}" CASCADE`);
 
     await DbUsageSnapshot.destroy({ where: { client_id: client.id } });
     await Invoice.destroy({ where: { client_id: client.id } });
     await client.destroy();
 
-    res.json({ message: `"${client.name}" and its database have been permanently deleted` });
+    res.json({ message: `"${client.name}" and its data have been permanently deleted` });
   } catch (error) {
     console.error('Delete client error:', error);
     res.status(500).json({ error: 'Failed to delete client' });

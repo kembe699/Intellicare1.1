@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 
 // The platform owner's own login — separate from every tenant's `users` table.
-// A platform admin JWT carries no dbName/tenant context at all (see
+// A platform admin JWT carries no schemaName/tenant context at all (see
 // routes/platform/auth.js), so it can never accidentally reach tenant data.
 module.exports = (sequelize) => {
   const PlatformAdmin = sequelize.define('PlatformAdmin', {

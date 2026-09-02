@@ -59,12 +59,12 @@ const PlatformClients: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', adminName: '', adminEmail: '', planId: '', dbUser: '', dbPassword: '' });
+  const [form, setForm] = useState({ name: '', code: '', adminName: '', adminEmail: '', planId: '' });
   const [result, setResult] = useState<NewClientResult | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ClientRow | null>(null);
   const [deleteConfirmCode, setDeleteConfirmCode] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [dbNamePrefix, setDbNamePrefix] = useState('');
+  const [schemaPrefix, setSchemaPrefix] = useState('');
 
   const loadClients = async () => {
     setLoading(true);
@@ -95,7 +95,7 @@ const PlatformClients: React.FC = () => {
     try {
       const res = await platformFetch('/clients/db-name-prefix');
       const data = await res.json();
-      if (res.ok) setDbNamePrefix(data.prefix);
+      if (res.ok) setSchemaPrefix(data.prefix);
     } catch {
       // Purely a UX hint (shows the admin what database to pre-create) —
       // if it fails to load, the create flow still works, it just won't
@@ -117,14 +117,12 @@ const PlatformClients: React.FC = () => {
           adminName: form.adminName,
           adminEmail: form.adminEmail,
           plan_id: form.planId || undefined,
-          dbUser: form.dbUser || undefined,
-          dbPassword: form.dbPassword || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create client');
       setResult({ ...data.credentials, invoice: data.invoice });
-      setForm({ name: '', code: '', adminName: '', adminEmail: '', planId: '', dbUser: '', dbPassword: '' });
+      setForm({ name: '', code: '', adminName: '', adminEmail: '', planId: '' });
       await loadClients();
     } catch (err: any) {
       toast.error(err.message);
@@ -315,40 +313,14 @@ const PlatformClients: React.FC = () => {
                       pattern="[a-z][a-z0-9]{2,29}"
                       className="font-mono"
                     />
-                    {dbNamePrefix && form.code && (
+                    {schemaPrefix && form.code && (
                       <p className="text-xs text-muted-foreground">
-                        Create this database first (e.g. in your hosting panel):{' '}
-                        <span className="font-mono text-foreground">{dbNamePrefix}{form.code}</span>
+                        Gets its own isolated schema:{' '}
+                        <span className="font-mono text-foreground">{schemaPrefix}{form.code}</span>
+                        {' '}— created automatically.
                       </p>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label>DB Username <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                      <Input
-                        value={form.dbUser}
-                        onChange={(e) => setForm({ ...form, dbUser: e.target.value })}
-                        className="font-mono"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>DB Password <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                      <Input
-                        type="password"
-                        value={form.dbPassword}
-                        onChange={(e) => setForm({ ...form, dbPassword: e.target.value })}
-                        className="font-mono"
-                        autoComplete="new-password"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground -mt-2">
-                    Leave blank if one shared database user already has access to everything (e.g. local/VPS
-                    hosting). On hosts where every database has its own dedicated user (e.g. Hostinger shared
-                    hosting), enter that database's own username/password here — created alongside the database
-                    above.
-                  </p>
                   <div className="space-y-1.5">
                     <Label>Admin Name</Label>
                     <Input

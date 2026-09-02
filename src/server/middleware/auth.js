@@ -14,7 +14,7 @@ if (!JWT_SECRET) {
 // Note: paths are relative to the /api mount point (req.path strips the /api prefix)
 // /platform is excluded entirely — it's authenticated separately by
 // middleware/platformAuth.js against the platform-admin JWT, which carries no
-// dbName/tenant context at all and must never be checked against tenant data.
+// schemaName/tenant context at all and must never be checked against tenant data.
 const publicPaths = [
   '/auth/login',
   '/auth/setup-password',
@@ -47,7 +47,7 @@ const authenticateToken = (req, res, next) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    if (!decoded.dbName) {
+    if (!decoded.schemaName) {
       // Token predates multi-tenant login (or is malformed) — there's no safe
       // database to resolve it against, so reject rather than guessing.
       return res.status(401).json({ error: 'Session is out of date, please log in again' });
@@ -55,20 +55,20 @@ const authenticateToken = (req, res, next) => {
 
     let tenantConnection;
     try {
-      tenantConnection = await getTenantConnection(decoded.dbName);
+      tenantConnection = await getTenantConnection(decoded.schemaName);
     } catch (connErr) {
       console.error('Tenant connection error:', connErr);
       return res.status(503).json({ error: 'Could not connect to your instance, please try again shortly' });
     }
     req.models = tenantConnection.models;
-    req.tenantDbName = decoded.dbName;
+    req.tenantSchema = decoded.schemaName;
 
-    // Cached by dbName+userId, not userId alone — user ids are only unique
+    // Cached by schemaName+userId, not userId alone — user ids are only unique
     // within a single tenant's own database (each tenant's `users` table has
     // its own independent auto-increment sequence), so a cache keyed on
     // userId alone would serve one tenant's cached role to another tenant's
     // same-numbered user id.
-    const cacheKey = `${decoded.dbName}:${decoded.userId}`;
+    const cacheKey = `${decoded.schemaName}:${decoded.userId}`;
     const cached = userAuthCache.get(cacheKey);
     if (cached) {
       req.user = {
@@ -78,7 +78,7 @@ const authenticateToken = (req, res, next) => {
         role: cached.role,
         clinicId: decoded.clinicId,
         branchId: decoded.branchId || null,
-        dbName: decoded.dbName,
+        schemaName: decoded.schemaName,
         isAdmin: cached.role === 'admin'
       };
       // Everything downstream — remaining middleware, the route handler, and
@@ -105,7 +105,7 @@ const authenticateToken = (req, res, next) => {
         role: dbUser.role,
         clinicId: decoded.clinicId,
         branchId: decoded.branchId || null,
-        dbName: decoded.dbName,
+        schemaName: decoded.schemaName,
         isAdmin: dbUser.role === 'admin'
       };
     } catch (dbErr) {
@@ -117,7 +117,7 @@ const authenticateToken = (req, res, next) => {
         role: decoded.role,
         clinicId: decoded.clinicId,
         branchId: decoded.branchId || null,
-        dbName: decoded.dbName,
+        schemaName: decoded.schemaName,
         isAdmin: decoded.role === 'admin'
       };
     }
