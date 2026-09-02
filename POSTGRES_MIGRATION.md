@@ -75,6 +75,26 @@ To add something every future tenant should start with, insert it into
   `AUTO_INCREMENT`, `ADD COLUMN … AFTER`) — idempotent patches the migrated
   schema already satisfies.
 
+## Deploying (Render)
+
+Build command:
+
+```
+npm install --include=dev && npm install --prefix src/server && npm run build
+```
+
+Two things there are easy to get wrong and both fail the build or the boot:
+
+- **`--include=dev`** is required. The whole build toolchain — vite, typescript,
+  tailwind, postcss, the react plugin — lives in `devDependencies`, and Render
+  sets `NODE_ENV=production`, which makes plain `npm install` omit them. Without
+  it the build dies with `sh: 1: vite: not found`.
+- **`--prefix src/server`** is required. That directory has its own
+  `package.json` with its own dependencies (express, pg, bcrypt…). Skip it and
+  the build succeeds, then the service crashes on boot.
+
+Start command: `node src/server/index.js`
+
 ## Configuration
 
 Copy `src/server/.env.example` to `src/server/.env`. On Render set `DB_SSL=true`.
