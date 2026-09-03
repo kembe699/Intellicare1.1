@@ -4,6 +4,50 @@ const { authorize } = require('../middleware/authorize');
 const router = express.Router();
 
 // Clinic name map
+/**
+ * Which clinic a newly-created user belongs to.
+ *
+ * Getting this wrong does not fail loudly — it creates an account that logs in
+ * perfectly and then shows empty screens everywhere, because every query is
+ * scoped by clinic_id. That is exactly what happened to a user created with
+ * clinic_id 1 in a tenant whose data all lives under clinic_id 6.
+ *
+ * The old expression ended in `|| 1`, a hardcoded id that is only meaningful in
+ * the original single-tenant deployment. clinicMap and a bare numeric parse are
+ * kept ahead of it for compatibility, but the final fallback now asks the
+ * tenant's own data rather than assuming:
+ *
+ *   1. an explicit, resolvable clinic from the request
+ *   2. the creating admin's own clinic — right for an admin adding a colleague
+ *   3. the clinic the tenant's existing users actually sit under
+ *   4. the tenant's own clinic_names row
+ *
+ * Only if a tenant has no users and no clinics at all does this fall back to 1,
+ * which for a brand-new tenant is the id its seeded facility uses anyway.
+ */
+async function resolveClinicIdForNewUser(req) {
+  const explicit = clinicMap[req.body.clinic] || parseInt(req.body.clinic);
+  if (explicit) return explicit;
+  if (req.user?.clinicId) return req.user.clinicId;
+
+  // Ask the tenant. The most common clinic_id among existing users is the one
+  // this tenant's records are actually filed under.
+  try {
+    const [[row]] = await sequelize.query(
+      `SELECT clinic_id FROM users WHERE clinic_id IS NOT NULL
+        GROUP BY clinic_id ORDER BY count(*) DESC LIMIT 1`
+    );
+    if (row?.clinic_id) return row.clinic_id;
+  } catch (e) { /* fall through */ }
+
+  try {
+    const [[row]] = await sequelize.query(`SELECT id FROM clinic_names ORDER BY id LIMIT 1`);
+    if (row?.id) return row.id;
+  } catch (e) { /* fall through */ }
+
+  return 1;
+}
+
 const clinicMap = {
   'IntelliCare': 1,
   'Moleeta': 2,
@@ -128,7 +172,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
       // correct for the overwhelmingly common case (an admin adding staff to their own
       // clinic) and keeps the original single-tenant deployment's behavior unchanged
       // (its admin's own clinicId is 1 anyway).
-      clinic_id: clinicMap[req.body.clinic] || parseInt(req.body.clinic) || req.user?.clinicId || 1,
+      clinic_id: await resolveClinicIdForNewUser(req),
       branch_id: req.body.branch_id || req.body.branchId || null,
       is_active: req.body.isActive !== undefined ? req.body.isActive : true,
       status: req.body.status || 'active',
