@@ -27,6 +27,24 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 require('dotenv').config({ path: path.resolve(__dirname, '../production.env') });
 
 const { Client } = require('pg');
+
+// Connection settings are snapshotted HERE, before anything else is required.
+//
+// Requiring the account catalogue below pulls in ../models -> config/database.js,
+// which calls dotenv with `override: true` and therefore replaces DB_HOST and
+// friends with the local .env values — silently redirecting this script at the
+// developer's own database even when the environment pointed it at production.
+// That is exactly the kind of mistake that is invisible until you notice the
+// row counts don't match the target.
+const DB_ENV = {
+  host: process.env.DB_HOST === 'localhost' ? '127.0.0.1' : (process.env.DB_HOST || '127.0.0.1'),
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD || '',
+  ssl: ['true', 'require'].includes(String(process.env.DB_SSL || '').toLowerCase()),
+};
+
 // Canonical account definitions, so a missing essential account is recreated
 // with the same code/type/balance side the seeder would have given it.
 const { healthcareChartOfAccounts: CATALOGUE } = require('./initializeChartOfAccounts');
@@ -59,15 +77,8 @@ const ONE = si !== -1 ? args[si + 1] : null;
 const validSchema = (s) => /^[a-z_][a-z0-9_]{0,62}$/.test(s);
 
 function connConfig() {
-  const sslOn = ['true', 'require'].includes(String(process.env.DB_SSL || '').toLowerCase());
-  return {
-    host: process.env.DB_HOST === 'localhost' ? '127.0.0.1' : (process.env.DB_HOST || '127.0.0.1'),
-    port: parseInt(process.env.DB_PORT || '5432', 10),
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD || '',
-    ...(sslOn ? { ssl: { rejectUnauthorized: false } } : {}),
-  };
+  const { ssl, ...rest } = DB_ENV;
+  return { ...rest, ...(ssl ? { ssl: { rejectUnauthorized: false } } : {}) };
 }
 
 async function leanOne(db, schema) {
@@ -154,6 +165,7 @@ async function main() {
       );
       schemas = rows.map((r) => r.nspname);
     }
+    console.log(`target: ${DB_ENV.user}@${DB_ENV.host}:${DB_ENV.port}/${DB_ENV.database}${DB_ENV.ssl ? ' (ssl)' : ''}`);
     if (!APPLY) console.log('[dry run — nothing written]');
     for (const s of schemas) {
       if (!validSchema(s)) continue;
