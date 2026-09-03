@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save } from 'lucide-react';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
+import { FREQUENCY_OPTIONS, calculateQuantity, describeDosage, findFrequency } from '@/lib/prescriptionFrequency';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -132,6 +133,28 @@ export default function LISTestOrders() {
   const [rxDuration, setRxDuration] = useState('');
   const [rxLines, setRxLines] = useState<any[]>([]);
   const [prescribing, setPrescribing] = useState(false);
+  // Numeric dose per administration — the multiplier in the quantity
+  // arithmetic. Kept separate from dose_strength ("500mg"), which is a label.
+  const [rxDoseAmount, setRxDoseAmount] = useState('1');
+  // Out-of-stock item the patient buys outside: typed name, no inventory row.
+  const [rxIsExternal, setRxIsExternal] = useState(false);
+  const [rxExternalName, setRxExternalName] = useState('');
+  const [rxNotes, setRxNotes] = useState('');
+  // Quantity is derived (dose x per-day x days) until a prescriber types their
+  // own, at which point their number wins — PRN and STAT have no derivable
+  // total at all, so the field simply stays theirs.
+  const [rxQtyTouched, setRxQtyTouched] = useState(false);
+  const [printingRx, setPrintingRx] = useState<string | null>(null);
+
+  const rxSuggestedQty = useMemo(
+    () => calculateQuantity(parseFloat(rxDoseAmount), rxFrequency, parseInt(rxDuration, 10)),
+    [rxDoseAmount, rxFrequency, rxDuration]
+  );
+
+  useEffect(() => {
+    if (rxQtyTouched) return;
+    if (rxSuggestedQty != null) setRxQty(String(rxSuggestedQty));
+  }, [rxSuggestedQty, rxQtyTouched]);
 
   // Request Another Service (within Visit Summary detail) — lets a doctor order a
   // confirmatory/follow-up test or service on the same visit without leaving the summary.
@@ -257,23 +280,49 @@ export default function LISTestOrders() {
     }
   };
 
+  const resetRxForm = () => {
+    setRxDrugId(''); setRxQty('1'); setRxDose(''); setRxFrequency(''); setRxDuration('');
+    setRxDoseAmount('1'); setRxExternalName(''); setRxNotes(''); setRxQtyTouched(false);
+  };
+
   const handleAddRxLine = () => {
+    const qty = parseInt(rxQty, 10) || 1;
+    const duration = parseInt(rxDuration, 10) || 0;
+
+    // An out-of-stock drug the patient buys outside: there is no inventory item
+    // to pick, so the name is typed and the line carries no drug_id. It is never
+    // stock-checked or billed here, because this pharmacy isn't supplying it.
+    if (rxIsExternal) {
+      if (!rxExternalName.trim()) { toast.error('Enter the medicine name'); return; }
+      setRxLines(prev => [...prev, {
+        drug_id: null, is_external: true,
+        external_drug_name: rxExternalName.trim(), drug_name: rxExternalName.trim(),
+        unit_of_measure: 'unit', quantity_prescribed: qty,
+        dose_amount: parseFloat(rxDoseAmount) || null, dose_strength: rxDose,
+        frequency: rxFrequency, duration_days: duration,
+        notes: rxNotes.trim(), selling_price: 0,
+      }]);
+      resetRxForm();
+      return;
+    }
+
     if (!rxDrugId) { toast.error('Select a drug'); return; }
     const drug = pharmacyDrugs.find(d => d.id === rxDrugId);
     if (!drug) return;
-    const qty = parseInt(rxQty, 10) || 1;
     const stockOnHand = drug.stock_on_hand != null ? parseInt(drug.stock_on_hand, 10) : null;
     const alreadyQueued = rxLines.filter(l => l.drug_id === drug.id).reduce((sum, l) => sum + (l.quantity_prescribed || 0), 0);
     if (stockOnHand != null && !isNaN(stockOnHand) && qty + alreadyQueued > stockOnHand) {
-      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock — reduce the quantity.`);
+      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock — reduce the quantity, or tick "Not in stock" to prescribe it for purchase outside.`);
       return;
     }
     setRxLines(prev => [...prev, {
-      drug_id: drug.id, drug_name: drug.drug_name, unit_of_measure: drug.unit_of_measure || 'tablet',
-      quantity_prescribed: qty, dose_strength: rxDose, frequency: rxFrequency,
-      duration_days: parseInt(rxDuration, 10) || 0, notes: '', selling_price: parseFloat(drug.selling_price) || 0,
+      drug_id: drug.id, is_external: false, drug_name: drug.drug_name,
+      unit_of_measure: drug.unit_of_measure || 'tablet',
+      quantity_prescribed: qty, dose_amount: parseFloat(rxDoseAmount) || null,
+      dose_strength: rxDose, frequency: rxFrequency,
+      duration_days: duration, notes: rxNotes.trim(), selling_price: parseFloat(drug.selling_price) || 0,
     }]);
-    setRxDrugId(''); setRxQty('1'); setRxDose(''); setRxFrequency(''); setRxDuration('');
+    resetRxForm();
   };
 
   const removeRxLine = (index: number) => {
@@ -299,6 +348,7 @@ export default function LISTestOrders() {
           lines: rxLines.map(l => ({
             drug_id: l.drug_id, quantity_prescribed: l.quantity_prescribed, unit_of_measure: l.unit_of_measure,
             dose_strength: l.dose_strength, frequency: l.frequency, duration_days: l.duration_days, notes: l.notes,
+            is_external: !!l.is_external, external_drug_name: l.external_drug_name || null, dose_amount: l.dose_amount ?? null,
           })),
         }),
       });
@@ -306,8 +356,15 @@ export default function LISTestOrders() {
         const created = await res.json();
         toast.success(`Prescription ${created.prescription_number} created`);
         const patient = { id: selectedSummary.participant_id, name: `${selectedSummary.first_name} ${selectedSummary.last_name}` };
-        for (const l of rxLines) {
+        // Only what this pharmacy actually supplies goes on the bill. An
+        // external line is bought outside, so billing it here would charge the
+        // patient twice for one medicine.
+        for (const l of rxLines.filter(x => !x.is_external)) {
           await addBillItem(`rx-${created.id}-${l.drug_id}`, l.drug_name, l.selling_price, patient, l.quantity_prescribed);
+        }
+        const externalCount = rxLines.filter(x => x.is_external).length;
+        if (externalCount > 0) {
+          toast.info(`${externalCount} item${externalCount === 1 ? '' : 's'} marked for purchase outside — not billed here. Print the prescription for the patient.`);
         }
         setRxLines([]);
         await refreshSelectedSummary();
@@ -524,6 +581,119 @@ export default function LISTestOrders() {
     }
   };
 
+  /**
+   * A standalone prescription the patient can take away — print it, or save it
+   * as a PDF from the browser's print dialog.
+   *
+   * Deliberately separate from the visit summary: a patient buying medicine at
+   * an outside pharmacy needs the medicines, the prescriber and the hospital's
+   * identity on one page, and nothing else. A visit summary carries diagnoses,
+   * vitals and lab results that have no business crossing a pharmacy counter.
+   *
+   * Items the hospital could not supply are marked, so the dispensing pharmacy
+   * can see at a glance which lines are theirs to fill.
+   */
+  const handlePrintPrescription = async (mode: 'print' | 'pdf' = 'print') => {
+    if (!selectedSummary) return;
+    const s = selectedSummary;
+    const lines: any[] = s.prescriptions || [];
+    if (lines.length === 0) { toast.error('No medicines prescribed for this visit yet.'); return; }
+
+    setPrintingRx(mode);
+    try {
+      const signature = await docTemplate.fetchUserSignature(user?.uid);
+      const patientName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+      const age = calculateAge(s.date_of_birth);
+      const rxNumber = lines[0]?.prescription_number || '';
+      const externals = lines.filter((l) => l.is_external);
+
+      const infoHTML = docTemplate.buildInfoGrid(
+        {
+          title: 'Patient',
+          rows: [
+            { label: 'Name', value: patientName || '—', bold: true },
+            { label: 'Patient No.', value: s.participant_number || '—' },
+            { label: 'Age / Sex', value: `${age ?? '—'} / ${s.gender || '—'}` },
+            { label: 'Phone', value: s.phone || '—' },
+          ],
+        },
+        {
+          title: 'Prescription',
+          rows: [
+            { label: 'Rx No.', value: rxNumber || '—', bold: true },
+            { label: 'Date', value: docTemplate.formatDate(lines[0]?.prescription_date || new Date()) },
+            { label: 'Prescriber', value: s.doctor_name ? `Dr. ${s.doctor_name}` : (user?.displayName || '—') },
+            { label: 'Diagnosis', value: s.clinical_notes ? String(s.clinical_notes).slice(0, 80) : '—' },
+          ],
+        }
+      );
+
+      const medsHTML = docTemplate.buildTable(
+        [
+          { label: '#', width: '6%', align: 'center' },
+          { label: 'Medicine', width: '30%' },
+          { label: 'Dosage / Sig', width: '34%' },
+          { label: 'Qty', width: '10%', align: 'center' },
+          { label: 'Source', width: '20%', align: 'center' },
+        ],
+        lines.map((l, i) => ({
+          cells: [
+            String(i + 1),
+            `<strong>${l.drug_name || l.external_drug_name || '—'}</strong>${l.dose_strength ? `<br><span style="color:#666">${l.dose_strength}</span>` : ''}`,
+            describeDosage(l.dose_amount, l.unit_of_measure, l.frequency, l.duration_days) +
+              (l.line_notes || l.notes ? `<br><span style="color:#666">${l.line_notes || l.notes}</span>` : ''),
+            `${l.quantity_prescribed ?? '—'} ${l.unit_of_measure || ''}`.trim(),
+            l.is_external
+              ? '<span style="color:#b45309;font-weight:600">Buy outside</span>'
+              : 'Hospital pharmacy',
+          ],
+        }))
+      );
+
+      const externalNote = externals.length > 0
+        ? `<div class="ic-notes"><strong>Note to the patient:</strong> ${externals.length} item${externals.length === 1 ? ' is' : 's are'} not available at this hospital's pharmacy and should be purchased from an outside pharmacy. Present this prescription there.</div>`
+        : '';
+
+      const bodyHTML = [
+        infoHTML,
+        '<div class="ic-section-title">Medicines Prescribed</div>',
+        medsHTML,
+        externalNote,
+        docTemplate.buildSignatures([
+          {
+            label: 'Prescribing Doctor',
+            name: s.doctor_name ? `Dr. ${s.doctor_name}` : (user?.displayName || ''),
+            signature: signature || undefined,
+          },
+        ]),
+      ].join('\n');
+
+      const html = docTemplate.buildDocument({
+        title: 'Prescription',
+        docType: 'Prescription',
+        docNumber: rxNumber || `RX-${String(s.order_id).slice(-6).toUpperCase()}`,
+        date: new Date(),
+        bodyHTML,
+        autoPrint: mode === 'print',
+        logoUrl: `${window.location.origin}/hjd-icon.png`,
+        facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
+        branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
+      });
+
+      if (mode === 'pdf') {
+        docTemplate.downloadDocument(html, `Prescription-${rxNumber || patientName || 'patient'}.html`);
+        toast.success('Prescription saved — open it and choose "Save as PDF" to keep a PDF copy.');
+      } else {
+        docTemplate.openPrintWindow(html);
+      }
+    } catch (e) {
+      console.error('Prescription print failed', e);
+      toast.error('Could not build the prescription document');
+    } finally {
+      setPrintingRx(null);
+    }
+  };
+
   const handlePrintSummary = async () => {
     if (!selectedSummary) return;
     const signature = await docTemplate.fetchUserSignature(user?.uid);
@@ -555,13 +725,15 @@ export default function LISTestOrders() {
     const prescriptionsHTML = prescriptions.length > 0 ? [
       '<div class="ic-section-title">Medications Prescribed</div>',
       docTemplate.buildTable(
-        [{ label: 'Drug' }, { label: 'Qty' }, { label: 'Dose' }, { label: 'Frequency' }, { label: 'Duration' }, { label: 'Status' }],
+        [{ label: 'Drug' }, { label: 'Qty' }, { label: 'Dosage / Sig' }, { label: 'Duration' }, { label: 'Status' }],
         prescriptions.map((rx: any) => ({
           cells: [
-            `${rx.drug_name || 'Unknown'}${rx.unit_of_measure ? ` (${rx.unit_of_measure})` : ''}`,
+            `${rx.drug_name || 'Unknown'}${rx.unit_of_measure ? ` (${rx.unit_of_measure})` : ''}`
+              + (rx.is_external ? ' <span style="color:#b45309;font-weight:600">[buy outside]</span>' : ''),
             String(rx.quantity_prescribed ?? '—'),
-            rx.dose_strength || '—',
-            rx.frequency || '—',
+            // One readable sig rather than three columns the reader has to
+            // reassemble: "1 tablet three times daily for 5 days".
+            describeDosage(rx.dose_amount, rx.unit_of_measure, rx.frequency, rx.duration_days),
             rx.duration_days ? `${rx.duration_days} day(s)` : '—',
             (rx.line_status || rx.status || '—').toString().replace(/_/g, ' '),
           ],
@@ -2312,28 +2484,99 @@ export default function LISTestOrders() {
                           <Pill className="w-3.5 h-3.5" /> Prescribe Medicine
                         </p>
                         <div className="border rounded-lg p-3 space-y-2.5 bg-card lg:sticky lg:top-0">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="rounded border-input"
+                            checked={rxIsExternal}
+                            onChange={e => { setRxIsExternal(e.target.checked); setRxDrugId(''); setRxExternalName(''); }}
+                          />
+                          Not in stock — patient buys from an outside pharmacy
+                        </label>
+
+                        {rxIsExternal ? (
+                          <Input
+                            placeholder="Medicine name e.g. Amoxicillin 500mg caps"
+                            value={rxExternalName}
+                            onChange={e => setRxExternalName(e.target.value)}
+                          />
+                        ) : (
+                          <Combobox
+                            options={[{ value: '', label: 'Select drug...' }, ...pharmacyDrugs.map((d: any) => ({ value: d.id, label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''} — stock ${d.stock_on_hand ?? 0}` }))]}
+                            value={rxDrugId}
+                            onChange={v => setRxDrugId(v)}
+                            placeholder="Select drug..."
+                            searchPlaceholder="Search drugs..."
+                            className="h-9"
+                          />
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            type="number" min="0.25" step="0.25"
+                            placeholder="Dose e.g. 1"
+                            title="How much is taken each time — the multiplier for the quantity"
+                            value={rxDoseAmount}
+                            onChange={e => setRxDoseAmount(e.target.value)}
+                          />
+                          <Input placeholder="Strength e.g. 500mg" value={rxDose} onChange={e => setRxDose(e.target.value)} />
+                        </div>
+
                         <Combobox
-                          options={[{ value: '', label: 'Select drug...' }, ...pharmacyDrugs.map((d: any) => ({ value: d.id, label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''} — stock ${d.stock_on_hand ?? 0}` }))]}
-                          value={rxDrugId}
-                          onChange={v => setRxDrugId(v)}
-                          placeholder="Select drug..."
-                          searchPlaceholder="Search drugs..."
+                          options={FREQUENCY_OPTIONS.map(f => ({
+                            value: f.code,
+                            label: `${f.code} — ${f.label}`,
+                          }))}
+                          value={rxFrequency}
+                          onChange={v => setRxFrequency(v)}
+                          placeholder="Frequency..."
+                          searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
                           className="h-9"
                         />
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input placeholder="Dose e.g. 500mg" value={rxDose} onChange={e => setRxDose(e.target.value)} />
-                          <Input placeholder="Frequency e.g. BID" value={rxFrequency} onChange={e => setRxFrequency(e.target.value)} />
-                        </div>
+
                         <div className="grid grid-cols-3 gap-2">
-                          <Input type="number" min="1" placeholder="Qty" value={rxQty} onChange={e => setRxQty(e.target.value)} />
+                          <Input
+                            type="number" min="0" placeholder="Days"
+                            value={rxDuration}
+                            onChange={e => setRxDuration(e.target.value)}
+                          />
+                          <Input
+                            type="number" min="1" placeholder="Qty"
+                            value={rxQty}
+                            onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
+                          />
                           <div
                             className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
                             title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
                           >
-                            {rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—'}
+                            {rxIsExternal ? 'unit' : (rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—')}
                           </div>
-                          <Input type="number" min="0" placeholder="Days" value={rxDuration} onChange={e => setRxDuration(e.target.value)} />
                         </div>
+
+                        {/* Show the arithmetic rather than silently overwriting the
+                            prescriber's number, so a computed total is always
+                            traceable back to dose x frequency x days. */}
+                        {rxSuggestedQty != null && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
+                            {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
+                              <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
+                                use this
+                              </button>
+                            )}
+                          </p>
+                        )}
+                        {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                          </p>
+                        )}
+
+                        <Input
+                          placeholder={rxIsExternal ? 'Instructions for the patient (required for outside purchase)' : 'Instructions (optional)'}
+                          value={rxNotes}
+                          onChange={e => setRxNotes(e.target.value)}
+                        />
                         <Button type="button" variant="outline" className="w-full" onClick={handleAddRxLine}>
                           <Plus className="w-4 h-4 mr-2" /> Add
                         </Button>
@@ -2345,6 +2588,11 @@ export default function LISTestOrders() {
                                 {l.drug_name} × {l.quantity_prescribed} {l.unit_of_measure}
                                 {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                                 {l.duration_days ? ` · ${l.duration_days}d` : ''}
+                                {l.is_external && (
+                                  <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                    buy outside
+                                  </span>
+                                )}
                               </span>
                               <button type="button" onClick={() => removeRxLine(i)} className="text-muted-foreground hover:text-foreground">
                                 <X className="w-3.5 h-3.5" />
@@ -2354,6 +2602,21 @@ export default function LISTestOrders() {
                           <Button className="w-full" onClick={handleSubmitPrescription} disabled={prescribing}>
                             {prescribing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pill className="w-4 h-4 mr-2" />}
                             Submit Prescription & Bill
+                          </Button>
+                        </div>
+                      )}
+
+                      {(selectedSummary?.prescriptions?.length ?? 0) > 0 && (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                          <Button type="button" variant="outline" size="sm"
+                            onClick={() => handlePrintPrescription('print')} disabled={!!printingRx}>
+                            {printingRx === 'print' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1.5" />}
+                            Print Rx
+                          </Button>
+                          <Button type="button" variant="outline" size="sm"
+                            onClick={() => handlePrintPrescription('pdf')} disabled={!!printingRx}>
+                            {printingRx === 'pdf' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
+                            Save Rx
                           </Button>
                         </div>
                       )}

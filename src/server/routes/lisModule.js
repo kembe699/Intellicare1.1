@@ -691,7 +691,10 @@ router.get('/visit-summaries', authorize(LIS_CLINICAL.concat(['lab'])), async (r
       [prescriptionLines] = await db.query(`
         SELECT pp.id as prescription_id, pp.patient_id, pp.prescription_number, pp.prescription_date, pp.status as prescription_status,
                pl.id as line_id, pl.quantity_prescribed, pl.unit_of_measure, pl.dose_strength, pl.frequency, pl.duration_days, pl.status as line_status,
-               ii.item_name as drug_name
+               pl.is_external, pl.external_drug_name, pl.dose_amount, pl.notes as line_notes,
+               -- An external line has no inventory row, so its name lives on
+               -- the line itself; COALESCE keeps one column for both kinds.
+               COALESCE(ii.item_name, pl.external_drug_name) as drug_name
         FROM pharmacy_prescriptions pp
         JOIN prescription_lines pl ON pl.prescription_id = pp.id
         LEFT JOIN inventory_items ii ON pl.drug_id = ii.id

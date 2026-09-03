@@ -581,7 +581,7 @@ router.get('/prescriptions/:id', authorize(PHARMACY_PRESCRIBE), async (req, res)
     if (rx.length === 0) return res.status(404).json({ error: 'Prescription not found' });
 
     const [lines] = await sequelize.query(`
-      SELECT pl.*, ii.item_name AS drug_name, ii.item_code AS drug_code,
+      SELECT pl.*, COALESCE(ii.item_name, pl.external_drug_name) AS drug_name, ii.item_code AS drug_code,
         ii.selling_price, ii.cost_currency,
         ii.quantity_on_hand AS stock_on_hand,
         ii.id AS inventory_item_id,
@@ -645,14 +645,20 @@ router.post('/prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) =>
     if (lines && lines.length > 0) {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        // An external line is a drug this pharmacy does not stock: it carries a
+        // typed name instead of a drug_id, and is_external is what keeps it out
+        // of the dispensing queue while still appearing on the printed script.
+        const isExternal = !!line.is_external || (!line.drug_id && !!line.external_drug_name);
         await sequelize.query(`
           INSERT INTO prescription_lines (id, prescription_id, line_number, drug_id,
             quantity_prescribed, unit_of_measure, dose_strength, frequency, duration_days,
-            allow_generic_substitution, notes)
-          VALUES (:id, :rxid, :ln, :did, :qty, :uom, :ds, :freq, :dur, :gen, :notes)
+            allow_generic_substitution, notes, is_external, external_drug_name, dose_amount)
+          VALUES (:id, :rxid, :ln, :did, :qty, :uom, :ds, :freq, :dur, :gen, :notes, :ext, :extname, :doseamt)
         `, {
           replacements: {
-            id: uuidv4(), rxid: id, ln: i + 1, did: line.drug_id,
+            id: uuidv4(), rxid: id, ln: i + 1, did: isExternal ? null : (line.drug_id || null),
+            ext: isExternal, extname: isExternal ? (line.external_drug_name || line.drug_name || null) : null,
+            doseamt: line.dose_amount != null && line.dose_amount !== '' ? Number(line.dose_amount) : null,
             qty: line.quantity_prescribed || 1, uom: line.unit_of_measure || 'tablet',
             ds: line.dose_strength || null, freq: line.frequency || null,
             dur: line.duration_days || null, gen: line.allow_generic_substitution !== false,

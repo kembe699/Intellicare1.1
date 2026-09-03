@@ -185,6 +185,20 @@ async function migratePharmacyTables() {
     )
   `);
   console.log('  prescription_lines table created/verified.');
+  // A drug the hospital doesn't stock, which the patient buys outside.
+  //
+  // drug_id has to become nullable for this: an external item has no
+  // inventory_items row to point at, and that is exactly what distinguishes it.
+  // The name is then carried as text, and is_external is what the pharmacy and
+  // the printed prescription key off — so an out-of-stock item is never
+  // mistaken for something waiting to be dispensed here.
+  try { await sequelize.query(`ALTER TABLE prescription_lines ALTER COLUMN drug_id DROP NOT NULL`); } catch(e){}
+  try { await sequelize.query(`ALTER TABLE prescription_lines ADD COLUMN IF NOT EXISTS is_external BOOLEAN DEFAULT false`); } catch(e){}
+  try { await sequelize.query(`ALTER TABLE prescription_lines ADD COLUMN IF NOT EXISTS external_drug_name VARCHAR(255)`); } catch(e){}
+  // Dose amount per administration, kept apart from dose_strength ("500mg"),
+  // because the quantity arithmetic needs a number: qty = dose x perDay x days.
+  try { await sequelize.query(`ALTER TABLE prescription_lines ADD COLUMN IF NOT EXISTS dose_amount NUMERIC(10,2)`); } catch(e){}
+
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_pl_prescription ON prescription_lines(prescription_id)`); } catch(e){}
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_pl_drug ON prescription_lines(drug_id)`); } catch(e){}
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_pl_status ON prescription_lines(status)`); } catch(e){}
