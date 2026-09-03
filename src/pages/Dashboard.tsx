@@ -5,7 +5,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { dashboardApi, authFetch } from '@/api/apiClient';
 import {
   Stethoscope, FlaskConical, Pill,
-  UserPlus, ArrowUpRight, Receipt as ReceiptIcon, FileBarChart, Wallet, X,
+  UserPlus, ArrowUpRight, Receipt as ReceiptIcon, FileBarChart, Wallet, X, Package,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -30,6 +30,19 @@ interface DashboardStats {
 
 const PAID_COLOR = 'hsl(var(--success))';
 const OUTSTANDING_COLOR = 'hsl(var(--destructive))';
+
+// The movement chart counts items, not money, so it needs its own tooltip
+// rather than the currency-formatting billing one.
+function StockMovementTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  return (
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+      <p className="font-medium text-popover-foreground">{item.name}</p>
+      <p className="text-muted-foreground">{item.value} item{item.value === 1 ? '' : 's'}</p>
+    </div>
+  );
+}
 
 function BillingStatusTooltip({ active, payload, fmt, maskPaid }: any) {
   if (!active || !payload?.length) return null;
@@ -83,6 +96,25 @@ const Dashboard: React.FC = () => {
   // an accountant can reveal them. Note this is a presentation control: the
   // totals are already in the API response by the time this renders, so it keeps
   // takings off a shared screen rather than making them unobtainable.
+  // A pharmacy user's dashboard answers a different question from a cashier's:
+  // what is moving off the shelf, not what was taken at the till. Both panels
+  // below swap out for them rather than showing billing they cannot act on.
+  const isPharmacyView = user?.role === 'pharmacy';
+  const [stockMovement, setStockMovement] = useState<any | null>(null);
+  const [stockLoading, setStockLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isPharmacyView) return;
+    let cancelled = false;
+    setStockLoading(true);
+    authFetch('/api/pharmacy-module/stock-movement?days=30')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setStockMovement(d); })
+      .catch(() => { if (!cancelled) setStockMovement(null); })
+      .finally(() => { if (!cancelled) setStockLoading(false); });
+    return () => { cancelled = true; };
+  }, [isPharmacyView]);
+
   const CAN_VIEW_COLLECTIONS = ['admin', 'accountant'];
   const canViewCollections = !!user?.role && CAN_VIEW_COLLECTIONS.includes(user.role);
   const [collectionsRevealed, setCollectionsRevealed] = useState(false);
@@ -327,6 +359,40 @@ const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-8 bg-card border rounded-lg shadow-sm p-4">
+            {isPharmacyView ? (
+              <>
+                <PageHeader title="Recent Stock Movement" icon={<Package />} className="mb-3" />
+                <AdvancedDataTable<any>
+                  data={stockMovement?.recentMovements || []}
+                  loading={stockLoading}
+                  loadingMessage="Loading stock movement..."
+                  emptyMessage="No stock movement recorded yet — receipts, dispensing and adjustments will show up here."
+                  keyExtractor={(row) => row.id}
+                  searchable
+                  searchPlaceholder="Search by item or reference..."
+                  exportable
+                  exportFileName="recent-stock-movement"
+                  pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+                  columns={[
+                    { key: 'reference', header: 'Reference', sortable: true, render: (v) => <span className="font-mono text-xs">{v || '—'}</span> },
+                    { key: 'itemName', header: 'Item', sortable: true },
+                    { key: 'type', header: 'Type', sortable: true, render: (v) => <span className="capitalize">{String(v || '').replace(/_/g, ' ')}</span> },
+                    {
+                      key: 'quantityChange', header: 'Qty', align: 'right', sortable: true,
+                      // Direction is the point of a movement row, so it is shown
+                      // rather than left for the reader to infer from a sign.
+                      render: (v, row) => (
+                        <span className={Number(v) < 0 ? 'text-destructive' : 'text-foreground'}>
+                          {Number(v) > 0 ? '+' : ''}{v} {row.unit}
+                        </span>
+                      ),
+                    },
+                    { key: 'at', header: 'When', sortable: true, render: (v) => (v ? new Date(v).toLocaleString() : '—') },
+                  ]}
+                />
+              </>
+            ) : (
+            <>
             <PageHeader title="Recent Payments" icon={<ReceiptIcon />} className="mb-3" />
             <AdvancedDataTable<RecentReceipt>
               data={recentReceipts}
@@ -364,9 +430,73 @@ const Dashboard: React.FC = () => {
                 { key: 'payment_date', header: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString() },
               ]}
             />
+            </>
+            )}
           </div>
 
           <div className="lg:col-span-4">
+            {isPharmacyView ? (
+              <Card className="h-full">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Stock Movement (last 30 days)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {stockLoading ? (
+                    <LoadingState message="Loading stock movement..." />
+                  ) : !stockMovement || stockMovement.totals?.items === 0 ? (
+                    <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                      No stock in this pharmacy yet
+                    </div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'Fast moving', value: stockMovement.movement.fast.length },
+                              { name: 'Average moving', value: stockMovement.movement.average.length },
+                              { name: 'Slow / not moving', value: stockMovement.movement.slow.length },
+                            ]}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius={60}
+                            outerRadius={85}
+                            paddingAngle={3}
+                            strokeWidth={0}
+                          >
+                            <Cell fill={PAID_COLOR} />
+                            <Cell fill="#F59E0B" />
+                            <Cell fill={OUTSTANDING_COLOR} />
+                          </Pie>
+                          <RTooltip content={<StockMovementTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-2 space-y-2 border-t border-border pt-3">
+                        {[
+                          { label: 'Fast moving', color: PAID_COLOR, list: stockMovement.movement.fast },
+                          { label: 'Average moving', color: '#F59E0B', list: stockMovement.movement.average },
+                          { label: 'Slow / not moving', color: OUTSTANDING_COLOR, list: stockMovement.movement.slow },
+                        ].map(({ label, color, list }) => (
+                          <div key={label} className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                              {label}
+                            </span>
+                            <span className="font-semibold text-foreground">{list.length} items</span>
+                          </div>
+                        ))}
+                        {stockMovement.movement.fast[0] && (
+                          <p className="pt-1 text-xs text-muted-foreground">
+                            Top mover: <span className="font-medium text-foreground">{stockMovement.movement.fast[0].itemName}</span>
+                            {' '}({stockMovement.movement.fast[0].qtyDispensed} dispensed)
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
             <Card className="h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
@@ -420,6 +550,7 @@ const Dashboard: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+            )}
           </div>
         </div>
       </div>

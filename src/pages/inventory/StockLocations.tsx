@@ -134,127 +134,112 @@ export default function StockLocations() {
       <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
         <PageHeader title="Stock Locations" icon={<MapPin />} className="mb-3" />
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-          {/* LEFT: Create/Edit form (always visible) */}
-          <div className="lg:col-span-4 bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-            <div className="p-4 border-b bg-muted/30 flex justify-between items-center flex-shrink-0">
-              <h3 className="font-medium flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" /> {editingLocation ? `Edit — ${editingLocation.location_name}` : 'New Stock Location'}
-              </h3>
-              {editingLocation && (
-                <Button variant="ghost" size="sm" onClick={openCreate}>
-                  <X className="w-3.5 h-3.5 mr-1.5" /> Cancel
-                </Button>
-              )}
-            </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-auto">
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Location Code</label>
-                    <Input required disabled={!!editingLocation} value={formData.location_code} onChange={e => setFormData({ ...formData, location_code: e.target.value })} placeholder="e.g. MAIN-WH" className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Type</label>
-                    <Combobox
-                      options={LOCATION_TYPE_OPTIONS}
-                      value={formData.location_type}
-                      onChange={v => setFormData({ ...formData, location_type: v })}
-                      searchPlaceholder="Search..."
-                      className="mt-1 h-9"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Location Name</label>
-                  <Input required value={formData.location_name} onChange={e => setFormData({ ...formData, location_name: e.target.value })} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Address</label>
-                  <textarea
-                    value={formData.address}
-                    onChange={e => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full mt-1 p-3 border border-input rounded-md resize-none h-16 text-sm bg-background shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Capacity Description</label>
-                  <Input value={formData.capacity_description} onChange={e => setFormData({ ...formData, capacity_description: e.target.value })} placeholder="e.g. 500 sq ft cold storage" className="mt-1" />
-                </div>
-              </div>
-              <div className="p-4 border-t bg-muted flex justify-end gap-2 sticky bottom-0">
-                <Button type="submit" disabled={saving}>
-                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-                  {saving ? (editingLocation ? 'Updating...' : 'Creating...') : `${editingLocation ? 'Update' : 'Create'} Location`}
-                </Button>
-              </div>
-            </form>
+        {/* Form above, table below — the layout used across the rest of the
+            system, rather than this page's own side-by-side arrangement. */}
+        <div className="bg-card rounded-lg border shadow-sm overflow-hidden mb-6">
+          <div className="p-4 border-b bg-muted/30 flex justify-between items-center">
+            <h3 className="font-medium flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-primary" />
+              {editingLocation ? `Edit — ${editingLocation.location_name}` : 'New Stock Location'}
+            </h3>
+            {editingLocation && (
+              <Button variant="ghost" size="sm" onClick={openCreate}>
+                <X className="w-3.5 h-3.5 mr-1.5" /> Cancel
+              </Button>
+            )}
           </div>
-
-          {/* RIGHT: Locations list */}
-          <div className="lg:col-span-8 flex flex-col overflow-hidden min-h-0">
-            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap flex-shrink-0">
-              <div className="relative w-64">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input placeholder="Search locations..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <form onSubmit={handleSubmit}>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Location Code</label>
+                <Input required disabled={!!editingLocation} value={formData.location_code} onChange={e => setFormData({ ...formData, location_code: e.target.value })} placeholder="e.g. MAIN-WH" className="mt-1" />
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchLocations} disabled={loading}>
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </Button>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Location Name</label>
+                <Input required value={formData.location_name} onChange={e => setFormData({ ...formData, location_name: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Type</label>
+                <Combobox
+                  options={LOCATION_TYPE_OPTIONS}
+                  value={formData.location_type}
+                  onChange={v => setFormData({ ...formData, location_type: v })}
+                  searchPlaceholder="Search..."
+                  className="mt-1 h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Capacity Description</label>
+                <Input value={formData.capacity_description} onChange={e => setFormData({ ...formData, capacity_description: e.target.value })} placeholder="e.g. 500 sq ft cold storage" className="mt-1" />
+              </div>
+              <div className="md:col-span-2 lg:col-span-4">
+                <label className="text-xs font-medium text-muted-foreground">Address</label>
+                <textarea
+                  value={formData.address}
+                  onChange={e => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full mt-1 p-3 border border-input rounded-md resize-none h-16 text-sm bg-background shadow-sm"
+                />
               </div>
             </div>
+            <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                {saving ? (editingLocation ? 'Updating...' : 'Creating...') : `${editingLocation ? 'Update' : 'Create'} Location`}
+              </Button>
+            </div>
+          </form>
+        </div>
 
-            <div className="flex-1 overflow-auto">
-              {filteredLocations.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredLocations.map(loc => (
-                    <div
-                      key={loc.id}
-                      className={cn("bg-card rounded-lg border shadow-sm p-4 hover:border-primary/50 transition-colors cursor-pointer", editingLocation?.id === loc.id && "bg-primary/5 border-primary/50")}
-                      onClick={() => openEdit(loc)}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <TypeIcon type={loc.location_type} className="w-6 h-6 text-primary shrink-0" />
-                          <div>
-                            <p className="font-semibold text-sm">{loc.location_name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{loc.location_code}</p>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-slate-100 text-slate-600 capitalize">{loc.location_type}</span>
-                      </div>
-                      {loc.address && <p className="text-xs text-muted-foreground mb-3">{loc.address}</p>}
-                      <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div className="p-2 rounded bg-muted/30 text-center">
-                          <p className="text-lg font-bold">{loc.item_count || 0}</p>
-                          <p className="text-[10px] text-muted-foreground">Items</p>
-                        </div>
-                        <div className="p-2 rounded bg-muted/30 text-center">
-                          <p className="text-lg font-bold">{loc.total_stock || 0}</p>
-                          <p className="text-[10px] text-muted-foreground">Total Units</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="flex-1" onClick={(e) => { e.stopPropagation(); viewStock(loc); }}>
-                          <Eye className="w-3.5 h-3.5 mr-1" /> View Stock
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openEdit(loc); }}>
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
+        <div className="flex-1 min-h-0">
+          <AdvancedDataTable<any>
+            data={filteredLocations}
+            loading={loading}
+            loadingMessage="Loading locations..."
+            emptyMessage="No stock locations yet — add one above."
+            keyExtractor={(row) => row.id}
+            searchable
+            searchPlaceholder="Search locations..."
+            exportable
+            exportFileName="stock-locations"
+            pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+            toolbarExtra={
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchLocations} disabled={loading}>
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            }
+            columns={[
+              {
+                key: 'location_name', header: 'Location', sortable: true,
+                render: (v, row) => (
+                  <div className="flex items-center gap-2.5">
+                    <TypeIcon type={row.location_type} className="w-4 h-4 text-primary shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{v}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{row.location_code}</p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-16 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-                  <Warehouse className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  {loading ? 'Loading...' : 'No locations found.'}
-                </div>
-              )}
-            </div>
-          </div>
+                  </div>
+                ),
+              },
+              { key: 'location_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize">{v}</span> },
+              { key: 'address', header: 'Address', render: (v) => v || '—' },
+              { key: 'item_count', header: 'Items', align: 'right', sortable: true, render: (v) => Number(v || 0).toLocaleString() },
+              { key: 'total_stock', header: 'Units', align: 'right', sortable: true, render: (v) => Number(v || 0).toLocaleString() },
+              { key: 'stock_value', header: 'Stock Value', align: 'right', sortable: true, render: (v) => fmt(parseFloat(v) || 0) },
+              {
+                key: 'id', header: 'Actions', align: 'center',
+                render: (_v, row) => (
+                  <div className="flex items-center justify-center gap-1">
+                    <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); viewStock(row); }}>
+                      <Eye className="w-3.5 h-3.5 mr-1" /> Stock
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+                      <Edit className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
       </div>

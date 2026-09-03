@@ -2450,4 +2450,102 @@ router.post('/dispensing-receipt', authorize(PHARMACY_WRITE), async (req, res) =
   }
 });
 
+
+/**
+ * Stock movement for the pharmacy dashboard.
+ *
+ * A pharmacy user's dashboard has no use for takings and receivables — what
+ * matters on their shift is what is moving, what is sitting still, and what
+ * just left the shelf. This serves both panels the pharmacy dashboard shows in
+ * place of the billing ones.
+ *
+ * Items are bucketed by quantity dispensed over the period:
+ *
+ *   fast     the top third of items that actually moved
+ *   average  the middle third
+ *   slow     the bottom third, plus everything that never moved at all
+ *
+ * Terciles rather than fixed thresholds, because "fast" only means anything
+ * relative to the rest of this pharmacy's catalogue — a busy clinic and a small
+ * one would need different absolute cut-offs. Items never dispensed are folded
+ * into slow deliberately: dead stock is the signal a pharmacist most needs.
+ */
+router.get('/stock-movement', authorize(PHARMACY_READ), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const days = Math.min(parseInt(req.query.days, 10) || 30, 365);
+    const dateFrom = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+    const dateTo = new Date().toISOString().split('T')[0];
+    const repl = { clinicId, dateFrom, dateTo };
+
+    const [rows] = await sequelize.query(`
+      SELECT ii.id AS "itemId", ii.item_name AS "itemName",
+             ii.quantity_on_hand AS "quantityOnHand",
+             ii.minimum_stock_level AS "reorderLevel",
+             COALESCE(SUM(dr.quantity_dispensed), 0) AS "qtyDispensed",
+             COALESCE(SUM(dr.total_price), 0) AS "dispensingValue"
+        FROM inventory_items ii
+        LEFT JOIN dispensing_records dr
+          ON dr.inventory_item_id = ii.id
+         AND dr.clinic_id = :clinicId
+         AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo
+       WHERE ii.clinic_id = :clinicId AND ii.is_active = true
+       GROUP BY ii.id, ii.item_name, ii.quantity_on_hand, ii.minimum_stock_level
+    `, { replacements: repl });
+
+    const items = rows.map(r => ({
+      itemId: r.itemId,
+      itemName: r.itemName,
+      quantityOnHand: parseInt(r.quantityOnHand, 10) || 0,
+      reorderLevel: parseInt(r.reorderLevel, 10) || 0,
+      qtyDispensed: parseInt(r.qtyDispensed, 10) || 0,
+      dispensingValue: parseFloat(r.dispensingValue) || 0,
+    }));
+
+    const moved = items.filter(i => i.qtyDispensed > 0).sort((a, b) => b.qtyDispensed - a.qtyDispensed);
+    const never = items.filter(i => i.qtyDispensed === 0);
+    const third = Math.ceil(moved.length / 3);
+
+    const fast = moved.slice(0, third);
+    const average = moved.slice(third, third * 2);
+    const slow = [...moved.slice(third * 2), ...never];
+
+    // The shelf's own recent history, which is what replaces the payments feed.
+    const [recent] = await sequelize.query(`
+      SELECT t.id, t.transaction_number AS "reference", t.transaction_type AS "type",
+             t.quantity_change AS "quantityChange", t.created_at AS "at",
+             ii.item_name AS "itemName", ii.unit_of_measure AS "unit"
+        FROM inventory_transactions t
+        LEFT JOIN inventory_items ii ON ii.id = t.item_id
+       WHERE t.clinic_id = :clinicId
+       ORDER BY t.created_at DESC
+       LIMIT 15
+    `, { replacements: { clinicId } });
+
+    res.json({
+      period: { dateFrom, dateTo, days },
+      totals: {
+        items: items.length,
+        movedItems: moved.length,
+        neverMoved: never.length,
+        unitsDispensed: items.reduce((s, i) => s + i.qtyDispensed, 0),
+        dispensingValue: items.reduce((s, i) => s + i.dispensingValue, 0),
+      },
+      movement: { fast, average, slow: slow.slice(0, 25) },
+      recentMovements: recent.map(r => ({
+        id: r.id,
+        reference: r.reference,
+        type: r.type,
+        quantityChange: parseInt(r.quantityChange, 10) || 0,
+        itemName: r.itemName || 'Unknown item',
+        unit: r.unit || '',
+        at: r.at,
+      })),
+    });
+  } catch (error) {
+    console.error('Error building stock movement:', error);
+    res.status(500).json({ error: 'Failed to build stock movement' });
+  }
+});
+
 module.exports = router;

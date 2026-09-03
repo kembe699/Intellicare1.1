@@ -686,7 +686,15 @@ router.get('/locations', authorize(INVENTORY_READ), async (req, res) => {
     const [locations] = await sequelize.query(`
       SELECT sl.*,
         (SELECT COUNT(DISTINCT sbl.item_id) FROM stock_by_location sbl WHERE sbl.location_id = sl.id AND sbl.quantity_on_hand > 0) AS item_count,
-        (SELECT COALESCE(SUM(sbl2.quantity_on_hand), 0) FROM stock_by_location sbl2 WHERE sbl2.location_id = sl.id) AS total_stock
+        (SELECT COALESCE(SUM(sbl2.quantity_on_hand), 0) FROM stock_by_location sbl2 WHERE sbl2.location_id = sl.id) AS total_stock,
+        -- Value of what is standing in this location, so the list answers
+        -- "how much is sitting here" without opening each one in turn.
+        -- Valued at the item's current unit cost, falling back to its moving
+        -- average — the same basis the inventory valuation report uses.
+        (SELECT COALESCE(SUM(sbl3.quantity_on_hand * COALESCE(NULLIF(ii.current_unit_cost, 0), ii.average_unit_cost, 0)), 0)
+           FROM stock_by_location sbl3
+           JOIN inventory_items ii ON ii.id = sbl3.item_id
+          WHERE sbl3.location_id = sl.id) AS stock_value
       FROM stock_locations sl
       WHERE sl.clinic_id = :clinic_id
       ORDER BY sl.location_name ASC

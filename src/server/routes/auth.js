@@ -260,8 +260,19 @@ router.get('/verify', async (req, res) => {
 
     const branchContext = await loadUserBranchContext(sequelize, user);
 
-    // If role or branch changed since token was issued, issue a fresh token
-    const freshToken = (decoded.role !== user.role || decoded.branchId !== (branchContext.primaryBranch?.id || user.branch_id || null))
+    // Re-issue the token when the identity it carries has drifted from the
+    // database.
+    //
+    // clinicId is checked here for the same reason role and branch are, and its
+    // absence was a real fault: every query for a non-admin is scoped by the
+    // clinicId in the token, so a user whose clinic is corrected keeps reading
+    // an empty clinic until the token expires — up to 24 hours, and a page
+    // refresh does not help, because /me only handed back a new token when the
+    // role or branch differed. That is what left a pharmacy account staring at
+    // an empty inventory after its clinic had already been fixed.
+    const freshToken = (decoded.role !== user.role
+      || decoded.clinicId !== user.clinic_id
+      || decoded.branchId !== (branchContext.primaryBranch?.id || user.branch_id || null))
       ? jwt.sign(
           {
             userId: user.id,
