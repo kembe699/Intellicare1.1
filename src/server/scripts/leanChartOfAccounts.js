@@ -61,7 +61,16 @@ const ESSENTIAL = {
   '2100': 'Accounts Payable - Suppliers — supplier invoices',
   '2150': 'Patient Deposits Held — patient deposit liability',
   '3200': "Retained Earnings — required for a meaningful balance sheet",
-  '4100': 'Patient Services Revenue — default revenue line for all billing',
+  // The income statement is meant to separate where the money came from, so
+  // every service line stays active even before it has been posted to.
+  '4100': 'Patient Services Revenue — catch-all for unclassified billing',
+  '4105': 'Consultation Revenue',
+  '4110': 'Laboratory Services Revenue',
+  '4120': 'Pharmacy Sales Revenue',
+  '4130': 'Radiology Services Revenue',
+  '4140': 'Procedure Revenue',
+  '4150': 'Inpatient Revenue',
+  '4900': 'Other Income',
   '5110': 'Doctor Fees — the Doctor Fees expense category posts here',
   '5120': 'Employee Benefits — the Allowance expense category posts here',
   '5400': 'Office Supplies Expense — daily expenses',

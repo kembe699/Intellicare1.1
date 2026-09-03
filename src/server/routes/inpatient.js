@@ -619,7 +619,7 @@ async function chargeBedAdmission(admissionId, branchId) {
 
     const rate = parseFloat(admission.daily_rate);
     const patientName = `${admission.first_name} ${admission.last_name}`.trim() || 'Patient';
-    const lineItem = { serviceName: `Bed Charge — ${admission.ward_name || 'Ward'}`, quantity: 1, unitPrice: rate, totalPrice: rate };
+    const lineItem = { revenueCategory: 'inpatient', serviceName: `Bed Charge — ${admission.ward_name || 'Ward'}`, quantity: 1, unitPrice: rate, totalPrice: rate };
     await addBillLineItem(admission.patient_id, patientName, parseInt(admission.clinic_id) || 1, branchId, lineItem, 'Auto-generated inpatient bed charge on admission');
   } catch (e) {
     console.error('Error charging bed on admission:', e);
@@ -653,6 +653,7 @@ async function reconcileBedCharge(admissionId, branchId, asOfDate) {
       unitPrice: rate,
       notes: 'Auto-generated inpatient bed charge',
       createdBy: 'System',
+      revenueCategory: 'inpatient',
     });
   } catch (e) {
     console.error('Error reconciling bed charge:', e);
@@ -929,7 +930,7 @@ router.post('/prescriptions', authorize(INPATIENT_CLINICAL), async (req, res) =>
       const total = parseFloat((qty * price).toFixed(2));
       await billInpatientRequest(admission_id, branchId, {
         serviceName: `Medication — ${medication_name}${dosage ? ` (${dosage})` : ''}`,
-        quantity: qty, unitPrice: price, totalPrice: total,
+        quantity: qty, unitPrice: price, totalPrice: total, revenueCategory: 'pharmacy',
       }, 'Auto-billed inpatient prescription');
     }
 
@@ -1083,7 +1084,7 @@ router.post('/lab-requests', authorize(INPATIENT_ANCILLARY), async (req, res) =>
     const price = parseFloat(unit_price);
     if (price > 0) {
       await billInpatientRequest(admission_id, getCreateBranchId(req), {
-        serviceName: `Lab Test — ${test_type}`, quantity: 1, unitPrice: price, totalPrice: price,
+        serviceName: `Lab Test — ${test_type}`, quantity: 1, unitPrice: price, totalPrice: price, revenueCategory: 'laboratory',
       }, 'Auto-billed inpatient lab request');
     }
 
@@ -1155,7 +1156,7 @@ router.post('/radiology-requests', authorize(INPATIENT_ANCILLARY), async (req, r
     const price = parseFloat(unit_price);
     if (price > 0) {
       await billInpatientRequest(admission_id, getCreateBranchId(req), {
-        serviceName: `Imaging — ${imaging_type}${body_part ? ` (${body_part})` : ''}`, quantity: 1, unitPrice: price, totalPrice: price,
+        serviceName: `Imaging — ${imaging_type}${body_part ? ` (${body_part})` : ''}`, quantity: 1, unitPrice: price, totalPrice: price, revenueCategory: 'radiology',
       }, 'Auto-billed inpatient radiology request');
     }
 

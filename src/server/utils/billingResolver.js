@@ -90,6 +90,21 @@ async function addLineItemsToBill({ patientId, patientName, clinicId, branchId, 
   const { PatientBill, sequelize } = require('../models');
   if (!patientId || !Array.isArray(lineItems) || lineItems.length === 0) return null;
 
+  // Give each line the revenue account its category belongs to, so the income
+  // statement can separate lab, pharmacy, consultation and inpatient instead of
+  // crediting everything to 4100. Callers pass `revenueCategory`; lines that
+  // already carry a revenue_account_id keep it.
+  const { resolveRevenueAccount } = require('./resolveRevenueAccount');
+  for (const li of lineItems) {
+    if (li.revenue_account_id || !li.revenueCategory) continue;
+    try {
+      li.revenue_account_id = await resolveRevenueAccount(li.revenueCategory, clinicId);
+    } catch (e) {
+      console.error('Could not resolve a revenue account for', li.revenueCategory, e.message);
+    }
+    delete li.revenueCategory;
+  }
+
   const total = lineItems.reduce((sum, li) => sum + (parseFloat(li.totalPrice) || 0), 0);
 
   const run = async () => sequelize.transaction(async (t) => {
@@ -163,9 +178,32 @@ async function addLineItemsToBill({ patientId, patientName, clinicId, branchId, 
 // far"), not a delta — settled quantity from paid/invoiced lines of the same
 // serviceName is subtracted off to get what the (at most one) open line
 // should actually show.
-async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId, serviceName, quantity, unitPrice, notes, createdBy, visitId }) {
+/**
+ * `revenueCategory` decides which revenue account the line is credited to when
+ * the bill posts to the ledger (see AccountingService.createGLFromPatientBill,
+ * which reads revenue_account_id off each service line).
+ *
+ * Without it every line fell through to 4100 Patient Services Revenue, so the
+ * income statement showed one undifferentiated total and could not answer what
+ * the lab or the pharmacy actually earned. Callers pass what they are billing
+ * for — 'pharmacy', 'laboratory', 'consultation' — and the mapping lives in
+ * utils/resolveRevenueAccount.js so there is one place that decides.
+ */
+async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId, serviceName, quantity, unitPrice, notes, createdBy, visitId, revenueCategory, revenueAccountId }) {
   const { PatientBill, sequelize } = require('../models');
   if (!patientId || !serviceName) return null;
+
+  let lineRevenueAccountId = revenueAccountId || null;
+  if (!lineRevenueAccountId && revenueCategory) {
+    try {
+      const { resolveRevenueAccount } = require('./resolveRevenueAccount');
+      lineRevenueAccountId = await resolveRevenueAccount(revenueCategory, clinicId);
+    } catch (e) {
+      // A revenue account that cannot be resolved must not stop the billing —
+      // the line still posts, just to the catch-all.
+      console.error('Could not resolve a revenue account for', revenueCategory, e.message);
+    }
+  }
 
   const run = async () => sequelize.transaction(async (t) => {
     const { bill, resolvedVisitId } = await resolveActiveBill(patientId, clinicId, { transaction: t, lock: t.LOCK.UPDATE, visitId });
@@ -184,7 +222,7 @@ async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId,
         balance_amount: totalPrice,
         status: 'pending',
         bill_date: new Date(),
-        services: [{ serviceName, quantity, unitPrice, totalPrice }],
+        services: [{ serviceName, quantity, unitPrice, totalPrice, revenue_account_id: lineRevenueAccountId }],
         notes: notes || null,
         created_by: createdBy || 'System',
         visit_id: resolvedVisitId,
@@ -221,7 +259,7 @@ async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId,
       services[openLineIdx] = { ...services[openLineIdx], quantity: neededQty, unitPrice, totalPrice: newTotal };
     } else {
       const newTotal = parseFloat((neededQty * unitPrice).toFixed(2));
-      services.push({ serviceName, quantity: neededQty, unitPrice, totalPrice: newTotal });
+      services.push({ serviceName, quantity: neededQty, unitPrice, totalPrice: newTotal, revenue_account_id: lineRevenueAccountId });
       delta = newTotal;
     }
     if (Math.abs(delta) < 0.01) return bill; // already up to date, skip the write

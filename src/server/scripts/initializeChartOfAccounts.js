@@ -21,7 +21,14 @@ const ESSENTIAL_ACCOUNT_CODES = new Set([
   '2100', // Accounts Payable - Suppliers
   '2150', // Patient Deposits Held
   '3200', // Retained Earnings
-  '4100', // Patient Services Revenue — default revenue line
+  '4100', // Patient Services Revenue — the catch-all for anything unclassified
+  '4105', // Consultation Revenue
+  '4110', // Laboratory Services Revenue
+  '4120', // Pharmacy Sales Revenue
+  '4130', // Radiology Services Revenue
+  '4140', // Procedure Revenue
+  '4150', // Inpatient Revenue
+  '4900', // Other Income
   '5110', // Doctor Fees — the Doctor Fees daily-expense category posts here
   '5120', // Employee Benefits — the Allowance category posts here
   '5400', // Office Supplies Expense
@@ -286,6 +293,17 @@ const healthcareChartOfAccounts = [
     description: 'Revenue from patient consultations and services'
   },
   {
+    // Consultation is the single biggest question a clinic asks of its revenue,
+    // and it had no account of its own — it fell into 4100 alongside everything
+    // else, which is what made the income statement one undifferentiated line.
+    account_code: '4105',
+    account_name: 'Consultation Revenue',
+    account_type: 'revenue',
+    sub_account_type: 'operating_revenue',
+    balance_type: 'credit',
+    description: 'Doctor and clinic consultation fees'
+  },
+  {
     account_code: '4110',
     account_name: 'Laboratory Services Revenue',
     account_type: 'revenue',
@@ -316,6 +334,14 @@ const healthcareChartOfAccounts = [
     sub_account_type: 'operating_revenue',
     balance_type: 'credit',
     description: 'Revenue from medical procedures'
+  },
+  {
+    account_code: '4150',
+    account_name: 'Inpatient Revenue',
+    account_type: 'revenue',
+    sub_account_type: 'operating_revenue',
+    balance_type: 'credit',
+    description: 'Admissions, bed charges and ward services'
   },
   {
     account_code: '4200',
