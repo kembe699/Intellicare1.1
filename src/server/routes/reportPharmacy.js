@@ -1,9 +1,9 @@
 // ─── Pharmacy Report (v2) ──────────────────────────────────────────────────
 //
-// Fresh, MySQL-native rewrite. Part of the same effort as reportPatients.js /
+// Rewritten as a self-contained v2 report. Part of the same effort as reportPatients.js /
 // reportLaboratory.js: the old src/server/routes/reports.js was full of
 // Postgres-only SQL that silently returns zeros on MySQL. This router is
-// self-contained, plain MySQL SQL only, and does not touch reports.js or
+// self-contained PostgreSQL SQL, and does not touch reports.js or
 // index.js — it is meant to be mounted separately, e.g.:
 //
 //   const reportPharmacyRouter = require('./routes/reportPharmacy');
@@ -160,11 +160,11 @@ router.get('/', async (req, res) => {
     // ── 1. Dispensing volume by drug, from dispensing_records (the live
     //      table — see header note). dispensing_date is a plain DATE column.
     const volumeRows = await sequelize.query(
-      `SELECT dr.drug_id AS drugId,
-              COALESCE(ii.item_name, 'Unknown / deleted item') AS drugName,
+      `SELECT dr.drug_id AS "drugId",
+              COALESCE(ii.item_name, 'Unknown / deleted item') AS "drugName",
               COUNT(*) AS events,
               COALESCE(SUM(dr.quantity_dispensed), 0) AS qty,
-              COALESCE(SUM(dr.total_price), 0) AS dispensingValue
+              COALESCE(SUM(dr.total_price), 0) AS "dispensingValue"
        FROM dispensing_records dr
        LEFT JOIN inventory_items ii ON ii.id = dr.drug_id
        WHERE dr.clinic_id = :clinicId AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo
@@ -175,10 +175,10 @@ router.get('/', async (req, res) => {
 
     // ── 2. Overall dispensing summary.
     const [summaryRow] = await sequelize.query(
-      `SELECT COUNT(*) AS totalEvents,
-              COUNT(DISTINCT patient_id) AS distinctPatients,
-              COALESCE(SUM(quantity_dispensed), 0) AS totalQty,
-              COALESCE(SUM(total_price), 0) AS totalDispensingValue
+      `SELECT COUNT(*) AS "totalEvents",
+              COUNT(DISTINCT patient_id) AS "distinctPatients",
+              COALESCE(SUM(quantity_dispensed), 0) AS "totalQty",
+              COALESCE(SUM(total_price), 0) AS "totalDispensingValue"
        FROM dispensing_records
        WHERE clinic_id = :clinicId AND dispensing_date BETWEEN :dateFrom AND :dateTo`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -246,7 +246,7 @@ router.get('/', async (req, res) => {
     //      `services` line-item array in JS (mysql2/Sequelize returns JSON
     //      columns as raw strings via raw sequelize.query, not pre-parsed).
     const bills = await sequelize.query(
-      `SELECT id, total_amount AS totalAmount, paid_amount AS paidAmount, status, bill_date AS billDate, services
+      `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services
        FROM patient_bills
        WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -355,9 +355,9 @@ router.get('/', async (req, res) => {
     //      dispensed in the period show qtyDispensed = 0 and surface at the top of
     //      "slow moving" — that is the correct, honest signal for dead stock.
     const movementRows = await sequelize.query(
-      `SELECT ii.id AS itemId, ii.item_name AS itemName, ii.quantity_on_hand AS quantityOnHand,
-              COALESCE(SUM(dr.quantity_dispensed), 0) AS qtyDispensed,
-              COALESCE(SUM(dr.total_price), 0) AS dispensingValue
+      `SELECT ii.id AS "itemId", ii.item_name AS "itemName", ii.quantity_on_hand AS "quantityOnHand",
+              COALESCE(SUM(dr.quantity_dispensed), 0) AS "qtyDispensed",
+              COALESCE(SUM(dr.total_price), 0) AS "dispensingValue"
        FROM inventory_items ii
        LEFT JOIN dispensing_records dr
          ON dr.drug_id = ii.id AND dr.clinic_id = :clinicId AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo

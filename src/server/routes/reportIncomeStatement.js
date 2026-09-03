@@ -1,5 +1,5 @@
 /**
- * Income Statement (Profit & Loss) — v2 report, built fresh on plain MySQL syntax.
+ * Income Statement (Profit & Loss) — v2 report, PostgreSQL syntax.
  *
  * Source of truth: chart_of_accounts joined against account_ledger.
  * Sign conventions:
@@ -59,7 +59,11 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo) {
        AND coa.is_active = true
        AND coa.account_type = :accountType
      GROUP BY coa.id, coa.account_code, coa.account_name
-     HAVING ABS(amount) > 0.001
+     -- The aggregate is repeated rather than referenced by its output alias:
+     -- MySQL let HAVING use a SELECT alias, PostgreSQL allows that only in
+     -- GROUP BY and ORDER BY, so the alias form failed with
+     -- 'column amount does not exist'.
+     HAVING ABS(${amountExpr}) > 0.001
      ORDER BY coa.account_code ASC`,
     {
       replacements: { clinicId, accountType, dateFrom, dateTo },

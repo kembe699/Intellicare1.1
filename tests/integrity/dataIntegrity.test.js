@@ -83,7 +83,7 @@ describe('Data Integrity Tests', () => {
     });
 
     test('exactly one base currency is defined', async () => {
-      const baseCnt = await scalar(`SELECT COUNT(*) FROM currencies WHERE is_base_currency = 1`);
+      const baseCnt = await scalar(`SELECT COUNT(*) FROM currencies WHERE is_base_currency = TRUE`);
       expect(parseInt(baseCnt)).toBe(1);
     });
 
@@ -126,7 +126,7 @@ describe('Data Integrity Tests', () => {
 
     test('no active exchange rate has zero or negative rate', async () => {
       const bad = await scalar(
-        `SELECT COUNT(*) FROM exchange_rates WHERE is_active = 1 AND rate <= 0`
+        `SELECT COUNT(*) FROM exchange_rates WHERE is_active = TRUE AND rate <= 0`
       );
       expect(parseInt(bad)).toBe(0);
     });

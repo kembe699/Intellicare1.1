@@ -1,10 +1,10 @@
 // ─── Patient Report (v2) ──────────────────────────────────────────────────
 //
-// Fresh, MySQL-native rewrite of the patient volume / billing report. The
+// Rewrite of the patient volume / billing report. The
 // old src/server/routes/reports.js was full of Postgres-only SQL (AGE(),
 // ::date casts, quoted INTERVAL literals, ON CONFLICT) that silently
-// returns zeros on MySQL. This router is self-contained, plain MySQL SQL
-// only (DATEDIFF / TIMESTAMPDIFF / unquoted INTERVAL n DAY), and does not
+// returned zeros on MySQL, the engine at the time. This router is self-contained
+// only, and does not
 // touch reports.js or index.js — it is meant to be mounted separately,
 // e.g.:
 //
@@ -64,10 +64,19 @@ router.get('/', async (req, res) => {
     //    real unit of encounter is an `lis_test_orders` row, created per visit via
     //    POST /lis/orders (see billingResolver.js's getCurrentOpenVisitId, which treats
     //    it the same way). Counting those instead is what makes this stat non-zero.
+    //
+    //    NOT clinic-scoped, matching dashboard.js / reportLaboratory.js /
+    //    reportDoctorPerformance.js: lis_test_orders.clinic_id is a false
+    //    cognate — the *consulting clinic* (a dr_clinics UUID, alongside
+    //    clinic_name/room_number), not the facility id. Comparing it to a
+    //    numeric clinic_id matched almost nothing under MySQL (which coerced
+    //    each UUID to 0) and errors outright on PostgreSQL, so this count was
+    //    wrong before the migration and broken after it. Each tenant has its
+    //    own schema, so the table already belongs to exactly one facility.
     const [visitsRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM lis_test_orders
-       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs`,
+       WHERE created_at BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -90,8 +99,8 @@ router.get('/', async (req, res) => {
     // 3. Paid in full — bills with status = 'paid' created in the period.
     const [paidRow] = await sequelize.query(
       `SELECT COUNT(*) AS cnt,
-              COALESCE(SUM(total_amount), 0) AS totalAmount,
-              COALESCE(SUM(paid_amount), 0) AS paidAmount
+              COALESCE(SUM(total_amount), 0) AS "totalAmount",
+              COALESCE(SUM(paid_amount), 0) AS "paidAmount"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND status = 'paid'
          AND created_at BETWEEN :fromTs AND :toTs`,
@@ -102,13 +111,13 @@ router.get('/', async (req, res) => {
     //    not bound to the period, plus the slice of that which originated
     //    within the selected period.
     const [outstandingAllRow] = await sequelize.query(
-      `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS totalOutstanding
+      `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS "totalOutstanding"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND status IN ('pending', 'partial')`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const [outstandingInPeriodRow] = await sequelize.query(
-      `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS totalOutstanding
+      `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS "totalOutstanding"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND status IN ('pending', 'partial')
          AND created_at BETWEEN :fromTs AND :toTs`,
@@ -117,9 +126,9 @@ router.get('/', async (req, res) => {
 
     // 5. Breakdown table — every bill created in the period (any status).
     const bills = await sequelize.query(
-      `SELECT id, bill_number AS billNumber, patient_id AS patientId, patient_name AS patientName,
-              total_amount AS totalAmount, paid_amount AS paidAmount, balance_amount AS balanceAmount,
-              status, bill_date AS billDate, created_at AS createdAt
+      `SELECT id, bill_number AS "billNumber", patient_id AS "patientId", patient_name AS "patientName",
+              total_amount AS "totalAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
+              status, bill_date AS "billDate", created_at AS "createdAt"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs
        ORDER BY created_at DESC`,

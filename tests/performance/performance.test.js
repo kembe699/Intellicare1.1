@@ -60,7 +60,7 @@ describe('Performance Tests', () => {
       const [rows, elapsed] = await timed(() =>
         query(`SELECT * FROM exchange_rates
                WHERE from_currency = 'USD' AND to_currency = 'SSP'
-               AND is_active = 1
+               AND is_active = TRUE
                ORDER BY effective_date DESC
                LIMIT 1`)
       );
@@ -71,7 +71,7 @@ describe('Performance Tests', () => {
     test('chart of accounts listing completes in < 200ms', async () => {
       const [rows, elapsed] = await timed(() =>
         query(`SELECT * FROM chart_of_accounts
-               WHERE clinic_id = :cid AND is_active = 1
+               WHERE clinic_id = :cid AND is_active = TRUE
                ORDER BY account_code`, { cid: TEST_CLINIC_ID })
       );
       console.log(`  ⏱ Chart of accounts listing: ${elapsed}ms (${rows.length} rows)`);
@@ -155,7 +155,7 @@ describe('Performance Tests', () => {
           await createTestExchangeRate({
             rate: 5500 + Math.round(Math.random() * 500),
             effective_date: `2025-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
-            is_active: i === 49 ? 1 : 0, // only latest active
+            is_active: i === 49, // only latest active
           });
         }
       });
@@ -185,7 +185,7 @@ describe('Performance Tests', () => {
         await query(`SELECT currency, COUNT(*) as cnt, SUM(balance_due) as total
                      FROM invoices WHERE clinic_id = :cid GROUP BY currency`, { cid: TEST_CLINIC_ID });
         await query(`SELECT from_currency, to_currency, rate, effective_date
-                     FROM exchange_rates WHERE is_active = 1 AND clinic_id = :cid
+                     FROM exchange_rates WHERE is_active = TRUE AND clinic_id = :cid
                      ORDER BY effective_date DESC`, { cid: TEST_CLINIC_ID });
         await query(`SELECT currency_code, SUM(balance_in_currency) as total
                      FROM account_currency_balances WHERE clinic_id = :cid
@@ -204,7 +204,7 @@ describe('Performance Tests', () => {
                      FROM chart_of_accounts ca
                      LEFT JOIN gl_line_items gli ON gli.account_id = ca.id
                      LEFT JOIN general_ledger gl ON gl.id = gli.gl_id AND gl.status = 'posted'
-                     WHERE ca.clinic_id = :cid AND ca.is_active = 1
+                     WHERE ca.clinic_id = :cid AND ca.is_active = TRUE
                      GROUP BY ca.account_type, ca.account_code, ca.account_name
                      ORDER BY ca.account_code`, { cid: TEST_CLINIC_ID });
       });

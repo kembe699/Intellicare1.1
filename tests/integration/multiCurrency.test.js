@@ -53,12 +53,12 @@ describe('Multi-Currency Integration Tests', () => {
     test('can find latest active rate for a currency pair', async () => {
       const today = new Date().toISOString().split('T')[0];
       // Deactivate any old test rates first
-      const r1 = await createTestExchangeRate({ effective_date: '2024-01-01', rate: 5000, is_active: 0 });
-      const r2 = await createTestExchangeRate({ effective_date: today, rate: 5700, is_active: 1 });
+      const r1 = await createTestExchangeRate({ effective_date: '2024-01-01', rate: 5000, is_active: false });
+      const r2 = await createTestExchangeRate({ effective_date: today, rate: 5700, is_active: true });
 
       const latest = await query(
         `SELECT * FROM exchange_rates
-         WHERE from_currency = 'USD' AND to_currency = 'SSP' AND is_active = 1 AND source = 'test'
+         WHERE from_currency = 'USD' AND to_currency = 'SSP' AND is_active = TRUE AND source = 'test'
          ORDER BY effective_date DESC LIMIT 1`
       );
       expect(latest.length).toBeGreaterThanOrEqual(1);
@@ -73,7 +73,7 @@ describe('Multi-Currency Integration Tests', () => {
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       await query(
         `INSERT INTO exchange_rates (id, clinic_id, from_currency, to_currency, rate, effective_date, source, is_active, created_at, updated_at)
-         VALUES (:id, :cid, 'EUR', 'SSP', 6200, :ed, 'test', 1, :now, :now)`,
+         VALUES (:id, :cid, 'EUR', 'SSP', 6200, :ed, 'test', TRUE, :now, :now)`,
         { id: eurId, cid: TEST_CLINIC_ID, ed: new Date().toISOString().split('T')[0], now }
       );
 

@@ -13,8 +13,15 @@ const NOW = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 const TODAY = () => new Date().toISOString().split('T')[0];
 
 function testId() {
-  // CHAR(36) columns — prefix 't-' (2) + short id (max 34) = 36 chars
-  return TEST_PREFIX + uuid().replace(/-/g, '').slice(0, 34);
+  // Must be EXACTLY 36 chars: prefix 't-' (2) + 34 random.
+  //
+  // These land in CHAR(36) columns, and PostgreSQL blank-pads bpchar and returns
+  // the padding to the client — where MySQL stripped it on retrieval. A 34-char
+  // id therefore came back with two trailing spaces and failed every
+  // `expect(row.id).toBe(created.id)` string comparison. uuid() without its
+  // dashes is only 32 chars, so it is topped up rather than sliced.
+  const raw = (uuid() + uuid()).replace(/-/g, '');
+  return TEST_PREFIX + raw.slice(0, 34);
 }
 
 // ─── Cleanup ───────────────────────────────────────────────
@@ -38,7 +45,7 @@ async function cleanupTestData() {
 
   for (const table of tables) {
     try {
-      await query(`DELETE FROM \`${table}\` WHERE id LIKE 't-%'`);
+      await query(`DELETE FROM "${table}" WHERE id LIKE 't-%'`);
     } catch (e) { /* skip */ }
   }
 
@@ -57,11 +64,11 @@ async function ensureBaseCurrencies() {
   const codes = existing.map(r => r.code);
   if (!codes.includes('SSP')) {
     await query(`INSERT INTO currencies (code, name, symbol, is_base_currency, decimal_places, is_active)
-                 VALUES ('SSP','South Sudanese Pound','SSP',1,2,1)`);
+                 VALUES ('SSP','South Sudanese Pound','SSP',TRUE,2,TRUE)`);
   }
   if (!codes.includes('USD')) {
     await query(`INSERT INTO currencies (code, name, symbol, is_base_currency, decimal_places, is_active)
-                 VALUES ('USD','US Dollar','$',0,2,1)`);
+                 VALUES ('USD','US Dollar','$',FALSE,2,TRUE)`);
   }
 }
 
@@ -80,7 +87,7 @@ async function createTestExchangeRate(overrides = {}) {
     spot_rate: null,
     effective_date: TODAY(),
     source: 'test',
-    is_active: 1,
+    is_active: true,
     notes: null,
     created_by: null,
     created_at: now,
@@ -190,7 +197,7 @@ async function createTestGLEntry(overrides = {}) {
     total_debit: 5000,
     total_credit: 5000,
     status: 'posted',
-    is_posted: 1,
+    is_posted: true,
     transaction_currency: 'SSP',
     base_currency: 'SSP',
     exchange_rate: 1.0,

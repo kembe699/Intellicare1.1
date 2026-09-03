@@ -36,7 +36,7 @@ describe('Currency & Exchange Rate Module – Unit Tests', () => {
     });
 
     test('exactly one base currency exists', async () => {
-      const count = await scalar(`SELECT COUNT(*) FROM currencies WHERE is_base_currency = 1`);
+      const count = await scalar(`SELECT COUNT(*) FROM currencies WHERE is_base_currency = TRUE`);
       expect(parseInt(count)).toBe(1);
     });
 
@@ -94,17 +94,17 @@ describe('Currency & Exchange Rate Module – Unit Tests', () => {
     });
 
     test('can deactivate a rate', async () => {
-      const rate = await createTestExchangeRate({ is_active: 1 });
-      await query(`UPDATE exchange_rates SET is_active = 0 WHERE id = :id`, { id: rate.id });
+      const rate = await createTestExchangeRate({ is_active: true });
+      await query(`UPDATE exchange_rates SET is_active = FALSE WHERE id = :id`, { id: rate.id });
       const row = await query(`SELECT is_active FROM exchange_rates WHERE id = :id`, { id: rate.id });
       expect(row[0].is_active).toBeFalsy();
     });
 
     test('can query active rates only', async () => {
-      const r1 = await createTestExchangeRate({ is_active: 1 });
-      const r2 = await createTestExchangeRate({ is_active: 0 });
+      const r1 = await createTestExchangeRate({ is_active: true });
+      const r2 = await createTestExchangeRate({ is_active: false });
       const active = await query(
-        `SELECT * FROM exchange_rates WHERE id IN (:id1, :id2) AND is_active = 1`,
+        `SELECT * FROM exchange_rates WHERE id IN (:id1, :id2) AND is_active = TRUE`,
         { id1: r1.id, id2: r2.id }
       );
       expect(active.length).toBe(1);

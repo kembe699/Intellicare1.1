@@ -4,7 +4,7 @@ const { sequelize } = require('../models');
 
 // ═══════════════════════════════════════════════════
 // BED / WARD OCCUPANCY REPORT — current-state snapshot + admissions trend
-// Plain MySQL-native SQL only (no Postgres syntax).
+// Plain PostgreSQL SQL.
 //
 // GET /  (mounted e.g. at /api/reports-v2/occupancy)
 // Query params:

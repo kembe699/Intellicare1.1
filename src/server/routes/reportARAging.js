@@ -2,7 +2,7 @@
 //
 // Current-state snapshot (not period-bound) of every outstanding patient
 // bill, bucketed by how many days have elapsed since bill_date. Built as a
-// self-contained MySQL-native router, matching the convention established
+// self-contained router, matching the convention established
 // by reportPatients.js / reportInventory.js this session — no Postgres-only
 // date syntax, no dependency on reports.js or index.js.
 //
@@ -22,7 +22,7 @@
 //                        date range only narrows which bills are considered, e.g. "AR aging
 //                        for bills raised last quarter" vs. the whole open book.
 //
-// Bucketing rule: ((CURRENT_DATE)::date - (bill_date)::date) computed in plain MySQL
+// Bucketing rule: ((CURRENT_DATE)::date - (bill_date)::date) computed in plain SQL
 // (no Postgres AGE()/::date/INTERVAL-quoting), against every patient_bills
 // row where status IN ('pending','partial') AND balance_amount > 0:
 //   current   : 0–30 days
@@ -69,7 +69,7 @@ router.get('/', async (req, res) => {
     if (dateTo) { dateClause += ' AND bill_date <= :toTs'; repl.toTs = `${dateTo} 23:59:59`; }
 
     // Every outstanding bill for the clinic, oldest/most-overdue first.
-    // ((CURRENT_DATE)::date - (bill_date)::date) — plain MySQL date math only.
+    // ((CURRENT_DATE)::date - (bill_date)::date) — plain SQL date math only.
     const bills = await sequelize.query(
       `SELECT
          id,

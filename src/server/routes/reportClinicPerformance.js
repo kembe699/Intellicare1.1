@@ -1,7 +1,7 @@
 // ─── Clinic / Department Performance Report (v2) ──────────────────────────
 //
-// Fresh, MySQL-native rewrite. Part of the same effort as reportLaboratory.js
-// and reportPatients.js. Self-contained, plain MySQL SQL only, does not
+// Rewritten as a self-contained v2 report. Part of the same effort as reportLaboratory.js
+// and reportPatients.js. Self-contained, does not
 // touch reports.js or index.js — meant to be mounted separately, e.g.:
 //
 //   app.use('/api/reports-v2/clinic-performance', require('./routes/reportClinicPerformance'));
@@ -189,7 +189,7 @@ router.get('/', async (req, res) => {
 
     // ── 2. Visit volume by clinic ────────────────────────────────────────
     const visitRows = await sequelize.query(
-      `SELECT clinic_id AS clinicId, COUNT(*) AS visitCount
+      `SELECT clinic_id AS "clinicId", COUNT(*) AS "visitCount"
        FROM visits
        WHERE visit_date BETWEEN :fromTs AND :toTs
        GROUP BY clinic_id`,
@@ -198,7 +198,7 @@ router.get('/', async (req, res) => {
 
     // ── 3. Revenue collected by clinic (active receipts only) ───────────
     const revenueRows = await sequelize.query(
-      `SELECT clinic_id AS clinicId, SUM(payment_amount) AS revenue
+      `SELECT clinic_id AS "clinicId", SUM(payment_amount) AS revenue
        FROM receipts
        WHERE payment_date BETWEEN :fromTs AND :toTs AND status = 'active'
        GROUP BY clinic_id`,
@@ -232,7 +232,7 @@ router.get('/', async (req, res) => {
 
     // ── 4. Category catalog: normalized service_name -> category ────────
     const services = await sequelize.query(
-      `SELECT service_name AS serviceName, category FROM services`,
+      `SELECT service_name AS "serviceName", category FROM services`,
       { type: QueryTypes.SELECT }
     );
     const nameToCategory = new Map();
@@ -243,8 +243,8 @@ router.get('/', async (req, res) => {
 
     // ── 5. Bills in period (all clinics — see header note) ──────────────
     const bills = await sequelize.query(
-      `SELECT id, total_amount AS totalAmount, paid_amount AS paidAmount, status, bill_date AS billDate, services,
-              scheme_id AS schemeId, bill_currency AS billCurrency
+      `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services,
+              scheme_id AS "schemeId", bill_currency AS "billCurrency"
        FROM patient_bills
        WHERE bill_date BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }

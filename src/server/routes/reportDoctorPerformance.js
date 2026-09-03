@@ -1,8 +1,8 @@
 // ─── Doctor Performance Report (v2) ────────────────────────────────────────
 //
-// Fresh, MySQL-native rewrite following the same conventions as
+// Follows the same conventions as
 // reportLaboratory.js / reportPharmacy.js / reportPatients.js. Self-contained,
-// plain MySQL SQL only, does not touch index.js — meant to be mounted
+// PostgreSQL SQL, does not touch index.js — meant to be mounted
 // separately, e.g.:
 //
 //   const reportDoctorPerformanceRouter = require('./routes/reportDoctorPerformance');
@@ -180,8 +180,8 @@ router.get('/', async (req, res) => {
     //      actual role='doctor' user. This is the ONLY set of visits this
     //      report credits to a doctor — see header note.
     const visitRows = await sequelize.query(
-      `SELECT o.id AS visitId, o.doctor_id AS doctorId, u.display_name AS doctorName,
-              o.participant_id AS patientId, DATE(o.created_at) AS visitDay
+      `SELECT o.id AS "visitId", o.doctor_id AS "doctorId", u.display_name AS "doctorName",
+              o.participant_id AS "patientId", DATE(o.created_at) AS "visitDay"
        FROM lis_test_orders o
        INNER JOIN users u ON u.id = o.doctor_id AND u.role = 'doctor'
        WHERE o.created_at BETWEEN :fromTs AND :toTs
@@ -192,7 +192,7 @@ router.get('/', async (req, res) => {
     // ── 2. Total visits in period (any doctor_id/none), for the
     //      dataQuality disclosure — how many were excluded and why.
     const [allVisitsRow] = await sequelize.query(
-      `SELECT COUNT(*) AS totalVisits
+      `SELECT COUNT(*) AS "totalVisits"
        FROM lis_test_orders
        WHERE created_at BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -230,7 +230,7 @@ router.get('/', async (req, res) => {
 
     // ── 4. Consultation-category catalog (currently just "GP - Consultation").
     const consultationServices = await sequelize.query(
-      `SELECT service_name AS serviceName FROM services WHERE category = 'Consultation'`,
+      `SELECT service_name AS "serviceName" FROM services WHERE category = 'Consultation'`,
       { type: QueryTypes.SELECT }
     );
     const consultationNames = new Set(
@@ -241,9 +241,9 @@ router.get('/', async (req, res) => {
     //      same reasoning as reportLaboratory.js (mysql2/Sequelize returns
     //      JSON columns as raw strings via raw sequelize.query).
     const bills = await sequelize.query(
-      `SELECT id, patient_id AS patientId, total_amount AS totalAmount, paid_amount AS paidAmount,
-              status, DATE(bill_date) AS billDay, services,
-              scheme_id AS schemeId, bill_currency AS billCurrency
+      `SELECT id, patient_id AS "patientId", total_amount AS "totalAmount", paid_amount AS "paidAmount",
+              status, DATE(bill_date) AS "billDay", services,
+              scheme_id AS "schemeId", bill_currency AS "billCurrency"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }

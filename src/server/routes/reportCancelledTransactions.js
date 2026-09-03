@@ -12,7 +12,7 @@
 // otherwise-live bill, see src/pages/BillDetails.tsx). Reported separately
 // so the two concepts are never blended into one table.
 //
-// Every query here is plain MySQL syntax, verified against the live
+// Every query here is PostgreSQL syntax, verified against the live
 // `intellicare` DB before shipping (this codebase has a documented history
 // of Postgres-only SQL silently failing on MySQL).
 //
@@ -28,14 +28,14 @@ const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
 
-/** Returns today's date as YYYY-MM-DD in server-local time (MySQL DATE format). */
+/** Returns today's date as YYYY-MM-DD in server-local time (SQL DATE format). */
 function todayISO() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Basic YYYY-MM-DD validator — reject anything else so we don't hand raw junk to MySQL. */
+/** Basic YYYY-MM-DD validator — reject anything else so we don't hand raw junk to the database. */
 function isValidDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
@@ -101,7 +101,7 @@ router.get('/', async (req, res) => {
     // ── Section 2: voided line items within otherwise-live bills ───────────
     // patient_bills.services is a JSON array of service line objects; a line
     // is "voided" when it carries isVoided === true. This is scanned in JS
-    // (not JSON_TABLE) for maximum MySQL-version compatibility.
+    // (not a SQL JSON function) so the shape of legacy rows can be handled defensively.
     const clinicBillSQL = clinicId ? ' AND clinic_id = ?' : '';
     const clinicBillParams = clinicId ? [clinicId] : [];
     const [billRows] = await sequelize.query(

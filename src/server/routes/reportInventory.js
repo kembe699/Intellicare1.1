@@ -5,7 +5,7 @@ const { getBranchConditionSQL } = require('../middleware/branchFilter');
 
 // ═══════════════════════════════════════════════════
 // INVENTORY REPORT — current-state stock listing + valuation
-// Plain MySQL-native SQL only (no Postgres syntax).
+// Plain PostgreSQL SQL.
 //
 // GET /  (mounted e.g. at /api/reports-v2/inventory)
 // Query params:

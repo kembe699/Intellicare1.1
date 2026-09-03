@@ -1,6 +1,6 @@
 // ─── Laboratory Report (v2) ────────────────────────────────────────────────
 //
-// Fresh, MySQL-native rewrite. Part of the same effort as reportPatients.js:
+// Rewritten as a self-contained v2 report. Part of the same effort as reportPatients.js:
 // the old src/server/routes/reports.js was full of Postgres-only SQL that
 // silently returns zeros on MySQL. This router is self-contained, plain
 // MySQL SQL only, and does not touch reports.js or index.js — it is meant
@@ -143,7 +143,7 @@ router.get('/', async (req, res) => {
     //      when the test was ordered/registered). Not clinic-filtered —
     //      see header note.
     const volumeRows = await sequelize.query(
-      `SELECT sp.test_code AS testCode, MIN(sp.test_name) AS testName, COUNT(*) AS volume
+      `SELECT sp.test_code AS "testCode", MIN(sp.test_name) AS "testName", COUNT(*) AS volume
        FROM lis_specimens sp
        INNER JOIN lis_test_orders o ON o.id = sp.order_id
        WHERE sp.created_at BETWEEN :fromTs AND :toTs
@@ -154,7 +154,7 @@ router.get('/', async (req, res) => {
 
     // ── 2. Patient volume: distinct participants + total tests performed.
     const [patientVolumeRow] = await sequelize.query(
-      `SELECT COUNT(DISTINCT o.participant_id) AS distinctPatients, COUNT(*) AS totalTests
+      `SELECT COUNT(DISTINCT o.participant_id) AS "distinctPatients", COUNT(*) AS "totalTests"
        FROM lis_specimens sp
        INNER JOIN lis_test_orders o ON o.id = sp.order_id
        WHERE sp.created_at BETWEEN :fromTs AND :toTs`,
@@ -174,11 +174,11 @@ router.get('/', async (req, res) => {
 
     // ── 4. Catalogs used to identify lab-related bill line items.
     const labTests = await sequelize.query(
-      `SELECT test_code AS testCode, test_name AS testName FROM lab_tests`,
+      `SELECT test_code AS "testCode", test_name AS "testName" FROM lab_tests`,
       { type: QueryTypes.SELECT }
     );
     const diagnosticServices = await sequelize.query(
-      `SELECT id, service_name AS serviceName FROM services WHERE category = 'Diagnostic'`,
+      `SELECT id, service_name AS "serviceName" FROM services WHERE category = 'Diagnostic'`,
       { type: QueryTypes.SELECT }
     );
 
@@ -214,7 +214,7 @@ router.get('/', async (req, res) => {
     //      columns as raw strings via raw sequelize.query, not pre-parsed —
     //      verified against this connection).
     const bills = await sequelize.query(
-      `SELECT id, total_amount AS totalAmount, paid_amount AS paidAmount, status, bill_date AS billDate, services
+      `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services
        FROM patient_bills
        WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }

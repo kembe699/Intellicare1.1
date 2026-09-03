@@ -3,10 +3,11 @@ const dotenv = require('dotenv');
 const path = require('path');
 
 // .env.test (dedicated, gitignored) — NOT the project-root .env, which is a Docker-
-// oriented config for a different, near-empty database (intellicare_hmis) than the one
-// the app actually runs against. Tests were silently running against that stale/empty
-// database for who knows how long, which is why ~30 tests failed on "missing" columns
-// the real app's database has always had. See .env.test for the full explanation.
+// oriented config for a different, near-empty database. See .env.test.
+//
+// Since the MySQL -> PostgreSQL migration this connects to the `tenant_test`
+// SCHEMA of the app's database. Isolation is by search_path, exactly as the app
+// does it for real tenants, so the suite can never read or write a tenant's rows.
 dotenv.config({ path: path.resolve(__dirname, '../../.env.test') });
 
 let sequelize = null;
@@ -16,17 +17,33 @@ let sequelize = null;
  * Uses a schema-identical clone of the app's real database (intellicare_test),
  * never the live one — see .env.test.
  */
+const TEST_SCHEMA = process.env.DB_SCHEMA || 'tenant_test';
+
+if (!/^[a-z_][a-z0-9_]{0,62}$/.test(TEST_SCHEMA)) {
+  throw new Error(`Unsafe DB_SCHEMA for tests: ${TEST_SCHEMA}`);
+}
+
 function getSequelize() {
   if (!sequelize) {
     sequelize = new Sequelize(
-      process.env.DB_NAME || 'intellicare_test',
-      process.env.DB_USER || 'root',
+      process.env.DB_NAME || 'intellicareoff',
+      process.env.DB_USER || 'intellicare',
       process.env.DB_PASSWORD || '',
       {
         host: process.env.DB_HOST || '127.0.0.1',
-        port: process.env.DB_PORT || 3306,
-        dialect: 'mysql',
+        port: process.env.DB_PORT || 5432,
+        dialect: 'postgres',
         logging: false,
+        ...(String(process.env.DB_SSL).toLowerCase() === 'true'
+          ? { dialectOptions: { ssl: { rejectUnauthorized: false } } }
+          : {}),
+        // Pin the schema on every pooled connection, the same way the app does
+        // for a tenant. Without this a test would silently read `public`.
+        hooks: {
+          async afterConnect(connection) {
+            await connection.query(`SET search_path TO "${TEST_SCHEMA}"`);
+          },
+        },
         pool: { max: 5, min: 0, acquire: 30000, idle: 10000 },
       }
     );
@@ -56,7 +73,10 @@ async function scalar(sql, replacements = {}) {
  * Check if a table exists.
  */
 async function tableExists(tableName) {
-  const rows = await query(`SHOW TABLES LIKE :t`, { t: tableName });
+  const rows = await query(
+    `SELECT 1 FROM pg_tables WHERE schemaname = :s AND tablename = :t`,
+    { s: TEST_SCHEMA, t: tableName }
+  );
   return rows.length > 0;
 }
 
@@ -65,9 +85,9 @@ async function tableExists(tableName) {
  */
 async function columnExists(tableName, columnName) {
   const rows = await query(
-    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c`,
-    { t: tableName, c: columnName }
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = :s AND table_name = :t AND column_name = :c`,
+    { s: TEST_SCHEMA, t: tableName, c: columnName }
   );
   return rows.length > 0;
 }
@@ -77,11 +97,12 @@ async function columnExists(tableName, columnName) {
  */
 async function getColumns(tableName) {
   const rows = await query(
-    `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
-     FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t
-     ORDER BY ORDINAL_POSITION`,
-    { t: tableName }
+    `SELECT column_name AS "COLUMN_NAME", data_type AS "DATA_TYPE",
+            is_nullable AS "IS_NULLABLE", column_default AS "COLUMN_DEFAULT"
+     FROM information_schema.columns
+     WHERE table_schema = :s AND table_name = :t
+     ORDER BY ordinal_position`,
+    { s: TEST_SCHEMA, t: tableName }
   );
   return rows;
 }
@@ -90,14 +111,17 @@ async function getColumns(tableName) {
  * Get all indexes on a table.
  */
 async function getIndexes(tableName) {
-  return query(`SHOW INDEX FROM \`${tableName}\``);
+  return query(
+    `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = :s AND tablename = :t`,
+    { s: TEST_SCHEMA, t: tableName }
+  );
 }
 
 /**
  * Get row count for a table.
  */
 async function rowCount(tableName) {
-  return scalar(`SELECT COUNT(*) FROM \`${tableName}\``);
+  return scalar(`SELECT COUNT(*)::int FROM "${tableName}"`);
 }
 
 /**
@@ -130,6 +154,7 @@ async function timed(fn) {
 }
 
 module.exports = {
+  TEST_SCHEMA,
   getSequelize,
   query,
   scalar,

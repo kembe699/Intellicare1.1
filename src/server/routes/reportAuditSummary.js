@@ -1,11 +1,11 @@
 // ─── Staff Activity / Audit Log Summary Report (v2) ───────────────────────
 //
-// Fresh, MySQL-native report reading from the existing `audit_logs` table
+// Report reading from the existing `audit_logs` table
 // (written to via the `logAudit` helper exported from the OLD
 // src/server/routes/reports.js — that file and its export are NOT touched
 // here, this router only SELECTs from the table it populates).
 //
-// Self-contained, plain MySQL SQL only (no AGE(), no ::date casts, no
+// Self-contained. NOTE: originally written for MySQL (no AGE(), no ::date casts, no
 // quoted INTERVAL literals — those are Postgres-only and silently fail on
 // MySQL). Does not touch reports.js or index.js — meant to be mounted
 // separately, e.g.:
@@ -84,72 +84,72 @@ router.get('/', async (req, res) => {
     // 1. Summary tiles — total actions, active staff count, most active user, top action.
     //    Scoped to the selected user when one is picked.
     const [totalsRow] = await sequelize.query(
-      `SELECT COUNT(*) AS totalActions,
-              COUNT(DISTINCT al.user_id) AS activeStaffCount
+      `SELECT COUNT(*) AS "totalActions",
+              COUNT(DISTINCT al.user_id) AS "activeStaffCount"
        FROM audit_logs al
        WHERE ${userScopeClause}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
     const [mostActiveUserRow] = await sequelize.query(
-      `SELECT al.user_id AS userId,
-              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS userName,
-              COUNT(*) AS actionCount
+      `SELECT al.user_id AS "userId",
+              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS "userName",
+              COUNT(*) AS "actionCount"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
        WHERE ${scopeClause} AND al.user_id IS NOT NULL
-       GROUP BY al.user_id, userName
-       ORDER BY actionCount DESC
+       GROUP BY al.user_id, "userName"
+       ORDER BY "actionCount" DESC
        LIMIT 1`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
     const [mostCommonActionRow] = await sequelize.query(
-      `SELECT al.action AS action, COUNT(*) AS actionCount
+      `SELECT al.action AS action, COUNT(*) AS "actionCount"
        FROM audit_logs al
        WHERE ${userScopeClause}
        GROUP BY al.action
-       ORDER BY actionCount DESC
+       ORDER BY "actionCount" DESC
        LIMIT 1`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
     // 2. Per-user staff activity summary.
     const byUser = await sequelize.query(
-      `SELECT al.user_id AS userId,
-              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS userName,
-              COALESCE(u.role, al.user_role, '—') AS userRole,
-              COUNT(*) AS actionCount,
-              MAX(al.created_at) AS lastActionAt
+      `SELECT al.user_id AS "userId",
+              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS "userName",
+              COALESCE(u.role, al.user_role, '—') AS "userRole",
+              COUNT(*) AS "actionCount",
+              MAX(al.created_at) AS "lastActionAt"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
        WHERE ${scopeClause}
-       GROUP BY al.user_id, userName, userRole
-       ORDER BY actionCount DESC`,
+       GROUP BY al.user_id, "userName", "userRole"
+       ORDER BY "actionCount" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
     // 3. Per-user × action-type breakdown (for the stacked summary).
     const byUserAction = await sequelize.query(
-      `SELECT al.user_id AS userId,
-              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS userName,
+      `SELECT al.user_id AS "userId",
+              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS "userName",
               al.action AS action,
-              COUNT(*) AS actionCount
+              COUNT(*) AS "actionCount"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
        WHERE ${scopeClause}
-       GROUP BY al.user_id, userName, al.action
-       ORDER BY userName ASC, actionCount DESC`,
+       GROUP BY al.user_id, "userName", al.action
+       ORDER BY "userName" ASC, "actionCount" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
     // 4. Action-type totals across all staff (for the "by action type" tile/legend).
     const byAction = await sequelize.query(
-      `SELECT al.action AS action, al.module AS module, COUNT(*) AS actionCount
+      `SELECT al.action AS action, al.module AS module, COUNT(*) AS "actionCount"
        FROM audit_logs al
        WHERE ${scopeClause}
        GROUP BY al.action, al.module
-       ORDER BY actionCount DESC`,
+       ORDER BY "actionCount" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -165,19 +165,19 @@ router.get('/', async (req, res) => {
 
     const activity = await sequelize.query(
       `SELECT al.id AS id,
-              al.user_id AS userId,
-              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS userName,
-              COALESCE(u.role, al.user_role, '—') AS userRole,
+              al.user_id AS "userId",
+              COALESCE(u.display_name, al.user_name, ('User #' || al.user_id)) AS "userName",
+              COALESCE(u.role, al.user_role, '—') AS "userRole",
               al.module AS module,
               al.action AS action,
-              al.entity_type AS entityType,
-              al.entity_id AS entityId,
+              al.entity_type AS "entityType",
+              al.entity_id AS "entityId",
               al.description AS description,
-              al.old_values AS oldValues,
-              al.new_values AS newValues,
-              al.ip_address AS ipAddress,
+              al.old_values AS "oldValues",
+              al.new_values AS "newValues",
+              al.ip_address AS "ipAddress",
               al.status AS status,
-              al.created_at AS createdAt
+              al.created_at AS "createdAt"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
        WHERE ${userScopeClause}

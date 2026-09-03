@@ -4,7 +4,7 @@
 // KPIs, a daily revenue trend, a daily patient-registration trend, a
 // payment-method breakdown, and a revenue-by-clinic breakdown.
 //
-// Fresh, MySQL-native rewrite following the same conventions as the other
+// Follows the same conventions as the other
 // reports-v2 routers (reportPatients.js, reportLaboratory.js, etc.) — plain
 // MySQL SQL only (DATE()/DATEDIFF/unquoted INTERVAL n DAY), self-contained,
 // not mounted here. Intended mount:
@@ -107,11 +107,23 @@ router.get('/', async (req, res) => {
     const fromPatients = parseInt(patientsRow.total, 10) || 0;
     const fromLis = parseInt(lisRow.total, 10) || 0;
 
-    // 3. Total visits in the period (clinic-scoped).
+    // 3. Total visits in the period.
+    //
+    //    Counts lis_test_orders, not the `visits` table, matching the decision
+    //    already documented in reportPatients.js: `visits` is legacy and barely
+    //    written (6 rows here, newest 2026-06-29), while the live clinical
+    //    workflow creates one lis_test_orders row per encounter via POST
+    //    /lis/orders (58 rows, current). Reading `visits` made this headline KPI
+    //    show 0 for any recent period.
+    //
+    //    Not clinic-scoped: lis_test_orders.clinic_id is the *consulting clinic*
+    //    (a dr_clinics UUID), not the facility id — see dashboard.js and
+    //    reportLaboratory.js. Each tenant has its own schema, so the table
+    //    already belongs to exactly one facility.
     const [visitsRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
-       FROM visits
-       WHERE clinic_id = :clinicId AND visit_date BETWEEN :fromTs AND :toTs`,
+       FROM lis_test_orders
+       WHERE created_at BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -126,9 +138,9 @@ router.get('/', async (req, res) => {
 
     // 5. Payments collected vs pending — bills created in the period.
     const [collectionRow] = await sequelize.query(
-      `SELECT COALESCE(SUM(total_amount), 0) AS totalBilled,
-              COALESCE(SUM(paid_amount), 0) AS totalPaid,
-              COALESCE(SUM(balance_amount), 0) AS totalPending
+      `SELECT COALESCE(SUM(total_amount), 0) AS "totalBilled",
+              COALESCE(SUM(paid_amount), 0) AS "totalPaid",
+              COALESCE(SUM(balance_amount), 0) AS "totalPending"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -206,17 +218,22 @@ router.get('/', async (req, res) => {
     //     system only has 2 clinic_names rows and the whole point of this
     //     section is to compare them side by side.
     const clinicRevenueRows = await sequelize.query(
-      `SELECT cn.id AS clinicId, cn.name AS clinicName,
+      `SELECT cn.id AS "clinicId", cn.name AS "clinicName",
               COALESCE(SUM(CASE WHEN r.status = 'active' THEN r.payment_amount ELSE 0 END), 0) AS revenue,
-              COUNT(DISTINCT CASE WHEN r.status = 'active' THEN r.id END) AS receiptCount
+              COUNT(DISTINCT CASE WHEN r.status = 'active' THEN r.id END) AS "receiptCount"
        FROM clinic_names cn
        LEFT JOIN receipts r ON r.clinic_id = cn.id AND r.payment_date BETWEEN :fromTs AND :toTs
        GROUP BY cn.id, cn.name
        ORDER BY cn.id`,
       { replacements: { fromTs, toTs }, type: QueryTypes.SELECT }
     );
+    // Still the legacy `visits` table: lis_test_orders cannot substitute here,
+    // because its clinic_id is a dr_clinics UUID and this widget keys on
+    // clinic_names.id (an int) — there is no join between the two dimensions.
+    // These per-clinic visit counts are therefore stale; the headline Total
+    // Visits KPI above is the accurate figure.
     const clinicVisitRows = await sequelize.query(
-      `SELECT clinic_id AS clinicId, COUNT(*) AS cnt
+      `SELECT clinic_id AS "clinicId", COUNT(*) AS cnt
        FROM visits
        WHERE visit_date BETWEEN :fromTs AND :toTs
        GROUP BY clinic_id`,
@@ -233,9 +250,9 @@ router.get('/', async (req, res) => {
 
     // 11. Recent activity — last 8 receipts (clinic-scoped, active only).
     const recentActivity = await sequelize.query(
-      `SELECT id, receipt_number AS receiptNumber, patient_name AS patientName,
-              payment_amount AS paymentAmount, payment_method AS paymentMethod,
-              payment_date AS paymentDate, cashier_name AS cashierName
+      `SELECT id, receipt_number AS "receiptNumber", patient_name AS "patientName",
+              payment_amount AS "paymentAmount", payment_method AS "paymentMethod",
+              payment_date AS "paymentDate", cashier_name AS "cashierName"
        FROM receipts
        WHERE clinic_id = :clinicId AND status = 'active'
        ORDER BY payment_date DESC

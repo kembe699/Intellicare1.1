@@ -3,7 +3,7 @@
 //
 // Rebuilt from scratch (2026-07) to replace the old Postgres-flavoured SQL
 // in routes/reports.js (AGE(), ::date casts, quoted INTERVAL, ON CONFLICT —
-// all silently broken on MySQL). Every query here is plain MySQL syntax,
+// all silently broken on MySQL, the engine at the time). Every query here is PostgreSQL syntax,
 // verified against the live `intellicare` DB before shipping.
 //
 // Mount as:
@@ -18,14 +18,14 @@ const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
 
-/** Returns today's date as YYYY-MM-DD in server-local time (MySQL DATE format). */
+/** Returns today's date as YYYY-MM-DD in server-local time (SQL DATE format). */
 function todayISO() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Basic YYYY-MM-DD validator — reject anything else so we don't hand raw junk to MySQL. */
+/** Basic YYYY-MM-DD validator — reject anything else so we don't hand raw junk to the database. */
 function isValidDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
@@ -48,7 +48,7 @@ router.get('/', async (req, res) => {
     // Group key: canonical cashier_id when present, otherwise fall back to the
     // stored cashier_name string (covers receipts created before cashier_id
     // was reliably captured). Every non-grouped column is aggregated so this
-    // is safe under MySQL's default ONLY_FULL_GROUP_BY mode.
+    // lists every non-aggregated column, which PostgreSQL requires.
     const [cashierRows] = await sequelize.query(
       `SELECT
          CASE WHEN r.cashier_id IS NOT NULL THEN ('id:' || r.cashier_id) ELSE ('name:' || COALESCE(r.cashier_name, 'Unknown')) END AS group_key,

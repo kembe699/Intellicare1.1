@@ -35,6 +35,9 @@ when writing new queries.
 | `tinyint(1)` is 0/1 | real `boolean` | `WHERE is_active = 1` no longer type-checks. |
 | `DATE_FORMAT`, `DATEDIFF`, `IFNULL`, `IF()`, `DATABASE()` | `to_char`, date subtraction, `COALESCE`, `CASE WHEN`, `current_schema()` | converted by `scripts/pg_codemod.py`, `pg_datefns.py`, `pg_concat.py` |
 | non-numeric id in a numeric column coerces to 0 | hard error | `/route/:id` with a non-numeric id now 500s instead of returning empty. Worth validating ids at the route layer. |
+| unquoted `AS camelCase` keeps its case | folds to **lowercase** | 96 aliases across the reports-v2 routers came back as `totalamount`, so `row.totalAmount` read `undefined` and every total rendered as **0** while still returning HTTP 200. Aliases are now quoted (`AS "totalAmount"`) — and a quoted alias must also be quoted where GROUP BY / ORDER BY references it. |
+| `HAVING` may reference a SELECT alias | only GROUP BY / ORDER BY may | The income statement failed outright with `column "amount" does not exist`. Repeat the aggregate expression in HAVING. |
+| `CHAR(n)` strips trailing blanks on read | `bpchar` returns the padding | 92 CHAR columns, mostly CHAR(36) ids. Real ids are exactly 36 chars so live data is unaffected, but anything shorter comes back space-padded and fails a JS `===`. Comparisons in SQL still ignore the padding, which is what hides it. |
 
 ## Multi-tenancy: one database, one schema per tenant
 
@@ -62,6 +65,39 @@ Render, where the app's role cannot `CREATE DATABASE`.
 
 To add something every future tenant should start with, insert it into
 `tenant_template` and list the table in `TENANT_SEED_TABLES`.
+
+## Tests
+
+The jest suite runs against the `tenant_test` schema of the same database —
+isolation by `search_path`, exactly as the app does for a real tenant, so tests
+can never read or write a tenant's rows. Build (or rebuild) it with:
+
+```bash
+psql "$DATABASE_URL" -f scripts/create_test_schema.sql
+npx jest                      # 163 tests across unit/integration/integrity/e2e/performance
+```
+
+It is a structural clone of `tenant_template` plus the reference catalogues and
+chart of accounts, dropped and recreated on each run of that script so a failed
+run cannot poison the next one. Connection settings live in `.env.test`.
+
+Note the suite exercises schema and raw SQL, **not** the HTTP layer — the alias
+case-folding bug above passed every test while returning zeros, and was only
+caught by calling the endpoints. Sweep the routes too when changing reports.
+
+## A trap specific to this schema
+
+`lis_test_orders.clinic_id` is a **false cognate**: it holds the *consulting
+clinic* (a `dr_clinics` UUID, alongside `clinic_name`/`room_number`), not the
+facility id. Filtering it by a numeric `clinic_id` matched almost nothing on
+MySQL (which coerced each UUID to 0) and errors outright on PostgreSQL. Every
+LIS-side query is therefore deliberately **not** clinic-scoped — each tenant has
+its own schema, so the table already belongs to exactly one facility. See
+`dashboard.js`, `reportLaboratory.js`, `reportDoctorPerformance.js`.
+
+Related: the `visits` table is legacy and barely written (6 rows, newest June
+2026). The live unit of encounter is an `lis_test_orders` row. Reports that
+counted `visits` showed 0 for any recent period.
 
 ## Known remaining work
 

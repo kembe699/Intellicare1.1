@@ -1,13 +1,49 @@
 {
-  "timestamp": "2026-08-08T14:58:13.073Z",
-  "totalTests": 49,
-  "passed": 49,
+  "timestamp": "2026-09-03T00:35:15.730Z",
+  "totalTests": 163,
+  "passed": 163,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 27244,
+  "duration": 10309,
   "success": false,
   "modules": [
+    {
+      "name": "completeWorkflow.test.js",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1258
+    },
+    {
+      "name": "performance.test.js",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2103
+    },
+    {
+      "name": "dataIntegrity.test.js",
+      "tests": 41,
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 980
+    },
+    {
+      "name": "insuranceClaims.test.js",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1064
+    },
     {
       "name": "currencies.test.js",
       "tests": 25,
@@ -15,16 +51,16 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 13015
+      "duration": 1063
     },
     {
-      "name": "invoices.test.js",
-      "tests": 14,
-      "passed": 14,
+      "name": "ledgerIntegration.test.js",
+      "tests": 16,
+      "passed": 16,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 11170
+      "duration": 1015
     },
     {
       "name": "billing.test.js",
@@ -33,7 +69,25 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1995
+      "duration": 895
+    },
+    {
+      "name": "invoices.test.js",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 963
+    },
+    {
+      "name": "multiCurrency.test.js",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 751
     }
   ],
   "errors": [],
