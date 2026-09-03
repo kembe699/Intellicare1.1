@@ -1,4 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
+import { lazyWithRetry } from '@/lib/lazyWithRetry';
+import { RouteErrorBoundary } from '@/components/common/RouteErrorBoundary';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,87 +13,87 @@ import { DatabaseProvider } from "@/contexts/DatabaseContext.browser";
 import { UserRole } from "@/types";
 import { Loader2 } from "lucide-react";
 
-const PlatformLogin = lazy(() => import('./pages/platform/PlatformLogin'));
-const PlatformDashboard = lazy(() => import('./pages/platform/PlatformDashboard'));
-const PlatformClients = lazy(() => import('./pages/platform/PlatformClients'));
-const PlatformClientDetail = lazy(() => import('./pages/platform/PlatformClientDetail'));
-const PlatformPlans = lazy(() => import('./pages/platform/PlatformPlans'));
-const PlatformUsers = lazy(() => import('./pages/platform/PlatformUsers'));
+const PlatformLogin = lazyWithRetry(() => import('./pages/platform/PlatformLogin'));
+const PlatformDashboard = lazyWithRetry(() => import('./pages/platform/PlatformDashboard'));
+const PlatformClients = lazyWithRetry(() => import('./pages/platform/PlatformClients'));
+const PlatformClientDetail = lazyWithRetry(() => import('./pages/platform/PlatformClientDetail'));
+const PlatformPlans = lazyWithRetry(() => import('./pages/platform/PlatformPlans'));
+const PlatformUsers = lazyWithRetry(() => import('./pages/platform/PlatformUsers'));
 
-const Login = lazy(() => import('./pages/Login'));
-const ResetPassword = lazy(() => import('./pages/ResetPassword'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const PatientVisitsHistory = lazy(() => import('./pages/PatientVisitsHistory'));
-const PatientsBill = lazy(() => import('./pages/PatientsBill'));
-const ProformaInvoice = lazy(() => import('./pages/ProformaInvoice'));
-const BillDetails = lazy(() => import('./pages/BillDetails'));
-const BillingManagement = lazy(() => import('./pages/BillingManagement'));
-const ClaimDetails = lazy(() => import('./pages/ClaimDetails'));
-const SchemeManagement = lazy(() => import('./pages/SchemeManagement'));
-const Receipts = lazy(() => import('./pages/Receipts'));
-const LISRegistration = lazy(() => import('./pages/lis/LISRegistration'));
-const LISTestOrders = lazy(() => import('./pages/lis/LISTestOrders'));
-const LISQueue = lazy(() => import('./pages/lis/LISQueue'));
-const Triage = lazy(() => import('./pages/lis/Triage'));
-const LISCollection = lazy(() => import('./pages/lis/LISCollection'));
-const LISResultsEntry = lazy(() => import('./pages/lis/LISResultsEntry'));
-const LISManagerReview = lazy(() => import('./pages/lis/LISManagerReview'));
-const LabTests = lazy(() => import('./pages/setup/LabTests'));
-const Services = lazy(() => import('./pages/setup/Services'));
-const Departments = lazy(() => import('./pages/setup/Departments'));
-const Clinics = lazy(() => import('./pages/setup/Clinics'));
-const ApiConfigurations = lazy(() => import('./pages/setup/ApiConfigurations'));
-const Security = lazy(() => import('./pages/setup/Security'));
-const Approvals = lazy(() => import('./pages/setup/Approvals'));
-const FacilitySetup = lazy(() => import('./pages/setup/FacilitySetup'));
-const AccountingCashTransfer = lazy(() => import('./pages/accounting/CashTransfer'));
-const CashierShift = lazy(() => import('./pages/cashier/CashierShift'));
-const PurchaseOrders = lazy(() => import('./pages/procurement/PurchaseOrders'));
-const DailyExpenses = lazy(() => import('./pages/procurement/DailyExpenses'));
-const ExpenseDetail = lazy(() => import('./pages/procurement/ExpenseDetail'));
-const SuppliersManagement = lazy(() => import('./pages/procurement/SuppliersManagement'));
-const PurchaseRequisitions = lazy(() => import('./pages/procurement/PurchaseRequisitions'));
-const GoodsReceiptNotes = lazy(() => import('./pages/procurement/GoodsReceiptNotes'));
-const ProcurementReports = lazy(() => import('./pages/procurement/ProcurementReports'));
-const Profile = lazy(() => import('./pages/Profile'));
-const ChartOfAccounts = lazy(() => import('./pages/accounting/ChartOfAccounts'));
-const GeneralLedger = lazy(() => import('./pages/accounting/GeneralLedger'));
-const JournalEntriesPage = lazy(() => import('./pages/accounting/JournalEntries'));
-const ReceivablesPage = lazy(() => import('./pages/accounting/Receivables'));
-const FinancialReports = lazy(() => import('./pages/accounting/FinancialReports'));
-const ExchangeRatesPage = lazy(() => import('./pages/accounting/ExchangeRates'));
-const SetupPassword = lazy(() => import('./pages/SetupPassword'));
-const ItemMaster = lazy(() => import('./pages/inventory/ItemMaster'));
-const StockLocations = lazy(() => import('./pages/inventory/StockLocations'));
-const StockTransactions = lazy(() => import('./pages/inventory/StockTransactions'));
-const BatchTracking = lazy(() => import('./pages/inventory/BatchTracking'));
-const PhysicalCounts = lazy(() => import('./pages/inventory/PhysicalCounts'));
-const ValuationCOGS = lazy(() => import('./pages/inventory/ValuationCOGS'));
-const PrescriptionManagement = lazy(() => import('./pages/pharmacyModule/PrescriptionManagement'));
-const DispensingWorkflow = lazy(() => import('./pages/pharmacyModule/DispensingWorkflow'));
-const PharmacyReturns = lazy(() => import('./pages/pharmacyModule/PharmacyReturns'));
-const Invoices = lazy(() => import('./pages/Invoices'));
-const PasswordVerification = lazy(() => import('./pages/reports/PasswordVerification'));
-const ReportsDashboard = lazy(() => import('./pages/reports/ReportsDashboard'));
-const RptPatients = lazy(() => import('./pages/reports/PatientReport'));
-const RptBillingByUser = lazy(() => import('./pages/reports/BillingByUserReport'));
-const RptLaboratory = lazy(() => import('./pages/reports/LabReport'));
-const RptPharmacy = lazy(() => import('./pages/reports/PharmacyReport'));
-const RptInventory = lazy(() => import('./pages/reports/InventoryReport'));
-const RptIncomeStatement = lazy(() => import('./pages/reports/IncomeStatementReport'));
-const RptOverview = lazy(() => import('./pages/reports/DashboardOverview'));
-const RptARAging = lazy(() => import('./pages/reports/ARAgingReport'));
-const RptClinicPerformance = lazy(() => import('./pages/reports/ClinicPerformanceReport'));
-const RptDoctorPerformance = lazy(() => import('./pages/reports/DoctorPerformanceReport'));
-const RptOccupancy = lazy(() => import('./pages/reports/OccupancyReport'));
-const RptCancelledTransactions = lazy(() => import('./pages/reports/CancelledTransactionsReport'));
-const RptAuditSummary = lazy(() => import('./pages/reports/AuditSummaryReport'));
-const WardsManagement = lazy(() => import('./pages/inpatient/WardsManagement'));
-const RoomsManagement = lazy(() => import('./pages/inpatient/RoomsManagement'));
-const Admissions = lazy(() => import('./pages/inpatient/Admissions'));
-const AdmittedPatients = lazy(() => import('./pages/inpatient/AdmittedPatients'));
-const PatientDetails = lazy(() => import('./pages/inpatient/PatientDetails'));
-const NotFound = lazy(() => import('./pages/NotFound'));
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const PatientVisitsHistory = lazyWithRetry(() => import('./pages/PatientVisitsHistory'));
+const PatientsBill = lazyWithRetry(() => import('./pages/PatientsBill'));
+const ProformaInvoice = lazyWithRetry(() => import('./pages/ProformaInvoice'));
+const BillDetails = lazyWithRetry(() => import('./pages/BillDetails'));
+const BillingManagement = lazyWithRetry(() => import('./pages/BillingManagement'));
+const ClaimDetails = lazyWithRetry(() => import('./pages/ClaimDetails'));
+const SchemeManagement = lazyWithRetry(() => import('./pages/SchemeManagement'));
+const Receipts = lazyWithRetry(() => import('./pages/Receipts'));
+const LISRegistration = lazyWithRetry(() => import('./pages/lis/LISRegistration'));
+const LISTestOrders = lazyWithRetry(() => import('./pages/lis/LISTestOrders'));
+const LISQueue = lazyWithRetry(() => import('./pages/lis/LISQueue'));
+const Triage = lazyWithRetry(() => import('./pages/lis/Triage'));
+const LISCollection = lazyWithRetry(() => import('./pages/lis/LISCollection'));
+const LISResultsEntry = lazyWithRetry(() => import('./pages/lis/LISResultsEntry'));
+const LISManagerReview = lazyWithRetry(() => import('./pages/lis/LISManagerReview'));
+const LabTests = lazyWithRetry(() => import('./pages/setup/LabTests'));
+const Services = lazyWithRetry(() => import('./pages/setup/Services'));
+const Departments = lazyWithRetry(() => import('./pages/setup/Departments'));
+const Clinics = lazyWithRetry(() => import('./pages/setup/Clinics'));
+const ApiConfigurations = lazyWithRetry(() => import('./pages/setup/ApiConfigurations'));
+const Security = lazyWithRetry(() => import('./pages/setup/Security'));
+const Approvals = lazyWithRetry(() => import('./pages/setup/Approvals'));
+const FacilitySetup = lazyWithRetry(() => import('./pages/setup/FacilitySetup'));
+const AccountingCashTransfer = lazyWithRetry(() => import('./pages/accounting/CashTransfer'));
+const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
+const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
+const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpenses'));
+const ExpenseDetail = lazyWithRetry(() => import('./pages/procurement/ExpenseDetail'));
+const SuppliersManagement = lazyWithRetry(() => import('./pages/procurement/SuppliersManagement'));
+const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
+const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
+const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
+const Profile = lazyWithRetry(() => import('./pages/Profile'));
+const ChartOfAccounts = lazyWithRetry(() => import('./pages/accounting/ChartOfAccounts'));
+const GeneralLedger = lazyWithRetry(() => import('./pages/accounting/GeneralLedger'));
+const JournalEntriesPage = lazyWithRetry(() => import('./pages/accounting/JournalEntries'));
+const ReceivablesPage = lazyWithRetry(() => import('./pages/accounting/Receivables'));
+const FinancialReports = lazyWithRetry(() => import('./pages/accounting/FinancialReports'));
+const ExchangeRatesPage = lazyWithRetry(() => import('./pages/accounting/ExchangeRates'));
+const SetupPassword = lazyWithRetry(() => import('./pages/SetupPassword'));
+const ItemMaster = lazyWithRetry(() => import('./pages/inventory/ItemMaster'));
+const StockLocations = lazyWithRetry(() => import('./pages/inventory/StockLocations'));
+const StockTransactions = lazyWithRetry(() => import('./pages/inventory/StockTransactions'));
+const BatchTracking = lazyWithRetry(() => import('./pages/inventory/BatchTracking'));
+const PhysicalCounts = lazyWithRetry(() => import('./pages/inventory/PhysicalCounts'));
+const ValuationCOGS = lazyWithRetry(() => import('./pages/inventory/ValuationCOGS'));
+const PrescriptionManagement = lazyWithRetry(() => import('./pages/pharmacyModule/PrescriptionManagement'));
+const DispensingWorkflow = lazyWithRetry(() => import('./pages/pharmacyModule/DispensingWorkflow'));
+const PharmacyReturns = lazyWithRetry(() => import('./pages/pharmacyModule/PharmacyReturns'));
+const Invoices = lazyWithRetry(() => import('./pages/Invoices'));
+const PasswordVerification = lazyWithRetry(() => import('./pages/reports/PasswordVerification'));
+const ReportsDashboard = lazyWithRetry(() => import('./pages/reports/ReportsDashboard'));
+const RptPatients = lazyWithRetry(() => import('./pages/reports/PatientReport'));
+const RptBillingByUser = lazyWithRetry(() => import('./pages/reports/BillingByUserReport'));
+const RptLaboratory = lazyWithRetry(() => import('./pages/reports/LabReport'));
+const RptPharmacy = lazyWithRetry(() => import('./pages/reports/PharmacyReport'));
+const RptInventory = lazyWithRetry(() => import('./pages/reports/InventoryReport'));
+const RptIncomeStatement = lazyWithRetry(() => import('./pages/reports/IncomeStatementReport'));
+const RptOverview = lazyWithRetry(() => import('./pages/reports/DashboardOverview'));
+const RptARAging = lazyWithRetry(() => import('./pages/reports/ARAgingReport'));
+const RptClinicPerformance = lazyWithRetry(() => import('./pages/reports/ClinicPerformanceReport'));
+const RptDoctorPerformance = lazyWithRetry(() => import('./pages/reports/DoctorPerformanceReport'));
+const RptOccupancy = lazyWithRetry(() => import('./pages/reports/OccupancyReport'));
+const RptCancelledTransactions = lazyWithRetry(() => import('./pages/reports/CancelledTransactionsReport'));
+const RptAuditSummary = lazyWithRetry(() => import('./pages/reports/AuditSummaryReport'));
+const WardsManagement = lazyWithRetry(() => import('./pages/inpatient/WardsManagement'));
+const RoomsManagement = lazyWithRetry(() => import('./pages/inpatient/RoomsManagement'));
+const Admissions = lazyWithRetry(() => import('./pages/inpatient/Admissions'));
+const AdmittedPatients = lazyWithRetry(() => import('./pages/inpatient/AdmittedPatients'));
+const PatientDetails = lazyWithRetry(() => import('./pages/inpatient/PatientDetails'));
+const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -213,6 +215,7 @@ const AppRoutes = () => {
   };
 
   return (
+    <RouteErrorBoundary>
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
     <Routes>
       <Route path="/" element={<Navigate to={getRootRedirect()} replace />} />
@@ -565,6 +568,7 @@ const AppRoutes = () => {
       <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   );
 };
 
