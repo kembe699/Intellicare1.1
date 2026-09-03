@@ -1138,4 +1138,88 @@ router.post('/results/:id/review', authorize(LIS_RESULTS_REVIEW), async (req, re
   }
 });
 
+
+/**
+ * Lab workload for the dashboard.
+ *
+ * A lab user's dashboard was showing takings and receivables, which they can
+ * neither act on nor are accountable for. What matters on a lab shift is the
+ * queue: what is waiting to be collected, what is on the analyser, what is
+ * waiting to be approved, and what has been finished today.
+ *
+ * Specimens move pending_collection -> routed -> analyzed -> approved, so
+ * "outstanding" is everything short of approved and "completed" is approved.
+ * Counting analyzed as done would flatter the numbers: a result nobody has
+ * verified is not a result the clinician can use yet.
+ */
+router.get('/lab-dashboard', authorize(LIS_QUEUE.concat(['lab'])), async (req, res) => {
+  try {
+    const db = req.models?.sequelize || sequelize;
+    const today = new Date().toISOString().split('T')[0];
+
+    const [statusRows] = await db.query(
+      `SELECT status, COUNT(*)::int AS n FROM lis_specimens GROUP BY status`
+    );
+    const byStatus = Object.fromEntries(statusRows.map(r => [r.status, r.n]));
+
+    const awaitingCollection = byStatus.pending_collection || 0;
+    const inProgress = (byStatus.routed || 0) + (byStatus.received || 0);
+    const awaitingApproval = byStatus.analyzed || 0;
+    const completed = byStatus.approved || 0;
+    const outstanding = awaitingCollection + inProgress + awaitingApproval;
+
+    const [[todayRow]] = await db.query(
+      `SELECT COUNT(*)::int AS n FROM lis_specimens
+        WHERE status = 'approved' AND DATE(COALESCE(updated_at, created_at)) = :today`,
+      { replacements: { today } }
+    );
+    const [[todayNewRow]] = await db.query(
+      `SELECT COUNT(*)::int AS n FROM lis_specimens WHERE DATE(created_at) = :today`,
+      { replacements: { today } }
+    );
+
+    // The queue itself — newest first, with the patient the sample belongs to.
+    const [queue] = await db.query(`
+      SELECT s.id, s.test_name AS "testName", s.test_code AS "testCode",
+             s.department, s.status, s.barcode,
+             s.collection_time AS "collectedAt", s.created_at AS "requestedAt",
+             COALESCE(NULLIF(TRIM(lp.first_name || ' ' || lp.last_name), ''), 'Unknown patient') AS "patientName",
+             lp.participant_number AS "patientNumber"
+        FROM lis_specimens s
+        LEFT JOIN lis_test_orders o ON o.id = s.order_id
+        LEFT JOIN lis_participants lp ON lp.id = o.participant_id
+       ORDER BY s.created_at DESC
+       LIMIT 50
+    `);
+
+    res.json({
+      totals: {
+        awaitingCollection,
+        inProgress,
+        awaitingApproval,
+        completed,
+        outstanding,
+        completedToday: todayRow?.n || 0,
+        requestedToday: todayNewRow?.n || 0,
+        total: outstanding + completed,
+      },
+      byStatus,
+      queue: queue.map(r => ({
+        id: r.id,
+        testName: r.testName || r.testCode || 'Unknown test',
+        department: r.department || '—',
+        status: r.status,
+        barcode: r.barcode,
+        patientName: r.patientName,
+        patientNumber: r.patientNumber,
+        requestedAt: r.requestedAt,
+        collectedAt: r.collectedAt,
+      })),
+    });
+  } catch (error) {
+    console.error('Error building lab dashboard:', error);
+    res.status(500).json({ error: 'Failed to build lab dashboard' });
+  }
+});
+
 module.exports = router;

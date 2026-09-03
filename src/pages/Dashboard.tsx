@@ -33,6 +33,17 @@ const OUTSTANDING_COLOR = 'hsl(var(--destructive))';
 
 // The movement chart counts items, not money, so it needs its own tooltip
 // rather than the currency-formatting billing one.
+function LabStatusTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  return (
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+      <p className="font-medium text-popover-foreground">{item.name}</p>
+      <p className="text-muted-foreground">{item.value} request{item.value === 1 ? '' : 's'}</p>
+    </div>
+  );
+}
+
 function StockMovementTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const item = payload[0];
@@ -100,8 +111,25 @@ const Dashboard: React.FC = () => {
   // what is moving off the shelf, not what was taken at the till. Both panels
   // below swap out for them rather than showing billing they cannot act on.
   const isPharmacyView = user?.role === 'pharmacy';
+  // A lab shift is measured by the queue, not by takings, so the same three
+  // panels swap out for that role too.
+  const isLabView = user?.role === 'lab';
   const [stockMovement, setStockMovement] = useState<any | null>(null);
   const [stockLoading, setStockLoading] = useState(false);
+  const [labData, setLabData] = useState<any | null>(null);
+  const [labLoading, setLabLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isLabView) return;
+    let cancelled = false;
+    setLabLoading(true);
+    authFetch('/api/lis/lab-dashboard')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setLabData(d); })
+      .catch(() => { if (!cancelled) setLabData(null); })
+      .finally(() => { if (!cancelled) setLabLoading(false); });
+    return () => { cancelled = true; };
+  }, [isLabView]);
 
   useEffect(() => {
     if (!isPharmacyView) return;
@@ -314,7 +342,62 @@ const Dashboard: React.FC = () => {
             )}
           </div>
 
-          {isPharmacyView ? (
+          {isLabView ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Lab Workload</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {labLoading ? (
+                  <LoadingState message="Loading lab workload..." />
+                ) : !labData ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">No lab data yet</p>
+                ) : (
+                  <>
+                    {/* Patient totals and stock alerts belong to other roles.
+                        These are the four numbers a lab shift is judged on,
+                        each one a queue somebody has to clear. */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Awaiting collection</p>
+                        <p className={`mt-0.5 text-lg font-semibold ${labData.totals.awaitingCollection > 0 ? 'text-destructive' : 'text-foreground'}`}>
+                          {labData.totals.awaitingCollection}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">In progress</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">{labData.totals.inProgress}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Awaiting approval</p>
+                        <p className={`mt-0.5 text-lg font-semibold ${labData.totals.awaitingApproval > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                          {labData.totals.awaitingApproval}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Completed today</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">{labData.totals.completedToday}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Requested today</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">{labData.totals.requestedToday}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Completed (all time)</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">{labData.totals.completed}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 border-t border-border pt-3 mt-4 text-xs text-muted-foreground">
+                      <span className={`h-1.5 w-1.5 rounded-full ${labData.totals.outstanding > 0 ? 'bg-amber-500' : 'bg-success'}`} />
+                      {labData.totals.outstanding > 0
+                        ? `${labData.totals.outstanding} request${labData.totals.outstanding === 1 ? '' : 's'} still open`
+                        : 'Queue clear'}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : isPharmacyView ? (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Dispensing Report (last 30 days)</CardTitle>
@@ -427,7 +510,47 @@ const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-8 bg-card border rounded-lg shadow-sm p-4">
-            {isPharmacyView ? (
+            {isLabView ? (
+              <>
+                <PageHeader title="Lab Queue" icon={<FlaskConical />} className="mb-3" />
+                <AdvancedDataTable<any>
+                  data={labData?.queue || []}
+                  loading={labLoading}
+                  loadingMessage="Loading lab queue..."
+                  emptyMessage="Nothing in the lab queue — requests appear here as they are ordered."
+                  keyExtractor={(row) => row.id}
+                  searchable
+                  searchPlaceholder="Search by patient, test or barcode..."
+                  exportable
+                  exportFileName="lab-queue"
+                  pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+                  columns={[
+                    { key: 'patientName', header: 'Patient', sortable: true,
+                      render: (v, row) => (
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{v}</p>
+                          {row.patientNumber && <p className="font-mono text-xs text-muted-foreground">{row.patientNumber}</p>}
+                        </div>
+                      ) },
+                    { key: 'testName', header: 'Test', sortable: true },
+                    { key: 'department', header: 'Department', sortable: true },
+                    { key: 'barcode', header: 'Barcode', render: (v) => <span className="font-mono text-xs">{v || '—'}</span> },
+                    { key: 'status', header: 'Status', sortable: true,
+                      // The stage a sample has reached is the whole point of this
+                      // list, so it is coloured rather than left as raw text.
+                      render: (v) => {
+                        const label = String(v || '').replace(/_/g, ' ');
+                        const tone = v === 'approved' ? 'bg-emerald-100 text-emerald-800'
+                          : v === 'analyzed' ? 'bg-amber-100 text-amber-800'
+                          : v === 'pending_collection' ? 'bg-rose-100 text-rose-800'
+                          : 'bg-sky-100 text-sky-800';
+                        return <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>{label}</span>;
+                      } },
+                    { key: 'requestedAt', header: 'Requested', sortable: true, render: (v) => (v ? new Date(v).toLocaleString() : '—') },
+                  ]}
+                />
+              </>
+            ) : isPharmacyView ? (
               <>
                 <PageHeader title="Recent Stock Movement" icon={<Package />} className="mb-3" />
                 <AdvancedDataTable<any>
@@ -503,7 +626,68 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="lg:col-span-4">
-            {isPharmacyView ? (
+            {isLabView ? (
+              <Card className="h-full">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Lab Requests — Completed vs Outstanding</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {labLoading ? (
+                    <LoadingState message="Loading lab requests..." />
+                  ) : !labData || labData.totals.total === 0 ? (
+                    <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                      No lab requests yet
+                    </div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'Completed', value: labData.totals.completed },
+                              { name: 'Outstanding', value: labData.totals.outstanding },
+                            ]}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius={60}
+                            outerRadius={85}
+                            paddingAngle={labData.totals.completed > 0 && labData.totals.outstanding > 0 ? 3 : 0}
+                            strokeWidth={0}
+                          >
+                            <Cell fill={PAID_COLOR} />
+                            <Cell fill={OUTSTANDING_COLOR} />
+                          </Pie>
+                          <RTooltip content={<LabStatusTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-2 space-y-2 border-t border-border pt-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PAID_COLOR }} />
+                            Completed (approved)
+                          </span>
+                          <span className="font-semibold text-foreground">{labData.totals.completed}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: OUTSTANDING_COLOR }} />
+                            Still outstanding
+                          </span>
+                          <span className="font-semibold text-foreground">{labData.totals.outstanding}</span>
+                        </div>
+                        {/* Where the outstanding work actually sits, so the number
+                            points at a next action rather than just a backlog. */}
+                        <p className="pt-1 text-xs text-muted-foreground">
+                          {labData.totals.awaitingCollection} awaiting collection ·{' '}
+                          {labData.totals.inProgress} in progress ·{' '}
+                          {labData.totals.awaitingApproval} awaiting approval
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            ) : isPharmacyView ? (
               <Card className="h-full">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Stock Movement (last 30 days)</CardTitle>
