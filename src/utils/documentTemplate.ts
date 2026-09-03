@@ -79,6 +79,11 @@ export function getDocumentCSS(extraCSS = ''): string {
       margin-bottom: 20px;
     }
     .ic-brand { display: flex; align-items: center; gap: 12px; }
+    /* A facility's own logo carries the identity on its own, so it is given
+       real size and stands without a wordmark beside it — the facility name
+       sits directly underneath, in .ic-facility-name. */
+    .ic-brand-logo { display: block; }
+    .ic-logo-img { width: 96px; height: 96px; object-fit: contain; display: block; }
     .ic-logo-text { line-height: 1.2; }
     .ic-logo-name {
       font-size: 20px; font-weight: 700; letter-spacing: -0.3px;
@@ -90,7 +95,7 @@ export function getDocumentCSS(extraCSS = ''): string {
       letter-spacing: 1.5px; margin-top: 1px;
     }
     .ic-facility-info { margin-top: 10px; }
-    .ic-facility-name { font-size: 11px; font-weight: 600; color: ${BRAND.dark}; }
+    .ic-facility-name { font-size: 15px; font-weight: 700; color: ${BRAND.dark}; letter-spacing: -0.2px; }
     .ic-facility-meta { font-size: 10px; color: ${BRAND.gray}; margin-top: 1px; }
     .ic-header-right { text-align: right; }
     .ic-doc-type {
@@ -316,18 +321,17 @@ export function buildDocument(opts: DocumentOptions): string {
   <!-- Header -->
   <div class="ic-header">
     <div>
-      <div class="ic-brand">
-        ${logoUrl
-          ? `<img src="${logoUrl}" alt="${facilityDisplayName}" style="width:48px;height:48px;object-fit:contain;border-radius:10px;" />`
-          : IC_LOGO_SVG}
-        <div class="ic-logo-text">
-          ${logoUrl
-            ? `<div class="ic-logo-name">${facilityDisplayName}</div>
-               <div class="ic-logo-tagline">${facilityInfo?.type || 'Health Management System'}</div>`
-            : `<div class="ic-logo-name">Intelli<span>care</span></div>
-               <div class="ic-logo-tagline">Health Management System</div>`}
-        </div>
-      </div>
+      ${logoUrl
+        ? `<div class="ic-brand-logo">
+             <img src="${logoUrl}" alt="${facilityDisplayName}" class="ic-logo-img" />
+           </div>`
+        : `<div class="ic-brand">
+             ${IC_LOGO_SVG}
+             <div class="ic-logo-text">
+               <div class="ic-logo-name">Intelli<span>care</span></div>
+               <div class="ic-logo-tagline">Health Management System</div>
+             </div>
+           </div>`}
       ${hasFacilityMeta ? `
       <div class="ic-facility-info">
         <div class="ic-facility-name">${facilityDisplayName}${facilityInfo?.type ? ` &mdash; ${facilityInfo.type}` : ''}</div>
@@ -354,19 +358,19 @@ export function buildDocument(opts: DocumentOptions): string {
   <!-- Footer -->
   <div class="ic-footer">
     <div class="ic-footer-left">
-      <p>${docNumber ? `Ref: ${docNumber}` : 'IntelliCare Health Management System'}</p>
+      <p>${docNumber ? `Ref: ${docNumber}` : (logoUrl ? facilityDisplayName : 'IntelliCare Health Management System')}</p>
       <p>For enquiries, please reference the document number above.</p>
     </div>
     <div class="ic-footer-brand">
       ${logoUrl
-        ? `<img src="${logoUrl}" alt="${facilityDisplayName}" style="width:22px;height:22px;object-fit:contain;border-radius:5px;" />`
+        ? `<img src="${logoUrl}" alt="${facilityDisplayName}" style="width:30px;height:30px;object-fit:contain;" />`
         : `<svg width="20" height="20" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="21" cy="21" r="21" fill="#1A7A75"/>
         <rect x="17.5" y="10" width="7" height="22" rx="2.5" fill="white" opacity="0.95"/>
         <rect x="10" y="17.5" width="22" height="7" rx="2.5" fill="white" opacity="0.95"/>
         <polyline points="10,21 14,21 16.5,15.5 19,27 21.5,17 24,21 32,21" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
       </svg>`}
-      Intelli<span>care</span>&nbsp;HMIS
+      ${logoUrl ? facilityDisplayName : 'Intelli<span>care</span>&nbsp;HMIS'}
     </div>
   </div>
 
