@@ -256,8 +256,8 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await sequelize.query(`
-      INSERT INTO password_reset_tokens (user_id, token, expires_at)
-      VALUES (?, ?, ?)
+      INSERT INTO password_reset_tokens (user_id, token, expires_at, used)
+      VALUES (?, ?, ?, FALSE)
     `, {
       replacements: [user.id, resetToken, expiresAt]
     });
@@ -299,7 +299,12 @@ app.get('/api/auth/verify-reset-token/:token', passwordResetLimiter, async (req,
 
     const [tokens] = await sequelize.query(`
       SELECT * FROM password_reset_tokens
-      WHERE token = ? AND used = FALSE AND expires_at > NOW()
+      -- IS NOT TRUE, not = FALSE. The column is nullable with no default, so a
+      -- freshly inserted token has used = NULL, and NULL = FALSE evaluates to
+      -- NULL rather than true — the row never matched and every reset link came
+      -- back "invalid or expired". IS NOT TRUE covers both NULL and false, and
+      -- repairs tokens already issued.
+      WHERE token = ? AND used IS NOT TRUE AND expires_at > NOW()
       LIMIT 1
     `, {
       replacements: [token]
@@ -339,7 +344,12 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
 
     const [tokens] = await sequelize.query(`
       SELECT * FROM password_reset_tokens
-      WHERE token = ? AND used = FALSE AND expires_at > NOW()
+      -- IS NOT TRUE, not = FALSE. The column is nullable with no default, so a
+      -- freshly inserted token has used = NULL, and NULL = FALSE evaluates to
+      -- NULL rather than true — the row never matched and every reset link came
+      -- back "invalid or expired". IS NOT TRUE covers both NULL and false, and
+      -- repairs tokens already issued.
+      WHERE token = ? AND used IS NOT TRUE AND expires_at > NOW()
       LIMIT 1
     `, {
       replacements: [token]
