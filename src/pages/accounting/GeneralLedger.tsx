@@ -183,7 +183,7 @@ const GeneralLedger: React.FC = () => {
                       <React.Fragment key={entry.id}>
                         <tr className="hover:bg-muted/30 transition-colors">
                           <td className="pl-5 pr-2 py-3.5">
-                            {entry.line_items && entry.line_items.length > 0 && (
+                            {entry.lineItems && entry.lineItems.length > 0 && (
                               <Button variant="ghost" size="sm" className="h-6 w-6 p-0"
                                 onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}>
                                 {expandedId === entry.id
@@ -224,7 +224,7 @@ const GeneralLedger: React.FC = () => {
                           </td>
                         </tr>
                         {/* Expanded Line Items */}
-                        {expandedId === entry.id && entry.line_items && entry.line_items.length > 0 && (
+                        {expandedId === entry.id && entry.lineItems && entry.lineItems.length > 0 && (
                           <tr>
                             <td colSpan={10} className="bg-muted/20 px-5 py-4">
                               <div className="ml-8 overflow-hidden rounded-lg border border-border/70 bg-background">
@@ -238,7 +238,7 @@ const GeneralLedger: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-border/60">
-                                    {entry.line_items.map((li: any, i: number) => (
+                                    {entry.lineItems.map((li: any, i: number) => (
                                       <tr key={i}>
                                         <td className="px-4 py-2.5">
                                           <span className="font-mono text-xs">{li.account?.account_code}</span>{' '}
@@ -312,12 +312,12 @@ const GeneralLedger: React.FC = () => {
                   <Label className="text-xs text-muted-foreground">Description</Label>
                   <p className="text-sm">{viewEntry.description}</p>
                 </div>
-                {viewEntry.line_items && viewEntry.line_items.length > 0 && (
+                {viewEntry.lineItems && viewEntry.lineItems.length > 0 && (
                   <div className="space-y-2">
                     <Label className="font-medium">Line Items</Label>
                     <div>
                       <AdvancedDataTable<any>
-                        data={viewEntry.line_items}
+                        data={viewEntry.lineItems}
                         keyExtractor={(li, i) => i}
                         columns={[
                           {

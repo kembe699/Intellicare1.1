@@ -899,18 +899,31 @@ router.get('/prescriptions', authorize(['admin', 'doctor', 'pharmacy']), async (
 // POST create prescription
 router.post('/prescriptions', authorize(INPATIENT_CLINICAL), async (req, res) => {
   try {
-    const { admission_id, patient_id, drug_id, medication_name, dosage, frequency, duration, route, instructions, quantity, unit_of_measure, start_date, end_date, unit_price } = req.body;
+    const { admission_id, patient_id, drug_id, medication_name, dosage, frequency, duration, route, instructions, quantity, unit_of_measure, start_date, end_date, unit_price,
+            duration_days, dose_amount, is_external, external_drug_name } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const doctorId = req.user?.id;
     const id = uuidv4();
+
+    // Out-of-stock medicine the family buys outside: no inventory item to point
+    // at, so the name is carried as text. Same rule as the outpatient flow.
+    const isExternal = !!is_external || (!drug_id && !!external_drug_name);
+    const medName = isExternal ? (external_drug_name || medication_name) : medication_name;
+
     await sequelize.query(
-      `INSERT INTO inpatient_prescriptions (id, clinic_id, admission_id, patient_id, doctor_id, drug_id, medication_name, prescription_date, dosage, frequency, duration, route, instructions, quantity, start_date, end_date)
-       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, :drugId, :medName, NOW(), :dosage, :frequency, :duration, :route, :instructions, :qty, :startDate, :endDate)`,
-      { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, drugId: drug_id || null, medName: medication_name, dosage, frequency, duration: duration || null, route: route || 'oral', instructions: instructions || null, qty: parseInt(quantity) || 0, startDate: start_date || null, endDate: end_date || null } }
+      `INSERT INTO inpatient_prescriptions (id, clinic_id, admission_id, patient_id, doctor_id, drug_id, medication_name, prescription_date, dosage, frequency, duration, route, instructions, quantity, start_date, end_date, duration_days, dose_amount, is_external, external_drug_name)
+       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, :drugId, :medName, NOW(), :dosage, :frequency, :duration, :route, :instructions, :qty, :startDate, :endDate, :durDays, :doseAmt, :ext, :extName)`,
+      { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, drugId: isExternal ? null : (drug_id || null), medName, dosage, frequency, duration: duration || null, route: route || 'oral', instructions: instructions || null, qty: parseInt(quantity) || 0, startDate: start_date || null, endDate: end_date || null,
+        durDays: duration_days != null && duration_days !== '' ? parseInt(duration_days, 10) : null,
+        doseAmt: dose_amount != null && dose_amount !== '' ? Number(dose_amount) : null,
+        ext: isExternal, extName: isExternal ? medName : null } }
     );
 
     const branchId = getCreateBranchId(req);
-    const price = parseFloat(unit_price);
+    // An external medicine is bought outside, so it is neither billed here nor
+    // sent to this pharmacy to dispense — doing either would charge or task the
+    // hospital for something it is not supplying.
+    const price = isExternal ? 0 : parseFloat(unit_price);
     if (price > 0) {
       const qty = Math.max(1, parseInt(quantity) || 1);
       const total = parseFloat((qty * price).toFixed(2));
@@ -920,8 +933,8 @@ router.post('/prescriptions', authorize(INPATIENT_CLINICAL), async (req, res) =>
       }, 'Auto-billed inpatient prescription');
     }
 
-    const admissionCtx = await getAdmissionBillingContext(admission_id);
-    const pharmacyLineId = await mirrorPrescriptionToPharmacy(
+    const admissionCtx = isExternal ? null : await getAdmissionBillingContext(admission_id);
+    const pharmacyLineId = isExternal ? null : await mirrorPrescriptionToPharmacy(
       clinicId, patient_id, doctorId, req.user?.displayName || req.user?.email, admission_id, admissionCtx?.ward_name,
       { drug_id, quantity, unit_of_measure, dosage, frequency, duration, instructions }
     );

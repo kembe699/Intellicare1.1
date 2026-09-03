@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { lazyWithRetry } from '@/lib/lazyWithRetry';
 import { RouteErrorBoundary } from '@/components/common/RouteErrorBoundary';
+import { LoadingState } from '@/components/common/LoadingState';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -62,7 +63,6 @@ const JournalEntriesPage = lazyWithRetry(() => import('./pages/accounting/Journa
 const ReceivablesPage = lazyWithRetry(() => import('./pages/accounting/Receivables'));
 const FinancialReports = lazyWithRetry(() => import('./pages/accounting/FinancialReports'));
 const ExchangeRatesPage = lazyWithRetry(() => import('./pages/accounting/ExchangeRates'));
-const SetupPassword = lazyWithRetry(() => import('./pages/SetupPassword'));
 const ItemMaster = lazyWithRetry(() => import('./pages/inventory/ItemMaster'));
 const StockLocations = lazyWithRetry(() => import('./pages/inventory/StockLocations'));
 const StockTransactions = lazyWithRetry(() => import('./pages/inventory/StockTransactions'));
@@ -216,7 +216,7 @@ const AppRoutes = () => {
 
   return (
     <RouteErrorBoundary>
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+    <Suspense fallback={<LoadingState variant="page" message="Loading..." />}>
     <Routes>
       <Route path="/" element={<Navigate to={getRootRedirect()} replace />} />
       <Route path="/platform-admin/login" element={<PlatformLogin />} />
@@ -245,7 +245,10 @@ const AppRoutes = () => {
           <ResetPassword />
         </PublicRoute>
       } />
-      <Route path="/setup-password" element={<SetupPassword />} />
+      {/* No /setup-password route: SetupPassword needs an email and a completion
+          callback, and the real first-time-login flow renders it from Login.tsx
+          with both (Login.tsx:167). Routed standalone it received neither, so
+          visiting the URL directly threw on email.toLowerCase(). */}
       <Route path="/dashboard" element={
         <ProtectedRoute allowedRoles={['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'accountant', 'finance_manager', 'auditor', 'nurse']}>
           <Dashboard />

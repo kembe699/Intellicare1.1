@@ -53,9 +53,9 @@ const TARGETS = {
   drug_administrations: ['clinic_id', 'nurse_id'],
   goods_receipt_notes: ['inspected_by', 'received_by'],
   inpatient_admissions: ['admitted_by_user_id', 'attending_doctor_id', 'clinic_id'],
-  inpatient_lab_requests: ['clinic_id', 'doctor_id'],
+  inpatient_lab_requests: ['clinic_id', 'doctor_id', 'completed_by'],
   inpatient_prescriptions: ['clinic_id', 'doctor_id'],
-  inpatient_radiology_requests: ['clinic_id', 'doctor_id'],
+  inpatient_radiology_requests: ['clinic_id', 'doctor_id', 'completed_by'],
   lab_results: ['performed_by'],
   lis_results: ['recorded_by'],
   nursing_notes: ['clinic_id', 'nurse_id'],
@@ -68,6 +68,35 @@ const TARGETS = {
   supplier_bill_approvals: ['user_id'],
   user_branches: ['user_id'],
   wards: ['clinic_id'],
+
+  // A second pass, found by extracting every "JOIN users u ON u.id = x.col"
+  // in the codebase: each of these is compared against an integer primary key,
+  // so leaving it varchar makes the query fail outright rather than return a
+  // wrong answer. daily_expense_approvals.approved_by and
+  // supplier_bill_approvals.approved_by are deliberately absent — they hold
+  // display names ("Levi Admin"), not ids, and the guard below would refuse
+  // them anyway.
+  bill_discounts: ['approved_by'],
+  branch_access_audit_logs: ['user_id'],
+  controlled_substance_log: ['dispensed_by'],
+  credit_notes: ['approved_by'],
+  currency_conversion_log: ['approved_by'],
+  dispensing_records: ['pharmacist_id'],
+  dispensing_returns: ['processed_by'],
+  drug_pricing_history: ['changed_by'],
+  expense_invoices: ['approved_by'],
+  inventory_adjustments: ['approved_by'],
+  inventory_transactions: ['approved_by'],
+  invoice_payments: ['recorded_by'],
+  journal_entries: ['approved_by'],
+  physical_inventory_counts: ['completed_by'],
+  procurement_attachments: ['uploaded_by'],
+  scheme_changes_history: ['changed_by'],
+  scheme_negotiated_prices: ['approved_by', 'negotiated_by_user_id'],
+  scheme_product_pricing_history: ['changed_by'],
+  scheme_service_pricing_history: ['changed_by'],
+  supplier_bill_payments: ['approved_by'],
+  supplier_performance: ['evaluator_id'],
 };
 
 const args = process.argv.slice(2);

@@ -21,7 +21,7 @@ async function addDispensingTable() {
         dispensed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         notes TEXT,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_clinic_id (clinic_id),
         INDEX idx_patient_id (patient_id),
         INDEX idx_drug_id (drug_id),

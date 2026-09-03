@@ -113,7 +113,7 @@ const GoodsReceiptNotes: React.FC = () => {
   const [processing, setProcessing] = useState<{ id: string; action: 'inspect' | 'accept' | 'reject' } | null>(null);
 
   const { fmt, currency } = useCurrency();
-  const { facilityInfo } = useFacilityInfo();
+  const facilityInfo = useFacilityInfo();
 
   // Format an amount in a PO's own currency (GRNs have no currency of their own —
   // they inherit the linked PO's po_currency). Falls back to the base-currency

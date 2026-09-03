@@ -14,6 +14,14 @@ export interface PageHeaderProps {
   actions?: React.ReactNode;
   breadcrumbs?: Breadcrumb[];
   className?: string;
+  /**
+   * Icon shown beside the title.
+   *
+   * 50 pages were already passing one, but the prop did not exist and nothing
+   * rendered it — so those icons were silently dropped and page headers looked
+   * inconsistent depending on whether a screen happened to draw its own.
+   */
+  icon?: React.ReactNode;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -22,6 +30,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   actions,
   breadcrumbs,
   className,
+  icon,
 }) => {
   return (
     <div className={cn('mb-6', className)}>
@@ -46,8 +55,15 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       )}
       
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
+            {icon && (
+              <span className="text-primary shrink-0 [&>svg]:h-6 [&>svg]:w-6" aria-hidden="true">
+                {icon}
+              </span>
+            )}
+            <h1 className="text-2xl font-bold text-foreground truncate">{title}</h1>
+          </div>
           {subtitle && (
             <p className="text-muted-foreground mt-1">{subtitle}</p>
           )}

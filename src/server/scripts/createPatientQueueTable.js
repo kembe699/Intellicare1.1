@@ -38,7 +38,7 @@ async function createPatientQueueTable() {
         queued_by VARCHAR(255) NOT NULL,
         queued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `;
 

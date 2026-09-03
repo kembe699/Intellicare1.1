@@ -278,7 +278,9 @@ const PurchaseRequisitions: React.FC = () => {
       estimated_line_total: (updated[idx].quantity_required || 1) * (item.unit_cost || 0),
     };
     setLines(updated);
-    setItemSearch(prev => ({ ...prev, [idx]: '' }));
+    // setItemSearch was left behind when the per-row search state was removed;
+    // there is no such state any more, so this threw a ReferenceError and
+    // aborted item selection on a requisition line.
   };
 
   const fetchDepartments = async () => {

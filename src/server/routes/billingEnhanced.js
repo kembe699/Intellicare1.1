@@ -97,7 +97,7 @@ const { Op } = require('sequelize');
         auto_bill_procedures BOOLEAN DEFAULT true,
         auto_bill_bed_charges BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY clinic_settings_idx (clinic_id)
       )
     `).catch(()=>{});

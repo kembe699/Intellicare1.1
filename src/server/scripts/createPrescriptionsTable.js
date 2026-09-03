@@ -40,7 +40,7 @@ async function createPrescriptionsTable() {
         clinic_id INT NOT NULL,
         status ENUM('active', 'completed', 'cancelled') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         
         INDEX idx_visit_id (visit_id),
         INDEX idx_patient_id (patient_id),

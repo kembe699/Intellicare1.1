@@ -208,7 +208,7 @@ export default function WardsManagement() {
 
         {/* Wards List */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+          <LoadingState message="Loading wards..." />
         ) : wards.length === 0 ? (
           <Card className="rounded-lg p-12 text-center border-dashed">
             <Building2 className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />

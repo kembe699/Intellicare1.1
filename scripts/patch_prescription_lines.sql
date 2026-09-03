@@ -25,3 +25,26 @@ BEGIN
     RAISE NOTICE '% : prescription_lines patched', s;
   END LOOP;
 END $$;
+
+-- Same standardisation for inpatient prescriptions.
+--
+-- duration is free text there ("7 days"), and there is no numeric dose, so the
+-- quantity could not be derived from dose x frequency x days the way the
+-- outpatient flow now does. duration_days and dose_amount make it computable;
+-- is_external/external_drug_name carry an out-of-stock item the patient's
+-- family buys outside, exactly as on the outpatient side.
+DO $$
+DECLARE s text;
+BEGIN
+  FOR s IN SELECT nspname FROM pg_namespace WHERE nspname LIKE 'tenant\_%' ORDER BY 1 LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname=s AND tablename='inpatient_prescriptions') THEN
+      CONTINUE;
+    END IF;
+    EXECUTE format('ALTER TABLE %I.inpatient_prescriptions ALTER COLUMN drug_id DROP NOT NULL', s);
+    EXECUTE format('ALTER TABLE %I.inpatient_prescriptions ADD COLUMN IF NOT EXISTS duration_days INTEGER', s);
+    EXECUTE format('ALTER TABLE %I.inpatient_prescriptions ADD COLUMN IF NOT EXISTS dose_amount NUMERIC(10,2)', s);
+    EXECUTE format('ALTER TABLE %I.inpatient_prescriptions ADD COLUMN IF NOT EXISTS is_external BOOLEAN DEFAULT false', s);
+    EXECUTE format('ALTER TABLE %I.inpatient_prescriptions ADD COLUMN IF NOT EXISTS external_drug_name VARCHAR(255)', s);
+    RAISE NOTICE '% : inpatient_prescriptions patched', s;
+  END LOOP;
+END $$;

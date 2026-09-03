@@ -27,7 +27,7 @@ const DEPOSIT_ACTION = ['admin', 'cashier', 'reception', 'finance_manager', 'acc
         clinic_id INT NOT NULL,
         currency VARCHAR(10) NOT NULL DEFAULT '${BASE_CURRENCY}',
         balance DECIMAL(15,2) NOT NULL DEFAULT 0,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (patient_id, clinic_id, currency)
       )
     `);

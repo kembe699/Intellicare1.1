@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency } from '@/lib/prescriptionFrequency';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoadingState } from '@/components/common';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -65,7 +66,20 @@ export default function PatientDetails() {
   // ── Forms State ──
   const [noteForm, setNoteForm] = useState({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' });
 
-  const [rxForm, setRxForm] = useState({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '' });
+  const [rxForm, setRxForm] = useState({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '',
+    dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '' });
+  // Same rule as the outpatient flow: quantity = dose x per-day x days, unless
+  // the prescriber types their own, and never for PRN/STAT where no total is
+  // derivable. See src/lib/prescriptionFrequency.ts.
+  const [rxQtyTouched, setRxQtyTouched] = useState(false);
+  const rxSuggestedQty = useMemo(
+    () => calculateQuantity(parseFloat(rxForm.dose_amount), rxForm.frequency, parseInt(rxForm.duration_days, 10)),
+    [rxForm.dose_amount, rxForm.frequency, rxForm.duration_days]
+  );
+  useEffect(() => {
+    if (rxQtyTouched || rxSuggestedQty == null) return;
+    setRxForm(f => (f.quantity === String(rxSuggestedQty) ? f : { ...f, quantity: String(rxSuggestedQty) }));
+  }, [rxSuggestedQty, rxQtyTouched]);
 
   const [nursingForm, setNursingForm] = useState({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' });
 
@@ -183,7 +197,7 @@ export default function PatientDetails() {
   });
 
   const notesMut = createMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' }); });
-  const rxMut = createMutation('/api/inpatient/prescriptions', 'Prescription created', () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '' }); });
+  const rxMut = createMutation('/api/inpatient/prescriptions', 'Prescription created', () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '' }); setRxQtyTouched(false); });
   const nursingMut = createMutation('/api/inpatient/nursing-notes', 'Nursing note saved', () => { setNursingForm({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' }); });
   const adminMut = createMutation('/api/inpatient/drug-administrations', 'Administration recorded', () => { setShowAdminForm(false); setAdminForm({ prescription_id: '', medication_name: '', dosage_given: '', route: 'oral', notes: '', status: 'given' }); });
   const labMut = createMutation('/api/inpatient/lab-requests', 'Lab request created', () => { setLabForm({ test_id: '', test_type: '', test_code: '', category: '', unit_price: 0, clinical_indication: '', sample_type: '', urgent: false }); });
@@ -359,30 +373,91 @@ export default function PatientDetails() {
             <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 items-start">
               <div className="lg:sticky lg:top-4">
                 <FormCard icon={Pill} title="New Prescription">
-                    <div>
-                      <Combobox
-                        options={drugOptions}
-                        value={rxForm.drug_id}
-                        onChange={v => { const d = drugCatalog.find((x: any) => String(x.id) === v); setRxForm({ ...rxForm, drug_id: v, medication_name: d?.drug_name || '', unit_price: parseFloat(d?.selling_price) || 0, unit_of_measure: d?.unit_of_measure || '' }); }}
-                        placeholder="Select medication *"
-                        searchPlaceholder="Search drug catalog..."
-                        emptyText="No matching drugs"
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-input"
+                        checked={rxForm.is_external}
+                        onChange={e => setRxForm({ ...rxForm, is_external: e.target.checked, drug_id: '', medication_name: '', external_drug_name: '', unit_price: 0 })}
                       />
-                      {rxForm.drug_id && (
-                        <p className="text-xs mt-1.5 text-muted-foreground">
-                          {rxForm.unit_price > 0 ? `Bills at ${fmt(rxForm.unit_price)} per unit • sent to Pharmacy` : 'No price set — will not be added to the bill, but is still sent to Pharmacy'}
-                        </p>
-                      )}
-                    </div>
-                    <Input placeholder="Dosage (e.g., 500mg)" value={rxForm.dosage} onChange={e => setRxForm({ ...rxForm, dosage: e.target.value })} />
-                    <Input placeholder="Frequency (e.g., TDS)" value={rxForm.frequency} onChange={e => setRxForm({ ...rxForm, frequency: e.target.value })} />
-                    <Input placeholder="Duration (e.g., 7 days)" value={rxForm.duration} onChange={e => setRxForm({ ...rxForm, duration: e.target.value })} />
+                      Not in stock — family buys from an outside pharmacy
+                    </label>
+
+                    {rxForm.is_external ? (
+                      <Input
+                        placeholder="Medicine name e.g. Amoxicillin 500mg caps"
+                        value={rxForm.external_drug_name}
+                        onChange={e => setRxForm({ ...rxForm, external_drug_name: e.target.value, medication_name: e.target.value })}
+                      />
+                    ) : (
+                      <div>
+                        <Combobox
+                          options={drugOptions}
+                          value={rxForm.drug_id}
+                          onChange={v => { const d = drugCatalog.find((x: any) => String(x.id) === v); setRxForm({ ...rxForm, drug_id: v, medication_name: d?.drug_name || '', unit_price: parseFloat(d?.selling_price) || 0, unit_of_measure: d?.unit_of_measure || '' }); }}
+                          placeholder="Select medication *"
+                          searchPlaceholder="Search drug catalog..."
+                          emptyText="No matching drugs"
+                        />
+                        {rxForm.drug_id && (
+                          <p className="text-xs mt-1.5 text-muted-foreground">
+                            {rxForm.unit_price > 0 ? `Bills at ${fmt(rxForm.unit_price)} per unit • sent to Pharmacy` : 'No price set — will not be added to the bill, but is still sent to Pharmacy'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-2">
-                      <Combobox options={routes.map(r => ({ value: r, label: r.toUpperCase() }))} value={rxForm.route} onChange={v => setRxForm({ ...rxForm, route: v })} searchPlaceholder="Search..." />
-                      <Input type="number" placeholder="Quantity" value={rxForm.quantity} onChange={e => setRxForm({ ...rxForm, quantity: e.target.value })} />
+                      <Input
+                        type="number" min="0.25" step="0.25"
+                        placeholder="Dose e.g. 1"
+                        title="How much is given each time — the multiplier for the quantity"
+                        value={rxForm.dose_amount}
+                        onChange={e => setRxForm({ ...rxForm, dose_amount: e.target.value })}
+                      />
+                      <Input placeholder="Strength (e.g., 500mg)" value={rxForm.dosage} onChange={e => setRxForm({ ...rxForm, dosage: e.target.value })} />
                     </div>
+
+                    <Combobox
+                      options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
+                      value={rxForm.frequency}
+                      onChange={v => setRxForm({ ...rxForm, frequency: v })}
+                      placeholder="Frequency *"
+                      searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                      emptyText="No matching frequency"
+                    />
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        type="number" min="0" placeholder="Days"
+                        value={rxForm.duration_days}
+                        onChange={e => setRxForm({ ...rxForm, duration_days: e.target.value, duration: e.target.value ? `${e.target.value} days` : '' })}
+                      />
+                      <Input
+                        type="number" placeholder="Quantity"
+                        value={rxForm.quantity}
+                        onChange={e => { setRxQtyTouched(true); setRxForm({ ...rxForm, quantity: e.target.value }); }}
+                      />
+                      <Combobox options={routes.map(r => ({ value: r, label: r.toUpperCase() }))} value={rxForm.route} onChange={v => setRxForm({ ...rxForm, route: v })} searchPlaceholder="Search..." />
+                    </div>
+
+                    {rxSuggestedQty != null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {rxForm.dose_amount} × {findFrequency(rxForm.frequency)?.perDay}/day × {rxForm.duration_days} days = <strong>{rxSuggestedQty}</strong>
+                        {rxQtyTouched && String(rxSuggestedQty) !== rxForm.quantity && (
+                          <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxForm({ ...rxForm, quantity: String(rxSuggestedQty) }); }}>
+                            use this
+                          </button>
+                        )}
+                      </p>
+                    )}
+                    {rxForm.frequency && !findFrequency(rxForm.frequency)?.perDay && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {rxForm.frequency === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                      </p>
+                    )}
                     <Textarea placeholder="Instructions" value={rxForm.instructions} onChange={e => setRxForm({ ...rxForm, instructions: e.target.value })} rows={2} />
-                    <Button className="w-full gap-1.5" disabled={rxMut.isPending} onClick={() => { if (!rxForm.medication_name || !rxForm.dosage || !rxForm.frequency) { toast.error('Name, dosage & frequency required'); return; } rxMut.mutate(rxForm); }}>
+                    <Button className="w-full gap-1.5" disabled={rxMut.isPending} onClick={() => { if (!rxForm.medication_name || !rxForm.frequency) { toast.error('Medicine and frequency are required'); return; } rxMut.mutate(rxForm); }}>
                       {rxMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Prescription
                     </Button>
                 </FormCard>
@@ -394,7 +469,12 @@ export default function PatientDetails() {
                       <div key={p.id} className="p-4 flex items-center gap-3">
                         <Pill className="h-4 w-4 text-primary shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-foreground truncate">{p.medication_name}</p>
+                          <p className="font-medium text-sm text-foreground truncate">
+                            {p.medication_name}
+                            {p.is_external && (
+                              <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">buy outside</span>
+                            )}
+                          </p>
                           <p className="text-xs text-muted-foreground">{p.dosage} • {p.frequency} • {p.route?.toUpperCase()} {p.duration ? `• ${p.duration}` : ''}</p>
                         </div>
                         <Badge variant={statusVariant(p.status)} className="capitalize flex-shrink-0">{p.status}</Badge>

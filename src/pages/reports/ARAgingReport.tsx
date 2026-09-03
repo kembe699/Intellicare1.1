@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, DollarSign, Clock, AlertTriangle, AlertOctagon, Search } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
-import { StatusBadge, StatusBadgeTone } from '@/components/common';
+import { StatusBadge, StatusBadgeTone, LoadingState} from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { fmtCurrency, fmtCount, fmtNum, fmtDate, CsvColumn } from '@/utils/reportUtils';
 
@@ -152,7 +152,7 @@ export default function ARAgingReport() {
       csvData={filteredItems} csvColumns={csvColumns} csvFilename={`ar-aging-report-${new Date().toISOString().split('T')[0]}.csv`}
     >
       {loading && !data ? (
-        <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <LoadingState message="Loading report..." />
       ) : (
         <div className="space-y-6">
 

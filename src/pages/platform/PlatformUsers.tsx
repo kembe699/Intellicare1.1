@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { LoadingState } from '@/components/common/LoadingState';
 import { platformFetch } from '@/api/platformApiClient';
 import { usePlatformAuth } from '@/contexts/PlatformAuthContext';
 import { PlatformAppLayout } from '@/components/layout/PlatformAppLayout';
@@ -131,7 +132,7 @@ const PlatformUsers: React.FC = () => {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="p-0"><LoadingState size="sm" message="" className="py-8" /></TableCell></TableRow>
               ) : admins.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                   <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />

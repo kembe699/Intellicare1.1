@@ -18,7 +18,7 @@ const { APPROVAL_TYPES } = require('../middleware/requireApprovalPermission');
         approval_type VARCHAR(50) NOT NULL,
         granted_by INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_clinic_user_type (clinic_id, user_id, approval_type)
       )
     `);

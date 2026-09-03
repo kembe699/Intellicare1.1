@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { LoadingState } from '@/components/common/LoadingState';
 import { platformFetch } from '@/api/platformApiClient';
 import { PlatformAppLayout } from '@/components/layout/PlatformAppLayout';
 import { PageHeader } from '@/components/common/PageHeader/PageHeader';
@@ -169,7 +170,7 @@ const PlatformPlans: React.FC = () => {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-8"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="p-0"><LoadingState size="sm" message="" className="py-8" /></TableCell></TableRow>
               ) : plans.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No plans yet</TableCell></TableRow>
               ) : plans.map((p) => (

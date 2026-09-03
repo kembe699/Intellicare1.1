@@ -38,7 +38,7 @@ async function createDrugInventoryTable() {
         notes TEXT,
         status ENUM('active', 'inactive', 'expired') DEFAULT 'active',
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_clinic_id (clinic_id),
         INDEX idx_drug_name (drug_name),
         INDEX idx_expiry_date (expiry_date)

@@ -1855,17 +1855,17 @@ router.get('/dashboard/stats', authorize(PROCUREMENT_READ), async (req, res) => 
         SELECT 'requisition' AS type, pr.pr_number AS reference, pr.status AS status,
                pr.total_amount AS amount, pr.created_at AS ts, u1.display_name AS actor
         FROM purchase_requisitions pr
-        LEFT JOIN users u1 ON u1.id = CAST(pr.created_by AS UNSIGNED)
+        LEFT JOIN users u1 ON u1.id = pr.created_by
         WHERE 1=1 ${cf('pr')}
         UNION ALL
         SELECT 'purchase_order', po.po_number, po.status, po.total_amount, po.created_at, u2.display_name
         FROM purchase_orders po
-        LEFT JOIN users u2 ON u2.id = CAST(po.created_by AS UNSIGNED)
+        LEFT JOIN users u2 ON u2.id = po.created_by
         ${cw('po')}
         UNION ALL
         SELECT 'goods_receipt', grn.grn_number, grn.status, NULL, grn.created_at, u3.display_name
         FROM goods_receipt_notes grn
-        LEFT JOIN users u3 ON u3.id = CAST(grn.received_by AS UNSIGNED)
+        LEFT JOIN users u3 ON u3.id = grn.received_by
         WHERE 1=1 ${cf('grn')}
         UNION ALL
         SELECT 'supplier', s.name, CASE WHEN s.on_hold = true THEN 'on_hold' ELSE 'active' END, NULL, s.created_at, NULL
@@ -2155,7 +2155,7 @@ router.get('/reports/purchase-orders', authorize(PROCUREMENT_READ), async (req, 
     }
     if (user_id && user_id !== 'all' && user_id !== 'undefined' && user_id !== 'null') {
       conditions.push('po.created_by = :user_id');
-      replacements.user_id = String(user_id);
+      replacements.user_id = parseInt(user_id, 10);
     }
     if (supplier_id && supplier_id !== 'all' && supplier_id !== 'undefined' && supplier_id !== 'null') {
       conditions.push('po.supplier_id = :supplier_id');
@@ -2218,7 +2218,7 @@ router.get('/reports/purchase-requisitions', authorize(PROCUREMENT_READ), async 
     if (start_date && end_date) {
       // requisition_date is a DATE column, but we keep the same half-open
       // convention used everywhere else in these reports for consistency.
-      conditions.push("pr.requisition_date >= :start_date AND pr.requisition_date < ((:end_date) + INTERVAL '1 day')");
+      conditions.push("pr.requisition_date >= :start_date AND pr.requisition_date < ((:end_date)::date + INTERVAL '1 day')");
       replacements.start_date = start_date;
       replacements.end_date = end_date;
     }
@@ -2230,7 +2230,7 @@ router.get('/reports/purchase-requisitions', authorize(PROCUREMENT_READ), async 
       // "By user" means the requester (created_by) for a requisition report —
       // approved_by is still returned in the row so both are visible.
       conditions.push('pr.created_by = :user_id');
-      replacements.user_id = String(user_id);
+      replacements.user_id = parseInt(user_id, 10);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -2264,7 +2264,7 @@ router.get('/reports/goods-receipts', authorize(PROCUREMENT_READ), async (req, r
     const replacements = { clinic_id: clinicId };
 
     if (start_date && end_date) {
-      conditions.push("grn.receipt_date >= :start_date AND grn.receipt_date < ((:end_date) + INTERVAL '1 day')");
+      conditions.push("grn.receipt_date >= :start_date AND grn.receipt_date < ((:end_date)::date + INTERVAL '1 day')");
       replacements.start_date = start_date;
       replacements.end_date = end_date;
     }
@@ -2276,7 +2276,7 @@ router.get('/reports/goods-receipts', authorize(PROCUREMENT_READ), async (req, r
     }
     if (user_id && user_id !== 'all' && user_id !== 'undefined' && user_id !== 'null') {
       conditions.push('grn.received_by = :user_id');
-      replacements.user_id = String(user_id);
+      replacements.user_id = parseInt(user_id, 10);
     }
     if (supplier_id && supplier_id !== 'all' && supplier_id !== 'undefined' && supplier_id !== 'null') {
       conditions.push('grn.supplier_id = :supplier_id');

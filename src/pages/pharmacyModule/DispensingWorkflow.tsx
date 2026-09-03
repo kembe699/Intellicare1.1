@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeader } from '@/components/common';
+import { PageHeader, LoadingState} from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1515,7 +1515,7 @@ export default function DispensingWorkflow() {
                           Once a bill has loaded once, a re-check updates the numbers in place
                           instead of replacing the card with a spinner each time. */}
                       {checkingBill && !activeBill ? (
-                        <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                        <LoadingState size="sm" message="" className="py-8" />
                       ) : !activeBill ? (
                         <div className="text-sm text-muted-foreground text-center py-8">Add a product to generate a bill for this patient.</div>
                       ) : (

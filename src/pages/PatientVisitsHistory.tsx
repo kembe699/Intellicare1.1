@@ -96,9 +96,7 @@ export default function PatientVisitsHistory() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <LoadingState variant="page" message="Loading visit history..." />
       </AppLayout>
     );
   }

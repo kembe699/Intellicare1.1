@@ -7,7 +7,7 @@ import {
   Search, TrendingUp, Clock, CalendarDays, RefreshCw,
 } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
-import { StatusBadge, type StatusBadgeTone } from '@/components/common';
+import { StatusBadge, type StatusBadgeTone, LoadingState} from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -164,7 +164,7 @@ export default function OccupancyReport() {
       csvData={filteredBeds} csvColumns={csvColumns} csvFilename={`bed-occupancy-${new Date().toISOString().split('T')[0]}.csv`}
     >
       {loading && !data ? (
-        <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <LoadingState message="Loading report..." />
       ) : (
         <div className="space-y-6">
 

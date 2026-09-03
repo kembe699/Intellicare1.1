@@ -653,7 +653,7 @@ export default function LISRegistration() {
                     Today
                   </Button>
                 )}
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchParticipants} disabled={loading}>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => fetchParticipants()} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>

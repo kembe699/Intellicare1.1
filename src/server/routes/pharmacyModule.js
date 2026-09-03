@@ -2193,9 +2193,19 @@ router.get('/reports/stock-usage', authorize(PHARMACY_READ), async (req, res) =>
         ii.quantity_on_hand AS current_stock,
         ii.minimum_stock_level AS reorder_level,
         COALESCE(SUM(dr.quantity_dispensed), 0) AS dispensed_qty,
-        ROUND(COALESCE(SUM(dr.quantity_dispensed), 0) / GREATEST((:DATE(td) - :DATE(fd)), 1), 2) AS avg_daily_usage,
+        -- Day span, and every division kept in numeric.
+        --
+        -- This read (:DATE(td) - :DATE(fd)), a mangled DATEDIFF conversion:
+        -- the :DATE part parses as a named bind parameter, so the statement
+        -- failed with "syntax error at or near :". Subtracting two dates
+        -- already yields an integer number of days. The ::numeric casts matter
+        -- too — integer division would floor an average like 1.6 to 1, and
+        -- ROUND(double precision, int) has no PostgreSQL overload.
+        ROUND(COALESCE(SUM(dr.quantity_dispensed), 0)::numeric
+              / GREATEST((:td::date - :fd::date), 1), 2) AS avg_daily_usage,
         CASE WHEN COALESCE(SUM(dr.quantity_dispensed), 0) > 0
-          THEN ROUND(ii.quantity_on_hand / (SUM(dr.quantity_dispensed) / GREATEST((:DATE(td) - :DATE(fd)), 1)), 1)
+          THEN ROUND(ii.quantity_on_hand::numeric
+               / (SUM(dr.quantity_dispensed)::numeric / GREATEST((:td::date - :fd::date), 1)), 1)
           ELSE 999 END AS days_of_stock
       FROM inventory_items ii
       LEFT JOIN dispensing_records dr ON dr.inventory_item_id = ii.id

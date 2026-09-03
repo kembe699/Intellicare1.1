@@ -25,7 +25,7 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
   billAmount,
   onUpdatePreAuth
 }) => {
-  const { baseCurrData } = useCurrency();
+  const { currency } = useCurrency();
   
   const coveragePercentage = scheme.coverage_percentage || 0;
   const schemeCoverage = (billAmount * coveragePercentage) / 100;
@@ -79,7 +79,7 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
               <div>
                 <p className="text-muted-foreground mb-1">Coverage Limit</p>
                 <p className="font-semibold">
-                  {baseCurrData.code} {scheme.coverage_limit.toLocaleString()}
+                  {currency.code} {scheme.coverage_limit.toLocaleString()}
                 </p>
               </div>
             )}
@@ -88,7 +88,7 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
               <div>
                 <p className="text-muted-foreground mb-1">Remaining Limit</p>
                 <p className={`font-semibold ${scheme.remaining_limit < 1000 ? 'text-red-600' : 'text-green-600'}`}>
-                  {baseCurrData.code} {scheme.remaining_limit.toLocaleString()}
+                  {currency.code} {scheme.remaining_limit.toLocaleString()}
                 </p>
               </div>
             )}
@@ -114,18 +114,18 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
               <div className="flex justify-between items-center p-2 bg-primary/10 rounded">
                 <span className="text-sm text-foreground">Scheme Coverage ({coveragePercentage}%)</span>
                 <span className="font-semibold text-foreground">
-                  {baseCurrData.code} {schemeCoverage.toFixed(2)}
+                  {currency.code} {schemeCoverage.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center p-2 bg-orange-50 rounded">
                 <span className="text-sm text-orange-900">Patient Co-Payment ({100 - coveragePercentage}%)</span>
                 <span className="font-semibold text-orange-900">
-                  {baseCurrData.code} {patientCoPayment.toFixed(2)}
+                  {currency.code} {patientCoPayment.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center p-2 bg-gray-100 rounded font-semibold">
                 <span className="text-sm">Total Bill Amount</span>
-                <span>{baseCurrData.code} {billAmount.toFixed(2)}</span>
+                <span>{currency.code} {billAmount.toFixed(2)}</span>
               </div>
             </div>
           </div>

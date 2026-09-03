@@ -208,8 +208,10 @@ export default function ProformaInvoicePage() {
 
   const resetForm = () => {
     setSelectedPatient(null);
+    // patientResults is derived from patientSearch via useMemo — there is no
+    // setter, and calling one threw a ReferenceError that aborted the whole
+    // reset. Clearing the search above already empties the results.
     setPatientSearch('');
-    setPatientResults([]);
     setCart([]);
     setNotes('');
     setSavedProforma(null);

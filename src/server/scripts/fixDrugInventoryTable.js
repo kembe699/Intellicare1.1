@@ -28,7 +28,7 @@ async function fixDrugInventoryTable() {
       "ALTER TABLE drug_inventory ADD COLUMN IF NOT EXISTS notes TEXT",
       "ALTER TABLE drug_inventory ADD COLUMN IF NOT EXISTS status ENUM('active', 'inactive', 'expired') DEFAULT 'active'",
       "ALTER TABLE drug_inventory ADD COLUMN IF NOT EXISTS createdAt DATETIME DEFAULT CURRENT_TIMESTAMP",
-      "ALTER TABLE drug_inventory ADD COLUMN IF NOT EXISTS updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE drug_inventory ADD COLUMN IF NOT EXISTS updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP",
       "ALTER TABLE drug_inventory MODIFY COLUMN unit_of_measure VARCHAR(100)",
       "ALTER TABLE drug_inventory ADD COLUMN IF NOT EXISTS unit_type VARCHAR(100)"
     ];

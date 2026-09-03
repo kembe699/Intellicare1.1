@@ -1,4 +1,5 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { EmptyState } from '../EmptyState';
@@ -12,7 +13,7 @@ export interface ListCardProps<T> {
   actions?: React.ReactNode;
   loading?: boolean;
   emptyMessage?: string;
-  emptyIcon?: React.ReactNode;
+  emptyIcon?: LucideIcon;
   className?: string;
   maxHeight?: string;
 }

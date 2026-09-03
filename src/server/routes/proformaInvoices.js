@@ -29,7 +29,7 @@ async function ensureTable() {
       created_by CHAR(36),
       created_by_name VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
   const [[idxCheck]] = await sequelize.query(`

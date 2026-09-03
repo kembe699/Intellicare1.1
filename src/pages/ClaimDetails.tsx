@@ -4,7 +4,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { getStatusColor } from '@/lib/statusColors';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeader } from '@/components/common';
+import { PageHeader, LoadingState} from '@/components/common';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -186,7 +186,7 @@ export default function ClaimDetails() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <LoadingState variant="page" message="Loading claim..." />
       </AppLayout>
     );
   }

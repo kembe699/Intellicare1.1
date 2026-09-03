@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronUp, ChevronDown, Loader2, Download, Columns } from 'lucide-react';
+import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TablePagination } from './TablePagination';
@@ -34,6 +35,8 @@ export interface AdvancedDataTableProps<T> {
   data: T[];
   columns: Column<T>[];
   loading?: boolean;
+  /** Wording shown while the body loads. */
+  loadingMessage?: string;
   emptyMessage?: string;
   emptyIcon?: React.ReactNode;
   onRowClick?: (row: T, index: number) => void;
@@ -70,6 +73,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   data,
   columns: initialColumns,
   loading = false,
+  loadingMessage = 'Loading...',
   emptyMessage = 'No data available',
   emptyIcon,
   onRowClick,
@@ -209,14 +213,12 @@ export function AdvancedDataTable<T extends Record<string, any>>({
     }
   }, [selectedRows, paginatedData, onSelectionChange, keyExtractor]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
+  // Loading no longer returns early. Replacing the whole component with a bare
+  // spinner tore out the toolbar and the column headers, so the page visibly
+  // reflowed the moment data arrived and the spinner appeared wherever the
+  // table used to start — which is why waiting looked different from screen to
+  // screen. The frame now stays put and only the body area shows the wait, at
+  // the same height the empty state uses, so nothing moves.
   const isEmpty = paginatedData.length === 0;
   const emptyRowCount = pagination?.enabled ? Math.min(pageSize, 10) : 8;
   const emptyBodyHeight = (compact ? 37 : 41) * emptyRowCount;
@@ -332,7 +334,17 @@ export function AdvancedDataTable<T extends Record<string, any>>({
             </tr>
           </thead>
           <tbody>
-            {isEmpty ? (
+            {loading ? (
+              <tr>
+                <td
+                  colSpan={columns.length + (selectable ? 1 : 0)}
+                  className="align-middle p-0"
+                  style={{ height: `${emptyBodyHeight}px` }}
+                >
+                  <LoadingState variant="section" message={loadingMessage} className="py-0" />
+                </td>
+              </tr>
+            ) : isEmpty ? (
               <tr>
                 <td
                   colSpan={columns.length + (selectable ? 1 : 0)}
