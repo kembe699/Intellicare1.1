@@ -137,8 +137,42 @@ router.post('/', authorize(['admin']), async (req, res) => {
     };
     
     console.log('Creating user with data:', userData);
-    
+
     const user = await User.create(userData);
+
+    // Give the new account a branch.
+    //
+    // The New User form has no branch picker, so branch_id came through null and
+    // no user_branches row was written either. loadUserBranchContext then found
+    // nothing, and the account signed in successfully to a blank screen — a
+    // valid token with no branch to scope any screen to.
+    //
+    // Default to the facility's main branch when the caller didn't name one.
+    // Non-fatal: the user has already been created, and an admin can always
+    // assign branches afterwards, so a failure here must not turn a successful
+    // creation into a 500.
+    try {
+      let branchId = user.branch_id;
+      if (!branchId) {
+        const [rows] = await sequelize.query(
+          `SELECT id FROM branches WHERE is_active IS NOT FALSE
+            ORDER BY is_main_branch DESC, id ASC LIMIT 1`
+        );
+        branchId = rows[0]?.id || null;
+        if (branchId) await user.update({ branch_id: branchId });
+      }
+      if (branchId) {
+        await sequelize.query(
+          `INSERT INTO user_branches (user_id, branch_id, is_primary, created_at, updated_at)
+           VALUES (:uid, :bid, TRUE, NOW(), NOW())
+           ON CONFLICT DO NOTHING`,
+          { replacements: { uid: user.id, bid: branchId } }
+        );
+      }
+    } catch (branchErr) {
+      console.error(`Could not assign a branch to new user ${user.id}:`, branchErr.message);
+    }
+
     res.status(201).json(user);
   } catch (error) {
     console.error('Error creating user:', error);

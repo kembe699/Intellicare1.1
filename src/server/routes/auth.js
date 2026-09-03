@@ -101,6 +101,37 @@ async function loadUserBranchContext(sequelize, user) {
     return { branches: [fallbackBranch], primaryBranch: fallbackBranch };
   }
 
+  // Last resort: a user with no user_branches row and no branch_id would
+  // otherwise sign in with no branch at all — the token is valid, the welcome
+  // toast fires, and then the app renders nothing, because every branch-scoped
+  // screen has no branch to scope to. That is exactly what a user created
+  // through Setup > Users looked like, since that form leaves branch_id null.
+  //
+  // Falling back to the facility's main branch (or the only branch, if there is
+  // just one) means such an account is usable instead of blank. It is a
+  // read-only default: nothing is written here, so an admin assigning a real
+  // branch later still wins.
+  try {
+    const [mainRows] = await sequelize.query(`
+      SELECT id, name, facility_id
+      FROM branches
+      WHERE is_active IS NOT FALSE
+      ORDER BY is_main_branch DESC, id ASC
+      LIMIT 1
+    `);
+    if (mainRows.length > 0) {
+      const fallback = {
+        id: mainRows[0].id,
+        name: mainRows[0].name,
+        facilityId: mainRows[0].facility_id,
+        isPrimary: true,
+      };
+      return { branches: [fallback], primaryBranch: fallback };
+    }
+  } catch (error) {
+    console.log('Auth default-branch fallback failed:', error.message);
+  }
+
   return { branches: [], primaryBranch: null };
 }
 

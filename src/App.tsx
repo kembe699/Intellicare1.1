@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformAuthProvider, usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
@@ -104,11 +104,39 @@ const queryClient = new QueryClient({
   },
 });
 
+// Where a role goes when it hits a page it may not see.
+//
+// `currentPath` exists to break a redirect loop, and that loop was real: the
+// fallback used to be /dashboard, but /dashboard itself excludes some roles —
+// cashier among them. A cashier signing in was redirected to /dashboard, which
+// rejected them and redirected to /dashboard again, forever. React rendered
+// nothing, so login appeared to succeed (the welcome toast fired) and then left
+// a blank screen. Any role missing from the list below and from /dashboard's
+// allowlist would have hit exactly the same wall, so the guard is structural
+// rather than one more special case.
+const ROLE_LANDING: Record<string, string> = {
+  reception: '/lis/registration',
+  accountant: '/accounting/chart-of-accounts',
+  finance_manager: '/accounting/chart-of-accounts',
+  auditor: '/accounting/chart-of-accounts',
+  procurement: '/procurement/suppliers-mgmt',
+  nurse: '/triage',
+  cashier: '/cashier/shift',
+};
+
+function landingPathForRole(role: string, currentPath: string): string {
+  const target = ROLE_LANDING[role] || '/dashboard';
+  // Never bounce a role back to the page that just rejected it.
+  if (target === currentPath) return '/profile';
+  return target;
+}
+
 const ProtectedRoute: React.FC<{ 
   children: React.ReactNode;
   allowedRoles?: UserRole[];
 }> = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return (
@@ -124,20 +152,7 @@ const ProtectedRoute: React.FC<{
   
   // Check role-based access
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to appropriate landing page based on role
-    if (user.role === 'reception') {
-      return <Navigate to="/lis/registration" replace />;
-    }
-    if (user.role === 'accountant' || user.role === 'finance_manager' || user.role === 'auditor') {
-      return <Navigate to="/accounting/chart-of-accounts" replace />;
-    }
-    if (user.role === 'procurement') {
-      return <Navigate to="/procurement/suppliers-mgmt" replace />;
-    }
-    if (user.role === 'nurse') {
-      return <Navigate to="/triage" replace />;
-    }
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={landingPathForRole(user.role, location.pathname)} replace />;
   }
 
   return <>{children}</>;

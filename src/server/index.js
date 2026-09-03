@@ -94,39 +94,27 @@ app.use(express.urlencoded({ extended: true }));
 const currenciesRouter = require('./routes/currencies');
 app.use('/api/currencies', currenciesRouter);
 
-// Branches endpoint must be public for login page
 const facilitiesRouter = require('./routes/facilities');
-app.get('/api/facilities/branches/all', async (req, res, next) => {
-  try {
-    const { sequelize } = require('./models');
-    const [branches] = await sequelize.query(`
-      SELECT * FROM branches ORDER BY is_main_branch DESC, name ASC
-    `);
-    res.json({ success: true, data: branches });
-  } catch (error) {
-    console.error('Error fetching branches:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch branches' });
-  }
-});
 
-// Facility name endpoint must be public for login page
-app.get('/api/facilities/name', async (req, res) => {
-  try {
-    const { sequelize } = require('./models');
-    const [facilities] = await sequelize.query(`
-      SELECT name FROM facilities ORDER BY id LIMIT 1
-    `);
-    
-    if (facilities.length > 0) {
-      res.json({ success: true, name: facilities[0].name });
-    } else {
-      res.json({ success: true, name: 'IntelliCare' });
-    }
-  } catch (error) {
-    console.error('Error fetching facility name:', error);
-    res.json({ success: true, name: 'IntelliCare' });
-  }
-});
+// NOTE: /api/facilities/branches/all and /api/facilities/name used to be
+// declared here, ahead of `app.use('/api', authenticateToken)`, so that the
+// login page could read them without a token. That predates multi-tenancy and
+// had become actively wrong:
+//
+//   - Running before authenticateToken means no tenant context, so the models
+//     proxy fell back to the DEFAULT connection — the tenant_template schema.
+//     Creating a branch (authenticated, correct schema) then listing them
+//     (unauthenticated, template schema) returned an empty list, which looked
+//     exactly like "it said success but the branch never appeared".
+//   - Being declared on `app` ahead of the router, they SHADOWED the
+//     tenant-aware handlers in routes/facilities.js, which could never run.
+//   - "Public" is meaningless per-tenant anyway: with no token there is no
+//     instance code, so the response could only ever be one arbitrary schema's
+//     data served to anyone who asked.
+//
+// Nothing needs them unauthenticated — Login.tsx calls neither, and every real
+// caller (FacilitySetup, Security, useFacilityInfo) is behind auth. They are
+// now served by facilitiesRouter, mounted after authenticateToken.
 
 // Branch verification endpoint must be public for login page
 const bcrypt = require('bcrypt');

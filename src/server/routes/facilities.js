@@ -43,6 +43,22 @@ ensureBranchesTable();
 // BRANCHES ENDPOINTS (must be defined BEFORE /:id catch-all)
 // ============================================================
 
+// GET /api/facilities/name - This facility's display name.
+// Declared before the /:id catch-all, which would otherwise swallow "name".
+// It previously lived in index.js ahead of authenticateToken and therefore read
+// the template schema; it is authenticated now, like every other tenant route.
+router.get('/name', async (req, res) => {
+  try {
+    const [facilities] = await sequelize.query(
+      `SELECT name FROM facilities ORDER BY id LIMIT 1`
+    );
+    res.json({ success: true, name: facilities[0]?.name || 'IntelliCare' });
+  } catch (error) {
+    console.error('Error fetching facility name:', error);
+    res.json({ success: true, name: 'IntelliCare' });
+  }
+});
+
 // GET /api/facilities/branches/all - Get all branches
 router.get('/branches/all', async (req, res) => {
   try {
