@@ -62,6 +62,8 @@ const ESSENTIAL = {
   '2150': 'Patient Deposits Held — patient deposit liability',
   '3200': "Retained Earnings — required for a meaningful balance sheet",
   '4100': 'Patient Services Revenue — default revenue line for all billing',
+  '5110': 'Doctor Fees — the Doctor Fees expense category posts here',
+  '5120': 'Employee Benefits — the Allowance expense category posts here',
   '5400': 'Office Supplies Expense — daily expenses',
   '5610': 'Foreign Exchange Gain/Loss — multi-currency settlement',
   '5700': 'Bad Debt Expense — write-offs',
@@ -133,18 +135,25 @@ async function leanOne(db, schema) {
     console.log(`     ✚ created missing essential account ${code} (${def.account_name})`);
   }
 
-  if (APPLY && disable.length) {
-    await db.query(
-      `UPDATE "${schema}".chart_of_accounts SET is_active = false WHERE id = ANY($1::text[])`,
-      [disable.map((r) => r.id)]
-    );
-    // Essential accounts are force-enabled: a tenant where one was switched off
-    // by hand would otherwise keep failing to post with no visible reason.
-    await db.query(
-      `UPDATE "${schema}".chart_of_accounts SET is_active = true WHERE account_code = ANY($1::text[])`,
+  if (APPLY) {
+    if (disable.length) {
+      await db.query(
+        `UPDATE "${schema}".chart_of_accounts SET is_active = false WHERE id = ANY($1::text[])`,
+        [disable.map((r) => r.id)]
+      );
+    }
+    // Essential accounts are force-enabled on every apply, not only when
+    // something also needed deactivating. Adding a new essential code to the
+    // list above would otherwise never switch it on in a tenant that was
+    // already lean — which is exactly what happened when Doctor Fees and
+    // Employee Benefits were added: the postings they back would have silently
+    // gone nowhere.
+    const { rowCount: enabled } = await db.query(
+      `UPDATE "${schema}".chart_of_accounts SET is_active = true
+        WHERE account_code = ANY($1::text[]) AND is_active IS DISTINCT FROM true`,
       [Object.keys(ESSENTIAL)]
     );
-    console.log(`   ✅ applied — ${disable.length} deactivated, ${keep.length} essential confirmed active`);
+    console.log(`   ✅ applied — ${disable.length} deactivated, ${enabled} re-activated, ${keep.length} essential active`);
   }
   return disable.length;
 }

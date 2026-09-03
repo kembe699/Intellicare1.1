@@ -22,6 +22,8 @@ const ESSENTIAL_ACCOUNT_CODES = new Set([
   '2150', // Patient Deposits Held
   '3200', // Retained Earnings
   '4100', // Patient Services Revenue — default revenue line
+  '5110', // Doctor Fees — the Doctor Fees daily-expense category posts here
+  '5120', // Employee Benefits — the Allowance category posts here
   '5400', // Office Supplies Expense
   '5610', // Foreign Exchange Gain/Loss
   '5700', // Bad Debt Expense

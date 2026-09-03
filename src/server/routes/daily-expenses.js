@@ -16,6 +16,12 @@ const DAILY_EXPENSES_WRITE = ['admin', 'cashier', 'procurement'];
 // Maps a daily-expense category to the Chart of Accounts expense-account code
 // it should be debited against when the expense is paid (see POST /:id/pay).
 const CATEGORY_EXPENSE_CODE = {
+  // Staff costs get their own accounts rather than falling into Miscellaneous.
+  // Doctor fees and allowances are large, recurring and reported on separately;
+  // burying them in 5900 would make the income statement useless for the two
+  // lines a clinic is asked about most.
+  'Doctor Fees': '5110',       // Doctor Fees
+  'Allowance': '5120',         // Employee Benefits
   'Office Supplies': '5400',   // Office Supplies Expense
   'Utilities': '5310',         // Utilities Expense
   'Maintenance': '5330',       // Maintenance and Repairs
@@ -468,6 +474,16 @@ router.post('/:id/pay', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
       const clinicIdNum = parseInt(exp.clinic_id || 1);
       const expenseAccountCode = CATEGORY_EXPENSE_CODE[exp.category] || DEFAULT_EXPENSE_CODE;
       const expenseAccount = await AccountingService.getAccountByCode(clinicIdNum, expenseAccountCode);
+      if (!expenseAccount) {
+        // getAccountByCode only returns active accounts, so a category mapped to
+        // a deactivated code silently posts nothing: the expense is paid and the
+        // ledger never hears about it. Say so rather than leaving the books to
+        // quietly drift.
+        console.error(
+          `Daily expense ${expenseId} paid but NOT posted: expense account ${expenseAccountCode} ` +
+          `for category "${exp.category}" is missing or inactive in clinic ${clinicIdNum}.`
+        );
+      }
       if (expenseAccount && exp.account_id) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: clinicIdNum,
