@@ -148,9 +148,15 @@ async function ensureColumnType(table, column, expectedDataType, modifySql) {
         { replacements: { cid: clinic_id } }
       );
       if (existing.length === 0) {
+        // gen_random_uuid(), not MySQL's UUID(), and a real boolean for
+        // is_active — the MySQL forms threw here after the PostgreSQL move and
+        // the catch below only warned, so this account silently stopped being
+        // created for new tenants. It is now also seeded by
+        // scripts/initializeChartOfAccounts.js; this remains the repair path
+        // for tenants provisioned before that.
         await sequelize.query(`
           INSERT INTO chart_of_accounts (id, clinic_id, account_code, account_name, account_type, balance_type, opening_balance, is_active, description)
-          VALUES (UUID(), :cid, '5610', 'Foreign Exchange Gain/Loss', 'expense', 'debit', 0, 1, 'Realized FX gain/loss on settling foreign-currency (e.g. USD) supplier liabilities against the SSP base currency. A gain nets against this account as a credit (reducing it), a loss debits it — one net line rather than separate gain/loss accounts.')
+          VALUES (gen_random_uuid()::text, :cid, '5610', 'Foreign Exchange Gain/Loss', 'expense', 'debit', 0, TRUE, 'Realized FX gain/loss on settling foreign-currency (e.g. USD) supplier liabilities against the SSP base currency. A gain nets against this account as a credit (reducing it), a loss debits it — one net line rather than separate gain/loss accounts.')
         `, { replacements: { cid: clinic_id } });
         console.log(`✅ Added Foreign Exchange Gain/Loss account (5610) for clinic ${clinic_id}`);
       }

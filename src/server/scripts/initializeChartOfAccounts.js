@@ -1,5 +1,33 @@
 const { ChartOfAccounts, sequelize } = require('../models');
 
+// The working set a clinic actually posts to. The catalogue below is a full
+// healthcare chart of accounts (55 lines, covering payroll liabilities, fixed
+// assets, depreciation and so on); a clinic touches about a dozen of them and
+// the rest are noise in every account picker.
+//
+// Everything is still SEEDED — the non-essential lines are just created
+// inactive, so ChartOfAccounts.tsx hides them behind its "show inactive"
+// checkbox and a clinic that later grows into "Rent Expense" can switch it on
+// instead of hand-building an account with the right code, type and balance
+// side. Keep this list in sync with scripts/leanChartOfAccounts.js, which
+// applies the same set to tenants that were provisioned before this change.
+const ESSENTIAL_ACCOUNT_CODES = new Set([
+  '1100', // Cash
+  '1105', // Cash at Hand — cashier collections
+  '1110', // Bank Account - Main
+  '1200', // Accounts Receivable - Patients
+  '1210', // Insurance Receivables — scheme billing
+  '1300', // Medical Supplies Inventory
+  '2100', // Accounts Payable - Suppliers
+  '2150', // Patient Deposits Held
+  '3200', // Retained Earnings
+  '4100', // Patient Services Revenue — default revenue line
+  '5400', // Office Supplies Expense
+  '5610', // Foreign Exchange Gain/Loss
+  '5700', // Bad Debt Expense
+  '5900', // Miscellaneous Expenses
+]);
+
 const healthcareChartOfAccounts = [
   // ASSETS (1000-1999)
   {
@@ -434,6 +462,19 @@ const healthcareChartOfAccounts = [
     description: 'Interest on loans and credit facilities'
   },
   {
+    // Was previously created lazily at boot by routes/daily-expenses.js instead
+    // of being seeded here. That insert used MySQL's UUID(), so after the move
+    // to PostgreSQL it threw, and its catch only warned — leaving every tenant
+    // provisioned since then without the account the FX settlement path posts
+    // to. Seeded properly here; the boot-time repair still covers older tenants.
+    account_code: '5610',
+    account_name: 'Foreign Exchange Gain/Loss',
+    account_type: 'expense',
+    sub_account_type: 'financial_expense',
+    balance_type: 'debit',
+    description: 'Realized FX gain/loss on settling foreign-currency (e.g. USD) supplier liabilities against the SSP base currency. A gain nets against this account as a credit (reducing it), a loss debits it — one net line rather than separate gain/loss accounts.'
+  },
+  {
     account_code: '5700',
     account_name: 'Bad Debt Expense',
     account_type: 'expense',
@@ -491,6 +532,9 @@ async function initializeChartOfAccounts(clinicId, createdBy = null) {
       ...account,
       clinic_id: clinicId,
       created_by: createdBy,
+      // Non-essential lines are seeded inactive so a new tenant opens with a
+      // short, usable account list rather than 55 rows.
+      is_active: ESSENTIAL_ACCOUNT_CODES.has(account.account_code),
       opening_balance: 0,
       opening_balance_date: new Date()
     }));
@@ -574,5 +618,6 @@ async function initializeAllClinics() {
 module.exports = {
   initializeChartOfAccounts,
   initializeAllClinics,
-  healthcareChartOfAccounts
+  healthcareChartOfAccounts,
+  ESSENTIAL_ACCOUNT_CODES
 };

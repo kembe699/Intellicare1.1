@@ -1,11 +1,28 @@
 import React, { useState, type ReactNode } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Lock } from 'lucide-react';
 
 export interface HeroStatCardProps {
   label: string;
   value: string;
   stats?: { label: string; value: string }[];
   actions?: ReactNode;
+  /**
+   * Whether the viewer is allowed to reveal the figure. When false the card
+   * stays masked and the toggle reports the refusal through `onDeniedReveal`
+   * instead of quietly doing nothing — a dead button reads as a bug, whereas an
+   * explicit "access denied" tells the user the restriction is deliberate.
+   */
+  canReveal?: boolean;
+  /** Start masked. Financial headline figures pass false. */
+  defaultRevealed?: boolean;
+  onDeniedReveal?: () => void;
+  /**
+   * Controlled mode. Pass both when the same figure is rendered elsewhere on
+   * the page and must mask and unmask together — hiding it here while the
+   * identical number sits in a chart below achieves nothing.
+   */
+  revealed?: boolean;
+  onRevealedChange?: (revealed: boolean) => void;
 }
 
 /**
@@ -13,9 +30,37 @@ export interface HeroStatCardProps {
  * as the "hero balance" pattern used elsewhere in the product suite, restyled
  * with this app's own teal (see the `hero-gradient` utility in tailwind.config.ts)
  * rather than borrowing another product's brand color.
+ *
+ * Masking here is a presentation control, not a security boundary: the figure
+ * has already been fetched by the time this renders. Anything that must not
+ * reach a role at all has to be withheld by the API.
  */
-export const HeroStatCard: React.FC<HeroStatCardProps> = ({ label, value, stats, actions }) => {
-  const [revealed, setRevealed] = useState(true);
+export const HeroStatCard: React.FC<HeroStatCardProps> = ({
+  label,
+  value,
+  stats,
+  actions,
+  canReveal = true,
+  defaultRevealed = true,
+  onDeniedReveal,
+  revealed: revealedProp,
+  onRevealedChange,
+}) => {
+  const [uncontrolled, setUncontrolled] = useState(defaultRevealed && canReveal);
+  const isControlled = revealedProp !== undefined;
+  const revealed = isControlled ? revealedProp && canReveal : uncontrolled;
+
+  const toggle = () => {
+    if (!canReveal) {
+      onDeniedReveal?.();
+      return;
+    }
+    const next = !revealed;
+    if (isControlled) onRevealedChange?.(next);
+    else setUncontrolled(next);
+  };
+
+  const Icon = !canReveal ? Lock : revealed ? Eye : EyeOff;
 
   return (
     <div className="rounded-2xl bg-hero-gradient p-6 text-white shadow-sm">
@@ -23,11 +68,12 @@ export const HeroStatCard: React.FC<HeroStatCardProps> = ({ label, value, stats,
         <p className="text-sm font-medium text-white/80">{label}</p>
         <button
           type="button"
-          onClick={() => setRevealed((prev) => !prev)}
+          onClick={toggle}
           className="rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-          aria-label={revealed ? 'Hide value' : 'Show value'}
+          aria-label={!canReveal ? 'Restricted value' : revealed ? 'Hide value' : 'Show value'}
+          title={!canReveal ? 'Restricted — administrators and accountants only' : undefined}
         >
-          {revealed ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          <Icon className="h-4 w-4" />
         </button>
       </div>
 

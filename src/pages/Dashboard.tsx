@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from 'recharts';
+import { toast } from 'sonner';
 
 interface DashboardStats {
   totalPatients: number;
@@ -30,13 +31,16 @@ interface DashboardStats {
 const PAID_COLOR = 'hsl(var(--success))';
 const OUTSTANDING_COLOR = 'hsl(var(--destructive))';
 
-function BillingStatusTooltip({ active, payload, fmt }: any) {
+function BillingStatusTooltip({ active, payload, fmt, maskPaid }: any) {
   if (!active || !payload?.length) return null;
   const item = payload[0];
+  // The Paid slice is the collections figure; masking it on the card while
+  // leaving it readable on hover would hand it straight back.
+  const masked = maskPaid && item.name === 'Paid';
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <p className="font-medium text-popover-foreground">{item.name}</p>
-      <p className="text-muted-foreground">{fmt(item.value)}</p>
+      <p className="text-muted-foreground">{masked ? '••••••••' : fmt(item.value)}</p>
     </div>
   );
 }
@@ -74,6 +78,15 @@ const Dashboard: React.FC = () => {
     totalOutstanding: 0,
   });
   const [receiptStats, setReceiptStats] = useState<ReceiptStats>({ totalReceipts: 0, totalAmount: 0 });
+
+  // Collections figures are masked for everyone by default and only an admin or
+  // an accountant can reveal them. Note this is a presentation control: the
+  // totals are already in the API response by the time this renders, so it keeps
+  // takings off a shared screen rather than making them unobtainable.
+  const CAN_VIEW_COLLECTIONS = ['admin', 'accountant'];
+  const canViewCollections = !!user?.role && CAN_VIEW_COLLECTIONS.includes(user.role);
+  const [collectionsRevealed, setCollectionsRevealed] = useState(false);
+  const maskMoney = (formatted: string) => (collectionsRevealed ? formatted : '••••••••');
   const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
   const [period, setPeriod] = useState<Period>('today');
   const [customFrom, setCustomFrom] = useState('');
@@ -219,6 +232,14 @@ const Dashboard: React.FC = () => {
               </div>
             </FilterBar>
             <HeroStatCard
+              canReveal={canViewCollections}
+              revealed={collectionsRevealed}
+              onRevealedChange={setCollectionsRevealed}
+              onDeniedReveal={() =>
+                toast.error('Access denied', {
+                  description: 'Only administrators and accountants can view collection figures.',
+                })
+              }
               label={isCustomRange ? `Collections — ${customFrom} to ${customTo}` : `Collections — ${PERIODS.find((p) => p.value === period)?.label}`}
               value={fmt(receiptStats.totalAmount)}
               stats={[
@@ -376,7 +397,7 @@ const Dashboard: React.FC = () => {
                           <Cell fill={PAID_COLOR} />
                           <Cell fill={OUTSTANDING_COLOR} />
                         </Pie>
-                        <RTooltip content={<BillingStatusTooltip fmt={fmt} />} />
+                        <RTooltip content={<BillingStatusTooltip fmt={fmt} maskPaid={!collectionsRevealed} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="mt-2 space-y-2 border-t border-border pt-3">
@@ -385,7 +406,7 @@ const Dashboard: React.FC = () => {
                           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PAID_COLOR }} />
                           Paid ({isCustomRange ? 'custom range' : PERIODS.find((p) => p.value === period)?.label})
                         </span>
-                        <span className="font-semibold text-foreground">{fmt(receiptStats.totalAmount)}</span>
+                        <span className="font-semibold text-foreground">{maskMoney(fmt(receiptStats.totalAmount))}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2 text-muted-foreground">

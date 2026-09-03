@@ -10,6 +10,7 @@ const { authenticatePlatformAdmin } = require('../../middleware/platformAuth');
 const { evictTenantConnection } = require('../../tenantDb');
 const { createInvoiceForClient, getClientCoverage } = require('../../services/subscriptionBilling');
 const { measureDbSize, getDataBreakdown } = require('../../services/tenantUsage');
+const { sendTenantWelcomeEmail } = require('../../utils/emailService');
 
 const execFileAsync = promisify(execFile);
 const router = express.Router();
@@ -208,11 +209,34 @@ router.post('/', async (req, res) => {
       console.error(`Initial DB usage snapshot failed for client ${client.id}:`, err.message)
     );
 
+    // Welcome email with the sign-in details. Awaited (not fire-and-forget) so
+    // the response can say truthfully whether it went out — the temporary
+    // password is unrecoverable after this, so "we emailed it" being wrong
+    // would strand the new admin with no way in.
+    //
+    // A failure here must not fail the request: the tenant is fully provisioned
+    // by this point, and the credentials are still returned in the response for
+    // the platform admin to pass on by hand.
+    let welcomeEmail = { delivered: false, mode: 'not-attempted' };
+    try {
+      welcomeEmail = await sendTenantWelcomeEmail({
+        to: adminEmail.toLowerCase(),
+        facilityName: name,
+        adminName,
+        clientCode: normalizedCode,
+        tempPassword,
+      });
+    } catch (err) {
+      console.error(`Welcome email failed for ${adminEmail}: ${err.message}`);
+      welcomeEmail = { delivered: false, mode: 'error', error: err.message };
+    }
+
     res.status(201).json({
       client,
       invoice,
       // Shown once — never re-shown or recoverable after this response.
       credentials: { code: normalizedCode, email: adminEmail.toLowerCase(), tempPassword },
+      welcomeEmail,
     });
   } catch (error) {
     console.error('Create client error:', error);

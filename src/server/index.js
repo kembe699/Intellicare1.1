@@ -839,6 +839,21 @@ async function runBackgroundMigrations() {
     console.log('  ⚠️  Admin seed skipped:', seedErr.message);
   }
 
+  // Identity sequences must be ahead of the data or the next INSERT collides
+  // with an existing primary key. Every one of them sat at 1 after the
+  // MySQL -> PostgreSQL migration (dump rows carry explicit ids, which does not
+  // advance a sequence), which broke creating users, expenses, purchase orders
+  // and password-reset tokens across the migrated tenant. Idempotent and cheap:
+  // it only moves a sequence forward to match rows that already exist, so a
+  // restored dump or a freshly cloned schema cannot silently reintroduce it.
+  try {
+    const { resyncAll } = require('./scripts/resyncSequences');
+    const fixed = await resyncAll({ quiet: true });
+    if (fixed > 0) console.log(`  ✅ Re-synced ${fixed} identity sequence(s) that were behind their data`);
+  } catch (seqErr) {
+    console.error('  ⚠️  Identity sequence resync failed:', seqErr.message);
+  }
+
   console.log('✅ All background migrations complete');
 }
 
@@ -854,10 +869,18 @@ async function startServer() {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`💾 Cache mode: ${process.env.REDIS_ENABLED === 'true' ? 'Redis (Upstash)' : 'In-memory'}`);
+      // Resend's HTTP API is the preferred transport and is checked first:
+      // Render blocks outbound SMTP ports, so on that host SMTP cannot deliver
+      // no matter how it is configured.
+      const resendConfigured = !!process.env.RESEND_API_KEY;
       const smtpConfigured = !!((process.env.EMAIL_USER || process.env.SMTP_USER) && (process.env.EMAIL_PASS || process.env.SMTP_PASS));
-      if (!smtpConfigured) {
+      if (resendConfigured) {
+        console.log(`📧 Email: Resend API, sending as ${process.env.EMAIL_FROM || 'onboarding@resend.dev'}`);
+      } else if (smtpConfigured) {
+        console.log(`📧 Email: SMTP (${process.env.EMAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com'})`);
+      } else {
         const level = process.env.NODE_ENV === 'production' ? console.error : console.warn;
-        level(`${process.env.NODE_ENV === 'production' ? '🚨' : '⚠️ '} SMTP not configured — password reset emails will NOT be delivered (set EMAIL_USER/EMAIL_PASS or SMTP_USER/SMTP_PASS)`);
+        level(`${process.env.NODE_ENV === 'production' ? '🚨' : '⚠️ '} No email transport configured — password reset and welcome emails will NOT be delivered (set RESEND_API_KEY, or EMAIL_USER/EMAIL_PASS)`);
       }
       resolve();
     });
