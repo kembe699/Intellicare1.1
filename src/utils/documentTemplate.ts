@@ -282,6 +282,12 @@ export interface DocumentOptions {
   bodyHTML: string;
   extraCSS?: string;
   autoPrint?: boolean;
+  /**
+   * Logo shown in the document header and footer — normally the facility's own,
+   * from useFacilityInfo().facilityLogo (a data URI, so it renders in the print
+   * window, which carries no auth). When absent the IntelliCare mark is used,
+   * so a facility that has not uploaded one still gets a complete document.
+   */
   logoUrl?: string;
   facilityInfo?: DocFacilityInfo;
   branchInfo?: DocBranchInfo;
@@ -312,11 +318,14 @@ export function buildDocument(opts: DocumentOptions): string {
     <div>
       <div class="ic-brand">
         ${logoUrl
-          ? `<img src="${logoUrl}" alt="Intellicare" style="width:48px;height:48px;object-fit:contain;border-radius:10px;" />`
+          ? `<img src="${logoUrl}" alt="${facilityDisplayName}" style="width:48px;height:48px;object-fit:contain;border-radius:10px;" />`
           : IC_LOGO_SVG}
         <div class="ic-logo-text">
-          <div class="ic-logo-name">Intelli<span>care</span></div>
-          <div class="ic-logo-tagline">Health Management System</div>
+          ${logoUrl
+            ? `<div class="ic-logo-name">${facilityDisplayName}</div>
+               <div class="ic-logo-tagline">${facilityInfo?.type || 'Health Management System'}</div>`
+            : `<div class="ic-logo-name">Intelli<span>care</span></div>
+               <div class="ic-logo-tagline">Health Management System</div>`}
         </div>
       </div>
       ${hasFacilityMeta ? `
@@ -350,7 +359,7 @@ export function buildDocument(opts: DocumentOptions): string {
     </div>
     <div class="ic-footer-brand">
       ${logoUrl
-        ? `<img src="${logoUrl}" alt="Intellicare" style="width:22px;height:22px;object-fit:contain;border-radius:5px;" />`
+        ? `<img src="${logoUrl}" alt="${facilityDisplayName}" style="width:22px;height:22px;object-fit:contain;border-radius:5px;" />`
         : `<svg width="20" height="20" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="21" cy="21" r="21" fill="#1A7A75"/>
         <rect x="17.5" y="10" width="7" height="22" rx="2.5" fill="white" opacity="0.95"/>

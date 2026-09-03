@@ -69,6 +69,17 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
+    // The facility's own logo, held as a data URI rather than a file path.
+    //
+    // Documents are printed from a separate window that carries no auth, so a
+    // URL pointing at a protected endpoint would silently fail to load there.
+    // An inline data URI always renders, and it is the same approach already
+    // used for user signatures. The image is downscaled in the browser before
+    // upload, so the stored string stays small.
+    logo: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true

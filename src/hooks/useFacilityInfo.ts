@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export interface FacilityInfo {
   facilityName: string;
+  /** Facility logo as a data URI; empty when none has been uploaded. */
+  facilityLogo: string;
   facilityType: string;
   facilityAddress: string;
   facilityCity: string;
@@ -19,6 +21,7 @@ export const useFacilityInfo = (): FacilityInfo => {
   const { user } = useAuth();
   const [info, setInfo] = useState<FacilityInfo>({
     facilityName: 'IntelliCare HMIS',
+    facilityLogo: '',
     facilityType: '',
     facilityAddress: '',
     facilityCity: '',
@@ -47,6 +50,7 @@ export const useFacilityInfo = (): FacilityInfo => {
             if (d.phone)           update.facilityPhone     = d.phone;
             if (d.email)           update.facilityEmail     = d.email;
             if (d.license_number)  update.facilityLicenseNo = d.license_number;
+            if (d.logo)            update.facilityLogo      = d.logo;
           }
         }
 

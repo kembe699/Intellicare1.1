@@ -39,11 +39,13 @@ interface Supplier {
 
 interface InventoryItem {
   id: string;
-  drug_name: string;
-  generic_name: string;
+  item_code: string;
+  item_name: string;
+  item_description?: string | null;
   unit_of_measure: string;
-  selling_price: number;
-  unit_cost: number;
+  current_unit_cost?: number | string | null;
+  average_unit_cost?: number | string | null;
+  selling_price?: number | string | null;
 }
 
 interface PurchaseOrderItem {
@@ -152,8 +154,22 @@ const PurchaseOrders: React.FC = () => {
 
   const fetchInventory = async () => {
     try {
-      const res = await authFetch(`/api/pharmacy/inventory/${user?.clinic || '1'}`);
-      if (res.ok) setInventory((await res.json()) || []);
+      // inventory_items (Item Master) — the same source Item Master, Batch
+      // Tracking, Scheme Management and billing all read.
+      //
+      // This used to call /api/pharmacy/inventory/:clinicId, which reads the
+      // legacy drug_inventory table. Nothing writes to that table any more
+      // (it holds 0 rows while inventory_items holds the real catalogue), so
+      // the picker had no options and an item could not be added to a
+      // purchase order.
+      const res = await authFetch(
+        `/api/inventory/items?clinic_id=${user?.clinic || '1'}&is_active=true`,
+        { credentials: 'include' }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setInventory(Array.isArray(data) ? data : (data?.items || []));
+      }
     } catch (error) {
       console.error('Error fetching inventory:', error);
     }
@@ -294,10 +310,21 @@ const PurchaseOrders: React.FC = () => {
   };
 
   const handleInventorySelection = (itemName: string) => {
-    const sel = inventory.find(item => item.drug_name === itemName);
-    if (sel) {
-      setItemFormData({ ...itemFormData, item_name: itemName, unit_price: sel.unit_cost?.toString() || '', unit_of_measure: sel.unit_of_measure || 'Each', description: sel.generic_name || '' });
-    }
+    const sel = inventory.find(item => item.item_name === itemName);
+    if (!sel) return;
+    // Prefer the item's current cost, falling back to its moving average — a
+    // purchase order is priced at what the item costs to buy, not what it sells
+    // for, so selling_price is only a last resort.
+    const cost = [sel.current_unit_cost, sel.average_unit_cost, sel.selling_price]
+      .map(v => (v == null ? NaN : parseFloat(String(v))))
+      .find(v => Number.isFinite(v) && v > 0);
+    setItemFormData({
+      ...itemFormData,
+      item_name: itemName,
+      unit_price: cost != null ? String(cost) : '',
+      unit_of_measure: sel.unit_of_measure || 'Each',
+      description: sel.item_description || '',
+    });
   };
 
   const updateOrderStatus = async (orderId: number, newStatus: string) => {
@@ -705,8 +732,8 @@ const PurchaseOrders: React.FC = () => {
                     {itemFormData.type === 'inventory' && !itemFormData.is_new_item ? (
                       <Combobox
                         options={inventory.map(item => ({
-                          value: item.drug_name,
-                          label: `${item.drug_name}${item.generic_name ? ` (${item.generic_name})` : ''}`,
+                          value: item.item_name,
+                          label: `${item.item_name}${item.item_code ? ` (${item.item_code})` : ''}`,
                         }))}
                         value={itemFormData.item_name}
                         onChange={handleInventorySelection}

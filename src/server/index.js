@@ -87,8 +87,29 @@ app.use(cors(corsOptions));
 // This ensures OPTIONS responses always carry the correct headers even if the
 // DB is still initialising or a route throws during startup.
 app.options('*', cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 10mb, not the 100kb express defaults to.
+//
+// Several payloads legitimately carry an inline data URI — the facility logo
+// (Setup > Facility) and user signatures — because documents are printed from
+// a window that carries no auth and so cannot fetch an image from a protected
+// endpoint. A 512px PNG data URI is routinely 100-400kb, which the default
+// limit rejected before the route ever ran: saving a facility with a logo
+// failed with a bare 500 (PayloadTooLargeError) and no usable message.
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '10mb';
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+
+// Say so plainly when a body really is too big, rather than letting it surface
+// as an unexplained 500.
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({
+      error: 'That upload is too large',
+      details: `Request body exceeds the ${JSON_BODY_LIMIT} limit. If this is an image, use a smaller one.`,
+    });
+  }
+  return next(err);
+});
 
 // Public routes (no authentication required)
 const currenciesRouter = require('./routes/currencies');

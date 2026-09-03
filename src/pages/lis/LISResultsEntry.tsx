@@ -350,7 +350,7 @@ export default function LISResultsEntry() {
         docNumber: `LAB-${currentGroup.order_id.slice(-6).toUpperCase()}`,
         date: new Date(),
         bodyHTML,
-        logoUrl: `${window.location.origin}/hjd-icon.png`,
+        logoUrl: facilityInfo.facilityLogo || `${window.location.origin}/hjd-icon.png`,
         facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
         branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
       });

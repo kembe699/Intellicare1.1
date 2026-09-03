@@ -295,7 +295,7 @@ function sanitizeFacilityData(body) {
   // Date fields — convert empty string to null
   if (!data.established_date) data.established_date = null;
   // Optional string fields — convert empty string to null
-  ['fax', 'website', 'license_number', 'postal_code', 'city', 'state', 'description'].forEach(f => {
+  ['fax', 'website', 'license_number', 'postal_code', 'city', 'state', 'description', 'logo'].forEach(f => {
     if (data[f] === '') data[f] = null;
   });
   // Ensure required defaults

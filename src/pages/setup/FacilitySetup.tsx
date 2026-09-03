@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Building2, Plus, Search, Edit2, Trash2, Save, X, Loader2,
   Phone, Mail, MapPin, Clock, Globe, Shield, Users, CheckCircle,
-  XCircle, ChevronDown, ChevronUp, Hospital, FileText
+  XCircle, ChevronDown, ChevronUp, Hospital, FileText, Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,8 @@ interface FacilityData {
   bed_capacity: number | '';
   is_active: boolean;
   fax: string;
+  /** Data URI of the facility's logo; '' when none is set. */
+  logo?: string;
   updated_at?: string;
 }
 
@@ -67,7 +69,7 @@ const emptyFacility: FacilityData = {
   name: '', type: 'Hospital', description: '', phone: '', email: '',
   address: '', city: '', state: '', postal_code: '', country: 'South Sudan',
   website: '', license_number: '', established_date: '', bed_capacity: '',
-  is_active: true, fax: ''
+  is_active: true, fax: '', logo: ''
 };
 
 const emptyBranch: BranchData = {
@@ -130,6 +132,66 @@ const FacilitySetup: React.FC = () => {
     }
   };
 
+  /**
+   * Read a chosen image, downscale it, and keep it as a data URI.
+   *
+   * A data URI is what documents need: they print from a separate window that
+   * carries no auth, so a logo served from a protected endpoint would silently
+   * fail to load there. The trade-off is size — the string lives in the
+   * facility row and is embedded in every document — so the image is shrunk
+   * until the encoded result is comfortably small. That also keeps the request
+   * under any proxy body limit in front of the API, which is not ours to change.
+   *
+   * PNG is used so logos with transparent backgrounds stay transparent.
+   */
+  const LOGO_MAX_PX = 512;
+  const LOGO_MAX_BYTES = 5 * 1024 * 1024;      // largest file we'll accept from disk
+  const LOGO_TARGET_BYTES = 250 * 1024;        // ceiling for the encoded result
+
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';           // allow re-picking the same file
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please choose an image file'); return; }
+    if (file.size > LOGO_MAX_BYTES) { toast.error('Image is too large — please use one under 5MB'); return; }
+
+    const reader = new FileReader();
+    reader.onerror = () => toast.error('Could not read that file');
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => toast.error('That file is not a readable image');
+      img.onload = () => {
+        const render = (maxPx: number): string | null => {
+          const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          ctx.drawImage(img, 0, 0, w, h);
+          return canvas.toDataURL('image/png');
+        };
+
+        let out: string | null = null;
+        for (const px of [LOGO_MAX_PX, 384, 256, 192, 128]) {
+          out = render(px);
+          if (!out) { toast.error('Could not process the image'); return; }
+          if (out.length <= LOGO_TARGET_BYTES) break;
+        }
+        if (!out) { toast.error('Could not process the image'); return; }
+        if (out.length > LOGO_TARGET_BYTES) {
+          toast.error('That image is too detailed to use as a logo — try a simpler or smaller one');
+          return;
+        }
+        setFacilityForm(f => ({ ...f, logo: out as string }));
+        toast.success(`Logo ready (${Math.round(out.length / 1024)}KB) — save to apply it to documents`);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const fetchBranches = async () => {
     setBranchesLoading(true);
     try {
@@ -184,7 +246,15 @@ const FacilitySetup: React.FC = () => {
           body: JSON.stringify(facilityForm)
         });
       }
-      if (!res.ok) throw new Error('Failed to save facility');
+      if (!res.ok) {
+        // Surface what the server actually said. A generic message here is what
+        // made a rejected logo upload look like an unexplained failure.
+        const detail = await res.json().catch(() => null);
+        throw new Error(
+          detail?.details || detail?.error ||
+          (res.status === 413 ? 'The logo image is too large to upload' : `Failed to save facility (${res.status})`)
+        );
+      }
       toast.success(facility?.id ? 'Facility updated successfully' : 'Facility created successfully');
       setIsEditingFacility(false);
       fetchFacility();
@@ -386,6 +456,39 @@ const FacilitySetup: React.FC = () => {
               ) : isEditingFacility ? (
                 /* ─── Edit Mode ─── */
                 <div className="space-y-5 max-w-3xl">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Facility Logo</label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Used on every printed document — receipts, invoices, lab reports and prescriptions.
+                      A square PNG with a transparent background works best.
+                    </p>
+                    <div className="mt-2 flex items-center gap-4">
+                      <div className="h-20 w-20 shrink-0 rounded-lg border border-border bg-muted/30 flex items-center justify-center overflow-hidden">
+                        {facilityForm.logo ? (
+                          <img src={facilityForm.logo} alt="Facility logo" className="h-full w-full object-contain" />
+                        ) : (
+                          <Hospital className="h-7 w-7 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
+                          <Upload className="h-4 w-4" />
+                          {facilityForm.logo ? 'Replace logo' : 'Upload logo'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                        </label>
+                        {facilityForm.logo && (
+                          <button
+                            type="button"
+                            onClick={() => setFacilityForm(f => ({ ...f, logo: '' }))}
+                            className="w-fit text-xs text-muted-foreground underline hover:text-foreground"
+                          >
+                            Remove — documents fall back to the IntelliCare mark
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground">Facility Name *</label>
@@ -542,6 +645,17 @@ const FacilitySetup: React.FC = () => {
               ) : facility ? (
                 /* ─── View Mode ─── */
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {facility.logo && (
+                    <div className="md:col-span-2 flex items-center gap-4">
+                      <div className="h-16 w-16 shrink-0 rounded-lg border border-border bg-muted/30 overflow-hidden">
+                        <img src={facility.logo} alt={`${facility.name} logo`} className="h-full w-full object-contain" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Facility Logo</p>
+                        <p className="text-sm text-foreground">Shown on all printed documents</p>
+                      </div>
+                    </div>
+                  )}
                   <InfoField icon={<Hospital className="w-4 h-4" />} label="Facility Name" value={facility.name} />
                   <InfoField icon={<FileText className="w-4 h-4" />} label="Facility Type" value={facility.type} />
                   <InfoField icon={<Phone className="w-4 h-4" />} label="Phone" value={facility.phone} />
