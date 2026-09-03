@@ -63,6 +63,19 @@ router.get('/items', authorize(INVENTORY_READ), async (req, res) => {
     if (search) { conditions.push('(i.item_name LIKE :search OR i.item_code LIKE :search OR i.barcode LIKE :search OR i.item_description LIKE :search)'); replacements.search = `%${search}%`; }
     if (low_stock === 'true') { conditions.push('i.quantity_on_hand <= i.minimum_stock_level AND i.minimum_stock_level > 0'); }
 
+    // Restrict to what is actually held at one store location.
+    //
+    // The quantity shown then has to come from that location too, not from the
+    // item's catalogue-wide quantity_on_hand — otherwise a store showing 3 boxes
+    // would display the 300 held across the whole clinic, which is worse than
+    // showing nothing.
+    const locationId = req.query.location_id;
+    if (locationId) {
+      conditions.push(`EXISTS (SELECT 1 FROM stock_by_location sbl0
+                                WHERE sbl0.item_id = i.id AND sbl0.location_id = :location_id)`);
+      replacements.location_id = locationId;
+    }
+
     // Branch isolation: non-admin users only see their own branch's items
     const { sql: branchSQL, params: branchParams } = getBranchConditionSQL(req, 'i');
     console.log('Branch filter for items list:', { branchSQL, branchParams, userRole: req.user?.role, userBranchId: req.user?.branchId });
@@ -82,7 +95,14 @@ router.get('/items', authorize(INVENTORY_READ), async (req, res) => {
     const [items] = await sequelize.query(`
       SELECT i.*,
         NULL AS preferred_supplier_name,
-        (i.quantity_on_hand - i.reserved_quantity) AS available_quantity,
+        ${locationId ? `
+        -- Quantities for the selected location, overriding the catalogue-wide
+        -- figures so every number on the page refers to the same shelf.
+        COALESCE(loc.quantity_on_hand, 0) AS quantity_on_hand,
+        COALESCE(loc.reserved_quantity, 0) AS reserved_quantity,
+        (COALESCE(loc.quantity_on_hand, 0) - COALESCE(loc.reserved_quantity, 0)) AS available_quantity,
+        loc.location_id AS location_id,` : `
+        (i.quantity_on_hand - i.reserved_quantity) AS available_quantity,`}
         COALESCE(ba.active_batches, 0)  AS active_batches,
         ba.nearest_expiry               AS nearest_expiry
       FROM inventory_items i
@@ -93,6 +113,8 @@ router.get('/items', authorize(INVENTORY_READ), async (req, res) => {
         FROM inventory_batches
         GROUP BY item_id
       ) ba ON ba.item_id = i.id
+      ${locationId ? `
+      LEFT JOIN stock_by_location loc ON loc.item_id = i.id AND loc.location_id = :location_id` : ''}
       ${where}
       ORDER BY i.item_name ASC
     `, { replacements });

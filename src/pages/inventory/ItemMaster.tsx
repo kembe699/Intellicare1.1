@@ -121,6 +121,13 @@ export default function ItemMaster() {
   const [stockFilter, setStockFilter] = useState('all');
 
   const [locations, setLocations] = useState<any[]>([]);
+  // Items are shown for one store location at a time, chosen first.
+  //
+  // Stock only means anything somewhere: a catalogue-wide list mixes what is on
+  // the pharmacy shelf with what is in the main store, and the quantity beside
+  // each row then belongs to neither. Nothing loads until a location is picked,
+  // so every number on the page refers to the same shelf.
+  const [viewLocationId, setViewLocationId] = useState('');
 
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [formData, setFormData] = useState(emptyForm(currency.code));
@@ -139,7 +146,12 @@ export default function ItemMaster() {
   const [applyingPriceAdj, setApplyingPriceAdj] = useState(false);
   const [currentExchangeRate, setCurrentExchangeRate] = useState<number | null>(null);
 
-  useEffect(() => { fetchItems(); fetchLocations(); fetchCurrentExchangeRate(); }, []);
+  useEffect(() => { fetchLocations(); fetchCurrentExchangeRate(); }, []);
+  // Re-fetch whenever the chosen location changes; nothing is loaded until one is.
+  useEffect(() => {
+    if (!viewLocationId) { setItems([]); return; }
+    fetchItems();
+  }, [viewLocationId]);
 
   const fetchCurrentExchangeRate = async () => {
     try {
@@ -154,7 +166,10 @@ export default function ItemMaster() {
   const fetchItems = async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/api/inventory/items?clinic_id=${clinicId}&is_active=true`, { credentials: 'include' });
+      const res = await authFetch(
+        `/api/inventory/items?clinic_id=${clinicId}&is_active=true&location_id=${encodeURIComponent(viewLocationId)}`,
+        { credentials: 'include' }
+      );
       if (res.ok) setItems(await res.json());
     } catch (e) {
       console.error(e);
@@ -602,7 +617,24 @@ export default function ItemMaster() {
                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchItems} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-                <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
+                <div className="flex items-center gap-2 mr-1">
+                  <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Store location</label>
+                  <Combobox
+                    options={[
+                      { value: '', label: 'Select a location…' },
+                      ...locations.map((l: any) => ({
+                        value: String(l.id),
+                        label: `${l.location_name}${l.location_code ? ` (${l.location_code})` : ''}`,
+                      })),
+                    ]}
+                    value={viewLocationId}
+                    onChange={setViewLocationId}
+                    placeholder="Select a location…"
+                    searchPlaceholder="Search locations..."
+                    className="h-9 w-56"
+                  />
+                </div>
+                <Button variant="outline" size="sm" className="h-9" onClick={exportCSV} disabled={!viewLocationId}>
                   <Download className="w-4 h-4 mr-2" /> Export
                 </Button>
                 <Button variant="outline" size="sm" className="h-9" onClick={() => setShowBulkUpload(true)}>
@@ -615,11 +647,21 @@ export default function ItemMaster() {
             </div>
 
             <div className="p-4">
+              {!viewLocationId ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <MapPin className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                  <p className="font-medium text-foreground">Choose a store location</p>
+                  <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                    Items are listed per location, so the quantity beside each one is the stock actually held there.
+                  </p>
+                </div>
+              ) : (
               <AdvancedDataTable<InventoryItem>
                 data={filteredItems}
                 keyExtractor={(item) => item.id}
                 loading={loading}
-                emptyMessage="No items found."
+                loadingMessage="Loading items at this location..."
+                emptyMessage="No items held at this location yet."
                 onRowClick={(item) => openEdit(item)}
                 rowClassName={(item) => editingItem?.id === item.id ? 'bg-primary/5' : ''}
                 pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
@@ -659,6 +701,7 @@ export default function ItemMaster() {
                   },
                 ]}
               />
+              )}
             </div>
           </div>
         </div>

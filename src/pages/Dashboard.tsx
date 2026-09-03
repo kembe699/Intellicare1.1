@@ -314,6 +314,73 @@ const Dashboard: React.FC = () => {
             )}
           </div>
 
+          {isPharmacyView ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Dispensing Report (last 30 days)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stockLoading ? (
+                  <LoadingState message="Loading dispensing report..." />
+                ) : !stockMovement ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">No dispensing data yet</p>
+                ) : (
+                  <>
+                    {/* Patient counts and lab queues are a clinician's summary.
+                        A pharmacist needs what left the shelf, what it was worth,
+                        and what needs reordering. */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Units dispensed</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">
+                          {stockMovement.totals.unitsDispensed.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Dispensing value</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">
+                          {fmt(stockMovement.totals.dispensingValue)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Items dispensed</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">
+                          {stockMovement.totals.movedItems} of {stockMovement.totals.items}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Not moving</p>
+                        <p className={`mt-0.5 text-lg font-semibold ${stockMovement.totals.neverMoved > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                          {stockMovement.totals.neverMoved}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Prescriptions pending</p>
+                        <p className="mt-0.5 text-lg font-semibold text-foreground">{stats.pendingLabTests ?? 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Low Stock Alerts</p>
+                        <p className={`mt-0.5 text-lg font-semibold ${stats.lowStockItems > 0 ? 'text-destructive' : 'text-foreground'}`}>
+                          {stats.lowStockItems}
+                        </p>
+                      </div>
+                    </div>
+                    {stockMovement.movement.slow.length > 0 && (
+                      <div className="mt-4 border-t border-border pt-3">
+                        <p className="text-xs text-muted-foreground">Longest without movement</p>
+                        <p className="mt-0.5 truncate text-sm font-medium text-foreground">
+                          {stockMovement.movement.slow[0].itemName}
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            ({stockMovement.movement.slow[0].quantityOnHand} on hand)
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Today at a Glance</CardTitle>
@@ -355,6 +422,7 @@ const Dashboard: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
