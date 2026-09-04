@@ -23,6 +23,18 @@ const LIS_RESULTS_REVIEW = ['admin', 'lab'];               // Manager Review
 const LIS_RESULTS_READ = ['admin', 'lab', 'doctor'];
 const LIS_TRIAGE = ['admin', 'nurse'];                     // Nurse Triage vitals entry
 
+// Who may look a person up in order to serve them.
+//
+// Registering a participant is reception's job, but *finding* one is not: the
+// same patient picker is used to dispense a drug, raise a bill and write a
+// prescription, so pharmacy and cashier need to read this list even though they
+// never write to it. Leaving pharmacy out made the picker come back empty on
+// any tenant whose people are registered through the LIS rather than the main
+// patient registry — the frontend requests patients and participants together
+// and just skips whichever half fails, so a 403 here looked like "no patients"
+// rather than a permission error.
+const LIS_PARTICIPANT_READ = ['admin', 'reception', 'doctor', 'lab', 'nurse', 'pharmacy', 'cashier'];
+
 // mysql2 auto-parses a true JSON-typed column into an object, but MariaDB (common on
 // shared hosts like Hostinger) stores its JSON columns as LONGTEXT under the hood, so the
 // driver can't tell it's JSON and hands back the raw string instead — silently breaking
@@ -271,7 +283,7 @@ router.post('/participants', authorize(LIS_REGISTRATION), async (req, res) => {
 // become permanently unfindable here. `search` now matches server-side against name,
 // participant number, and phone; LIMIT still applies (raised to 200) but only as a page
 // size, not as the entire searchable universe.
-router.get('/participants', authorize(LIS_REGISTRATION.concat(['doctor', 'lab'])), async (req, res) => {
+router.get('/participants', authorize(LIS_PARTICIPANT_READ), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const { search } = req.query;

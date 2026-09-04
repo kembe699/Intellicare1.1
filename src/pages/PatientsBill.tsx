@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
+import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { PaymentReceipt, printThermalReceipt } from '@/components/receipts/PaymentReceipt';
@@ -212,35 +213,12 @@ export default function PatientsBill() {
 
   // Merges the main Patient Registry with LIS-registered patients so both are billable here.
   const fetchPeople = async () => {
-    try {
-      const [patientsRes, lisRes] = await Promise.all([
-        // Deliberately NOT filtered by clinic. clinic_id is the department a
-        // patient was registered under (Outpatient, General, ...), not an access
-        // boundary — the tenant schema is the boundary, and the server still
-        // scopes this list to the caller's branch. Filtering the picker by the
-        // operator's own clinic meant a pharmacist registered under one clinic
-        // simply could not find a patient registered under another, which read
-        // as names "sometimes" loading. The LIS half of this same picker has
-        // always been unfiltered, so the two halves now agree.
-        authFetch('/api/patients', { credentials: 'include' }).catch(() => null),
-        authFetch('/api/lis/participants', { credentials: 'include' }).catch(() => null),
-      ]);
-      const merged: any[] = [];
-      if (patientsRes?.ok) {
-        const data = await patientsRes.json();
-        (Array.isArray(data) ? data : []).forEach((p: any) => merged.push({
-          id: p.id, label: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.full_name, code: p.patient_id, source: 'patients',
-        }));
-      }
-      if (lisRes?.ok) {
-        const data = await lisRes.json();
-        (Array.isArray(data) ? data : []).forEach((p: any) => merged.push({
-          id: p.id, label: `${p.first_name || ''} ${p.last_name || ''}`.trim(), code: p.participant_number, source: 'lis',
-        }));
-      }
-      setPeople(merged);
-    } catch (e) {
-      console.error('Failed to fetch people', e);
+    const { people, failed } = await fetchPatientDirectory();
+    setPeople(people);
+    if (failed.length) {
+      // A half that cannot be read must say so. Silently showing the other half
+      // is how a permission error came to look like "this patient doesn't exist".
+      toast.error(`Could not load ${failed.join(' and ')} — the patient list is incomplete.`);
     }
   };
 
