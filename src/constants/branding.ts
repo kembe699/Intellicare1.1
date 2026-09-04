@@ -9,7 +9,7 @@ export const BRANDING = {
   // Company Information
   COMPANY_NAME: 'IntelliCare',
   COMPANY_WEBSITE: 'https://intellicare.com',
-  SUPPORT_EMAIL: 'support@intellicare.com',
+  SUPPORT_EMAIL: 'support@nilehc.tech',
   SALES_EMAIL: 'sales@intellicare.com',
   SUPPORT_PHONE: '+211-XXX-XXXX',
 

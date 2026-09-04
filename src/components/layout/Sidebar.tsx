@@ -734,7 +734,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-[13px] truncate leading-tight">{user?.displayName}</p>
-                <p className="text-[11px] text-sidebar-foreground/60 capitalize leading-tight">{user?.role} • {user?.clinic}</p>
+                {/* user.clinic is the clinic's id, so this read "admin • 6" —
+                    a bare number with no meaning to the person reading it. The
+                    branch is the context that actually matters here, and it is
+                    already named at the top of the page, so the role stands on
+                    its own. */}
+                <p className="text-[11px] text-sidebar-foreground/60 capitalize leading-tight">{user?.role}</p>
               </div>
             </Link>
             <button

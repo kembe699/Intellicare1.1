@@ -12,6 +12,14 @@ interface AuthContextType {
   currentBranchId: number | null;
   switchBranch: (branchId: number) => void;
   updateCurrentRoom: (roomId: string | null) => Promise<void>;
+  /**
+   * Merge changes into the signed-in user without a page reload.
+   *
+   * Saving a profile updated the server but left this context holding the old
+   * values, so the name in the header and on the profile card only caught up
+   * after a refresh — which reads as the save not having worked.
+   */
+  updateUser: (changes: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -186,6 +194,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('current_branch_id', branchId.toString());
   };
 
+  const updateUser = (changes: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...changes } : prev));
+  };
+
   const updateCurrentRoom = async (roomId: string | null) => {
     if (!user?.uid) return;
     const res = await authFetch(`/api/users/${user.uid}/current-room`, {
@@ -200,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, token, currentBranchId, switchBranch, updateCurrentRoom }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, token, currentBranchId, switchBranch, updateCurrentRoom, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

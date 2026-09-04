@@ -26,12 +26,11 @@ const Login: React.FC = () => {
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
 
-  // Auto-expand form after 3 seconds
+  // A short beat before the form appears, so the logo registers first and the
+  // reveal reads as deliberate rather than as the page still loading. Two
+  // seconds was long enough to feel like something had gone wrong.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsFormExpanded(true);
-    }, 2000);
-
+    const timer = setTimeout(() => setIsFormExpanded(true), 450);
     return () => clearTimeout(timer);
   }, []);
 
@@ -181,12 +180,27 @@ const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* Form Card - Animated Slide Down */}
-        <div 
-          className={`bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 transition-all duration-500 ease-in-out transform ${
-            isFormExpanded 
-              ? 'opacity-100 translate-y-0 max-h-[2000px]' 
-              : 'opacity-0 -translate-y-4 max-h-0 overflow-hidden p-0 border-0'
+        {/*
+          Reveal by animating grid rows from 0fr to 1fr rather than max-height.
+          max-height had to guess a ceiling (2000px), so the transition spent
+          most of its time crossing empty space and the card appeared to snap
+          into place near the end. 0fr -> 1fr animates to the content's real
+          height, so the motion matches what you actually see. The card's
+          padding and border live on the inner element too, because toggling
+          them on the animated one made the layout jump as it opened.
+        */}
+        <div
+          className="grid transition-[grid-template-rows,opacity] duration-700 ease-out motion-reduce:transition-none"
+          style={{
+            gridTemplateRows: isFormExpanded ? '1fr' : '0fr',
+            opacity: isFormExpanded ? 1 : 0,
+          }}
+          aria-hidden={!isFormExpanded}
+        >
+          <div className="overflow-hidden">
+        <div
+          className={`bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 transition-transform duration-700 ease-out motion-reduce:transition-none ${
+            isFormExpanded ? 'translate-y-0' : '-translate-y-2'
           }`}
         >
           {error && (
@@ -446,10 +460,10 @@ const Login: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1">
             Need help? Contact support at{' '}
             <a 
-              href="mailto:support@intellicare.com" 
+              href="mailto:support@nilehc.tech" 
               className="hover:underline text-primary"
             >
-              support@intellicare.com
+              support@nilehc.tech
             </a>
           </p>
         </div>
@@ -548,6 +562,8 @@ const Login: React.FC = () => {
         </div>
       )}
     </div>
+          </div>
+        </div>
   );
 };
 

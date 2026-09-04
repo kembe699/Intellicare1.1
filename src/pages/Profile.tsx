@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
@@ -33,7 +34,8 @@ import {
 import { toast } from 'sonner';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const facilityInfo = useFacilityInfo();
   const [loading, setLoading] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -82,6 +84,9 @@ const Profile: React.FC = () => {
         throw new Error(error.message || 'Failed to update profile');
       }
         
+      // Reflect the change immediately rather than waiting for the next page
+      // load — the header and the profile card both read from this context.
+      updateUser({ displayName: editFormData.displayName.trim() });
       toast.success('Profile updated successfully');
       setShowEditForm(false);
     } catch (error) {
@@ -297,7 +302,10 @@ const Profile: React.FC = () => {
                   <Building className="w-4 h-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Clinic</p>
-                    <p className="text-sm text-muted-foreground">{user?.clinic}</p>
+                    {/* user.clinic is the clinic's id, so this rendered a bare
+                        number ("6"). The facility's name is what a person
+                        recognises. */}
+                    <p className="text-sm text-muted-foreground">{facilityInfo.facilityName}</p>
                   </div>
                 </div>
               </div>
