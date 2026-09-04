@@ -225,7 +225,9 @@ router.post('/visits', async (req, res) => {
     const schemaName = req.tenantSchema || 'default';
     const userId = req.user?.id || 'anon';
     const branchId = req.branchContext?.branchId || req.user?.branchId || 'none';
-    await redisCache.delPattern(`ic|${schemaName}|${userId}|${branchId}|`).catch(() => {});
+    // Tenant-wide for the same reason as the global buster in index.js:
+    // a per-user prefix leaves every other user reading stale data.
+    await redisCache.delPattern(`ic|${schemaName}|`).catch(() => {});
     console.log('Cache busted for user:', userId, 'branch:', branchId);
     
     // Add lab tests to existing patient bill and create lab requests if lab requests exist

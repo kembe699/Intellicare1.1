@@ -116,7 +116,15 @@ export default function PrescriptionManagement() {
   const fetchPeople = async () => {
     try {
       const [patientsRes, lisRes] = await Promise.all([
-        authFetch(`/api/patients?clinic_id=${clinicId}`, { credentials: 'include' }).catch(() => null),
+        // Deliberately NOT filtered by clinic. clinic_id is the department a
+        // patient was registered under (Outpatient, General, ...), not an access
+        // boundary — the tenant schema is the boundary, and the server still
+        // scopes this list to the caller's branch. Filtering the picker by the
+        // operator's own clinic meant a pharmacist registered under one clinic
+        // simply could not find a patient registered under another, which read
+        // as names "sometimes" loading. The LIS half of this same picker has
+        // always been unfiltered, so the two halves now agree.
+        authFetch('/api/patients', { credentials: 'include' }).catch(() => null),
         authFetch('/api/lis/participants', { credentials: 'include' }).catch(() => null),
       ]);
       const merged: any[] = [];

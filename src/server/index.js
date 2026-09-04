@@ -506,17 +506,23 @@ app.use('/api', redisCacheMiddleware());
 })();
 
 // Global mutation cache-buster: after any successful POST/PUT/PATCH/DELETE,
-// wipe all cached GET responses for that user+branch so data is always fresh.
+// wipe every cached GET response for the whole tenant.
+//
+// This used to clear only the key prefix containing the *mutating* user's id,
+// which meant a write was invisible to everybody else until the 60s TTL ran
+// out. Registering a patient at reception left the pharmacist's cached patient
+// list untouched, so the new patient could not be found on the dispensing or
+// billing picker for up to a minute — the "names sometimes load, sometimes
+// don't" that only a re-login (by which time the entry had expired anyway)
+// appeared to fix. Cached data is shared, so invalidation has to be too.
 const redisCache = require('./services/RedisCache');
 app.use((req, res, next) => {
   if (req.method === 'GET') return next();
   const originalJson = res.json.bind(res);
   res.json = function(data) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      const schemaName   = req.tenantSchema || 'default';
-      const userId   = req.user?.id   || 'anon';
-      const branchId = req.branchContext?.branchId || req.user?.branchId || 'none';
-      redisCache.delPattern('ic|' + schemaName + '|' + userId + '|' + branchId + '|').catch(() => {});
+      const schemaName = req.tenantSchema || 'default';
+      redisCache.delPattern('ic|' + schemaName + '|').catch(() => {});
     }
     return originalJson(data);
   };

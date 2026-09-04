@@ -100,7 +100,13 @@ class RedisCache {
       return;
     }
     try {
-      const json = await this._fetch(`/keys/${encodeURIComponent(pattern)}`);
+      // KEYS takes a glob, not a prefix. Callers pass a bare prefix (matching
+      // the in-memory fallback above, which does a substring test), so without
+      // a trailing wildcard this asked Redis for one exact key that never
+      // exists and silently deleted nothing — invalidation worked only while
+      // Redis was disabled. Wrapped so a caller's own '*' is not doubled.
+      const glob = pattern.includes('*') ? pattern : `*${pattern}*`;
+      const json = await this._fetch(`/keys/${encodeURIComponent(glob)}`);
       const keys = json.result || [];
       await Promise.all(keys.map(k => this.del(k)));
     } catch { /* ignore */ }

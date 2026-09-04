@@ -146,7 +146,12 @@ router.post('/', async (req, res) => {
       ...req.body,
       gender: req.body.gender ? req.body.gender.toLowerCase() : req.body.gender,
       registration_date: req.body.registration_date || new Date(),
-      clinic_id: req.body.clinic_id || 6,
+      // Defaulted to a hardcoded 6 ("General") while every reader in the app
+      // defaults to 1, so a registration that did not name a clinic landed in a
+      // clinic nobody queries: the patient existed but was invisible to the
+      // pharmacy, billing and dispensing pickers. Fall back to the registering
+      // user's own clinic instead, which is by definition one that is read.
+      clinic_id: req.body.clinic_id || BranchQueryFilter.resolveClinicId(req),
       registered_by: req.body.registered_by || null,
       branch_id: req.body.branch_id || getCreateBranchId(req),
     };
