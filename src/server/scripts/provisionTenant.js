@@ -174,8 +174,12 @@ async function main() {
     );
 
     const branch = await db.query(
-      `INSERT INTO branches (facility_id, name, is_main_branch, created_at, updated_at)
-       VALUES ($1, $2, TRUE, NOW(), NOW()) RETURNING id`,
+      // is_active must be set explicitly: the column defaults to FALSE, so a
+      // main branch created without it is inactive, and every lookup that asks
+      // for an active branch finds none. New users then get no branch at all
+      // and sign in to "your account has not been assigned to a branch".
+      `INSERT INTO branches (facility_id, name, is_main_branch, is_active, created_at, updated_at)
+       VALUES ($1, $2, TRUE, TRUE, NOW(), NOW()) RETURNING id`,
       [DEFAULT_CLINIC_ID, `${facilityName} — Main Branch`],
     );
     const branchId = branch.rows[0].id;

@@ -1,6 +1,7 @@
 const express = require('express');
 const { User, sequelize } = require('../models');
 const { authorize } = require('../middleware/authorize');
+const { resolveTenantClinicId, clinicExists, checkUserCanSeeData } = require('../services/tenantClinic');
 const router = express.Router();
 
 // Clinic name map
@@ -25,36 +26,39 @@ const router = express.Router();
  * Only if a tenant has no users and no clinics at all does this fall back to 1,
  * which for a brand-new tenant is the id its seeded facility uses anyway.
  */
+/**
+ * Decide which clinic a newly-created user belongs to.
+ *
+ * This is resolved on the server and deliberately does not trust the client.
+ * The New User form used to post a clinic *name*, which was looked up in a
+ * hardcoded map left over from the original single-tenant deployment:
+ *
+ *     clinicMap = { IntelliCare: 1, Moleeta: 2, ... }
+ *
+ * That map was consulted first, and the form's default value was the literal
+ * string 'IntelliCare', so on every other tenant the answer was 1 no matter
+ * where that tenant's records actually lived — and the fallbacks below it were
+ * unreachable. A user created that way could sign in and see nothing at all.
+ * The map is gone; only a numeric id the tenant has actually configured is
+ * honoured, and anything else is resolved from the tenant's own data.
+ */
 async function resolveClinicIdForNewUser(req) {
-  const explicit = clinicMap[req.body.clinic] || parseInt(req.body.clinic);
-  if (explicit) return explicit;
-  if (req.user?.clinicId) return req.user.clinicId;
+  const requested = parseInt(req.body.clinic_id ?? req.body.clinic, 10);
+  if (requested && await clinicExists(requested)) return requested;
 
-  // Ask the tenant. The most common clinic_id among existing users is the one
-  // this tenant's records are actually filed under.
-  try {
-    const [[row]] = await sequelize.query(
-      `SELECT clinic_id FROM users WHERE clinic_id IS NOT NULL
-        GROUP BY clinic_id ORDER BY count(*) DESC LIMIT 1`
-    );
-    if (row?.clinic_id) return row.clinic_id;
-  } catch (e) { /* fall through */ }
+  // The creating admin's own clinic is, by construction, one that works —
+  // they are looking at this tenant's data right now.
+  if (req.user?.clinicId && await clinicExists(req.user.clinicId)) {
+    return parseInt(req.user.clinicId, 10);
+  }
 
-  try {
-    const [[row]] = await sequelize.query(`SELECT id FROM clinic_names ORDER BY id LIMIT 1`);
-    if (row?.id) return row.id;
-  } catch (e) { /* fall through */ }
-
-  return 1;
+  const { clinicId, source } = await resolveTenantClinicId();
+  if (source === 'fallback') {
+    console.warn('New user: could not determine this tenant\'s clinic from its own data; defaulting to 1.');
+  }
+  return clinicId;
 }
 
-const clinicMap = {
-  'IntelliCare': 1,
-  'Moleeta': 2,
-  'Adar': 3,
-  'Gumry': 4,
-  'Friendship': 5
-};
 
 // Get all users (with optional clinic filter) — returns ALL users for management
 router.get('/', async (req, res) => {
@@ -76,7 +80,9 @@ router.get('/', async (req, res) => {
     }
 
     if (clinic) {
-      const clinicId = clinicMap[clinic] || parseInt(clinic);
+      // Only a numeric clinic id is meaningful now that the hardcoded name map
+      // is gone; a stale name from an old client simply filters nothing.
+      const clinicId = parseInt(clinic, 10);
       if (clinicId) {
         conditions.push('u.clinic_id = ?');
         replacements.push(clinicId);
@@ -198,11 +204,18 @@ router.post('/', authorize(['admin']), async (req, res) => {
     try {
       let branchId = user.branch_id;
       if (!branchId) {
+        // Prefer an active branch, but fall back to any branch at all rather
+        // than leaving the account with none: a user with no branch passes
+        // login and is then refused by every screen, which is a worse outcome
+        // than being attached to a branch an admin has not activated yet.
         const [rows] = await sequelize.query(
-          `SELECT id FROM branches WHERE is_active IS NOT FALSE
-            ORDER BY is_main_branch DESC, id ASC LIMIT 1`
+          `SELECT id FROM branches
+            ORDER BY (is_active IS NOT FALSE) DESC, is_main_branch DESC, id ASC LIMIT 1`
         );
         branchId = rows[0]?.id || null;
+        if (!branchId) {
+          console.error('New user: this tenant has no branches at all — the account cannot be scoped to anything.');
+        }
         if (branchId) await user.update({ branch_id: branchId });
       }
       if (branchId) {
@@ -215,6 +228,21 @@ router.post('/', authorize(['admin']), async (req, res) => {
       }
     } catch (branchErr) {
       console.error(`Could not assign a branch to new user ${user.id}:`, branchErr.message);
+    }
+
+    // Last line of defence: an account that cannot see any of this tenant's
+    // stock is an account that will sign in to empty screens with no error to
+    // explain why. If the clinic it landed on holds nothing, move it to the one
+    // the tenant's records actually live under and say so in the log, rather
+    // than handing over a working password to a broken account.
+    try {
+      const corrected = await checkUserCanSeeData(user);
+      if (corrected) {
+        console.warn(`New user ${user.email}: clinic ${user.clinic_id} holds none of this tenant's inventory — moved to ${corrected}.`);
+        await user.update({ clinic_id: corrected });
+      }
+    } catch (checkErr) {
+      console.error(`Could not verify clinic scoping for new user ${user.id}:`, checkErr.message);
     }
 
     res.status(201).json(user);
@@ -251,15 +279,15 @@ router.put('/:id', async (req, res) => {
       updateData.role = req.body.role;
     }
     if (req.body.clinic !== undefined) {
-      // Same broken clinicMap as user creation (see POST / above) — for any tenant
-      // other than the original one, this never resolves. The bug here was worse
-      // than at creation time: falling back to a hardcoded 1 meant editing ANY field
-      // on a user (e.g. just changing their role) silently reset their clinic_id back
-      // to 1 as a side effect, even for a user whose clinic_id was already correctly
-      // something else. Only touch clinic_id when it actually resolves to something
-      // real; otherwise leave the existing value alone.
-      const resolvedClinicId = clinicMap[req.body.clinic] || parseInt(req.body.clinic);
-      if (resolvedClinicId) updateData.clinic_id = resolvedClinicId;
+      // Only move a user's clinic to one this tenant has actually configured.
+      // Previously a hardcoded name map resolved to 1 for every tenant but the
+      // original, so editing any field on a user — just changing their role —
+      // silently reset their clinic_id to 1 and stranded the account. Anything
+      // unrecognised now leaves the existing value untouched.
+      const resolvedClinicId = parseInt(req.body.clinic_id ?? req.body.clinic, 10);
+      if (resolvedClinicId && await clinicExists(resolvedClinicId)) {
+        updateData.clinic_id = resolvedClinicId;
+      }
     }
     if (req.body.branch_id !== undefined || req.body.branchId !== undefined) {
       updateData.branch_id = req.body.branch_id || req.body.branchId || null;

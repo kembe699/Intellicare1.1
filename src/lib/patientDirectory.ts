@@ -20,6 +20,9 @@ export interface DirectoryPerson {
   id: string;
   label: string;
   code?: string;
+  /** Name parts kept separate for callers that render them individually. */
+  firstName?: string;
+  lastName?: string;
   source: 'patients' | 'lis';
 }
 
@@ -61,12 +64,16 @@ export async function fetchPatientDirectory(): Promise<PatientDirectoryResult> {
       id: p.id,
       label: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.full_name,
       code: p.patient_id,
+      firstName: p.first_name,
+      lastName: p.last_name,
       source: 'patients',
     }), people, failed),
     readList('/api/lis/participants', 'LIS registry', (p) => ({
       id: p.id,
       label: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
       code: p.participant_number,
+      firstName: p.first_name,
+      lastName: p.last_name,
       source: 'lis',
     }), people, failed),
   ]);

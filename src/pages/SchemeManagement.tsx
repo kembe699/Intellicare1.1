@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
+import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { toast } from 'sonner';
@@ -179,22 +180,22 @@ const SchemeManagement: React.FC = () => {
       // target either) — merge both into the picker so an LIS-only patient can still
       // be added as a member here, instead of only being reachable through that
       // other, indirect path.
-      const [membersRes, patientsRes, lisRes] = await Promise.all([
+      // Shares lib/patientDirectory with every other people-picker in the app.
+      // This used to be a fifth private copy of the same merge, reading the
+      // clinic-scoped patient route, so someone enrolled under a different
+      // clinic could not be found and a failed half was silently dropped.
+      const [membersRes, directory] = await Promise.all([
         authFetch(`/api/schemes/${selectedSchemeId}/members`),
-        authFetch(`/api/patients/clinic/${clinicId}`),
-        authFetch('/api/lis/participants', { credentials: 'include' }).catch(() => null),
+        fetchPatientDirectory(),
       ]);
       if (membersRes.ok) setMembers(await membersRes.json());
-      const merged: any[] = [];
-      if (patientsRes.ok) {
-        const data = await patientsRes.json();
-        (Array.isArray(data) ? data : []).forEach((p: any) => merged.push({ id: p.id, first_name: p.first_name, last_name: p.last_name, patient_id: p.patient_id, source: 'patients' }));
+      if (directory.failed.length) {
+        toast.error(`Could not load ${directory.failed.join(' and ')} — the patient list is incomplete.`);
       }
-      if (lisRes?.ok) {
-        const data = await lisRes.json();
-        (Array.isArray(data) ? data : []).forEach((p: any) => merged.push({ id: p.id, first_name: p.first_name, last_name: p.last_name, patient_id: p.participant_number, source: 'lis' }));
-      }
-      setPatients(merged);
+      setPatients(directory.people.map((p) => ({
+        id: p.id, first_name: p.firstName, last_name: p.lastName,
+        patient_id: p.code, source: p.source,
+      })));
     } catch (err) { console.error(err); }
     setLoading(false);
   }

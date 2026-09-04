@@ -373,7 +373,11 @@ const Security: React.FC = () => {
           email: createFormData.email.toLowerCase().trim(),
           displayName: createFormData.displayName.trim(),
           role: createFormData.role,
-          clinic: createFormData.clinic || 'IntelliCare',
+          // clinic is intentionally not sent. It used to carry a clinic *name*
+          // that the server looked up in a hardcoded map from the original
+          // single-tenant deployment, where the default 'IntelliCare' resolved
+          // to 1 on every tenant — stranding new users on a clinic holding none
+          // of that tenant's data. The server now resolves it from the tenant.
           branch_id: createFormData.branch_id ? parseInt(createFormData.branch_id) : null,
           isActive: true,
           status: 'pending',

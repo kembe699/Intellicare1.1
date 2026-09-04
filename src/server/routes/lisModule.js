@@ -33,7 +33,17 @@ const LIS_TRIAGE = ['admin', 'nurse'];                     // Nurse Triage vital
 // patient registry — the frontend requests patients and participants together
 // and just skips whichever half fails, so a 403 here looked like "no patients"
 // rather than a permission error.
-const LIS_PARTICIPANT_READ = ['admin', 'reception', 'doctor', 'lab', 'nurse', 'pharmacy', 'cashier'];
+const LIS_PARTICIPANT_READ = ['admin', 'reception', 'doctor', 'lab', 'nurse', 'pharmacy', 'cashier', 'finance_manager', 'accountant'];
+
+// Who may register a walk-in.
+//
+// Registering is reception's job in the normal flow, but the dispensing counter
+// and the billing desk both offer a "walk-in patient" shortcut for someone who
+// arrives without having been registered first. Those screens are open to
+// pharmacy and doctor respectively, so restricting this to reception meant the
+// button was visible, enabled, and returned 403 — the same shape of mismatch as
+// the participant list, and just as invisible from either file alone.
+const LIS_PARTICIPANT_CREATE = ['admin', 'reception', 'doctor', 'pharmacy', 'lab'];
 
 // mysql2 auto-parses a true JSON-typed column into an object, but MariaDB (common on
 // shared hosts like Hostinger) stores its JSON columns as LONGTEXT under the hood, so the
@@ -137,7 +147,7 @@ async function findByPhone(phone, replacementsFn = db.query) {
   return existing[0] || null;
 }
 
-router.post('/participants', authorize(LIS_REGISTRATION), async (req, res) => {
+router.post('/participants', authorize(LIS_PARTICIPANT_CREATE), async (req, res) => {
   const { sequelize: db } = req.models;
   const { first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics, doctor_id, room_number, clinic_id, clinic_name } = req.body;
   const id = uuidv4();
