@@ -123,6 +123,13 @@ export default function PharmacyReturns() {
       r.drug_name?.toLowerCase().includes(q);
   });
 
+  // What the refunds on screen actually cost, so the cash leaving the drawer is
+  // visible here and not only in the accounts it posts to.
+  const refundedTotal = filteredReturns.reduce((sum, r) => sum + (parseFloat(r.amount_refunded) || 0), 0);
+  const refundedToday = filteredReturns
+    .filter(r => String(r.return_date || '').slice(0, 10) === new Date().toISOString().slice(0, 10))
+    .reduce((sum, r) => sum + (parseFloat(r.amount_refunded) || 0), 0);
+
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
@@ -131,7 +138,20 @@ export default function PharmacyReturns() {
 
         <div className="flex-1 min-h-0 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
           <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <h3 className="font-medium">Return Directory</h3>
+            <div className="flex items-baseline gap-4 flex-wrap">
+              <h3 className="font-medium">Return Directory</h3>
+              <span className="text-xs text-muted-foreground">
+                {filteredReturns.length} return{filteredReturns.length === 1 ? '' : 's'} ·
+                refunded <strong className="text-foreground">{fmt(refundedTotal)}</strong>
+                {refundedToday > 0 && <> · today <strong className="text-foreground">{fmt(refundedToday)}</strong></>}
+              </span>
+              <span
+                className="text-[11px] text-muted-foreground"
+                title="Each refund posts a journal entry: pharmacy revenue is debited and cash at hand credited, so the income statement and cash balance both reflect the money returned."
+              >
+                Refunds reduce pharmacy revenue and cash at hand in the accounts.
+              </span>
+            </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative w-64">
                 <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />

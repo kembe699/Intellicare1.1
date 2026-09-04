@@ -7,6 +7,7 @@ const { getBranchConditionSQL } = require('../middleware/branchFilter');
 const redisCache = require('../services/RedisCache');
 const { authorize } = require('../middleware/authorize');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+const AccountingService = require('../services/AccountingService');
 
 // This entire file had no authorize() calls at all — every route (including controlled-
 // substance dispensing, price edits, and drug-interaction deletes) was reachable by any
@@ -1892,6 +1893,57 @@ router.post('/returns', authorize(PHARMACY_WRITE), async (req, res) => {
     });
 
     await t.commit();
+
+    // Put the refunded cash on the books.
+    //
+    // Returning stock used to reverse the inventory and nothing else: the money
+    // handed back to the patient touched no account anywhere, so revenue stayed
+    // recognised in full, cash on hand read high by the refunded amount, and the
+    // refund appeared in no financial report at all — only as a row in
+    // dispensing_returns that nothing reads.
+    //
+    // The entry is the reverse of the sale: debit the revenue that is no longer
+    // earned, credit the cash that has left the drawer. Posted after commit and
+    // non-blocking, matching every other GL posting in the app — the return
+    // itself (stock, audit trail) has already succeeded and must not be undone
+    // by an accounting problem, but a failure is logged loudly enough to be
+    // reconciled rather than swallowed.
+    if (refundAmount > 0) {
+      try {
+        // 4120 is where pharmacy sales land once revenue is split by service
+        // line; 4100 is the pre-split catch-all that older tenants still use.
+        const revenueAccount = (await AccountingService.getAccountByCode(cid, '4120'))
+          || (await AccountingService.getAccountByCode(cid, '4100'));
+        // refund_method is recorded as 'cash' above, so the credit goes to the
+        // cash account the cashier actually collects into (1105), not the bank.
+        const cashAccount = (await AccountingService.getAccountByCode(cid, '1105'))
+          || (await AccountingService.getAccountByCode(cid, '1100'));
+
+        if (revenueAccount && cashAccount) {
+          const description = `Pharmacy refund ${retNum} — ${qty} unit(s) returned from ${record.dispensing_number} (${return_reason || 'unused'})`;
+          const glEntry = await AccountingService.createGLEntry({
+            clinic_id: cid,
+            transaction_date: new Date().toISOString().split('T')[0],
+            transaction_type: 'pharmacy_return_refund',
+            description,
+            reference_id: retNum,
+            reference_module: 'pharmacy_return',
+          }, [
+            { account_id: revenueAccount.id, debit_amount: refundAmount, credit_amount: 0, description: `Reverse pharmacy revenue on return ${retNum}` },
+            { account_id: cashAccount.id, debit_amount: 0, credit_amount: refundAmount, description: `Cash refunded to patient for return ${retNum}` },
+          ], req.user?.id || 'system');
+          await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
+          // revenue_reversal_gl_id already existed on this table — the schema
+          // anticipated this posting, only the code never did it.
+          await sequelize.query('UPDATE dispensing_returns SET revenue_reversal_gl_id = :gid WHERE id = :id',
+            { replacements: { gid: glEntry.id, id: retId } });
+        } else {
+          console.error(`Pharmacy return ${retNum}: refund of ${refundAmount} NOT posted to the GL — missing account (revenue 4120/4100: ${!!revenueAccount}, cash 1105/1100: ${!!cashAccount}) for clinic ${cid}`);
+        }
+      } catch (glErr) {
+        console.error(`Pharmacy return ${retNum}: refund of ${refundAmount} failed to post to the GL —`, glErr.message);
+      }
+    }
 
     try {
       const rr = require('./reports');

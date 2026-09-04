@@ -19,6 +19,7 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 require('dotenv').config({ path: path.resolve(__dirname, '../production.env') });
 
+const fs = require('fs');
 const { Client } = require('pg');
 const { assertValidSchema } = require('../config/dbConnectionOptions');
 
@@ -113,6 +114,23 @@ async function seedReferenceData(db, template, target) {
   return copied;
 }
 
+/**
+ * Install the schema-level triggers a tenant needs.
+ *
+ * `LIKE ... INCLUDING ALL` in cloneSchema copies columns, defaults, indexes and
+ * check constraints, but NOT triggers, and functions are schema objects that a
+ * table clone never sees at all. So anything enforced by a trigger has to be
+ * replayed here explicitly or a newly-provisioned tenant silently loses it —
+ * which is exactly how a prescription header could drift from its lines.
+ */
+async function installTriggers(db, target) {
+  const sql = fs.readFileSync(
+    path.join(__dirname, '../../../scripts/prescription_status_rollup.sql'), 'utf8',
+  );
+  await db.query(`SET search_path TO "${target}"`);
+  await db.query(sql);
+}
+
 async function main() {
   const argJson = process.argv[2];
   if (!argJson) throw new Error('Usage: provisionTenant.js <jsonArgs>');
@@ -137,6 +155,7 @@ async function main() {
     await db.query(`CREATE SCHEMA "${schemaName}"`);
     const tableCount = await cloneSchema(db, TEMPLATE_SCHEMA, schemaName);
     const seededRows = await seedReferenceData(db, TEMPLATE_SCHEMA, schemaName);
+    await installTriggers(db, schemaName);
 
     // Seed the minimum a usable instance needs: one facility, its main branch,
     // and the first admin who can sign in.

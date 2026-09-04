@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { CheckSquare, Check, X, RefreshCw, Search, User, Activity, Box, History, Loader2, Printer, ChevronRight, CheckCircle2, Circle, FlaskConical } from 'lucide-react';
+import { CheckSquare, Check, CheckCheck, X, RefreshCw, Search, User, Activity, Box, History, Loader2, Printer, ChevronRight, CheckCircle2, Circle, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -103,6 +103,7 @@ export default function LISManagerReview() {
   const [historyResults, setHistoryResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [reviewingAction, setReviewingAction] = useState<'approved' | 'queried' | null>(null);
+  const [approvingAll, setApprovingAll] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [managerNotes, setManagerNotes] = useState<Record<string, string>>({});
 
@@ -154,6 +155,9 @@ export default function LISManagerReview() {
 
   const selectedSpecimen = currentOrder?.specimens.find((s: any) => s.specimen_id === selectedSpecimenId) || null;
 
+  // Tests on the open order still awaiting a decision — what "approve all" acts on.
+  const pendingCount = (currentOrder?.specimens || []).filter((sp: any) => sp.status !== 'approved').length;
+
   const selectOrder = (group: any) => {
     setSelectedOrderId(group.order_id);
     setSelectedSpecimenId(group.specimens[0]?.specimen_id || null);
@@ -204,6 +208,60 @@ export default function LISManagerReview() {
       toast.error('Network error');
     } finally {
       setReviewingAction(null);
+    }
+  };
+
+  /**
+   * Approve every outstanding test on the open order in one action.
+   *
+   * A patient rarely has one test: a panel arrives as four or five specimens and
+   * approving them one at a time means selecting, approving, waiting for the
+   * auto-advance, and repeating. This walks the same per-result review endpoint
+   * the single-specimen path uses, so approval is recorded identically — there
+   * is no bulk endpoint doing something subtly different.
+   *
+   * Requests are issued per specimen and counted, because a partial failure has
+   * to be reported honestly: the specimens that did update stay updated, and the
+   * ones that did not are named so they can be retried rather than silently
+   * left pending.
+   */
+  const handleApproveOrder = async () => {
+    if (approvingAll || reviewingAction || !currentOrder) return;
+
+    const outstanding = (currentOrder.specimens || []).filter((sp: any) => sp.status !== 'approved');
+    if (outstanding.length === 0) return toast.error('Nothing left to approve on this patient');
+
+    setApprovingAll(true);
+    try {
+      const failed: string[] = [];
+      for (const sp of outstanding) {
+        const specimenResults = results.filter(r => r.specimen_id === sp.specimen_id);
+        const notes = managerNotes[sp.specimen_id] || '';
+        let ok = 0;
+        for (const r of specimenResults) {
+          const res = await authFetch(`/api/lis/results/${r.id}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ action: 'approved', manager_notes: notes, manager_id: user?.id }),
+          });
+          if (res.ok) ok++;
+        }
+        if (ok !== specimenResults.length) failed.push(sp.test_name);
+      }
+
+      if (failed.length === 0) {
+        toast.success(`Approved all ${outstanding.length} test${outstanding.length > 1 ? 's' : ''}`);
+        setSelectedSpecimenId(null);
+        setSelectedOrderId(null);
+      } else {
+        toast.error(`${failed.length} of ${outstanding.length} could not be approved: ${failed.join(', ')} — still listed, please retry`);
+      }
+      fetchResults();
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setApprovingAll(false);
     }
   };
 
@@ -560,10 +618,25 @@ export default function LISManagerReview() {
 
           {/* RIGHT: Tests for the selected patient's order */}
           <div className="lg:col-span-3 bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden h-full min-h-0">
-            <div className="p-4 border-b bg-muted/30">
+            <div className="p-4 border-b bg-muted/30 space-y-2.5">
               <h3 className="font-medium flex items-center gap-2">
                 <FlaskConical className="w-4 h-4" /> Tests {currentOrder ? `(${currentOrder.specimens.length})` : ''}
               </h3>
+              {/* Only offered where it can actually do something: on the pending
+                  queue, and only while more than one test is still outstanding. */}
+              {activeTab === 'pending' && pendingCount > 1 && (
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={handleApproveOrder}
+                  disabled={approvingAll || !!reviewingAction}
+                >
+                  {approvingAll
+                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    : <CheckCheck className="w-4 h-4 mr-2" />}
+                  {approvingAll ? `Approving ${pendingCount}...` : `Approve All ${pendingCount} Tests`}
+                </Button>
+              )}
             </div>
             <div className="flex-1 overflow-auto p-2 space-y-1 bg-card">
               {currentOrder ? (

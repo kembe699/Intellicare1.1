@@ -36,7 +36,10 @@ const sequelize = buildSequelize(defaultSchema);
     console.log(`✅ PostgreSQL connection successful | ${row.user}@${row.database_name} | schema: ${row.schema}`);
   } catch (error) {
     console.error(`❌ PostgreSQL connection failed:`, error.message);
-    console.error(`💡 DB_HOST=${host} | DB_USER=${user} | DB_NAME=${db}`);
+    // Read straight from the environment: host/user/db were never in scope
+    // here, so this line used to throw a ReferenceError and replace the
+    // connection diagnostic with a stack trace about the diagnostic itself.
+    console.error(`💡 DB_HOST=${process.env.DB_HOST} | DB_USER=${process.env.DB_USER} | DB_NAME=${process.env.DB_NAME} | schema: ${defaultSchema}`);
   }
 })();
 
