@@ -85,8 +85,8 @@ router.post('/receive', verifyIntegrationToken, async (req, res) => {
     }
 
     await sequelize.query(`
-      INSERT INTO lab_machine_raw_results (sample_id, machine_name, raw_data, parsed_data)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO lab_machine_raw_results (sample_id, machine_name, raw_data, parsed_data, is_processed)
+      VALUES (?, ?, ?, ?, FALSE)
     `, {
       replacements: [
         sampleId, 
@@ -126,8 +126,12 @@ router.get('/fetch-machine-result', verifyAuth, async (req, res) => {
     }
 
     const [results] = await sequelize.query(`
-      SELECT * FROM lab_machine_raw_results 
-      WHERE sample_id = ? AND is_processed = FALSE
+      SELECT * FROM lab_machine_raw_results
+      -- IS NOT TRUE, not = FALSE. is_processed is nullable with no default and
+      -- the insert below did not set it, so every received result sat at NULL —
+      -- and NULL = FALSE evaluates to NULL rather than true. The row was in the
+      -- holding tank and the fetch reported "no results found for this sample".
+      WHERE sample_id = ? AND is_processed IS NOT TRUE
       ORDER BY created_at DESC
       LIMIT 1
     `, {
