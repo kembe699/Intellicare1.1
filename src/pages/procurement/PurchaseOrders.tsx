@@ -114,6 +114,14 @@ const PurchaseOrders: React.FC = () => {
   const [showItemModal, setShowItemModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  // Editing the lines of a draft PO, in place in the details modal. Kept as a
+  // separate draft copy so Cancel really discards and nothing is written until
+  // Save — a purchase order is a financial document and a half-applied edit is
+  // worse than no edit.
+  const [editingItems, setEditingItems] = useState(false);
+  const [itemDrafts, setItemDrafts] = useState<PurchaseOrderItem[]>([]);
+  const [removedItemIds, setRemovedItemIds] = useState<Array<string | number>>([]);
+  const [savingItemEdits, setSavingItemEdits] = useState(false);
   const [pendingItems, setPendingItems] = useState<any[]>([]);
   const [userSignature, setUserSignature] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -475,12 +483,103 @@ const PurchaseOrders: React.FC = () => {
 
   const viewOrder = async (order: PurchaseOrder) => {
     setSelectedOrder(order);
+    cancelEditItems();
     setShowDetailsModal(true);
     try {
       const res = await authFetch(`/api/procurement/purchase-orders/${order.id}`);
       if (res.ok) setSelectedOrder(await res.json());
     } catch (error) {
       console.error('Error loading PO details:', error);
+    }
+  };
+
+  // Only a draft may be edited: once it has been submitted for check the
+  // figures are what someone signed against, so later stages are read-only.
+  const canEditItems = (order: PurchaseOrder | null) => order?.status === 'draft';
+
+  const beginEditItems = () => {
+    if (!selectedOrder) return;
+    setItemDrafts((selectedOrder.items || []).map(i => ({ ...i })));
+    setRemovedItemIds([]);
+    setEditingItems(true);
+  };
+
+  const cancelEditItems = () => {
+    setEditingItems(false);
+    setItemDrafts([]);
+    setRemovedItemIds([]);
+  };
+
+  const updateItemDraft = (id: string | number, field: 'quantity' | 'unit_price' | 'description', value: string) => {
+    setItemDrafts(prev => prev.map(i => {
+      if ((i.id ?? '') !== id) return i;
+      if (field === 'description') return { ...i, description: value };
+      // Keep the raw string in state while typing so a half-typed "3." is not
+      // clobbered; it is coerced once, on save.
+      return { ...i, [field]: value } as PurchaseOrderItem;
+    }));
+  };
+
+  const markItemRemoved = (id: string | number) => {
+    setRemovedItemIds(prev => [...prev, id]);
+    setItemDrafts(prev => prev.filter(i => (i.id ?? '') !== id));
+  };
+
+  const saveItemEdits = async () => {
+    if (!selectedOrder || savingItemEdits) return;
+
+    const invalid = itemDrafts.find(i => !(Number(i.quantity) > 0) || !(Number(i.unit_price) >= 0));
+    if (invalid) {
+      toast.error(`${invalid.item_name}: quantity must be greater than zero and price cannot be negative`);
+      return;
+    }
+    if (itemDrafts.length === 0 && removedItemIds.length > 0) {
+      toast.error('A purchase order needs at least one item — add a replacement before removing the last one.');
+      return;
+    }
+
+    setSavingItemEdits(true);
+    try {
+      const original = selectedOrder.items || [];
+      const changed = itemDrafts.filter(d => {
+        const before = original.find(o => (o.id ?? '') === (d.id ?? ''));
+        return !before
+          || Number(before.quantity) !== Number(d.quantity)
+          || Number(before.unit_price) !== Number(d.unit_price)
+          || (before.description || '') !== (d.description || '');
+      });
+
+      for (const id of removedItemIds) {
+        const res = await authFetch(`/api/procurement/purchase-orders/${selectedOrder.id}/items/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to remove an item');
+      }
+      for (const item of changed) {
+        const res = await authFetch(`/api/procurement/purchase-orders/${selectedOrder.id}/items/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quantity: Number(item.quantity),
+            unit_price: Number(item.unit_price),
+            description: item.description || null,
+          }),
+        });
+        if (!res.ok) throw new Error('Failed to update an item');
+      }
+
+      const touched = changed.length + removedItemIds.length;
+      toast.success(touched === 0 ? 'No changes to save' : `${touched} line${touched === 1 ? '' : 's'} updated`);
+
+      // Re-read the order rather than patching local state: the server
+      // recalculates the PO total from its lines on every item change, and that
+      // recalculated figure is the one that must be shown.
+      const res = await authFetch(`/api/procurement/purchase-orders/${selectedOrder.id}`);
+      if (res.ok) setSelectedOrder(await res.json());
+      cancelEditItems();
+      fetchOrders();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save changes');
+    } finally {
+      setSavingItemEdits(false);
     }
   };
 
@@ -858,26 +957,131 @@ const PurchaseOrders: React.FC = () => {
                   </div>
                 )}
 
-                {/* Items Table */}
+                {/* Items */}
                 <div>
-                  <AdvancedDataTable<PurchaseOrderItem>
-                    data={selectedOrder.items || []}
-                    keyExtractor={(item, idx) => item.id ?? idx}
-                    emptyMessage="No items"
-                    columns={[
-                      { key: '__idx', header: '#', render: (_v, _item, idx) => <span className="text-xs text-muted-foreground">{idx + 1}</span> },
-                      { key: 'item_name', header: 'Item', render: (v) => <span className="text-xs font-medium">{v}</span> },
-                      { key: 'description', header: 'Description', render: (v) => <span className="text-muted-foreground text-xs">{v || '—'}</span> },
-                      { key: 'quantity', header: 'Qty', align: 'right' },
-                      { key: 'unit_of_measure', header: 'UOM', render: (v) => v || 'Each' },
-                      { key: 'unit_price', header: 'Unit Price', align: 'right', render: (v) => <span className="font-mono">{fmtAs(v, selectedOrder.po_currency)}</span> },
-                      { key: 'total_price', header: 'Total', align: 'right', render: (v) => <span className="font-mono">{fmtAs(v, selectedOrder.po_currency)}</span> },
-                    ]}
-                  />
-                  {(selectedOrder.items || []).length > 0 && (
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</p>
+                    {canEditItems(selectedOrder) && !editingItems && (selectedOrder.items || []).length > 0 && (
+                      <Button variant="outline" size="sm" className="h-7 px-3 text-xs" onClick={beginEditItems}>
+                        <FileText className="w-3 h-3 mr-1.5" /> Edit Items
+                      </Button>
+                    )}
+                    {editingItems && (
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="h-7 px-3 text-xs" onClick={cancelEditItems} disabled={savingItemEdits}>
+                          <X className="w-3 h-3 mr-1.5" /> Cancel
+                        </Button>
+                        <Button size="sm" className="h-7 px-3 text-xs" onClick={saveItemEdits} disabled={savingItemEdits}>
+                          {savingItemEdits ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Check className="w-3 h-3 mr-1.5" />}
+                          {savingItemEdits ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {editingItems ? (
+                    <div className="overflow-x-auto rounded-md border border-border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-xs text-muted-foreground">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-medium w-8">#</th>
+                            <th className="px-2 py-2 text-left font-medium">Item</th>
+                            <th className="px-2 py-2 text-left font-medium">Description</th>
+                            <th className="px-2 py-2 text-right font-medium w-24">Qty</th>
+                            <th className="px-2 py-2 text-left font-medium w-20">UOM</th>
+                            <th className="px-2 py-2 text-right font-medium w-32">Unit Price</th>
+                            <th className="px-2 py-2 text-right font-medium w-32">Total</th>
+                            <th className="px-2 py-2 w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {itemDrafts.map((item, idx) => (
+                            <tr key={item.id ?? idx} className="border-t border-border">
+                              <td className="px-2 py-1.5 text-xs text-muted-foreground">{idx + 1}</td>
+                              <td className="px-2 py-1.5 text-xs font-medium">{item.item_name}</td>
+                              <td className="px-2 py-1.5">
+                                <Input
+                                  className="h-8 text-xs"
+                                  value={item.description || ''}
+                                  placeholder="—"
+                                  onChange={e => updateItemDraft(item.id ?? idx, 'description', e.target.value)}
+                                />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <Input
+                                  type="number" min="1" step="1"
+                                  className="h-8 text-xs text-right"
+                                  value={String(item.quantity ?? '')}
+                                  onChange={e => updateItemDraft(item.id ?? idx, 'quantity', e.target.value)}
+                                />
+                              </td>
+                              <td className="px-2 py-1.5 text-xs text-muted-foreground">{item.unit_of_measure || 'Each'}</td>
+                              <td className="px-2 py-1.5">
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  className="h-8 text-xs text-right"
+                                  value={String(item.unit_price ?? '')}
+                                  onChange={e => updateItemDraft(item.id ?? idx, 'unit_price', e.target.value)}
+                                />
+                              </td>
+                              <td className="px-2 py-1.5 text-right font-mono text-xs">
+                                {fmtAs(Number(item.quantity) * Number(item.unit_price) || 0, selectedOrder.po_currency)}
+                              </td>
+                              <td className="px-2 py-1.5 text-right">
+                                <button
+                                  type="button"
+                                  title="Remove this line"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() => markItemRemoved(item.id ?? idx)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {itemDrafts.length === 0 && (
+                            <tr><td colSpan={8} className="px-2 py-6 text-center text-xs text-muted-foreground">
+                              Every line removed — add an item before saving.
+                            </td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <AdvancedDataTable<PurchaseOrderItem>
+                      data={selectedOrder.items || []}
+                      keyExtractor={(item, idx) => item.id ?? idx}
+                      emptyMessage="No items"
+                      columns={[
+                        { key: '__idx', header: '#', render: (_v, _item, idx) => <span className="text-xs text-muted-foreground">{idx + 1}</span> },
+                        { key: 'item_name', header: 'Item', render: (v) => <span className="text-xs font-medium">{v}</span> },
+                        { key: 'description', header: 'Description', render: (v) => <span className="text-muted-foreground text-xs">{v || '—'}</span> },
+                        { key: 'quantity', header: 'Qty', align: 'right' },
+                        { key: 'unit_of_measure', header: 'UOM', render: (v) => v || 'Each' },
+                        { key: 'unit_price', header: 'Unit Price', align: 'right', render: (v) => <span className="font-mono">{fmtAs(v, selectedOrder.po_currency)}</span> },
+                        // Derived, like the footer below, so a stale stored
+                        // total_price cannot disagree with the qty x price on
+                        // the same row.
+                        { key: 'total_price', header: 'Total', align: 'right', render: (_v, item) => <span className="font-mono">{fmtAs(Number(item.quantity) * Number(item.unit_price) || 0, selectedOrder.po_currency)}</span> },
+                      ]}
+                    />
+                  )}
+
+                  {/* Derived from the lines on screen rather than the stored
+                      header total, which is written by a separate code path and
+                      was showing 0.00 against lines that clearly summed to more.
+                      A footer that disagrees with the rows above it is worse
+                      than useless on a financial document. */}
+                  {(editingItems ? itemDrafts : (selectedOrder.items || [])).length > 0 && (
                     <div className="border border-t-0 border-border rounded-b-md bg-muted/20 -mt-px px-3 py-2 flex justify-between text-sm font-semibold">
                       <span>Total ({selectedOrder.po_currency || currency.code}):</span>
-                      <span className="font-mono">{fmtAs(selectedOrder.total_amount, selectedOrder.po_currency)}</span>
+                      <span className="font-mono">
+                        {fmtAs(
+                          (editingItems ? itemDrafts : (selectedOrder.items || []))
+                            .reduce((sum, it) => sum + (Number(it.quantity) * Number(it.unit_price) || 0), 0),
+                          selectedOrder.po_currency,
+                        )}
+                      </span>
                     </div>
                   )}
                 </div>

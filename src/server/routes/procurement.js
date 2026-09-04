@@ -966,6 +966,66 @@ router.post('/purchase-orders', authorize(PO_WRITE), async (req, res) => {
 // /api/procurement namespace this page otherwise uses exclusively. This keeps
 // item creation consistent with how the PO's totals (subtotal/tax/shipping/
 // base_currency_total) are computed everywhere else in this file.
+/**
+ * Recompute a purchase order's money columns from the lines it currently has.
+ *
+ * subtotal/tax/total are stored on the header but derived from the items, so
+ * every path that adds, edits or removes a line has to put them back in step —
+ * otherwise the order shows a total that its own lines contradict. Kept in one
+ * place so the three item routes cannot drift apart.
+ */
+async function recomputePOTotals(poId, po) {
+  // Alias is lower-case deliberately. PostgreSQL folds an unquoted alias to
+  // lower case, so `AS newSubtotal` comes back as `newsubtotal` and
+  // destructuring `{ newSubtotal }` yielded undefined -> 0. That is why a
+  // purchase order could show a total of 0.00 above lines that plainly summed
+  // to millions: every recompute silently wrote zero. MySQL returns the alias
+  // exactly as written, so a lower-case name is correct on both.
+  const [[row]] = await sequelize.query(
+    'SELECT COALESCE(SUM(total_price), 0) AS newsubtotal FROM purchase_order_items WHERE purchase_order_id = :id',
+    { replacements: { id: poId } }
+  );
+  const subtotal = parseFloat(row?.newsubtotal) || 0;
+  const taxRate = parseFloat(po.tax_rate) || 0;
+  const shippingCost = parseFloat(po.shipping_cost) || 0;
+  const taxAmount = subtotal * (taxRate / 100);
+  const total = subtotal + taxAmount + shippingCost;
+  const exchangeRate = parseFloat(po.exchange_rate) || 1;
+
+  await sequelize.query(`
+    UPDATE purchase_orders SET subtotal = :subtotal, tax_amount = :tax_amount,
+      total_amount = :total_amount, base_currency_total = :base_currency_total, updated_at = NOW()
+    WHERE id = :id
+  `, {
+    replacements: {
+      subtotal, tax_amount: taxAmount, total_amount: total,
+      base_currency_total: total * exchangeRate, id: poId
+    }
+  });
+
+  return { subtotal, taxAmount, total };
+}
+
+/**
+ * Load a PO the caller is allowed to touch, and refuse anything past draft.
+ *
+ * Once an order leaves draft its figures are what an approver signed against,
+ * so they stop being editable — the same rule the add-item route already
+ * applies, shared so edit and delete cannot disagree with it.
+ */
+async function loadEditableP0(req) {
+  const clinicId = BranchQueryFilter.resolveClinicId(req);
+  const [pos] = await sequelize.query(
+    'SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId',
+    { replacements: { id: req.params.id, clinicId } }
+  );
+  if (pos.length === 0) return { error: { code: 404, body: { error: 'PO not found' } } };
+  if (pos[0].status !== 'draft') {
+    return { error: { code: 400, body: { error: 'Items can only be changed while the PO is in draft status' } } };
+  }
+  return { po: pos[0] };
+}
+
 router.post('/purchase-orders/:id/items', authorize(PO_WRITE), async (req, res) => {
   try {
     const { item_name, description, quantity, unit_price, unit_of_measure } = req.body;
@@ -994,37 +1054,124 @@ router.post('/purchase-orders/:id/items', authorize(PO_WRITE), async (req, res) 
       }
     });
 
-    // Recompute PO totals from all items (tax_rate/shipping_cost carried over from the PO)
-    const [[{ newSubtotal }]] = await sequelize.query(
-      'SELECT COALESCE(SUM(total_price), 0) as newSubtotal FROM purchase_order_items WHERE purchase_order_id = :id',
-      { replacements: { id: req.params.id } }
-    );
-    const taxRate = parseFloat(po.tax_rate) || 0;
-    const shippingCost = parseFloat(po.shipping_cost) || 0;
-    const taxAmount = newSubtotal * (taxRate / 100);
-    const newTotal = newSubtotal + taxAmount + shippingCost;
-    const exchangeRate = parseFloat(po.exchange_rate) || 1;
-
-    await sequelize.query(`
-      UPDATE purchase_orders SET subtotal = :subtotal, tax_amount = :tax_amount,
-        total_amount = :total_amount, base_currency_total = :base_currency_total, updated_at = NOW()
-      WHERE id = :id
-    `, {
-      replacements: {
-        subtotal: newSubtotal, tax_amount: taxAmount, total_amount: newTotal,
-        base_currency_total: newTotal * exchangeRate, id: req.params.id
-      }
-    });
+    // Shared with the edit and delete routes so the three cannot drift apart.
+    const totals = await recomputePOTotals(req.params.id, po);
 
     const [items] = await sequelize.query(
       'SELECT * FROM purchase_order_items WHERE purchase_order_id = :id ORDER BY id',
       { replacements: { id: req.params.id } }
     );
 
-    res.status(201).json({ items, total_amount: newTotal, subtotal: newSubtotal, tax_amount: taxAmount });
+    res.status(201).json({ items, total_amount: totals.total, subtotal: totals.subtotal, tax_amount: totals.taxAmount });
   } catch (error) {
     console.error('Error adding PO item:', error);
     res.status(500).json({ error: 'Failed to add item to purchase order' });
+  }
+});
+
+// Edit a line on a draft PO
+router.put('/purchase-orders/:id/items/:itemId', authorize(PO_WRITE), async (req, res) => {
+  try {
+    const { po, error } = await loadEditableP0(req);
+    if (error) return res.status(error.code).json(error.body);
+
+    const [existing] = await sequelize.query(
+      'SELECT * FROM purchase_order_items WHERE id = :itemId AND purchase_order_id = :poId',
+      { replacements: { itemId: req.params.itemId, poId: req.params.id } }
+    );
+    if (existing.length === 0) return res.status(404).json({ error: 'Item not found on this purchase order' });
+
+    // Only the three fields the draft editor exposes; item_name stays as picked
+    // from the catalogue so a line cannot be silently repointed at a different
+    // product while keeping its history.
+    const quantity = req.body.quantity !== undefined ? parseInt(req.body.quantity, 10) : parseInt(existing[0].quantity, 10);
+    const unitPrice = req.body.unit_price !== undefined ? parseFloat(req.body.unit_price) : parseFloat(existing[0].unit_price);
+    const description = req.body.description !== undefined ? (req.body.description || null) : existing[0].description;
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'Quantity must be a whole number greater than zero' });
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      return res.status(400).json({ error: 'Unit price cannot be negative' });
+    }
+
+    await sequelize.query(`
+      UPDATE purchase_order_items
+         SET quantity = :quantity, unit_price = :unit_price, total_price = :total_price,
+             description = :description, updated_at = NOW()
+       WHERE id = :itemId AND purchase_order_id = :poId
+    `, {
+      replacements: {
+        quantity, unit_price: unitPrice, total_price: quantity * unitPrice,
+        description, itemId: req.params.itemId, poId: req.params.id
+      }
+    });
+
+    const totals = await recomputePOTotals(req.params.id, po);
+    const [items] = await sequelize.query(
+      'SELECT * FROM purchase_order_items WHERE purchase_order_id = :id ORDER BY id',
+      { replacements: { id: req.params.id } }
+    );
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
+        user_role: req.user?.role, module: 'Procurement', action: 'PO_ITEM_UPDATED',
+        entity_type: 'PurchaseOrderItem', entity_id: String(req.params.itemId),
+        description: `PO ${po.po_number}: ${existing[0].item_name} changed`,
+        old_values: { quantity: existing[0].quantity, unit_price: existing[0].unit_price },
+        new_values: { quantity, unit_price: unitPrice },
+        ip_address: req.ip, status: 'success'
+      });
+    } catch (e) { /* audit must never block the edit */ }
+
+    res.json({ items, total_amount: totals.total, subtotal: totals.subtotal, tax_amount: totals.taxAmount });
+  } catch (error) {
+    console.error('Error updating PO item:', error);
+    res.status(500).json({ error: 'Failed to update purchase order item' });
+  }
+});
+
+// Remove a line from a draft PO
+router.delete('/purchase-orders/:id/items/:itemId', authorize(PO_WRITE), async (req, res) => {
+  try {
+    const { po, error } = await loadEditableP0(req);
+    if (error) return res.status(error.code).json(error.body);
+
+    const [existing] = await sequelize.query(
+      'SELECT * FROM purchase_order_items WHERE id = :itemId AND purchase_order_id = :poId',
+      { replacements: { itemId: req.params.itemId, poId: req.params.id } }
+    );
+    if (existing.length === 0) return res.status(404).json({ error: 'Item not found on this purchase order' });
+
+    await sequelize.query(
+      'DELETE FROM purchase_order_items WHERE id = :itemId AND purchase_order_id = :poId',
+      { replacements: { itemId: req.params.itemId, poId: req.params.id } }
+    );
+
+    const totals = await recomputePOTotals(req.params.id, po);
+    const [items] = await sequelize.query(
+      'SELECT * FROM purchase_order_items WHERE purchase_order_id = :id ORDER BY id',
+      { replacements: { id: req.params.id } }
+    );
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
+        user_role: req.user?.role, module: 'Procurement', action: 'PO_ITEM_REMOVED',
+        entity_type: 'PurchaseOrderItem', entity_id: String(req.params.itemId),
+        description: `PO ${po.po_number}: ${existing[0].item_name} removed`,
+        old_values: { item_name: existing[0].item_name, quantity: existing[0].quantity, unit_price: existing[0].unit_price },
+        ip_address: req.ip, status: 'success'
+      });
+    } catch (e) { /* audit must never block the removal */ }
+
+    res.json({ items, total_amount: totals.total, subtotal: totals.subtotal, tax_amount: totals.taxAmount });
+  } catch (error) {
+    console.error('Error deleting PO item:', error);
+    res.status(500).json({ error: 'Failed to delete purchase order item' });
   }
 });
 
