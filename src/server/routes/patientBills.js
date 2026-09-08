@@ -1151,6 +1151,80 @@ router.post('/:billId/void-item', authorize(BILLS_FINANCIAL_ACTION), async (req,
       });
     }
 
+    // Reverse the accounting the item raised.
+    //
+    // Creating the bill posted Dr Receivable / Cr Revenue for this line. Voiding
+    // it removed the line from the bill and dropped the bill's total, but left
+    // both of those postings standing, so the income statement kept reporting
+    // revenue for an item that had been cancelled and never paid for. That is
+    // how a day could show more revenue than the till had billed: one 78,000
+    // line voided a minute after it was raised stayed in the accounts.
+    //
+    // The reversal is the mirror of the original entry. When the item had
+    // already been paid and the cash was handed back (autoRefundAmount above),
+    // the money leaving is posted too — otherwise the refund would clear a
+    // receivable that the reversal has just written off.
+    const voidedAmount = parseFloat(item.totalPrice) || 0;
+    if (voidedAmount > 0) {
+      try {
+        const { ChartOfAccounts: COA } = require('../models');
+        const { Op: COAOpVoid } = require('sequelize');
+        const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
+        const clinicIdForVoid = bill.clinic_id || 1;
+
+        const revenueAccountId = item.revenue_account_id
+          || await resolveRevenueAccountForLine(item, clinicIdForVoid);
+        const revenueAccount = revenueAccountId ? await COA.findByPk(revenueAccountId) : null;
+        const receivableAccount = await COA.findOne({
+          where: { clinic_id: clinicIdForVoid, account_code: bill.scheme_id ? '1210' : '1200', is_active: true },
+        }) || await COA.findOne({ where: { clinic_id: clinicIdForVoid, account_code: '1200', is_active: true } });
+
+        if (revenueAccount && receivableAccount) {
+          const lineItems = [
+            { account_id: revenueAccount.id, debit_amount: voidedAmount, credit_amount: 0,
+              description: `Reversal - voided "${item.serviceName || item.name || 'item'}" on ${bill.bill_number}` },
+            { account_id: receivableAccount.id, debit_amount: 0, credit_amount: voidedAmount,
+              description: `Receivable reversed - voided item on ${bill.bill_number}` },
+          ];
+
+          if (autoRefundAmount > 0) {
+            const cashAccount = await COA.findOne({
+              where: { clinic_id: clinicIdForVoid, account_name: { [COAOpVoid.iLike]: 'cash at hand' }, is_active: true },
+            }) || await COA.findOne({
+              where: { clinic_id: clinicIdForVoid, account_type: 'asset', is_active: true, account_name: { [COAOpVoid.iLike]: '%cash%' } },
+              order: [['account_code', 'ASC']],
+            });
+            if (cashAccount) {
+              lineItems.push(
+                { account_id: receivableAccount.id, debit_amount: autoRefundAmount, credit_amount: 0,
+                  description: `Refund of voided item - ${bill.bill_number}` },
+                { account_id: cashAccount.id, debit_amount: 0, credit_amount: autoRefundAmount,
+                  description: `Cash refunded for voided item - ${bill.bill_number}` },
+              );
+            } else {
+              console.error(`Void on ${bill.bill_number}: refunded ${autoRefundAmount} but no cash account found — cash side not posted.`);
+            }
+          }
+
+          const glEntry = await AccountingService.createGLEntry({
+            clinic_id: clinicIdForVoid,
+            transaction_date: new Date().toISOString().split('T')[0],
+            transaction_type: 'bill_item_void',
+            description: `Voided item on ${bill.bill_number}`,
+            reference_id: billId,
+            reference_module: 'bill_item_void',
+          }, lineItems, req.user?.id || 'system');
+          await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
+        } else {
+          console.error(`Void on ${bill.bill_number}: could not reverse ${voidedAmount} — revenue account ${!!revenueAccount}, receivable ${!!receivableAccount}.`);
+        }
+      } catch (voidGlErr) {
+        // Non-fatal: the void itself already succeeded and the bill is correct.
+        // Logged loudly because the ledger now needs reconciling.
+        console.error(`Void on ${bill.bill_number}: item voided but GL reversal of ${voidedAmount} failed —`, voidGlErr.message);
+      }
+    }
+
     const billData = updatedBill.toJSON();
     billData.services = services;
 
