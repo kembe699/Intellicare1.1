@@ -85,8 +85,8 @@ async function reversePaymentGL({ clinicId, billId, amount, paymentMethod, refer
 
     let originalDebitAccount = null;
     if (method === 'cash') {
-      originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_name: { [Op.like]: 'cash at hand' }, is_active: true } })
-        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.like]: '%cash%' } }, order: [['account_code', 'ASC']] });
+      originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_name: { [Op.iLike]: 'cash at hand' }, is_active: true } })
+        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } }, order: [['account_code', 'ASC']] });
     } else {
       // card, mobile_money, bank_transfer, insurance — all posted to the main bank account originally
       originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, is_bank_account: true, is_active: true }, order: [['account_code', 'ASC']] })
@@ -481,10 +481,10 @@ router.get('/clinic/:clinicId/search', async (req, res) => {
     // Add search query
     if (q) {
       whereClause[Op.or] = [
-        { receipt_number: { [Op.like]: `%${q}%` } },
-        { patient_name: { [Op.like]: `%${q}%` } },
-        { patient_id: { [Op.like]: `%${q}%` } },
-        { cashier_name: { [Op.like]: `%${q}%` } }
+        { receipt_number: { [Op.iLike]: `%${q}%` } },
+        { patient_name: { [Op.iLike]: `%${q}%` } },
+        { patient_id: { [Op.iLike]: `%${q}%` } },
+        { cashier_name: { [Op.iLike]: `%${q}%` } }
       ];
     }
     

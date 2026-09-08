@@ -53,9 +53,9 @@ router.get('/search', async (req, res) => {
       where: {
         ...getBranchCondition(req),
         [Op.or]: [
-          { first_name: { [Op.like]: `%${q}%` } },
-          { last_name: { [Op.like]: `%${q}%` } },
-          { patient_id: { [Op.like]: `%${q}%` } },
+          { first_name: { [Op.iLike]: `%${q}%` } },
+          { last_name: { [Op.iLike]: `%${q}%` } },
+          { patient_id: { [Op.iLike]: `%${q}%` } },
         ],
       },
       order: [['last_name', 'ASC'], ['first_name', 'ASC']],

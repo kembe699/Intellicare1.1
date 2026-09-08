@@ -1485,11 +1485,22 @@ router.post('/:billId/payments', authorize(BILLS_FINANCIAL_ACTION), async (req, 
         let debitAccount = null;
         const method = (paymentData.payment_method || 'cash').toLowerCase();
         if (method === 'cash') {
+          // iLike, not like.
+          //
+          // MySQL's LIKE ignores case; PostgreSQL's does not. After the move to
+          // Postgres, `like 'cash at hand'` stopped matching the account
+          // actually called "Cash at Hand", and so did the `%cash%` fallback.
+          // Both lookups returned nothing, debitAccount stayed null, and the
+          // whole posting block below was skipped — silently, because it is
+          // wrapped in a best-effort try/catch. Every cash payment taken after
+          // the cutover cleared no receivable and reached no cash account, so
+          // the cashier's screen showed the money while the ledger and every
+          // report built on it did not.
           // Try "Cash at Hand" first, fall back to "Cash"
           debitAccount = await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_name: { [COAOp.like]: 'cash at hand' }, is_active: true }
+            where: { clinic_id: clinicId, account_name: { [COAOp.iLike]: 'cash at hand' }, is_active: true }
           }) || await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.like]: '%cash%' } },
+            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%' } },
             order: [['account_code', 'ASC']]
           });
         } else if (method === 'card') {
@@ -1525,7 +1536,7 @@ router.post('/:billId/payments', authorize(BILLS_FINANCIAL_ACTION), async (req, 
         }) || await ChartOfAccounts.findOne({
           where: { clinic_id: clinicId, account_code: '1200', is_active: true }
         }) || await ChartOfAccounts.findOne({
-          where: { clinic_id: clinicId, account_type: 'asset', account_name: { [COAOp.like]: '%receivable%' }, is_active: true },
+          where: { clinic_id: clinicId, account_type: 'asset', account_name: { [COAOp.iLike]: '%receivable%' }, is_active: true },
           order: [['account_code', 'ASC']]
         });
 

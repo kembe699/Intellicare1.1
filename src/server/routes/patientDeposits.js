@@ -180,9 +180,9 @@ async function getDepositBalance(patientId, clinicId, currency = BASE_CURRENCY) 
 async function resolveCashOrBankAccount(clinicId, method) {
   if (method === 'cash') {
     return await ChartOfAccounts.findOne({
-      where: { clinic_id: clinicId, account_name: { [Op.like]: 'cash at hand' }, is_active: true }
+      where: { clinic_id: clinicId, account_name: { [Op.iLike]: 'cash at hand' }, is_active: true }
     }) || await ChartOfAccounts.findOne({
-      where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.like]: '%cash%' } },
+      where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } },
       order: [['account_code', 'ASC']]
     });
   }

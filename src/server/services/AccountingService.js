@@ -363,6 +363,23 @@ class AccountingService {
         throw innerError;
       }
 
+      // Post it.
+      //
+      // createGLEntry writes the entry as a draft and its account_ledger rows
+      // with is_posted = false; only postGLEntry flips them. Nothing here ever
+      // called it, so every patient bill's revenue sat unposted — and the income
+      // statement counts posted rows only, so it showed a fraction of what had
+      // actually been billed while the cashier's own totals showed the real
+      // money. Posting happens after the commit above, because postGLEntry opens
+      // its own transaction and cannot see rows that are still uncommitted.
+      // Non-fatal: the bill and its ledger rows already exist and are correct,
+      // so a failure here must be visible and repairable, not a lost bill.
+      try {
+        await this.postGLEntry(glEntry.id, userId);
+      } catch (postError) {
+        console.error(`GL entry ${glEntry.id} for bill ${billData.bill_number} was created but not posted:`, postError.message);
+      }
+
       return glEntry;
 
     } catch (error) {
@@ -472,6 +489,16 @@ class AccountingService {
       if (affected === 0) {
         console.warn(`No PatientReceivables row found for bill ${bill.bill_number} — GL posted for the added ${addedAmount}, but the Receivables/Aging report won't reflect it until reconciled.`);
       }
+
+      // Posted after the commit, for the same reason as bill creation: the
+      // income statement only counts posted ledger rows, and postGLEntry runs
+      // in its own transaction so it cannot see uncommitted ones.
+      try {
+        await this.postGLEntry(glEntry.id, userId);
+      } catch (postError) {
+        console.error(`GL entry ${glEntry.id} for items added to bill ${bill.bill_number} was created but not posted:`, postError.message);
+      }
+
       return glEntry;
     } catch (error) {
       if (!txn.finished) await txn.rollback().catch(() => {});
@@ -535,7 +562,16 @@ class AccountingService {
           clinic_id: receiptData.clinic_id
         }
       });
-      
+
+      // A receipt's entry needs posting too, or cash collected never reaches the
+      // cash account on any report. This one runs outside a transaction of its
+      // own, so it can post immediately.
+      try {
+        await this.postGLEntry(glEntry.id, userId);
+      } catch (postError) {
+        console.error(`GL entry ${glEntry.id} for receipt ${receiptData.receipt_number} was created but not posted:`, postError.message);
+      }
+
       return glEntry;
       
     } catch (error) {

@@ -110,8 +110,8 @@ async function postToChartOfAccounts(fromAccountName, toAccountName, transferAmo
     const { ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger, sequelize } = require('../models');
 
     const [coaFrom, coaTo] = await Promise.all([
-      ChartOfAccounts.findOne({ where: { account_name: { [Op.like]: fromAccountName } } }),
-      ChartOfAccounts.findOne({ where: { account_name: { [Op.like]: toAccountName } } })
+      ChartOfAccounts.findOne({ where: { account_name: { [Op.iLike]: fromAccountName } } }),
+      ChartOfAccounts.findOne({ where: { account_name: { [Op.iLike]: toAccountName } } })
     ]);
 
     if (!coaFrom || !coaTo) {
@@ -475,17 +475,17 @@ router.post('/transfer-cash', async (req, res) => {
     const cashAtHandAccount = await ChartOfAccounts.findOne({
       where: seq.where(
         seq.fn('LOWER', seq.col('account_name')),
-        { [Op.like]: '%cash at hand%' }
+        { [Op.iLike]: '%cash at hand%' }
       )
     }) || await ChartOfAccounts.findOne({
       where: seq.where(
         seq.fn('LOWER', seq.col('account_name')),
-        { [Op.like]: '%cash in hand%' }
+        { [Op.iLike]: '%cash in hand%' }
       )
     }) || await ChartOfAccounts.findOne({
       where: seq.where(
         seq.fn('LOWER', seq.col('account_name')),
-        { [Op.like]: '%petty cash%' }
+        { [Op.iLike]: '%petty cash%' }
       )
     }) || await ChartOfAccounts.findOne({
       where: { account_type: 'asset', is_active: true },
