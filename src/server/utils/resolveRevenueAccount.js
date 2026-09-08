@@ -28,4 +28,62 @@ async function resolveRevenueAccount(category, clinicId) {
   return fallback?.id || null;
 }
 
-module.exports = { resolveRevenueAccount };
+/**
+ * Work out which revenue account a bill line belongs to when nobody said.
+ *
+ * A bill stores its lines as JSON on patient_bills.services, and most callers
+ * write only a name, a quantity and a price — the pharmacy and billing screens
+ * post exactly that. AccountingService then grouped every line without a
+ * revenue_account_id under one key and credited the lot to 4100, which is why
+ * an income statement could show millions in "Patient Services Revenue" and
+ * almost nothing against pharmacy or laboratory even though every sale was one
+ * or the other.
+ *
+ * Rather than requiring each caller to remember a category, the line is
+ * identified here from what the tenant already knows about it:
+ *
+ *   1. an account the caller supplied            — always wins
+ *   2. the services catalogue, by id then name   — it carries a real category
+ *   3. the lab test catalogue, by name           — laboratory
+ *   4. the inventory catalogue, by id then name  — dispensed stock, pharmacy
+ *   5. the words in the line's own name          — last resort before 4100
+ *
+ * Anything still unidentified keeps falling to 4100, which stays the honest
+ * "we don't know" bucket rather than a silent default for everything.
+ */
+async function resolveRevenueAccountForLine(line, clinicId) {
+  if (!line) return null;
+  if (line.revenue_account_id) return line.revenue_account_id;
+  if (line.revenueCategory) return resolveRevenueAccount(line.revenueCategory, clinicId);
+
+  const id = line.serviceId ?? line.service_id ?? null;
+  const name = (line.serviceName || line.service_name || line.item_name || '').trim();
+  if (!id && !name) return null;
+
+  const lookups = [
+    // [sql, replacements, category-or-null]  — null category means "use the row's own"
+    id   ? ['SELECT category FROM services WHERE id = :id LIMIT 1', { id }, null] : null,
+    name ? ['SELECT category FROM services WHERE LOWER(service_name) = LOWER(:name) LIMIT 1', { name }, null] : null,
+    name ? ['SELECT 1 AS hit FROM lab_tests WHERE LOWER(test_name) = LOWER(:name) LIMIT 1', { name }, 'laboratory'] : null,
+    id   ? ['SELECT 1 AS hit FROM inventory_items WHERE id = :id LIMIT 1', { id: String(id) }, 'pharmacy'] : null,
+    name ? ['SELECT 1 AS hit FROM inventory_items WHERE LOWER(item_name) = LOWER(:name) LIMIT 1', { name }, 'pharmacy'] : null,
+  ].filter(Boolean);
+
+  for (const [sql, replacements, forcedCategory] of lookups) {
+    try {
+      const [[row]] = await sequelize.query(sql, { replacements });
+      if (!row) continue;
+      const category = forcedCategory || row.category;
+      if (category) return resolveRevenueAccount(category, clinicId);
+    } catch (e) {
+      // A catalogue this tenant does not have is not an error — try the next.
+    }
+  }
+
+  // Nothing matched a catalogue: fall back to reading the name itself, which
+  // catches things like "Consultation Fee" that were typed rather than picked.
+  return resolveRevenueAccount(name, clinicId);
+}
+
+module.exports = { resolveRevenueAccount, resolveRevenueAccountForLine };
+

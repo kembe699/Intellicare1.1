@@ -272,10 +272,24 @@ class AccountingService {
         ? (typeof billData.services === 'string' ? JSON.parse(billData.services) : billData.services)
         : [];
 
-      // Group services by revenue_account_id → sum amounts
+      // Group services by revenue_account_id → sum amounts.
+      //
+      // Most callers write a bill line as a name, a quantity and a price and
+      // nothing else, so relying on them to attach a revenue account meant
+      // every such line grouped under one key and credited 4100. The line is
+      // identified here instead, from the tenant's own catalogues, so a bill
+      // splits correctly no matter which screen raised it.
+      const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
       const revenueMap = {};
       for (const svc of services) {
-        const acctId = svc.revenue_account_id || null;
+        let acctId = svc.revenue_account_id || null;
+        if (!acctId) {
+          try {
+            acctId = await resolveRevenueAccountForLine(svc, billData.clinic_id);
+          } catch (e) {
+            console.error('Could not classify bill line for revenue:', svc.serviceName, e.message);
+          }
+        }
         const amt = parseFloat(svc.totalPrice || svc.total_price || svc.price || 0);
         const key = acctId || 'default';
         if (!revenueMap[key]) revenueMap[key] = { account_id: acctId, amount: 0 };
@@ -391,9 +405,19 @@ class AccountingService {
       transaction_currency: bill.bill_currency,
     };
 
+    // Same classification as bill creation — items added to an existing bill
+    // must land on the same revenue lines as items billed with it.
+    const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
     const revenueMap = {};
     for (const svc of addedServices) {
-      const acctId = svc.revenue_account_id || null;
+      let acctId = svc.revenue_account_id || null;
+      if (!acctId) {
+        try {
+          acctId = await resolveRevenueAccountForLine(svc, bill.clinic_id);
+        } catch (e) {
+          console.error('Could not classify added bill line for revenue:', svc.serviceName, e.message);
+        }
+      }
       const amt = parseFloat(svc.totalPrice || svc.total_price || svc.price || 0);
       const key = acctId || 'default';
       if (!revenueMap[key]) revenueMap[key] = { account_id: acctId, amount: 0 };

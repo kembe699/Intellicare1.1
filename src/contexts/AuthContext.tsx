@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@/types';
 import { toast } from 'sonner';
 import { authFetch } from '@/api/apiClient';
+import { getFacilityInfo, refreshFacilityInfo } from '@/hooks/useFacilityInfo';
 
 interface AuthContextType {
   user: User | null;
@@ -131,6 +132,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setToken(activeToken);
           console.log('Setting user from token verification, userData:', userData);
           setUser(normalizedUser);
+          // Warm the facility identity now rather than when a document is
+          // first printed, so a receipt can never go out branded with the
+          // IntelliCare placeholder just because it was printed quickly.
+          void getFacilityInfo(normalizedUser.primaryBranchId || normalizedUser.branchId);
           setCurrentBranchId(savedBranchId ? parseInt(savedBranchId, 10) : (normalizedUser.primaryBranchId || normalizedUser.branchId || null));
         }
       } catch (error) {
@@ -158,6 +163,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Set user data
       console.log('Setting user from login, userData:', userData);
       setUser(normalizedUser);
+      // A different account can mean a different facility, so this is
+      // re-read rather than reused from the previous session.
+      void refreshFacilityInfo(normalizedUser.primaryBranchId || normalizedUser.branchId);
       const nextBranchId = normalizedUser.primaryBranchId || normalizedUser.branchId || null;
       setCurrentBranchId(nextBranchId);
       if (nextBranchId) {

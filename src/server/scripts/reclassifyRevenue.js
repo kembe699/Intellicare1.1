@@ -100,7 +100,12 @@ async function main() {
         .filter((s) => s && typeof s === 'object' && !s.isVoided)
         .map((s) => ({
           amount: parseFloat(s.totalPrice || s.total_price || 0) || 0,
-          code: nameToCode.get(String(s.serviceName || s.name || '').trim().toLowerCase()) || '4100',
+          // Catalogue first; failing that, read the line's own name the way
+          // utils/resolveRevenueAccount.js does at runtime, so a line typed by
+          // hand ("Consultation Fee") lands where the application would now put
+          // it rather than defaulting to 4100 and disagreeing with new postings.
+          code: nameToCode.get(String(s.serviceName || s.name || '').trim().toLowerCase())
+                || codeForCategory(String(s.serviceName || s.name || '')),
         }))
         .filter((l) => l.amount > 0);
       if (lines.length) billLines.set(b.id, lines);

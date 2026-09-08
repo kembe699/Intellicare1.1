@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { refreshFacilityInfo } from '@/hooks/useFacilityInfo';
 
 // ─── Interfaces ─────────────────────────────────────────────
 interface FacilityData {
@@ -258,6 +259,10 @@ const FacilitySetup: React.FC = () => {
       toast.success(facility?.id ? 'Facility updated successfully' : 'Facility created successfully');
       setIsEditingFacility(false);
       fetchFacility();
+      // Documents read the facility's name and logo from a shared cache. Without
+      // dropping it here, a newly uploaded logo would keep printing as the old
+      // one — or as the IntelliCare placeholder — until the page was reloaded.
+      void refreshFacilityInfo();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save facility');
     } finally {
@@ -291,6 +296,8 @@ const FacilitySetup: React.FC = () => {
       toast.success('Branch created successfully');
       setNewBranch({ ...emptyBranch });
       fetchBranches();
+      // Branch details appear on the letterhead too.
+      void refreshFacilityInfo();
       setActiveTab('branches');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create branch');
@@ -323,6 +330,8 @@ const FacilitySetup: React.FC = () => {
       setShowEditBranchModal(false);
       setEditingBranch(null);
       fetchBranches();
+      // Branch details appear on the letterhead too.
+      void refreshFacilityInfo();
     } catch (err: any) {
       toast.error(err.message || 'Failed to update branch');
     } finally {
@@ -339,6 +348,8 @@ const FacilitySetup: React.FC = () => {
       if (!res.ok) throw new Error('Failed to delete branch');
       toast.success('Branch deleted successfully');
       fetchBranches();
+      // Branch details appear on the letterhead too.
+      void refreshFacilityInfo();
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete branch');
     } finally {
@@ -354,6 +365,8 @@ const FacilitySetup: React.FC = () => {
       if (!res.ok) throw new Error('Failed to toggle branch');
       toast.success('Branch status updated');
       fetchBranches();
+      // Branch details appear on the letterhead too.
+      void refreshFacilityInfo();
     } catch (err: any) {
       toast.error(err.message || 'Failed to toggle branch status');
     }
