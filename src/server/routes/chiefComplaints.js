@@ -1,4 +1,10 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on clinical documentation, so the API enforces what the client already assumes.
+const CLINICAL_WRITE = ['admin', 'doctor', 'nurse', 'reception'];
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 // Only for the one-time boot-time table-ensure below — every tenant's own
@@ -36,7 +42,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authorize(CLINICAL_WRITE), async (req, res) => {
   const { sequelize } = req.models;
   const { complaint_text } = req.body;
   if (!complaint_text || !complaint_text.trim()) {

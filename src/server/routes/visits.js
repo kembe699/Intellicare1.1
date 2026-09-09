@@ -1,11 +1,17 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
 const { Visit } = require('../models');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on clinical visit creation, so the API enforces what the client already assumes.
+const VISIT_WRITE = ['admin', 'reception', 'doctor', 'nurse'];
 const router = express.Router();
 
 // Create new visit
-router.post('/', async (req, res) => {
+router.post('/', authorize(VISIT_WRITE), async (req, res) => {
   try {
     const { v4: uuidv4 } = require('uuid');
     

@@ -1,4 +1,10 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /procurement/purchase-orders, so the API enforces what the client already assumes.
+const PO_WRITE = ['admin', 'procurement'];
 const router = express.Router();
 const { PurchaseOrder, PurchaseOrderItem } = require('../models');
 
@@ -44,7 +50,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new purchase order
-router.post('/', async (req, res) => {
+router.post('/', authorize(PO_WRITE), async (req, res) => {
   try {
     console.log('=== CREATE PURCHASE ORDER REQUEST ===');
     console.log('Request body:', req.body);
@@ -102,7 +108,7 @@ router.post('/', async (req, res) => {
 });
 
 // Add item to purchase order
-router.post('/:id/items', async (req, res) => {
+router.post('/:id/items', authorize(PO_WRITE), async (req, res) => {
   try {
     const order = await PurchaseOrder.findByPk(req.params.id);
     if (!order) {
@@ -137,7 +143,7 @@ router.post('/:id/items', async (req, res) => {
 });
 
 // Update purchase order item
-router.put('/:id/items/:itemId', async (req, res) => {
+router.put('/:id/items/:itemId', authorize(PO_WRITE), async (req, res) => {
   try {
     const item = await PurchaseOrderItem.findOne({
       where: { 
@@ -174,7 +180,7 @@ router.put('/:id/items/:itemId', async (req, res) => {
 });
 
 // Delete purchase order item
-router.delete('/:id/items/:itemId', async (req, res) => {
+router.delete('/:id/items/:itemId', authorize(PO_WRITE), async (req, res) => {
   try {
     const item = await PurchaseOrderItem.findOne({
       where: { 
@@ -205,7 +211,7 @@ router.delete('/:id/items/:itemId', async (req, res) => {
 });
 
 // Update purchase order
-router.put('/:id', async (req, res) => {
+router.put('/:id', authorize(PO_WRITE), async (req, res) => {
   try {
     const order = await PurchaseOrder.findByPk(req.params.id);
     if (!order) {

@@ -1,4 +1,18 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gates. None of these endpoints had one, so any authenticated
+// user of any role could open a visit, write a prescription or change a service
+// price. Split by what the endpoint actually does rather than one list for the
+// file: recording an encounter and editing the service catalogue are different
+// jobs held by different people.
+const CLINICAL_ENCOUNTER = ['admin', 'doctor', 'nurse', 'reception', 'lab'];
+const CLINICAL_PRESCRIBE = ['admin', 'doctor'];
+const CLINICAL_QUEUE     = ['admin', 'reception', 'nurse', 'doctor', 'lab'];
+// Matches /setup/services in App.tsx.
+const SERVICE_CATALOGUE  = ['admin', 'doctor', 'lab'];
+// Changing every price at once is a financial act, not a catalogue edit.
+const SERVICE_REPRICE    = ['admin', 'finance_manager', 'accountant'];
 const router = express.Router();
 const { Patient, PatientQueue, Visit, DrugInventory, Prescription, PatientBill, LabTest, Service, sequelize } = require('../models');
 const { Op } = require('sequelize');
@@ -190,7 +204,7 @@ router.get('/visits/:clinicId/:doctorId', redisCacheMiddleware(5), async (req, r
 });
 
 // Create visit
-router.post('/visits', async (req, res) => {
+router.post('/visits', authorize(CLINICAL_ENCOUNTER), async (req, res) => {
   try {
     const visitData = req.body;
     console.log('=== CLINICAL ROUTE: Creating visit with data ===');
@@ -531,7 +545,7 @@ router.get('/prescriptions/visit/:visitId', async (req, res) => {
 });
 
 // Create prescription
-router.post('/prescriptions', async (req, res) => {
+router.post('/prescriptions', authorize(CLINICAL_PRESCRIBE), async (req, res) => {
   try {
     const body = req.body;
     console.log('Creating prescription with data:', body);
@@ -565,7 +579,7 @@ router.post('/prescriptions', async (req, res) => {
 });
 
 // Update patient queue status (e.g., remove from queue when visit is created)
-router.put('/queue/:queueId', async (req, res) => {
+router.put('/queue/:queueId', authorize(CLINICAL_QUEUE), async (req, res) => {
   try {
     const { queueId } = req.params;
     const { status } = req.body;
@@ -587,7 +601,7 @@ router.put('/queue/:queueId', async (req, res) => {
 });
 
 // Update visit details (chief complaints, clinical notes, vitals)
-router.put('/visits/:visitId/details', async (req, res) => {
+router.put('/visits/:visitId/details', authorize(CLINICAL_ENCOUNTER), async (req, res) => {
   try {
     const { visitId } = req.params;
     const { chief_complaint, clinical_notes, vitals, diagnosis, diagnosis_code } = req.body;
@@ -615,7 +629,7 @@ router.put('/visits/:visitId/details', async (req, res) => {
 });
 
 // Close visit and update queue status to completed
-router.put('/visits/:visitId/close', async (req, res) => {
+router.put('/visits/:visitId/close', authorize(CLINICAL_ENCOUNTER), async (req, res) => {
   try {
     const { visitId } = req.params;
     const { closedBy } = req.body;
@@ -707,7 +721,7 @@ router.put('/visits/:visitId/close', async (req, res) => {
 });
 
 // Delete patient from queue
-router.delete('/queue/:queueId', async (req, res) => {
+router.delete('/queue/:queueId', authorize(CLINICAL_QUEUE), async (req, res) => {
   try {
     const { queueId } = req.params;
     const queueEntry = await PatientQueue.findByPk(queueId);
@@ -750,7 +764,7 @@ router.get('/services/:clinicId', async (req, res) => {
 });
 
 // Create new service
-router.post('/services', async (req, res) => {
+router.post('/services', authorize(SERVICE_CATALOGUE), async (req, res) => {
   try {
     // Ensure services table exists
     await Service.sync();
@@ -780,7 +794,7 @@ router.post('/services', async (req, res) => {
 });
 
 // Update service
-router.put('/services/:id', async (req, res) => {
+router.put('/services/:id', authorize(SERVICE_CATALOGUE), async (req, res) => {
   try {
     const { id } = req.params;
     const { service_name, category, price, description, revenue_account_id, department_id, is_active, updated_by } = req.body;
@@ -818,7 +832,7 @@ router.put('/services/:id', async (req, res) => {
 });
 
 // Bulk-adjust service prices by percentage (increase or decrease)
-router.post('/services/bulk-price-adjustment', async (req, res) => {
+router.post('/services/bulk-price-adjustment', authorize(SERVICE_REPRICE), async (req, res) => {
   try {
     const { mode, percentage, direction, new_rate, category } = req.body;
 
@@ -882,7 +896,7 @@ router.post('/services/bulk-price-adjustment', async (req, res) => {
 });
 
 // Delete service
-router.delete('/services/:id', async (req, res) => {
+router.delete('/services/:id', authorize(SERVICE_CATALOGUE), async (req, res) => {
   try {
     const { id } = req.params;
     

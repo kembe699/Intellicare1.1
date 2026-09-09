@@ -1,8 +1,17 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
 const { Patient } = require('../models');
 const { Op } = require('sequelize');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+
+// Registering and editing a patient is reception's job, with clinical staff able
+// to correct a record they are working from. Deleting is admin-only: a patient
+// record is the anchor for bills, results and prescriptions, so removing one is
+// not something any logged-in user should be able to do — which, with no guard
+// at all here, it previously was.
+const PATIENT_WRITE = ['admin', 'reception', 'doctor', 'nurse', 'lab'];
+const PATIENT_DELETE = ['admin'];
 const router = express.Router();
 
 // Get all patients (filtered by branch and optionally by date)
@@ -140,7 +149,7 @@ router.get('/clinic/:clinicId', async (req, res) => {
 });
 
 // Create new patient (stamps branch_id from current user)
-router.post('/', async (req, res) => {
+router.post('/', authorize(PATIENT_WRITE), async (req, res) => {
   try {
     const patientData = {
       ...req.body,
@@ -171,7 +180,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update patient
-router.put('/:id', async (req, res) => {
+router.put('/:id', authorize(PATIENT_WRITE), async (req, res) => {
   try {
     const patient = await Patient.findByPk(req.params.id);
     if (!patient) {
@@ -212,7 +221,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete patient
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authorize(PATIENT_DELETE), async (req, res) => {
   try {
     const patient = await Patient.findByPk(req.params.id);
     if (!patient) {

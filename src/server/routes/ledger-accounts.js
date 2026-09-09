@@ -1,4 +1,10 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /accounting, so the API enforces what the client already assumes.
+const LEDGER_WRITE = ['admin', 'accountant', 'finance_manager'];
 const router = express.Router();
 const { LedgerAccount } = require('../models');
 
@@ -30,7 +36,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new ledger account
-router.post('/', async (req, res) => {
+router.post('/', authorize(LEDGER_WRITE), async (req, res) => {
   try {
     const { account_name, account_code, account_type, parent_account_id, description } = req.body;
     
@@ -51,7 +57,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update ledger account
-router.put('/:id', async (req, res) => {
+router.put('/:id', authorize(LEDGER_WRITE), async (req, res) => {
   try {
     const { account_name, account_code, account_type, parent_account_id, description } = req.body;
     
@@ -76,7 +82,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete ledger account
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authorize(LEDGER_WRITE), async (req, res) => {
   try {
     const account = await LedgerAccount.findByPk(req.params.id);
     if (!account) {

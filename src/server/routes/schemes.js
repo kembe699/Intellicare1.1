@@ -1,4 +1,10 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /scheme-management, so the API enforces what the client already assumes.
+const SCHEME_WRITE = ['admin', 'finance_manager', 'accountant'];
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -139,7 +145,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create scheme
-router.post('/', async (req, res) => {
+router.post('/', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const id = uuidv4();
@@ -215,7 +221,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update scheme
-router.put('/:id', async (req, res) => {
+router.put('/:id', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const schemeId = req.params.id;
@@ -288,7 +294,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Deactivate scheme
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query('UPDATE patient_schemes SET is_active = false WHERE id = :id', { replacements: { id: req.params.id } });
     res.json({ message: 'Scheme deactivated' });
@@ -318,7 +324,7 @@ router.get('/:id/change-history', async (req, res) => {
 // ════════════════════════════════════════
 
 // Add patient to scheme
-router.post('/:id/members', async (req, res) => {
+router.post('/:id/members', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const schemeId = req.params.id;
     const { clinic_id, patient_id, member_number, effective_from, effective_to, relationship_to_member, notes } = req.body;
@@ -377,7 +383,7 @@ router.get('/:id/members', async (req, res) => {
 });
 
 // Update membership
-router.put('/membership/:membershipId', async (req, res) => {
+router.put('/membership/:membershipId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { member_number, effective_from, effective_to, is_active, verified, verified_by, relationship_to_member, notes } = req.body;
     const sets = [];
@@ -401,7 +407,7 @@ router.put('/membership/:membershipId', async (req, res) => {
 });
 
 // Remove membership
-router.delete('/membership/:membershipId', async (req, res) => {
+router.delete('/membership/:membershipId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query('UPDATE scheme_membership SET is_active = false WHERE id = :id', { replacements: { id: req.params.membershipId } });
     res.json({ message: 'Membership deactivated' });
@@ -428,7 +434,7 @@ router.get('/patient-schemes/:patientId', async (req, res) => {
 });
 
 // Assign scheme to patient
-router.post('/patient-schemes/:patientId', async (req, res) => {
+router.post('/patient-schemes/:patientId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { scheme_id, clinic_id, member_number, effective_from } = req.body;
     const id = uuidv4();
@@ -497,7 +503,7 @@ router.get('/:id/service-pricing/:serviceId', async (req, res) => {
 });
 
 // Set service price for scheme
-router.post('/:id/service-pricing', async (req, res) => {
+router.post('/:id/service-pricing', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const schemeId = req.params.id;
@@ -570,7 +576,7 @@ router.post('/:id/service-pricing', async (req, res) => {
 });
 
 // Update service price
-router.put('/:id/service-pricing/:pricingId', async (req, res) => {
+router.put('/:id/service-pricing/:pricingId', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const pricingId = req.params.pricingId;
@@ -611,7 +617,7 @@ router.put('/:id/service-pricing/:pricingId', async (req, res) => {
 });
 
 // Delete service price
-router.delete('/:id/service-pricing/:pricingId', async (req, res) => {
+router.delete('/:id/service-pricing/:pricingId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query('UPDATE scheme_service_pricing SET is_active = false WHERE id = :id', { replacements: { id: req.params.pricingId } });
     res.json({ message: 'Service price removed' });
@@ -621,7 +627,7 @@ router.delete('/:id/service-pricing/:pricingId', async (req, res) => {
 });
 
 // Bulk update service prices
-router.post('/:id/service-pricing/bulk-update', async (req, res) => {
+router.post('/:id/service-pricing/bulk-update', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const schemeId = req.params.id;
@@ -725,7 +731,7 @@ router.get('/:id/product-pricing', async (req, res) => {
 });
 
 // Set product price
-router.post('/:id/product-pricing', async (req, res) => {
+router.post('/:id/product-pricing', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const schemeId = req.params.id;
@@ -796,7 +802,7 @@ router.post('/:id/product-pricing', async (req, res) => {
 });
 
 // Update product price
-router.put('/:id/product-pricing/:pricingId', async (req, res) => {
+router.put('/:id/product-pricing/:pricingId', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const [old] = await sequelize.query('SELECT * FROM scheme_product_pricing WHERE id = :id', { replacements: { id: req.params.pricingId }, transaction: t });
@@ -837,7 +843,7 @@ router.put('/:id/product-pricing/:pricingId', async (req, res) => {
 });
 
 // Delete product price
-router.delete('/:id/product-pricing/:pricingId', async (req, res) => {
+router.delete('/:id/product-pricing/:pricingId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query('UPDATE scheme_product_pricing SET is_active = false WHERE id = :id', { replacements: { id: req.params.pricingId } });
     res.json({ message: 'Product price removed' });
@@ -847,7 +853,7 @@ router.delete('/:id/product-pricing/:pricingId', async (req, res) => {
 });
 
 // Bulk update product prices
-router.post('/:id/product-pricing/bulk-update', async (req, res) => {
+router.post('/:id/product-pricing/bulk-update', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const schemeId = req.params.id;
@@ -906,7 +912,7 @@ router.get('/:id/tiered-pricing', async (req, res) => {
   }
 });
 
-router.post('/:id/tiered-pricing', async (req, res) => {
+router.post('/:id/tiered-pricing', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { clinic_id, service_id, product_id, product_type, tier_level, tier_name,
       min_quantity, max_quantity, tier_price, tier_currency, tier_discount_percentage,
@@ -937,7 +943,7 @@ router.post('/:id/tiered-pricing', async (req, res) => {
   }
 });
 
-router.put('/:id/tiered-pricing/:tierId', async (req, res) => {
+router.put('/:id/tiered-pricing/:tierId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const fields = ['tier_level', 'tier_name', 'min_quantity', 'max_quantity', 'tier_price',
       'tier_discount_percentage', 'tier_copay', 'effective_from', 'effective_to', 'is_active'];
@@ -955,7 +961,7 @@ router.put('/:id/tiered-pricing/:tierId', async (req, res) => {
   }
 });
 
-router.delete('/:id/tiered-pricing/:tierId', async (req, res) => {
+router.delete('/:id/tiered-pricing/:tierId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query('UPDATE scheme_tiered_pricing SET is_active = false WHERE id = :id', { replacements: { id: req.params.tierId } });
     res.json({ message: 'Tier removed' });
@@ -979,7 +985,7 @@ router.get('/:id/discounts', async (req, res) => {
   }
 });
 
-router.post('/:id/discounts', async (req, res) => {
+router.post('/:id/discounts', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { clinic_id, discount_code, discount_type, discount_name, discount_value,
       applies_to, service_ids, product_ids, min_bill_amount, min_items_qty,
@@ -1013,7 +1019,7 @@ router.post('/:id/discounts', async (req, res) => {
   }
 });
 
-router.put('/:id/discounts/:discountId', async (req, res) => {
+router.put('/:id/discounts/:discountId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const fields = ['discount_name', 'discount_type', 'discount_value', 'applies_to',
       'min_bill_amount', 'min_items_qty', 'effective_from', 'effective_to', 'is_active',
@@ -1032,7 +1038,7 @@ router.put('/:id/discounts/:discountId', async (req, res) => {
   }
 });
 
-router.delete('/:id/discounts/:discountId', async (req, res) => {
+router.delete('/:id/discounts/:discountId', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query('UPDATE scheme_discounts SET is_active = false WHERE id = :id', { replacements: { id: req.params.discountId } });
     res.json({ message: 'Discount deleted' });
@@ -1061,7 +1067,7 @@ router.get('/:id/negotiated-prices', async (req, res) => {
   }
 });
 
-router.post('/:id/negotiated-prices', async (req, res) => {
+router.post('/:id/negotiated-prices', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { clinic_id, applies_to, reference_id, negotiation_type, negotiated_price,
       original_price, valid_from, valid_to, quantity_limit, notes } = req.body;
@@ -1099,7 +1105,7 @@ router.post('/:id/negotiated-prices', async (req, res) => {
   }
 });
 
-router.put('/:id/negotiated-prices/:negId/approve', async (req, res) => {
+router.put('/:id/negotiated-prices/:negId/approve', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query(`
       UPDATE scheme_negotiated_prices SET status = 'approved', approved_by = :by,
@@ -1112,7 +1118,7 @@ router.put('/:id/negotiated-prices/:negId/approve', async (req, res) => {
   }
 });
 
-router.put('/:id/negotiated-prices/:negId/activate', async (req, res) => {
+router.put('/:id/negotiated-prices/:negId/activate', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     await sequelize.query(`UPDATE scheme_negotiated_prices SET status = 'active' WHERE id = :id AND status = 'approved'`,
       { replacements: { id: req.params.negId } });
@@ -1436,7 +1442,7 @@ router.get('/pricing/scheme/:schemeId/service/:serviceId', async (req, res) => {
 });
 
 // Bulk calculate
-router.post('/pricing/bulk-calculate', async (req, res) => {
+router.post('/pricing/bulk-calculate', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { patient_id, clinic_id, items } = req.body; // items: [{ type: 'service'|'product', id, quantity }]
     const cid = parseInt(clinic_id) || 1;
@@ -1685,7 +1691,7 @@ router.get('/reports/margin-analysis', async (req, res) => {
 // BULK CSV PRICING UPLOAD
 // ════════════════════════════════════════
 
-router.post('/bulk-csv-pricing', async (req, res) => {
+router.post('/bulk-csv-pricing', authorize(SCHEME_WRITE), async (req, res) => {
   try {
     const { clinic_id, item_type, prices } = req.body;
     // prices: [{ scheme_id, item_id, scheme_price }]

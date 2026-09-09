@@ -1,7 +1,13 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
 const { PatientQueue, Patient, Visit } = require('../models');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const redisCacheMiddleware = require('../middleware/redisCacheMiddleware');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /lis/queue and triage, so the API enforces what the client already assumes.
+const QUEUE_WRITE = ['admin', 'reception', 'nurse', 'doctor', 'lab'];
 const router = express.Router();
 
 // Get all queue entries for a clinic (5-second cache for near real-time updates)
@@ -41,7 +47,7 @@ const priorityMap = {
 };
 
 // Add patient to queue
-router.post('/', async (req, res) => {
+router.post('/', authorize(QUEUE_WRITE), async (req, res) => {
   try {
     console.log('=== PATIENT QUEUE CREATION ===');
     console.log('Request body:', req.body);
@@ -107,7 +113,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update queue entry status
-router.put('/:id', async (req, res) => {
+router.put('/:id', authorize(QUEUE_WRITE), async (req, res) => {
   try {
     const [updatedRows] = await PatientQueue.update(req.body, {
       where: { id: req.params.id },
@@ -126,7 +132,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Remove patient from queue
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authorize(QUEUE_WRITE), async (req, res) => {
   try {
     const deletedRows = await PatientQueue.destroy({
       where: { id: req.params.id },

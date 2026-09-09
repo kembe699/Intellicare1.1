@@ -1,4 +1,10 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /proforma-invoices, so the API enforces what the client already assumes.
+const PROFORMA_WRITE = ['admin', 'reception', 'doctor'];
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -80,7 +86,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authorize(PROFORMA_WRITE), async (req, res) => {
   try {
     const { patient_id, patient_name, items, notes, currency } = req.body;
     if (!patient_id) return res.status(400).json({ error: 'Patient is required' });
@@ -122,7 +128,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authorize(PROFORMA_WRITE), async (req, res) => {
   try {
     const [[row]] = await sequelize.query(`SELECT status FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id } });
     if (!row) return res.status(404).json({ error: 'Proforma invoice not found' });
@@ -138,7 +144,7 @@ router.delete('/:id', async (req, res) => {
 // active bill if one exists, otherwise creates a new one. Same create-or-add
 // pattern used by the LIS order billing flow, so a patient never ends up
 // with two open bills just because one line came from a converted proforma.
-router.post('/:id/convert', async (req, res) => {
+router.post('/:id/convert', authorize(PROFORMA_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const [[proforma]] = await sequelize.query(`SELECT * FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id }, transaction: t });

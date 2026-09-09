@@ -1,4 +1,10 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /receipts, so the API enforces what the client already assumes.
+const RECEIPT_WRITE = ['admin', 'reception', 'doctor', 'pharmacy', 'cashier'];
 const router = express.Router();
 const { Receipt, PatientBill, ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger, sequelize } = require('../models');
 const { normalizeServices } = require('../utils/normalizeServices');
@@ -356,7 +362,7 @@ router.get('/clinic/:clinicId/date-range', async (req, res) => {
 });
 
 // Update receipt status (void/refund)
-router.put('/:receiptId/status', async (req, res) => {
+router.put('/:receiptId/status', authorize(RECEIPT_WRITE), async (req, res) => {
   try {
     const { receiptId } = req.params;
     const { status, reason } = req.body;

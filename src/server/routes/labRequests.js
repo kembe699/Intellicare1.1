@@ -1,7 +1,13 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /laboratory, so the API enforces what the client already assumes.
+const LAB_WRITE = ['admin', 'lab', 'doctor'];
 const router = express.Router();
 
 async function getLabRequestById(id) {
@@ -78,7 +84,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create new lab request
-router.post('/', async (req, res) => {
+router.post('/', authorize(LAB_WRITE), async (req, res) => {
   try {
     console.log('=== LAB REQUEST CREATION START ===');
     console.log('Lab request creation - received body:', JSON.stringify(req.body, null, 2));
@@ -298,7 +304,7 @@ router.get('/:id/component-values', async (req, res) => {
 });
 
 // Auto-save component value
-router.post('/:id/auto-save', async (req, res) => {
+router.post('/:id/auto-save', authorize(LAB_WRITE), async (req, res) => {
   const crypto = require('crypto');
   try {
     const { id } = req.params;
@@ -426,7 +432,7 @@ router.post('/:id/auto-save', async (req, res) => {
 });
 
 // Submit lab results and lock the request
-router.post('/:id/results', async (req, res) => {
+router.post('/:id/results', authorize(LAB_WRITE), async (req, res) => {
   const crypto = require('crypto');
   try {
     const { id } = req.params;
@@ -514,7 +520,7 @@ router.post('/:id/results', async (req, res) => {
 });
 
 // Send lab results back to requesting doctor
-router.post('/:id/send-results', async (req, res) => {
+router.post('/:id/send-results', authorize(LAB_WRITE), async (req, res) => {
   try {
     const { id } = req.params;
     const { components } = req.body;

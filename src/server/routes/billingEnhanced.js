@@ -1,5 +1,11 @@
 const express = require('express');
+const { authorize } = require('../middleware/authorize');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
+
+// Server-side role gate. These endpoints had none: any authenticated user of
+// any role could call them, regardless of what the UI shows. Mirrors the roles
+// App.tsx allows on /billing-management and /patients-bill, so the API enforces what the client already assumes.
+const BILLING_WRITE = ['admin', 'reception', 'doctor', 'finance_manager', 'accountant'];
 const router = express.Router();
 const { sequelize, PatientBill, Receipt, CashierShift } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -126,7 +132,7 @@ router.get('/bills/:billId/line-items', async (req, res) => {
 });
 
 // Add line item to a bill
-router.post('/bills/:billId/line-items', async (req, res) => {
+router.post('/bills/:billId/line-items', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { billId } = req.params;
@@ -205,7 +211,7 @@ router.post('/bills/:billId/line-items', async (req, res) => {
 });
 
 // Update a line item
-router.put('/bills/:billId/line-items/:lineId', async (req, res) => {
+router.put('/bills/:billId/line-items/:lineId', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { billId, lineId } = req.params;
@@ -262,7 +268,7 @@ router.put('/bills/:billId/line-items/:lineId', async (req, res) => {
 });
 
 // Delete (cancel) a line item
-router.delete('/bills/:billId/line-items/:lineId', async (req, res) => {
+router.delete('/bills/:billId/line-items/:lineId', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { billId, lineId } = req.params;
@@ -301,7 +307,7 @@ router.delete('/bills/:billId/line-items/:lineId', async (req, res) => {
 // ============ DISCOUNTS ============
 
 // Apply discount to a bill
-router.post('/bills/:billId/discounts', async (req, res) => {
+router.post('/bills/:billId/discounts', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { billId } = req.params;
@@ -415,7 +421,7 @@ router.post('/bills/:billId/discounts', async (req, res) => {
 // ============ WRITE-OFFS ============
 
 // Write off the remaining balance of a bill as bad debt
-router.post('/bills/:billId/write-off', async (req, res) => {
+router.post('/bills/:billId/write-off', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { billId } = req.params;
@@ -507,7 +513,7 @@ router.get('/bills/:billId/discounts', async (req, res) => {
 // ============ CREDIT NOTES ============
 
 // Create credit note
-router.post('/credit-notes', async (req, res) => {
+router.post('/credit-notes', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { original_bill_id, credit_amount, credit_currency, reason, reason_details } = req.body;
@@ -553,7 +559,7 @@ router.post('/credit-notes', async (req, res) => {
 });
 
 // Approve credit note
-router.put('/credit-notes/:id/approve', async (req, res) => {
+router.put('/credit-notes/:id/approve', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const { id } = req.params;
     await sequelize.query(`
@@ -569,7 +575,7 @@ router.put('/credit-notes/:id/approve', async (req, res) => {
 });
 
 // Apply credit note to bill
-router.put('/credit-notes/:id/apply', async (req, res) => {
+router.put('/credit-notes/:id/apply', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
@@ -703,7 +709,7 @@ router.get('/patient-insurance/:patientId', async (req, res) => {
 });
 
 // Create/update patient insurance
-router.post('/patient-insurance', async (req, res) => {
+router.post('/patient-insurance', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const data = req.body;
     const id = uuidv4();
@@ -735,7 +741,7 @@ router.post('/patient-insurance', async (req, res) => {
 });
 
 // Update patient insurance
-router.put('/patient-insurance/:id', async (req, res) => {
+router.put('/patient-insurance/:id', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const data = req.body;
     const fields = [];
@@ -759,7 +765,7 @@ router.put('/patient-insurance/:id', async (req, res) => {
 });
 
 // Apply insurance copay to bill
-router.put('/bills/:billId/apply-insurance', async (req, res) => {
+router.put('/bills/:billId/apply-insurance', authorize(BILLING_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { billId } = req.params;
@@ -845,7 +851,7 @@ router.get('/insurance-claims', async (req, res) => {
 });
 
 // Create insurance claim from bill
-router.post('/insurance-claims/:billId', async (req, res) => {
+router.post('/insurance-claims/:billId', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const { billId } = req.params;
     const [bills] = await sequelize.query('SELECT * FROM patient_bills WHERE id = :billId', { replacements: { billId } });
@@ -888,7 +894,7 @@ router.post('/insurance-claims/:billId', async (req, res) => {
 });
 
 // Update insurance claim status
-router.put('/insurance-claims/:id', async (req, res) => {
+router.put('/insurance-claims/:id', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const data = req.body;
     const fields = [];
@@ -1019,7 +1025,7 @@ router.get('/receivables/patient/:patientId', async (req, res) => {
 // Record a collections follow-up on an overdue bill. The billing_follow_ups table already
 // existed (created by an earlier migration) but no route ever wrote to it — the
 // Receivables tab's "Follow-up" button called this exact path and always 404'd.
-router.post('/receivables/:billId/follow-up', async (req, res) => {
+router.post('/receivables/:billId/follow-up', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const { billId } = req.params;
     const { follow_up_type, follow_up_notes, outcome, next_follow_up_date } = req.body;
@@ -1377,7 +1383,7 @@ router.get('/settings/:clinicId', async (req, res) => {
 });
 
 // Update settings
-router.put('/settings/:clinicId', async (req, res) => {
+router.put('/settings/:clinicId', authorize(BILLING_WRITE), async (req, res) => {
   try {
     const clinicId = parseInt(req.params.clinicId);
     const data = req.body;
