@@ -18,6 +18,8 @@ interface Receipt {
   receipt_number: string;
   bill_id?: string | null;
   patient_id?: string | null;
+  /** The patient's own reference (UH-…, a participant number), not the row id. */
+  patient_ref?: string | null;
   patient_name?: string | null;
   clinic_id: number;
   payment_amount: number;
@@ -213,6 +215,7 @@ export default function Receipts() {
     const matchesSearch = !q ||
       r.receipt_number?.toLowerCase().includes(q) ||
       (r.patient_name || '').toLowerCase().includes(q) ||
+      (r.patient_ref || '').toLowerCase().includes(q) ||
       (r.patient_id || '').toLowerCase().includes(q) ||
       (r.cashier_name || '').toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
@@ -295,7 +298,9 @@ export default function Receipts() {
                   render: (v, r) => (
                     <>
                       {v || 'Walk-in Patient'}
-                      <span className="text-xs text-muted-foreground ml-1">{r.patient_id ? `(${r.patient_id})` : ''}</span>
+                      {/* The patient's own reference, not the internal row id —
+                          a raw UUID beside every name is noise. */}
+                      <span className="text-xs text-muted-foreground ml-1">{r.patient_ref ? `(${r.patient_ref})` : ''}</span>
                     </>
                   ),
                 },

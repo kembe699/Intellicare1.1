@@ -282,7 +282,28 @@ router.get('/clinic/:clinicId', async (req, res) => {
       order: [['created_at', 'DESC']]
     });
 
-    res.json(receipts.map(serializeReceipt));
+    // Attach the patient's own reference (UH-203920, a participant number), not
+    // the internal row id. receipts.patient_id holds the foreign key, and the
+    // receipts list was printing that raw UUID beside every name — noise to a
+    // cashier, and useless for finding anyone. Looked up in one pass rather than
+    // per row.
+    const ids = [...new Set(receipts.map((r) => r.patient_id).filter(Boolean))];
+    const refs = new Map();
+    if (ids.length > 0) {
+      const [rows] = await sequelize.query(
+        `SELECT id, patient_id AS ref FROM patients WHERE id IN (:ids)
+          UNION ALL
+         SELECT id, participant_number AS ref FROM lis_participants WHERE id IN (:ids)`,
+        { replacements: { ids } },
+      ).catch(() => [[]]);
+      for (const row of rows || []) if (row.ref) refs.set(String(row.id), row.ref);
+    }
+
+    res.json(receipts.map((r) => {
+      const out = serializeReceipt(r);
+      out.patient_ref = refs.get(String(r.patient_id)) || null;
+      return out;
+    }));
   } catch (error) {
     console.error('Error fetching receipts:', error);
     res.status(500).json({ error: 'Failed to fetch receipts' });
