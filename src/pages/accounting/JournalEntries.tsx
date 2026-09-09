@@ -40,7 +40,7 @@ const JournalEntriesPage: React.FC = () => {
   const [editFormData, setEditFormData] = useState<{
     entry_date: string; description: string; narration: string; reference: string;
     transaction_currency: CurrencyCode; exchange_rate: number;
-    lines: { account_id: string; debit_amount: number; credit_amount: number; description: string }[];
+    lines: { account_id: string; debit_amount: string; credit_amount: string; description: string }[];
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -53,8 +53,8 @@ const JournalEntriesPage: React.FC = () => {
     transaction_currency: '' as CurrencyCode,
     exchange_rate: 1.0,
     lines: [
-      { account_id: '', debit_amount: 0, credit_amount: 0, description: '' },
-      { account_id: '', debit_amount: 0, credit_amount: 0, description: '' }
+      { account_id: '', debit_amount: '', credit_amount: '', description: '' },
+      { account_id: '', debit_amount: '', credit_amount: '', description: '' }
     ]
   });
 
@@ -128,6 +128,15 @@ const JournalEntriesPage: React.FC = () => {
     }
   };
 
+  // The form keeps amounts as text so an untouched box can stay empty rather than
+  // showing a 0. The API expects numbers, and an empty side means zero on it.
+  const numericLines = (lines: { account_id: string; debit_amount: string; credit_amount: string; description: string }[]) =>
+    lines.map((l) => ({
+      ...l,
+      debit_amount: parseFloat(l.debit_amount) || 0,
+      credit_amount: parseFloat(l.credit_amount) || 0
+    }));
+
   const createJournalEntry = async () => {
     if (loading) return;
     try {
@@ -136,6 +145,7 @@ const JournalEntriesPage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           ...jeFormData,
+          lines: numericLines(jeFormData.lines),
           clinic_id: user?.clinic,
           transaction_currency: jeFormData.transaction_currency,
           exchange_rate: jeFormData.exchange_rate
@@ -150,8 +160,8 @@ const JournalEntriesPage: React.FC = () => {
           transaction_currency: BASE_CURRENCY as CurrencyCode,
           exchange_rate: 1.0,
           lines: [
-            { account_id: '', debit_amount: 0, credit_amount: 0, description: '' },
-            { account_id: '', debit_amount: 0, credit_amount: 0, description: '' }
+            { account_id: '', debit_amount: '', credit_amount: '', description: '' },
+            { account_id: '', debit_amount: '', credit_amount: '', description: '' }
           ]
         });
         await loadJournalEntries();
@@ -170,7 +180,7 @@ const JournalEntriesPage: React.FC = () => {
   const addJournalEntryLine = () => {
     setJeFormData(prev => ({
       ...prev,
-      lines: [...prev.lines, { account_id: '', debit_amount: 0, credit_amount: 0, description: '' }]
+      lines: [...prev.lines, { account_id: '', debit_amount: '', credit_amount: '', description: '' }]
     }));
   };
 
@@ -230,8 +240,8 @@ const JournalEntriesPage: React.FC = () => {
         exchange_rate: parseFloat(data.exchange_rate) || 1.0,
         lines: (data.lines || []).map((l: any) => ({
           account_id: l.account_id,
-          debit_amount: parseFloat(l.debit_amount) || 0,
-          credit_amount: parseFloat(l.credit_amount) || 0,
+          debit_amount: parseFloat(l.debit_amount) ? String(parseFloat(l.debit_amount)) : '',
+          credit_amount: parseFloat(l.credit_amount) ? String(parseFloat(l.credit_amount)) : '',
           description: l.description || ''
         }))
       });
@@ -263,7 +273,7 @@ const JournalEntriesPage: React.FC = () => {
   const addEditLine = () => {
     setEditFormData(prev => prev ? {
       ...prev,
-      lines: [...prev.lines, { account_id: '', debit_amount: 0, credit_amount: 0, description: '' }]
+      lines: [...prev.lines, { account_id: '', debit_amount: '', credit_amount: '', description: '' }]
     } : prev);
   };
 
@@ -344,7 +354,7 @@ const JournalEntriesPage: React.FC = () => {
       setLoading(true);
       const response = await apiFetch(`/api/accounting/journal-entries/${editEntry.id}`, {
         method: 'PUT',
-        body: JSON.stringify(editFormData)
+        body: JSON.stringify({ ...editFormData, lines: numericLines(editFormData.lines) })
       });
       if (response.ok) {
         toast.success('Journal entry updated successfully');
@@ -442,6 +452,13 @@ const JournalEntriesPage: React.FC = () => {
                   </Button>
                 </div>
                 <div className="space-y-2">
+                  <div className="grid grid-cols-12 gap-2 px-2 pb-1 text-xs font-medium text-muted-foreground">
+                    <div className="col-span-4">Account</div>
+                    <div className="col-span-2">Debit</div>
+                    <div className="col-span-2">Credit</div>
+                    <div className="col-span-3">Description</div>
+                    <div className="col-span-1" />
+                  </div>
                   {jeFormData.lines.map((line, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 items-center p-2 border rounded">
                       <div className="col-span-4">
@@ -455,11 +472,11 @@ const JournalEntriesPage: React.FC = () => {
                       </div>
                       <div className="col-span-2">
                         <Input type="number" step="0.01" placeholder="Debit" value={line.debit_amount}
-                          onChange={(e) => updateJournalEntryLine(index, 'debit_amount', parseFloat(e.target.value) || 0)} />
+                          onChange={(e) => updateJournalEntryLine(index, 'debit_amount', e.target.value)} />
                       </div>
                       <div className="col-span-2">
                         <Input type="number" step="0.01" placeholder="Credit" value={line.credit_amount}
-                          onChange={(e) => updateJournalEntryLine(index, 'credit_amount', parseFloat(e.target.value) || 0)} />
+                          onChange={(e) => updateJournalEntryLine(index, 'credit_amount', e.target.value)} />
                       </div>
                       <div className="col-span-3">
                         <Input placeholder="Description" value={line.description}
@@ -764,6 +781,13 @@ const JournalEntriesPage: React.FC = () => {
                     </Button>
                   </div>
                   <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 px-2 pb-1 text-xs font-medium text-muted-foreground">
+                      <div className="col-span-4">Account</div>
+                      <div className="col-span-2">Debit</div>
+                      <div className="col-span-2">Credit</div>
+                      <div className="col-span-3">Description</div>
+                      <div className="col-span-1" />
+                    </div>
                     {editFormData.lines.map((line, index) => (
                       <div key={index} className="grid grid-cols-12 gap-2 items-center p-2 border rounded">
                         <div className="col-span-4">
@@ -777,11 +801,11 @@ const JournalEntriesPage: React.FC = () => {
                         </div>
                         <div className="col-span-2">
                           <Input type="number" step="0.01" placeholder="Debit" value={line.debit_amount}
-                            onChange={(e) => updateEditLine(index, 'debit_amount', parseFloat(e.target.value) || 0)} />
+                            onChange={(e) => updateEditLine(index, 'debit_amount', e.target.value)} />
                         </div>
                         <div className="col-span-2">
                           <Input type="number" step="0.01" placeholder="Credit" value={line.credit_amount}
-                            onChange={(e) => updateEditLine(index, 'credit_amount', parseFloat(e.target.value) || 0)} />
+                            onChange={(e) => updateEditLine(index, 'credit_amount', e.target.value)} />
                         </div>
                         <div className="col-span-3">
                           <Input placeholder="Description" value={line.description}
