@@ -38,6 +38,12 @@ router.get('/:id', async (req, res) => {
 // Create new ledger account
 router.post('/', authorize(LEDGER_WRITE), async (req, res) => {
   try {
+    // Validate before writing. Without this the missing field surfaced as a 500
+    // from the database driver, which reads to the caller as "the server broke"
+    // rather than "you left something out".
+    if (!req.body?.account_name) {
+      return res.status(400).json({ error: 'account_name is required' });
+    }
     const { account_name, account_code, account_type, parent_account_id, description } = req.body;
     
     const account = await LedgerAccount.create({

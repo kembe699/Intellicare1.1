@@ -13,6 +13,12 @@ const router = express.Router();
 // Create new visit
 router.post('/', authorize(VISIT_WRITE), async (req, res) => {
   try {
+    // Validate before writing. Without this the missing field surfaced as a 500
+    // from the database driver, which reads to the caller as "the server broke"
+    // rather than "you left something out".
+    if (!req.body?.patient_id) {
+      return res.status(400).json({ error: 'patient_id is required' });
+    }
     const { v4: uuidv4 } = require('uuid');
     
     const visitData = {

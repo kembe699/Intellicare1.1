@@ -148,6 +148,13 @@ router.get('/:id', async (req, res) => {
 router.post('/', authorize(SCHEME_WRITE), async (req, res) => {
   const t = await sequelize.transaction();
   try {
+    // Validate before writing. Without this the missing field surfaced as a 500
+    // from the database driver, which reads to the caller as "the server broke"
+    // rather than "you left something out".
+    if (!req.body?.code || !req.body?.name) {
+      await t.rollback();
+      return res.status(400).json({ error: 'code and name are required' });
+    }
     const id = uuidv4();
     const {
       clinic_id, scheme_code, scheme_name, scheme_description, scheme_type,

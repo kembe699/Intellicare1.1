@@ -42,6 +42,34 @@ const router = express.Router();
  * The map is gone; only a numeric id the tenant has actually configured is
  * honoured, and anything else is resolved from the tenant's own data.
  */
+/**
+ * The branch a new user belongs to, checked against the branches that exist.
+ *
+ * A branch id was taken from the request and stored without looking at it, so an
+ * account could be created on a branch this tenant does not have. Branch is an
+ * access boundary: every list is filtered by it, so that user signs in
+ * successfully and then sees nothing at all, with no error to explain why —
+ * the same shape of fault as a user pinned to a clinic holding no data.
+ *
+ * An id that does not resolve is dropped rather than honoured; the caller then
+ * falls back to the facility's main branch, which is what happens already when
+ * no branch is named.
+ */
+async function resolveBranchIdForNewUser(req) {
+  const asked = req.body.branch_id ?? req.body.branchId ?? null;
+  if (!asked) return null;
+  try {
+    const [[row]] = await sequelize.query(
+      'SELECT id FROM branches WHERE id = :id LIMIT 1',
+      { replacements: { id: asked } });
+    if (row) return row.id;
+    console.warn(`New user: branch ${asked} does not exist in this tenant — falling back to the main branch.`);
+  } catch (e) {
+    console.error('Could not verify the requested branch:', e.message);
+  }
+  return null;
+}
+
 async function resolveClinicIdForNewUser(req) {
   const requested = parseInt(req.body.clinic_id ?? req.body.clinic, 10);
   if (requested && await clinicExists(requested)) return requested;
@@ -187,7 +215,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
       // clinic) and keeps the original single-tenant deployment's behavior unchanged
       // (its admin's own clinicId is 1 anyway).
       clinic_id: await resolveClinicIdForNewUser(req),
-      branch_id: req.body.branch_id || req.body.branchId || null,
+      branch_id: await resolveBranchIdForNewUser(req),
       is_active: req.body.isActive !== undefined ? req.body.isActive : true,
       status: req.body.status || 'active',
       created_by: req.body.createdBy || 'system',

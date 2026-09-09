@@ -151,6 +151,12 @@ router.get('/clinic/:clinicId', async (req, res) => {
 // Create new patient (stamps branch_id from current user)
 router.post('/', authorize(PATIENT_WRITE), async (req, res) => {
   try {
+    // Validate before writing. Without this the missing field surfaced as a 500
+    // from the database driver, which reads to the caller as "the server broke"
+    // rather than "you left something out".
+    if (!req.body?.first_name || !req.body?.last_name) {
+      return res.status(400).json({ error: 'first_name and last_name are required' });
+    }
     const patientData = {
       ...req.body,
       gender: req.body.gender ? req.body.gender.toLowerCase() : req.body.gender,

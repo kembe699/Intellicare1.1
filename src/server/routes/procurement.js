@@ -854,6 +854,11 @@ router.get('/purchase-orders/:id', authorize(PROCUREMENT_READ), async (req, res)
 // Create PO (from scratch or from approved PR)
 router.post('/purchase-orders', authorize(PO_WRITE), async (req, res) => {
   try {
+    // Validate before writing, so a missing supplier reads as a bad request
+    // rather than a server error.
+    if (!req.body?.supplier_id) {
+      return res.status(400).json({ error: 'supplier_id is required' });
+    }
     const { supplier_id, pr_id, po_type, order_date, delivery_address,
       requested_delivery_date, payment_terms, terms_conditions, po_currency,
       exchange_rate, notes, items, created_by } = req.body;

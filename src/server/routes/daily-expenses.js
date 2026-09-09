@@ -807,6 +807,12 @@ router.post('/:id/reject', requireApprovalPermission('expense_approve'), async (
 
 router.post('/', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
   try {
+    // Validate before writing. Without this the missing field surfaced as a 500
+    // from the database driver, which reads to the caller as "the server broke"
+    // rather than "you left something out".
+    if (!req.body?.description || !(parseFloat(req.body?.amount) > 0) || !req.body?.account_id) {
+      return res.status(400).json({ error: 'description, a positive amount and account_id are required' });
+    }
     const { account_id, amount, description, expense_date, category, notes, created_by, payment_method } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
     let accountName = 'Unknown';

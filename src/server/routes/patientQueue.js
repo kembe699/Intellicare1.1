@@ -49,6 +49,12 @@ const priorityMap = {
 // Add patient to queue
 router.post('/', authorize(QUEUE_WRITE), async (req, res) => {
   try {
+    // Validate before writing. Without this the missing field surfaced as a 500
+    // from the database driver, which reads to the caller as "the server broke"
+    // rather than "you left something out".
+    if (!req.body?.patient_id) {
+      return res.status(400).json({ error: 'patient_id is required' });
+    }
     console.log('=== PATIENT QUEUE CREATION ===');
     console.log('Request body:', req.body);
     console.log('Patient ID to find:', req.body.patient_id);
