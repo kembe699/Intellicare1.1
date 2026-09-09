@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { authorize } = require('../middleware/authorize');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 
@@ -64,7 +65,7 @@ const { Op } = require('sequelize');
       try {
         await sequelize.query(`ALTER TABLE insurance_claims ADD COLUMN ${col} ${def}`);
       } catch (e) {
-        if (e.original?.code !== 'ER_DUP_FIELDNAME') console.warn(`Could not add insurance_claims.${col}:`, e.message);
+        if (!isDuplicateColumn(e)) console.warn(`Could not add insurance_claims.${col}:`, e.message);
       }
     }
 

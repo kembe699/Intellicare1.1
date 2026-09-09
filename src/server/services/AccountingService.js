@@ -275,7 +275,16 @@ class AccountingService {
       const defaultRevenueAccount = await this.getAccountByCode(billData.clinic_id, '4100'); // Patient Services Revenue (fallback)
 
       if (!receivablesAccount || !defaultRevenueAccount) {
-        throw new Error('Required accounts not found for patient billing');
+        // Name what was looked for and which schema answered. "Required accounts
+        // not found" on its own cannot distinguish a genuinely missing account
+        // from the lookup running against the wrong tenant — the template's
+        // chart of accounts is clinic 1, so a clinic-6 tenant finds nothing
+        // there and fails identically.
+        const [[ctx]] = await sequelize.query('SELECT current_schema() AS schema').catch(() => [[{}]]);
+        throw new Error(
+          `Required accounts not found for patient billing — clinic ${billData.clinic_id}, `
+          + `receivable ${receivablesAccount ? 'ok' : 'MISSING'}, revenue 4100 ${defaultRevenueAccount ? 'ok' : 'MISSING'}, `
+          + `schema ${ctx?.schema || 'unknown'}`);
       }
 
       const glData = {

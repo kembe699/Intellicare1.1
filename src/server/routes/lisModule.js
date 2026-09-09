@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
@@ -254,7 +255,7 @@ router.post('/participants', authorize(LIS_PARTICIPANT_CREATE), async (req, res)
     // and somehow a duplicate still reached the INSERT — e.g. two connections racing at
     // the gap-lock boundary — translate the DB-level rejection into the same friendly
     // "already exists" response instead of a generic 500.
-    if (error.original?.code === 'ER_DUP_ENTRY' && error.original?.sqlMessage?.includes('uniq_lis_participants_phone')) {
+    if (isUniqueViolation(error) && /phone/i.test(error.original?.detail || error.original?.sqlMessage || '')) {
       const existing = cleanPhone ? await findByPhone(cleanPhone).catch(() => null) : null;
       return res.status(409).json({
         success: false,
@@ -263,7 +264,7 @@ router.post('/participants', authorize(LIS_PARTICIPANT_CREATE), async (req, res)
         patient: existing,
       });
     }
-    if (error.original?.code === 'ER_DUP_ENTRY') {
+    if (isUniqueViolation(error)) {
       return res.status(400).json({ success: false, error: 'Participant number already exists' });
     }
     res.status(500).json({ success: false, error: 'Database error' });

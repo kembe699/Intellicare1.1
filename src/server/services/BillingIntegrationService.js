@@ -22,9 +22,12 @@ class BillingIntegrationService {
       
       return glEntry;
     } catch (error) {
+      // Deliberately not rethrown: a bill must not fail because its ledger entry
+      // did. But the reason has to survive — returning a bare null discarded it,
+      // so the audit trail recorded "failed to post" with nothing to act on and
+      // the only copy of the cause was a console line on the server.
       console.error('Error creating accounting entries for bill:', error);
-      // Don't throw error to prevent bill creation from failing
-      // Just log the error and continue
+      this.lastBillPostingError = error?.message || String(error);
       return null;
     }
   }

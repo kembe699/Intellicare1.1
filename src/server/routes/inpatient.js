@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -27,7 +28,7 @@ const INPATIENT_ANCILLARY = ['admin', 'doctor', 'lab'];
     await sequelize.query(`ALTER TABLE wards ADD COLUMN daily_rate DECIMAL(10,2) DEFAULT 0`);
     console.log('✅ Added daily_rate to wards');
   } catch (e) {
-    if (e.original?.code !== 'ER_DUP_FIELDNAME') {
+    if (!isDuplicateColumn(e)) {
       console.log('Note: Could not add daily_rate to wards:', e.message);
     }
   }
@@ -35,7 +36,7 @@ const INPATIENT_ANCILLARY = ['admin', 'doctor', 'lab'];
     await sequelize.query(`ALTER TABLE wards ADD COLUMN service_id VARCHAR(36) DEFAULT NULL`);
     console.log('✅ Added service_id to wards');
   } catch (e) {
-    if (e.original?.code !== 'ER_DUP_FIELDNAME') {
+    if (!isDuplicateColumn(e)) {
       console.log('Note: Could not add service_id to wards:', e.message);
     }
   }
@@ -102,7 +103,7 @@ const INPATIENT_ANCILLARY = ['admin', 'doctor', 'lab'];
     await sequelize.query(`ALTER TABLE admission_requests ADD COLUMN diagnosis VARCHAR(500)`);
     console.log('✅ Added diagnosis to admission_requests');
   } catch (e) {
-    if (e.original?.code !== 'ER_DUP_FIELDNAME') {
+    if (!isDuplicateColumn(e)) {
       console.log('Note: Could not add diagnosis to admission_requests:', e.message);
     }
   }
@@ -134,6 +135,13 @@ router.get('/wards', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
 // POST create ward — billing rate is derived from the linked service's price, not typed manually
 router.post('/wards', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
   try {
+    // Validate before writing: wards.code and rooms.room_number are NOT NULL, so
+    // a blank field reached the database as a constraint violation and came back
+    // as a 500 "Failed to create" — which reads as a broken server rather than a
+    // missing field.
+    if (!req.body?.name?.trim() || !req.body?.code?.trim()) {
+      return res.status(400).json({ error: 'Ward name and code are both required' });
+    }
     const { name, code, description, ward_type, capacity, service_id } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const id = uuidv4();
@@ -146,13 +154,13 @@ router.post('/wards', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
     }
 
     await sequelize.query(
-      `INSERT INTO wards (id, clinic_id, name, code, description, ward_type, capacity, daily_rate, service_id) VALUES (:id, :clinicId, :name, :code, :description, :wardType, :capacity, :dailyRate, :serviceId)`,
+      `INSERT INTO wards (id, clinic_id, name, code, description, ward_type, capacity, daily_rate, service_id, is_active) VALUES (:id, :clinicId, :name, :code, :description, :wardType, :capacity, :dailyRate, :serviceId, TRUE)`,
       { replacements: { id, clinicId, name, code, description: description || null, wardType: ward_type || 'general', capacity: parseInt(capacity) || 0, dailyRate, serviceId: service_id || null } }
     );
     res.status(201).json({ id, name, code, description, ward_type, capacity, daily_rate: dailyRate, service_id: service_id || null });
   } catch (error) {
     console.error('Error creating ward:', error);
-    if (error.original?.code === 'ER_DUP_ENTRY' || error.message?.includes('unique')) {
+    if (isUniqueViolation(error)) {
       return res.status(409).json({ error: 'Ward code already exists' });
     }
     res.status(500).json({ error: 'Failed to create ward' });
@@ -233,17 +241,20 @@ router.get('/rooms', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
 // POST create room
 router.post('/rooms', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
   try {
+    if (!req.body?.room_number?.trim()) {
+      return res.status(400).json({ error: 'Room number is required' });
+    }
     const { ward_id, room_number, room_type, description, capacity } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const id = uuidv4();
     await sequelize.query(
-      `INSERT INTO rooms (id, ward_id, clinic_id, room_number, room_type, description, capacity) VALUES (:id, :wardId, :clinicId, :roomNumber, :roomType, :description, :capacity)`,
+      `INSERT INTO rooms (id, ward_id, clinic_id, room_number, room_type, description, capacity, is_active) VALUES (:id, :wardId, :clinicId, :roomNumber, :roomType, :description, :capacity, TRUE)`,
       { replacements: { id, wardId: ward_id || null, clinicId, roomNumber: room_number, roomType: room_type || 'standard', description: description || null, capacity: parseInt(capacity) || 0 } }
     );
     res.status(201).json({ id, ward_id, room_number, room_type, description, capacity });
   } catch (error) {
     console.error('Error creating room:', error);
-    if (error.original?.code === 'ER_DUP_ENTRY' || error.message?.includes('unique')) {
+    if (isUniqueViolation(error)) {
       return res.status(409).json({ error: 'Room number already exists in this clinic' });
     }
     res.status(500).json({ error: 'Failed to create room' });
@@ -313,13 +324,13 @@ router.post('/beds', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
     const id = uuidv4();
     const bedStatus = status || 'available';
     await sequelize.query(
-      `INSERT INTO beds (id, room_id, ward_id, clinic_id, bed_number, bed_type, status) VALUES (:id, :roomId, :wardId, :clinicId, :bedNumber, :bedType, :status)`,
+      `INSERT INTO beds (id, room_id, ward_id, clinic_id, bed_number, bed_type, status, is_active) VALUES (:id, :roomId, :wardId, :clinicId, :bedNumber, :bedType, :status, TRUE)`,
       { replacements: { id, roomId: room_id, wardId: ward_id, clinicId, bedNumber: bed_number, bedType: bed_type || 'standard', status: bedStatus } }
     );
     res.status(201).json({ id, room_id, ward_id, bed_number, bed_type, status: bedStatus });
   } catch (error) {
     console.error('Error creating bed:', error);
-    if (error.original?.code === 'ER_DUP_ENTRY' || error.message?.includes('unique')) {
+    if (isUniqueViolation(error)) {
       return res.status(409).json({ error: 'Bed number already exists' });
     }
     res.status(500).json({ error: 'Failed to create bed' });

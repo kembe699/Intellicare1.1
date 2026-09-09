@@ -56,7 +56,7 @@ function buildSequelize(schemaName, { logging } = {}) {
     throw new Error('DB_NAME and DB_USER must be set');
   }
 
-  return new Sequelize(database, user, pass, {
+  const sequelize = new Sequelize(database, user, pass, {
     host,
     port,
     dialect: 'postgres',
@@ -81,6 +81,43 @@ function buildSequelize(schemaName, { logging } = {}) {
     logging: logging ?? (process.env.NODE_ENV === 'development' ? console.log : false),
     timezone: '+00:00',
   });
+
+  return withNullReplacements(sequelize);
+}
+
+/**
+ * Treat an absent replacement value as SQL NULL.
+ *
+ * Sequelize accepts null in a named replacement and rejects undefined, throwing
+ * "Named replacement :x has no entry in the replacement map" — which surfaces as
+ * a 500 with no useful message. Handlers destructure optional fields straight
+ * out of req.body and pass them through, so leaving one out of a request broke
+ * the whole statement: creating a ward without a code, or a scheme without one,
+ * answered "Failed to create ward" rather than saving a row with no code.
+ *
+ * There are 285 such values across the route files. Rather than guard each one
+ * and rely on the next handler remembering, the coercion happens once here, on
+ * every connection. undefined means "no value given", which is exactly what SQL
+ * NULL means; nothing else about the query is touched.
+ */
+function withNullReplacements(sequelize) {
+  const original = sequelize.query.bind(sequelize);
+  sequelize.query = function query(sql, options) {
+    const r = options?.replacements;
+    if (r && typeof r === 'object') {
+      if (Array.isArray(r)) {
+        if (r.some((v) => v === undefined)) {
+          options = { ...options, replacements: r.map((v) => (v === undefined ? null : v)) };
+        }
+      } else if (Object.values(r).some((v) => v === undefined)) {
+        const cleaned = {};
+        for (const [k, v] of Object.entries(r)) cleaned[k] = v === undefined ? null : v;
+        options = { ...options, replacements: cleaned };
+      }
+    }
+    return original(sql, options);
+  };
+  return sequelize;
 }
 
 module.exports = { buildSequelize, connectionHost, assertValidSchema, SCHEMA_RE };

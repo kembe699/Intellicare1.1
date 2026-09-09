@@ -1,4 +1,5 @@
 const { Sequelize, DataTypes } = require('sequelize');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const dotenv = require('dotenv');
 const path = require('path');
@@ -583,7 +584,7 @@ async function runSchemaBootstrap(sequelize) {
       await sequelize.query(`ALTER TABLE users ADD COLUMN current_room_id VARCHAR(36) NULL`);
       console.log('Added current_room_id column to users table');
     } catch (error) {
-      if (error.original?.code !== 'ER_DUP_FIELDNAME') {
+      if (!isDuplicateColumn(error)) {
         console.log('Note: Could not add current_room_id column:', error.message);
       }
     }

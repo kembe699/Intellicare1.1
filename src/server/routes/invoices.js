@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { authorize } = require('../middleware/authorize');
 
 // Server-side role gate. These endpoints had none: any authenticated user of
@@ -77,7 +78,7 @@ async function postJournalEntry({ clinicId, amount, debitAccount, creditAccount,
       await sequelize.query(`ALTER TABLE invoices ADD COLUMN ${column} ${def}`);
       console.log(`✅ Added ${column} to invoices`);
     } catch (e) {
-      if (e.original?.code !== 'ER_DUP_FIELDNAME') {
+      if (!isDuplicateColumn(e)) {
         console.log(`Note: Could not add ${column} to invoices:`, e.message);
       }
     }

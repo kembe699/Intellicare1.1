@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const path = require('path');
@@ -75,7 +76,7 @@ const PO_WRITE = ['admin', 'procurement'];
       // MySQL (unlike Postgres) does not support "ADD COLUMN IF NOT EXISTS" —
       // issue a bare ALTER TABLE and swallow only the "column already exists" error.
       await sequelize.query(`ALTER TABLE suppliers ADD COLUMN ${col} ${def}`).catch((err) => {
-        if (err?.original?.code !== 'ER_DUP_FIELDNAME') {
+        if (!isDuplicateColumn(err)) {
           console.warn(`Could not add suppliers.${col}:`, err.message);
         }
       });
@@ -90,7 +91,7 @@ const PO_WRITE = ['admin', 'procurement'];
     ];
     for (const [col, def] of poItemCols) {
       await sequelize.query(`ALTER TABLE purchase_order_items ADD COLUMN ${col} ${def}`).catch((err) => {
-        if (err?.original?.code !== 'ER_DUP_FIELDNAME') {
+        if (!isDuplicateColumn(err)) {
           console.warn(`Could not add purchase_order_items.${col}:`, err.message);
         }
       });
@@ -105,7 +106,7 @@ const PO_WRITE = ['admin', 'procurement'];
     ];
     for (const [col, def] of grnLineCols) {
       await sequelize.query(`ALTER TABLE grn_line_items ADD COLUMN ${col} ${def}`).catch((err) => {
-        if (err?.original?.code !== 'ER_DUP_FIELDNAME') {
+        if (!isDuplicateColumn(err)) {
           console.warn(`Could not add grn_line_items.${col}:`, err.message);
         }
       });
@@ -114,7 +115,7 @@ const PO_WRITE = ['admin', 'procurement'];
     // Invoice Number — optional field on the goods receipt form (supplier's invoice
     // reference), separate from the GRN's own grn_number.
     await sequelize.query(`ALTER TABLE goods_receipt_notes ADD COLUMN invoice_number VARCHAR(100) NULL`).catch((err) => {
-      if (err?.original?.code !== 'ER_DUP_FIELDNAME') {
+      if (!isDuplicateColumn(err)) {
         console.warn('Could not add goods_receipt_notes.invoice_number:', err.message);
       }
     });

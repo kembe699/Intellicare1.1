@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const router = express.Router();
 const { sequelize, Receipt, ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger, CashierShift } = require('../models');
 const { Op } = require('sequelize');
@@ -71,7 +72,7 @@ const DEPOSIT_ACTION = ['admin', 'cashier', 'reception', 'finance_manager', 'acc
     await sequelize.query(`ALTER TABLE receipts ADD COLUMN receipt_type ENUM('payment','deposit','deposit_refund') NOT NULL DEFAULT 'payment'`);
     console.log('✅ Added receipts.receipt_type column');
   } catch (e) {
-    if (e.original?.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add receipts.receipt_type:', e.message);
+    if (!isDuplicateColumn(e)) console.warn('Could not add receipts.receipt_type:', e.message);
   }
 })();
 

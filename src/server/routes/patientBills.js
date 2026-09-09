@@ -734,8 +734,8 @@ router.post('/', authorize(BILLS_WRITE_CHARGE), async (req, res) => {
           await rr.logAudit({
             clinic_id: billData.clinic_id, user_id: req.user?.id, user_name: billData.created_by || req.user?.displayName, user_role: req.user?.role,
             module: 'Billing', action: 'GL_POSTING_FAILED', entity_type: 'PatientBill', entity_id: bill.id,
-            description: `Bill ${bill.bill_number} was created but its accounting entry failed to post — total ${billData.total_amount} is not reflected in the ledger and needs manual reconciliation.`,
-            new_values: { bill_number: bill.bill_number, total_amount: bill.total_amount },
+            description: `Bill ${bill.bill_number} was created but its accounting entry failed to post — total ${billData.total_amount} is not reflected in the ledger and needs manual reconciliation. Reason: ${BillingIntegrationService.lastBillPostingError || 'not recorded'}`,
+            new_values: { bill_number: bill.bill_number, total_amount: bill.total_amount, reason: BillingIntegrationService.lastBillPostingError || null },
             ip_address: req.ip, status: 'failure',
           });
         } catch (e) {}
