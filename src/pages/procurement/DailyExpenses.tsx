@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -18,7 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
-import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Search, RefreshCw, ShieldCheck, Download, DollarSign } from 'lucide-react';
+import { exportCSV } from '@/utils/reportUtils';
+import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Search, RefreshCw, ShieldCheck, Download, DollarSign, Pencil, Trash2, Ban, FileSpreadsheet } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -57,6 +58,16 @@ const DailyExpenses: React.FC = () => {
   const [loadingExp, setLoadingExp] = useState(false);
   const [loadingBills, setLoadingBills] = useState(false);
   const [searchExp, setSearchExp] = useState('');
+  // Today by default: the list grows without limit otherwise, and a day's
+  // expenses are what anyone opening this page actually wants to see.
+  const todayStr = () => new Date().toLocaleDateString('en-CA');
+  const [expFrom, setExpFrom] = useState(todayStr);
+  const [expTo, setExpTo] = useState(todayStr);
+  const [editExpense, setEditExpense] = useState<DailyExpense | null>(null);
+  const [rejectExpense, setRejectExpense] = useState<DailyExpense | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [busyExpId, setBusyExpId] = useState<number | null>(null);
+  const [openEditCombo, setOpenEditCombo] = useState(false);
   const [searchBills, setSearchBills] = useState('');
   const [showExpModal, setShowExpModal] = useState(false);
   const [expForm, setExpForm] = useState({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', notes: '', payment_method: 'Cash' });
@@ -84,6 +95,13 @@ const DailyExpenses: React.FC = () => {
   const [submittingExpApproval, setSubmittingExpApproval] = useState(false);
 
   useEffect(() => { fetchExpenses(); fetchBills(); fetchCoA(); fetchUserProfile(); }, []);
+  // Re-read whenever the window moves; skipped on the first render, which the
+  // effect above already covers.
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; return; }
+    fetchExpenses();
+  }, [expFrom, expTo]);
 
   // The base currency loads asynchronously (CurrencyContext's own fetch) and often isn't
   // ready yet when fetchBills first runs — re-fetch rates once it lands so the "≈ base
@@ -100,7 +118,10 @@ const DailyExpenses: React.FC = () => {
   const fetchExpenses = async () => {
     setLoadingExp(true);
     try {
-      const r = await authFetch(`/api/daily-expenses?clinic_id=${clinicId}`);
+      const params = new URLSearchParams({ clinic_id: String(clinicId) });
+      if (expFrom) params.set('dateFrom', expFrom);
+      if (expTo) params.set('dateTo', expTo);
+      const r = await authFetch(`/api/daily-expenses?${params}`);
       if (r.ok) {
         const list: DailyExpense[] = await r.json();
         setExpenses(list);
@@ -118,6 +139,77 @@ const DailyExpenses: React.FC = () => {
       }
     } catch {}
     finally { setLoadingExp(false); }
+  };
+
+  const saveExpenseEdit = async (payload: Partial<DailyExpense>) => {
+    if (!editExpense) return;
+    setBusyExpId(editExpense.id);
+    try {
+      const r = await authFetch(`/api/daily-expenses/${editExpense.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Failed to save changes');
+      toast.success('Expense updated');
+      setEditExpense(null);
+      fetchExpenses();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save changes');
+    } finally { setBusyExpId(null); }
+  };
+
+  const removeExpense = async (exp: DailyExpense) => {
+    if (!window.confirm(`Remove "${exp.description}" (${fmt(parseFloat(String(exp.amount || 0)))})? This cannot be undone.`)) return;
+    setBusyExpId(exp.id);
+    try {
+      const r = await authFetch(`/api/daily-expenses/${exp.id}`, { method: 'DELETE' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Failed to remove expense');
+      toast.success('Expense removed');
+      fetchExpenses();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to remove expense');
+    } finally { setBusyExpId(null); }
+  };
+
+  const submitReject = async () => {
+    if (!rejectExpense) return;
+    if (!rejectReason.trim()) { toast.error('Give a reason for rejecting'); return; }
+    setBusyExpId(rejectExpense.id);
+    try {
+      const r = await authFetch(`/api/daily-expenses/${rejectExpense.id}/reject`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: rejectReason.trim() }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Failed to reject');
+      toast.success('Expense rejected');
+      setRejectExpense(null); setRejectReason('');
+      fetchExpenses();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to reject');
+    } finally { setBusyExpId(null); }
+  };
+
+  const exportExpensesCSV = () => {
+    if (filteredExpenses.length === 0) { toast.error('Nothing to export'); return; }
+    exportCSV(
+      filteredExpenses,
+      [
+        { key: 'voucher_number', header: 'Voucher' },
+        { key: 'expense_date', header: 'Date', transform: (v: any) => (v ? new Date(v).toLocaleDateString() : '') },
+        { key: 'description', header: 'Description' },
+        { key: 'category', header: 'Category' },
+        { key: 'account_name', header: 'Account' },
+        { key: 'payment_method', header: 'Method', transform: (v: any) => v || 'cash' },
+        { key: 'amount', header: `Amount (${currency.code})`, transform: (v: any) => parseFloat(String(v || 0)).toFixed(2) },
+        { key: 'status', header: 'Status' },
+        { key: 'created_by', header: 'Recorded By' },
+      ],
+      `expenses_${expFrom}_to_${expTo}`,
+    );
+    toast.success(`Exported ${filteredExpenses.length} expense(s)`);
   };
 
   const fetchExpApprovals = async (expId: number) => {
@@ -603,8 +695,27 @@ const DailyExpenses: React.FC = () => {
           <TabsContent value="expenses" className="mt-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-base">Expense History</CardTitle>
-                <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." className="pl-8 h-8 w-48 text-sm" value={searchExp} onChange={e => setSearchExp(e.target.value)} /></div>
+                <CardTitle className="text-base">
+                  Expense History
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {expFrom === expTo ? new Date(expFrom).toLocaleDateString() : `${new Date(expFrom).toLocaleDateString()} — ${new Date(expTo).toLocaleDateString()}`}
+                    {' · '}{filteredExpenses.length} item{filteredExpenses.length === 1 ? '' : 's'}
+                    {' · '}<strong className="text-foreground">{fmt(filteredExpenses.reduce((sum, e) => sum + (parseFloat(String(e.amount || 0)) || 0), 0))}</strong>
+                  </span>
+                </CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input type="date" className="h-8 w-[9.5rem] text-sm" value={expFrom} max={expTo}
+                    onChange={e => setExpFrom(e.target.value)} title="From date" />
+                  <span className="text-muted-foreground text-xs">to</span>
+                  <Input type="date" className="h-8 w-[9.5rem] text-sm" value={expTo} min={expFrom}
+                    onChange={e => setExpTo(e.target.value)} title="To date" />
+                  <Button variant="outline" size="sm" className="h-8 text-xs"
+                    onClick={() => { const t = todayStr(); setExpFrom(t); setExpTo(t); }}>Today</Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportExpensesCSV}>
+                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />CSV
+                  </Button>
+                  <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." className="pl-8 h-8 w-40 text-sm" value={searchExp} onChange={e => setSearchExp(e.target.value)} /></div>
+                </div>
               </CardHeader>
               <CardContent className="p-4">
                 <AdvancedDataTable<DailyExpense>
@@ -629,6 +740,7 @@ const DailyExpenses: React.FC = () => {
                         const approvalCount = (expApprovals[exp.id] || []).length;
                         if (v === 'pending_approval') return <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Pending {approvalCount}/2</Badge>;
                         if (v === 'approved') return <Badge className="text-xs bg-primary/10 text-primary border-primary/40 hover:bg-primary/10">Approved</Badge>;
+                        if (v === 'rejected') return <Badge className="text-xs bg-destructive/10 text-destructive border-destructive/40 hover:bg-destructive/10">Rejected</Badge>;
                         return <Badge className="text-xs bg-green-100 text-green-800 border-green-300 hover:bg-green-100">Paid</Badge>;
                       },
                     },
@@ -636,14 +748,38 @@ const DailyExpenses: React.FC = () => {
                       key: '__actions', header: '',
                       render: (_v, exp) => {
                         const isPending = exp.status === 'pending_approval';
+                        // Editing and removing are only offered while nobody has
+                        // approved yet — after that the figures are what someone
+                        // signed against. Rejecting stays available for as long as
+                        // the expense is unpaid, since that is the case it exists
+                        // for: an approver disagreeing with what was submitted.
+                        const noApprovalsYet = (expApprovals[exp.id] || []).length === 0;
+                        const busy = busyExpId === exp.id;
                         return (
                           <div className="flex items-center gap-1">
-                            {isPending && (
-                              <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={(e) => { e.stopPropagation(); openExpApprove(exp); }}>
-                                <ShieldCheck className="w-3 h-3 mr-1" />Approve
-                              </Button>
+                            {isPending && noApprovalsYet && (
+                              <>
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={busy} title="Edit"
+                                  onClick={(e) => { e.stopPropagation(); setEditExpense(exp); }}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" disabled={busy} title="Remove"
+                                  onClick={(e) => { e.stopPropagation(); removeExpense(exp); }}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </>
                             )}
-                            {!isPending && (
+                            {isPending && (
+                              <>
+                                <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-amber-300 text-amber-700 hover:bg-amber-50" disabled={busy} onClick={(e) => { e.stopPropagation(); openExpApprove(exp); }}>
+                                  <ShieldCheck className="w-3 h-3 mr-1" />Approve
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-destructive/40 text-destructive hover:bg-destructive/5" disabled={busy} onClick={(e) => { e.stopPropagation(); setRejectExpense(exp); setRejectReason(''); }}>
+                                  <Ban className="w-3 h-3 mr-1" />Reject
+                                </Button>
+                              </>
+                            )}
+                            {!isPending && exp.status !== 'rejected' && (
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); printExpVoucher(exp); }} title="Print Voucher"><Printer className="w-3.5 h-3.5" /></Button>
                             )}
                           </div>
@@ -806,6 +942,105 @@ const DailyExpenses: React.FC = () => {
                 <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => setShowExpModal(false)}>Cancel</Button>
               </div>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── EDIT EXPENSE (only before any approval) ── */}
+        <Dialog open={!!editExpense} onOpenChange={(o) => { if (!o) setEditExpense(null); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit Expense</DialogTitle>
+              <DialogDescription>Corrections are only possible until someone approves it.</DialogDescription>
+            </DialogHeader>
+            {editExpense && (() => {
+              const e = editExpense;
+              const set = (patch: Partial<DailyExpense>) => setEditExpense({ ...e, ...patch } as DailyExpense);
+              return (
+                <form
+                  className="space-y-3 px-6 pb-6 pt-2"
+                  onSubmit={(ev) => {
+                    ev.preventDefault();
+                    if (!(parseFloat(String(e.amount)) > 0)) { toast.error('Amount must be greater than zero'); return; }
+                    if (!String(e.description || '').trim()) { toast.error('Description is required'); return; }
+                    saveExpenseEdit({
+                      expense_date: e.expense_date, description: e.description, amount: parseFloat(String(e.amount)),
+                      category: e.category, notes: e.notes, payment_method: e.payment_method,
+                      account_id: e.account_id,
+                    } as any);
+                  }}
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label className="text-xs">Date *</Label>
+                      <Input type="date" className="mt-1"
+                        value={e.expense_date ? String(e.expense_date).slice(0, 10) : ''}
+                        onChange={ev => set({ expense_date: ev.target.value } as any)} required /></div>
+                    <div><Label className="text-xs">Category</Label>
+                      <Combobox options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: c }))}
+                        value={e.category || ''} onChange={v => set({ category: v } as any)}
+                        placeholder="Select category" searchPlaceholder="Search..." className="mt-1 h-9" /></div>
+                  </div>
+                  <div><Label className="text-xs">Description *</Label>
+                    <Input className="mt-1" value={e.description || ''}
+                      onChange={ev => set({ description: ev.target.value } as any)} required /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label className="text-xs">Amount ({currency.code}) *</Label>
+                      <Input type="number" step="0.01" min="0.01" className="mt-1" value={String(e.amount ?? '')}
+                        onChange={ev => set({ amount: ev.target.value } as any)} required /></div>
+                    <div><Label className="text-xs">Payment Method</Label>
+                      <Combobox options={PAYMENT_METHODS.map(m => ({ value: m, label: m }))}
+                        value={e.payment_method || 'Cash'} onChange={v => set({ payment_method: v } as any)}
+                        searchPlaceholder="Search..." className="mt-1 h-9" /></div>
+                  </div>
+                  <div><Label className="text-xs">Deduct From Account (CoA)</Label>
+                    <div className="mt-1">
+                      <AccountCombobox value={String(e.account_id || '')}
+                        onSelect={(id, name) => set({ account_id: id, account_name: name } as any)}
+                        open={openEditCombo} onOpenChange={setOpenEditCombo} />
+                    </div></div>
+                  <div><Label className="text-xs">Notes</Label>
+                    <Textarea className="mt-1 text-sm" rows={2} value={e.notes || ''}
+                      onChange={ev => set({ notes: ev.target.value } as any)} /></div>
+                  <div className="flex gap-2 pt-2">
+                    <Button size="sm" type="submit" className="h-8 px-4 text-xs" disabled={busyExpId === e.id}>
+                      {busyExpId === e.id ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Saving...</> : <><Check className="w-3 h-3 mr-2" />Save Changes</>}
+                    </Button>
+                    <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => setEditExpense(null)}>Cancel</Button>
+                  </div>
+                </form>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── REJECT EXPENSE ── */}
+        <Dialog open={!!rejectExpense} onOpenChange={(o) => { if (!o) { setRejectExpense(null); setRejectReason(''); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reject Expense</DialogTitle>
+              <DialogDescription>
+                {rejectExpense && `${rejectExpense.description} — ${fmt(parseFloat(String(rejectExpense.amount || 0)))}`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 px-6 pb-6 pt-2">
+              <p className="text-xs text-muted-foreground">
+                The expense is kept with the reason recorded against it, and any approvals
+                already given are cleared so a corrected version starts afresh.
+              </p>
+              <div>
+                <Label className="text-xs">Reason *</Label>
+                <Textarea className="mt-1 text-sm" rows={3} value={rejectReason}
+                  onChange={ev => setRejectReason(ev.target.value)}
+                  placeholder="Why is this being rejected?" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" variant="destructive" className="h-8 px-4 text-xs"
+                  disabled={busyExpId === rejectExpense?.id} onClick={submitReject}>
+                  {busyExpId === rejectExpense?.id ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Rejecting...</> : <><Ban className="w-3 h-3 mr-2" />Reject Expense</>}
+                </Button>
+                <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs"
+                  onClick={() => { setRejectExpense(null); setRejectReason(''); }}>Cancel</Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

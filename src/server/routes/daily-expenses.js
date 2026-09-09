@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { DailyExpense, LedgerAccount, ChartOfAccounts, sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
+const { Op } = require('sequelize');
 const AccountingService = require('../services/AccountingService');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { authorize } = require('../middleware/authorize');
@@ -172,9 +173,29 @@ async function ensureColumnType(table, column, expectedDataType, modifySql) {
 
 router.get('/', authorize(DAILY_EXPENSES_READ), async (req, res) => {
   try {
-    const expenses = await DailyExpense.findAll({ where: { clinic_id: BranchQueryFilter.resolveClinicId(req) }, order: [['expense_date', 'DESC']] });
+    const { dateFrom, dateTo } = req.query;
+    const where = { clinic_id: BranchQueryFilter.resolveClinicId(req) };
+
+    // Optional date window. The page asks for today by default — the list grows
+    // without limit otherwise, and a day's expenses are what anyone actually
+    // needs to see.
+    //
+    // expense_date is a timestamp, not a date, so the closing day has to run to
+    // its end: comparing against the bare date gives midnight, and "today to
+    // today" would match only an expense recorded exactly at 00:00:00.
+    const endOfDay = (d) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
+    if (dateFrom && dateTo) {
+      where.expense_date = { [Op.between]: [new Date(dateFrom), endOfDay(dateTo)] };
+    } else if (dateFrom) {
+      where.expense_date = { [Op.gte]: new Date(dateFrom) };
+    } else if (dateTo) {
+      where.expense_date = { [Op.lte]: endOfDay(dateTo) };
+    }
+
+    const expenses = await DailyExpense.findAll({ where, order: [['expense_date', 'DESC'], ['id', 'DESC']] });
     res.json(expenses);
   } catch (error) {
+    console.error('Error fetching expenses:', error);
     res.status(500).json({ error: 'Failed to fetch expenses' });
   }
 });
@@ -591,6 +612,195 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
   } catch (error) {
     console.error('Error submitting expense approval:', error);
     res.status(500).json({ error: 'Failed to submit approval' });
+  }
+});
+
+/**
+ * Load an expense that is still editable, or explain why it is not.
+ *
+ * An expense stops being editable the moment someone has approved it: the
+ * figures are what they signed against, and a final approval also assigns a
+ * voucher number and opens the door to payment. Until then it is a draft and
+ * correcting a wrong amount, category or account should not require deleting
+ * the record and starting again.
+ */
+async function loadEditableExpense(req) {
+  const id = parseInt(req.params.id);
+  if (!Number.isFinite(id)) return { error: { code: 400, body: { error: 'Invalid expense id' } } };
+
+  const [[expense]] = await sequelize.query(
+    'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :cid LIMIT 1',
+    { replacements: { id, cid: BranchQueryFilter.resolveClinicId(req) } });
+  if (!expense) return { error: { code: 404, body: { error: 'Expense not found' } } };
+
+  if (expense.status === 'paid' || expense.paid_at) {
+    return { error: { code: 400, body: { error: 'This expense has already been paid and cannot be changed' } } };
+  }
+  if (expense.status === 'approved') {
+    return { error: { code: 400, body: { error: 'This expense is fully approved and cannot be changed' } } };
+  }
+
+  const [approvals] = await sequelize.query(
+    'SELECT id FROM daily_expense_approvals WHERE expense_id = :id', { replacements: { id } });
+  if (approvals.length > 0) {
+    return { error: { code: 400, body: { error: `This expense already has ${approvals.length} approval(s) and cannot be changed. Reject it first if it is wrong.` } } };
+  }
+
+  return { expense, id };
+}
+
+// Edit an expense that has not been approved yet
+router.put('/:id', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+  try {
+    const { expense, id, error } = await loadEditableExpense(req);
+    if (error) return res.status(error.code).json(error.body);
+
+    const { account_id, amount, description, expense_date, category, notes, payment_method } = req.body;
+
+    if (amount !== undefined && !(parseFloat(amount) > 0)) {
+      return res.status(400).json({ error: 'Amount must be greater than zero' });
+    }
+
+    // Keep account_name in step with account_id: it is denormalised onto the row
+    // and printed on the voucher, so leaving it stale would show one account on
+    // the paperwork and post to another.
+    let accountName = expense.account_name;
+    if (account_id !== undefined && String(account_id) !== String(expense.account_id)) {
+      accountName = 'Unknown';
+      try {
+        const coa = await ChartOfAccounts.findByPk(account_id);
+        if (coa) accountName = coa.account_name;
+        else {
+          const la = await LedgerAccount.findByPk(account_id);
+          if (la) accountName = la.account_name;
+        }
+      } catch (e) { /* keep 'Unknown' rather than failing the edit */ }
+    }
+
+    const next = {
+      account_id: account_id ?? expense.account_id,
+      account_name: accountName,
+      amount: amount !== undefined ? parseFloat(amount) : expense.amount,
+      description: description ?? expense.description,
+      expense_date: expense_date ?? expense.expense_date,
+      category: category ?? expense.category,
+      notes: notes ?? expense.notes,
+      payment_method: payment_method ?? expense.payment_method,
+    };
+
+    await sequelize.query(
+      `UPDATE daily_expenses SET account_id = :account_id, account_name = :account_name,
+              amount = :amount, description = :description, expense_date = :expense_date,
+              category = :category, notes = :notes, payment_method = :payment_method,
+              updated_at = NOW()
+        WHERE id = :id`,
+      { replacements: { ...next, id } });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
+        module: 'Expenses', action: 'EXPENSE_UPDATED', entity_type: 'DailyExpense', entity_id: String(id),
+        description: `Expense edited before approval: ${next.description} — ${next.amount}`,
+        old_values: { amount: expense.amount, description: expense.description, category: expense.category, account_name: expense.account_name },
+        new_values: { amount: next.amount, description: next.description, category: next.category, account_name: next.account_name },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) { /* audit must not block the edit */ }
+
+    const [[updated]] = await sequelize.query('SELECT * FROM daily_expenses WHERE id = :id', { replacements: { id } });
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating expense:', error);
+    res.status(500).json({ error: 'Failed to update expense' });
+  }
+});
+
+// Remove an expense that has not been approved yet
+router.delete('/:id', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+  try {
+    const { expense, id, error } = await loadEditableExpense(req);
+    if (error) return res.status(error.code).json(error.body);
+
+    await sequelize.query('DELETE FROM daily_expenses WHERE id = :id', { replacements: { id } });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
+        module: 'Expenses', action: 'EXPENSE_DELETED', entity_type: 'DailyExpense', entity_id: String(id),
+        description: `Expense removed before approval: ${expense.description} — ${expense.amount}`,
+        old_values: { amount: expense.amount, description: expense.description, category: expense.category },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) { /* audit must not block the delete */ }
+
+    res.json({ message: 'Expense removed' });
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    res.status(500).json({ error: 'Failed to delete expense' });
+  }
+});
+
+/**
+ * Reject an expense.
+ *
+ * Rejecting is an approver's decision, so it needs the approval permission
+ * rather than the write permission — and unlike editing it stays available
+ * after a first approval, which is the case it exists for: the second approver
+ * disagreeing with the first. A rejected expense keeps its record and its
+ * reason instead of being deleted, so the decision is auditable, and it never
+ * reaches the payment step.
+ */
+router.post('/:id/reject', requireApprovalPermission('expense_approve'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { reason } = req.body;
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid expense id' });
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ error: 'A reason is required when rejecting an expense' });
+    }
+
+    const [[expense]] = await sequelize.query(
+      'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :cid LIMIT 1',
+      { replacements: { id, cid: BranchQueryFilter.resolveClinicId(req) } });
+    if (!expense) return res.status(404).json({ error: 'Expense not found' });
+    if (expense.status === 'paid' || expense.paid_at) {
+      return res.status(400).json({ error: 'This expense has already been paid and cannot be rejected' });
+    }
+    if (expense.status === 'rejected') {
+      return res.status(400).json({ error: 'This expense is already rejected' });
+    }
+
+    await sequelize.query(
+      `UPDATE daily_expenses SET status = 'rejected',
+              notes = COALESCE(NULLIF(notes, ''), '') ||
+                      CASE WHEN COALESCE(notes, '') = '' THEN '' ELSE E'\n' END ||
+                      'Rejected: ' || :reason,
+              updated_at = NOW()
+        WHERE id = :id`,
+      { replacements: { id, reason: String(reason).trim() } });
+
+    // Clear any approvals already given, so a re-submitted expense starts over
+    // rather than inheriting a signature from before the objection was raised.
+    await sequelize.query('DELETE FROM daily_expense_approvals WHERE expense_id = :id', { replacements: { id } });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
+        module: 'Expenses', action: 'EXPENSE_REJECTED', entity_type: 'DailyExpense', entity_id: String(id),
+        description: `Expense rejected: ${expense.description} — ${expense.amount} (${String(reason).trim()})`,
+        old_values: { status: expense.status },
+        new_values: { status: 'rejected', reason: String(reason).trim() },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) { /* audit must not block the rejection */ }
+
+    res.json({ message: 'Expense rejected', status: 'rejected' });
+  } catch (error) {
+    console.error('Error rejecting expense:', error);
+    res.status(500).json({ error: 'Failed to reject expense' });
   }
 });
 

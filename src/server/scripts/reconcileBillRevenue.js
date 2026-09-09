@@ -120,7 +120,12 @@ async function main() {
           JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
           JOIN general_ledger gl ON gl.id = al.transaction_id
          WHERE gl.reference_id = $1 AND gl.reference_module IN ('patient_billing','bill_item_void')
-         GROUP BY 1 HAVING SUM(al.credit_amount) - SUM(al.debit_amount) > 0`, [b.id]);
+         GROUP BY 1
+        -- Any account this bill has touched, not only those still carrying a
+        -- positive balance. A bill voided for more than was ever posted ends up
+        -- net negative on every line, and requiring a positive balance left it
+        -- with nowhere to put the correction, so it was skipped and stayed wrong.
+        HAVING SUM(ABS(al.credit_amount)) + SUM(ABS(al.debit_amount)) > 0`, [b.id]);
 
       const { rows: arRows } = await db.query(
         `SELECT id FROM chart_of_accounts WHERE clinic_id = $1 AND account_code = $2 AND is_active LIMIT 1`,
@@ -133,13 +138,16 @@ async function main() {
         skipped++; continue;
       }
 
-      const available = byAccount.reduce((s, r) => s + Number(r.amount), 0);
+      // Weight by magnitude: a net-negative line still tells us where this bill's
+      // revenue was recognised, and a zero-sum weighting would divide by zero.
+      const weights = byAccount.map(r => Math.abs(Number(r.amount)) || 1);
+      const available = weights.reduce((s, w) => s + w, 0);
       const lines = [];
       let allocated = 0;
       byAccount.forEach((r, i) => {
         const share = i === byAccount.length - 1
           ? round2(magnitude - allocated)
-          : round2((Number(r.amount) / available) * magnitude);
+          : round2((weights[i] / available) * magnitude);
         allocated = round2(allocated + share);
         if (share > 0) lines.push({ account_id: r.account_id, amount: share });
       });

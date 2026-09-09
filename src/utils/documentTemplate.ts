@@ -7,6 +7,8 @@
  *
  * Mirrors the server-side documentTemplate.js design exactly.
  */
+import { peekFacilityInfo } from '@/hooks/useFacilityInfo';
+
 
 // ── Brand Colors (Intellicare Brand Guide) ───────────────────────
 const BRAND = {
@@ -300,16 +302,35 @@ export interface DocumentOptions {
 
 // ── Build full HTML document ─────────────────────────────────────
 export function buildDocument(opts: DocumentOptions): string {
-  const { title, docType, docNumber, status, date, bodyHTML, extraCSS, autoPrint = true, logoUrl, facilityInfo, branchInfo } = opts;
+  const { title, docType, docNumber, status, date, bodyHTML, extraCSS, autoPrint = true, facilityInfo, branchInfo } = opts;
 
-  const facilityDisplayName = facilityInfo?.name || 'IntelliCare';
+  // No product-brand fallback. A document carries the facility's identity, and
+  // substituting "IntelliCare" when the name had not arrived yet is what put the
+  // wrong hospital on printed paperwork — the reader cannot tell a placeholder
+  // from a real letterhead.
+  //
+  // Where the caller's own copy is still the blank starting value (its component
+  // rendered before the fetch landed), the shared cache is read directly, so a
+  // document printed early is branded correctly rather than anonymously.
+  const cachedFacility = peekFacilityInfo();
+  const logoUrl = opts.logoUrl || cachedFacility?.facilityLogo || '';
+  const facility = {
+    name: facilityInfo?.name || cachedFacility?.facilityName || '',
+    type: facilityInfo?.type || cachedFacility?.facilityType || '',
+    address: facilityInfo?.address || cachedFacility?.facilityAddress || '',
+    city: facilityInfo?.city || cachedFacility?.facilityCity || '',
+    phone: facilityInfo?.phone || cachedFacility?.facilityPhone || '',
+    email: facilityInfo?.email || cachedFacility?.facilityEmail || '',
+    licenseNo: facilityInfo?.licenseNo || cachedFacility?.facilityLicenseNo || '',
+  };
+  const facilityDisplayName = facility.name;
   const hasFacilityMeta = facilityInfo?.address || facilityInfo?.phone || facilityInfo?.licenseNo || branchInfo?.name;
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${title || 'IntelliCare Document'}</title>
+  <title>${title || `${facilityDisplayName || 'Document'}`}</title>
   <style>${getDocumentCSS(extraCSS)}</style>
 </head>
 <body>
@@ -325,7 +346,9 @@ export function buildDocument(opts: DocumentOptions): string {
         ? `<div class="ic-brand-logo">
              <img src="${logoUrl}" alt="${facilityDisplayName}" class="ic-logo-img" />
            </div>`
-        : `<div class="ic-brand">
+        : facilityDisplayName
+          ? ''
+          : `<div class="ic-brand">
              ${IC_LOGO_SVG}
              <div class="ic-logo-text">
                <div class="ic-logo-name">Intelli<span>care</span></div>
@@ -334,12 +357,12 @@ export function buildDocument(opts: DocumentOptions): string {
            </div>`}
       ${hasFacilityMeta ? `
       <div class="ic-facility-info">
-        <div class="ic-facility-name">${facilityDisplayName}${facilityInfo?.type ? ` &mdash; ${facilityInfo.type}` : ''}</div>
-        ${facilityInfo?.address ? `<div class="ic-facility-meta">${facilityInfo.address}${facilityInfo.city ? ', ' + facilityInfo.city : ''}</div>` : ''}
-        ${facilityInfo?.phone ? `<div class="ic-facility-meta">Tel: ${facilityInfo.phone}${facilityInfo.email ? '&nbsp;&nbsp;|&nbsp;&nbsp;' + facilityInfo.email : ''}</div>` : ''}
-        ${facilityInfo?.licenseNo ? `<div class="ic-facility-meta">License: ${facilityInfo.licenseNo}</div>` : ''}
+        <div class="ic-facility-name">${facilityDisplayName}${facility.type ? ` &mdash; ${facility.type}` : ''}</div>
+        ${facility.address ? `<div class="ic-facility-meta">${facility.address}${facility.city ? ', ' + facility.city : ''}</div>` : ''}
+        ${facility.phone ? `<div class="ic-facility-meta">Tel: ${facility.phone}${facility.email ? '&nbsp;&nbsp;|&nbsp;&nbsp;' + facility.email : ''}</div>` : ''}
+        ${facility.licenseNo ? `<div class="ic-facility-meta">License: ${facility.licenseNo}</div>` : ''}
         ${branchInfo?.name ? `<div class="ic-facility-meta">Branch: <strong>${branchInfo.name}</strong>${branchInfo.address ? ' &mdash; ' + branchInfo.address : ''}${branchInfo.phone ? ' | ' + branchInfo.phone : ''}</div>` : ''}
-      </div>` : `<div class="ic-facility-info"><div class="ic-facility-name">${facilityDisplayName}</div></div>`}
+      </div>` : (facilityDisplayName ? `<div class="ic-facility-info"><div class="ic-facility-name">${facilityDisplayName}</div></div>` : '')}
     </div>
     <div class="ic-header-right">
       <div class="ic-doc-type">${docType}</div>
@@ -358,7 +381,7 @@ export function buildDocument(opts: DocumentOptions): string {
   <!-- Footer -->
   <div class="ic-footer">
     <div class="ic-footer-left">
-      <p>${docNumber ? `Ref: ${docNumber}` : (logoUrl ? facilityDisplayName : 'IntelliCare Health Management System')}</p>
+      <p>${docNumber ? `Ref: ${docNumber}` : facilityDisplayName}</p>
       <p>For enquiries, please reference the document number above.</p>
     </div>
     <div class="ic-footer-brand">
@@ -370,7 +393,7 @@ export function buildDocument(opts: DocumentOptions): string {
         <rect x="10" y="17.5" width="22" height="7" rx="2.5" fill="white" opacity="0.95"/>
         <polyline points="10,21 14,21 16.5,15.5 19,27 21.5,17 24,21 32,21" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
       </svg>`}
-      ${logoUrl ? facilityDisplayName : 'Intelli<span>care</span>&nbsp;HMIS'}
+      ${facilityDisplayName}
     </div>
   </div>
 

@@ -18,7 +18,10 @@ export interface FacilityInfo {
 }
 
 const DEFAULTS: FacilityInfo = {
-  facilityName: 'IntelliCare HMIS',
+  // Deliberately blank, not a product name. Anything reading this before the
+  // fetch lands shows nothing rather than branding a document, a report or a
+  // receipt with the wrong hospital.
+  facilityName: '',
   facilityLogo: '',
   facilityType: '',
   facilityAddress: '',
@@ -119,6 +122,18 @@ export async function getFacilityInfo(branchId?: number | null): Promise<Facilit
       .finally(() => { inFlight = null; });
   }
   return inFlight;
+}
+
+/**
+ * The loaded identity if there is one, without waiting.
+ *
+ * For synchronous consumers — chiefly the document template, which builds HTML
+ * in one pass. A component that rendered before the fetch landed still holds the
+ * blank starting values; reading the shared cache here means the document gets
+ * the real facility even when the caller's own copy is stale.
+ */
+export function peekFacilityInfo(): FacilityInfo | null {
+  return cached;
 }
 
 /** Drop the cache after the facility is edited, so changes show immediately. */

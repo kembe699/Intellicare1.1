@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-09-08T11:45:57.957Z",
+  "timestamp": "2026-09-09T09:01:08.139Z",
   "totalTests": 173,
   "passed": 173,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 20133,
+  "duration": 12272,
   "success": false,
   "modules": [
     {
@@ -15,7 +15,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 4319
+      "duration": 3441
     },
     {
       "name": "insuranceClaims.test.js",
@@ -24,16 +24,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2584
-    },
-    {
-      "name": "dataIntegrity.test.js",
-      "tests": 41,
-      "passed": 41,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1673
+      "duration": 1305
     },
     {
       "name": "currencies.test.js",
@@ -42,25 +33,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2383
-    },
-    {
-      "name": "ledgerIntegration.test.js",
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1566
-    },
-    {
-      "name": "billing.test.js",
-      "tests": 10,
-      "passed": 10,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1916
+      "duration": 1319
     },
     {
       "name": "invoices.test.js",
@@ -69,7 +42,34 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1953
+      "duration": 941
+    },
+    {
+      "name": "billing.test.js",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 904
+    },
+    {
+      "name": "dataIntegrity.test.js",
+      "tests": 41,
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1033
+    },
+    {
+      "name": "ledgerIntegration.test.js",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 986
     },
     {
       "name": "multiCurrency.test.js",
@@ -78,7 +78,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1467
+      "duration": 935
     },
     {
       "name": "completeWorkflow.test.js",
@@ -87,7 +87,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1416
+      "duration": 905
     },
     {
       "name": "roleAccess.test.js",
@@ -96,7 +96,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 404
+      "duration": 189
     }
   ],
   "errors": [],

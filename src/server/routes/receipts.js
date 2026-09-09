@@ -500,9 +500,13 @@ router.get('/clinic/:clinicId/search', async (req, res) => {
     
     // Add date range filter
     if (startDate && endDate) {
-      whereClause.payment_date = {
-        [Op.between]: [new Date(startDate), new Date(endDate)]
-      };
+      // endDate arrives as a plain date, which parses to midnight — so asking for
+      // "2026-09-08 to 2026-09-08" produced a zero-width window at 00:00 and
+      // matched nothing for that day. Run to the end of the closing day instead.
+      const from = new Date(startDate);
+      const to = new Date(endDate);
+      if (!/T/.test(String(endDate))) to.setHours(23, 59, 59, 999);
+      whereClause.payment_date = { [Op.between]: [from, to] };
     }
     
     const receipts = await Receipt.findAll({
@@ -550,9 +554,14 @@ router.get('/clinic/:clinicId/stats', async (req, res) => {
       }
     });
     
+    // A voided receipt never touched the drawer, so it must not count towards
+    // money collected; a refund did leave the drawer and is already negative, so
+    // it nets out on its own. Counting voided receipts made collections read
+    // high by their full value.
+    const collected = receipts.filter((r) => r.status !== 'voided');
     const stats = {
-      totalReceipts: receipts.length,
-      totalAmount: receipts.reduce((sum, r) => sum + parseFloat(r.payment_amount), 0),
+      totalReceipts: collected.length,
+      totalAmount: collected.reduce((sum, r) => sum + (parseFloat(r.payment_amount) || 0), 0),
       activeReceipts: receipts.filter(r => r.status === 'active').length,
       voidedReceipts: receipts.filter(r => r.status === 'voided').length,
       refundedReceipts: receipts.filter(r => r.status === 'refunded').length,
