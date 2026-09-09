@@ -83,7 +83,23 @@ class AccountingService {
   // record) — the caller owns commit/rollback in that case. Omit it (the default,
   // used by every existing caller) to keep the original self-contained behavior:
   // this method opens and commits/rolls back its own transaction.
-  async createGLEntry(glData, lineItems, userId, externalTransaction = null) {
+  /**
+   * Create a GL entry and, unless a draft was asked for, post it.
+   *
+   * This used to always write a draft with its account_ledger rows flagged
+   * is_posted = false, leaving every caller to remember a separate postGLEntry.
+   * Three of them did not, so every patient bill's revenue sat unposted — and
+   * because the income statement, trial balance and balance sheet all count
+   * posted rows only, the reports showed a fraction of what had been billed
+   * while nothing anywhere looked broken.
+   *
+   * Posting is now the default and happens inside the same transaction as the
+   * entry itself, so an entry cannot exist in a state no report will show. A
+   * genuine draft — the manual journal-entry screen, where a person creates an
+   * entry and posts it as a separate act — passes { draft: true }.
+   */
+  async createGLEntry(glData, lineItems, userId, externalTransaction = null, options = {}) {
+    const draft = options.draft === true;
     const transaction = externalTransaction || await sequelize.transaction();
     const ownsTransaction = !externalTransaction;
 
@@ -127,7 +143,10 @@ class AccountingService {
         base_total_credit: baseTotalCredits,
         is_balanced: true,
         created_by: userId,
-        status: 'draft'
+        status: draft ? 'draft' : 'posted',
+        is_posted: !draft,
+        posted_by: draft ? null : userId,
+        posted_date: draft ? null : new Date()
       }, { transaction });
       
       // Create line items with base currency amounts
@@ -160,7 +179,10 @@ class AccountingService {
           description: lineItem.description,
           source_module: glData.reference_module,
           posted_by: userId,
-          is_posted: false
+          // Matches the entry above: a posted entry's ledger rows must be posted
+          // too, or the reports that read account_ledger will not see them.
+          is_posted: !draft,
+          posted_date: draft ? null : new Date()
         }, { transaction });
       }
       
@@ -191,8 +213,11 @@ class AccountingService {
         throw new Error('GL entry not found');
       }
       
-      if (glEntry.status === 'posted') {
-        throw new Error('GL entry is already posted');
+      if (glEntry.status === 'posted' && glEntry.is_posted) {
+        // Not an error. createGLEntry posts by default now, and most callers
+        // still call this straight afterwards; throwing here would turn a
+        // correctly-posted entry into a failure at every one of those sites.
+        return glEntry;
       }
       
       // Update GL entry status
@@ -504,6 +529,133 @@ class AccountingService {
       if (!txn.finished) await txn.rollback().catch(() => {});
       throw error;
     }
+  }
+
+  /**
+   * Bring a bill's posted revenue back in line with what the bill is worth.
+   *
+   * Revenue is posted when a bill is created and topped up when items are added,
+   * but a bill's total can also move by other routes — an item voided, a line
+   * edited, PUT /patient-bills/:id changing total_amount outright — and each of
+   * those was a way for the ledger to drift from the bill silently. Reports then
+   * disagreed with the till, and the only way to notice was to add the day up by
+   * hand.
+   *
+   * Rather than expecting every one of those paths to compute and post its own
+   * delta correctly, this compares the two and posts the difference. It is
+   * idempotent: run against a bill that already agrees, it does nothing. Call it
+   * after anything that can change a bill's total, and drift cannot survive.
+   *
+   * Returns the adjustment posted, or 0.
+   */
+  async syncBillRevenueToGL(billId, userId = 'system') {
+    if (!billId) return 0;
+
+    const [[bill]] = await sequelize.query(
+      `SELECT id, clinic_id, scheme_id, bill_number, bill_date,
+              COALESCE(NULLIF(base_currency_total, 0), total_amount) AS worth
+         FROM patient_bills WHERE id = :id LIMIT 1`,
+      { replacements: { id: billId } });
+    if (!bill) return 0;
+
+    const [[postedRow]] = await sequelize.query(
+      `SELECT COALESCE(SUM(al.credit_amount) - SUM(al.debit_amount), 0) AS revenue
+         FROM account_ledger al
+         JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+         JOIN general_ledger gl ON gl.id = al.transaction_id
+        WHERE gl.reference_id = :id
+          AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')`,
+      { replacements: { id: billId } });
+
+    const worth = parseFloat(bill.worth) || 0;
+    const posted = parseFloat(postedRow?.revenue) || 0;
+    const delta = Math.round((worth - posted) * 100) / 100;
+    if (Math.abs(delta) < 0.01) return 0;
+
+    // Put the adjustment where this bill's revenue already sits, so a service
+    // line is corrected on the account it was recognised on rather than all of
+    // it landing in one bucket.
+    const [byAccount] = await sequelize.query(
+      `SELECT al.account_id, SUM(al.credit_amount) - SUM(al.debit_amount) AS amount
+         FROM account_ledger al
+         JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+         JOIN general_ledger gl ON gl.id = al.transaction_id
+        WHERE gl.reference_id = :id
+          AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+        GROUP BY 1`,
+      { replacements: { id: billId } });
+
+    let targets = byAccount.filter((r) => Math.abs(Number(r.amount)) > 0.001);
+    if (targets.length === 0) {
+      // Nothing posted yet for this bill: classify its own lines instead.
+      const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
+      const [[row]] = await sequelize.query('SELECT services FROM patient_bills WHERE id = :id', { replacements: { id: billId } });
+      let services = row?.services;
+      if (typeof services === 'string') { try { services = JSON.parse(services); } catch { services = []; } }
+      const totals = new Map();
+      for (const line of (Array.isArray(services) ? services : [])) {
+        if (!line || line.isVoided) continue;
+        const amount = parseFloat(line.totalPrice || line.total_price || 0) || 0;
+        if (amount <= 0) continue;
+        const acct = line.revenue_account_id || await resolveRevenueAccountForLine(line, bill.clinic_id);
+        if (!acct) continue;
+        totals.set(acct, (totals.get(acct) || 0) + amount);
+      }
+      targets = [...totals.entries()].map(([account_id, amount]) => ({ account_id, amount }));
+    }
+    if (targets.length === 0) {
+      const fallback = await this.getAccountByCode(bill.clinic_id, '4100');
+      if (!fallback) {
+        console.error(`Bill ${bill.bill_number}: revenue is out by ${delta} but no account could be resolved to correct it.`);
+        return 0;
+      }
+      targets = [{ account_id: fallback.id, amount: 1 }];
+    }
+
+    const receivable = await this.getReceivableAccount(bill.clinic_id, bill.scheme_id);
+    if (!receivable) {
+      console.error(`Bill ${bill.bill_number}: revenue is out by ${delta} but no receivable account was found.`);
+      return 0;
+    }
+
+    const adding = delta > 0;
+    const magnitude = Math.abs(delta);
+    const weights = targets.map((r) => Math.abs(Number(r.amount)) || 1);
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+    const lineItems = [];
+    let allocated = 0;
+    targets.forEach((r, i) => {
+      const share = i === targets.length - 1
+        ? Math.round((magnitude - allocated) * 100) / 100
+        : Math.round((weights[i] / totalWeight) * magnitude * 100) / 100;
+      allocated = Math.round((allocated + share) * 100) / 100;
+      if (share <= 0) return;
+      lineItems.push({
+        account_id: r.account_id,
+        debit_amount: adding ? 0 : share,
+        credit_amount: adding ? share : 0,
+        description: `Revenue ${adding ? 'adjustment' : 'reversal'} - ${bill.bill_number}`,
+      });
+    });
+    lineItems.push({
+      account_id: receivable.id,
+      debit_amount: adding ? magnitude : 0,
+      credit_amount: adding ? 0 : magnitude,
+      description: `Receivable ${adding ? 'adjustment' : 'reversal'} - ${bill.bill_number}`,
+    });
+
+    const glEntry = await this.createGLEntry({
+      clinic_id: bill.clinic_id,
+      transaction_date: new Date().toISOString().split('T')[0],
+      transaction_type: 'bill_revenue_adjustment',
+      description: `Revenue brought in line with bill ${bill.bill_number}`,
+      reference_id: bill.id,
+      reference_module: 'bill_revenue_adjustment',
+    }, lineItems, userId);
+
+    console.log(`Bill ${bill.bill_number}: revenue was out by ${delta}, corrected via ${glEntry.gl_number}.`);
+    return delta;
   }
 
   /**

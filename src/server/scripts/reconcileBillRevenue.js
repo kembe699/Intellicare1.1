@@ -79,7 +79,7 @@ async function main() {
          WHERE gl.reference_module IN ('patient_billing', 'bill_item_void')
          GROUP BY 1)
       SELECT b.id, b.bill_number, b.clinic_id, b.scheme_id,
-             p.revenue::float AS posted_revenue,
+             COALESCE(p.revenue, 0)::float AS posted_revenue,
              COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)::float AS bill_total,
              -- Dated to the void, else the bill. Never "today": dating months of
              -- corrections into the current period makes today's report nonsense.
@@ -87,10 +87,13 @@ async function main() {
                (SELECT MAX(a.created_at)::date FROM audit_logs a
                  WHERE a.action = 'BILL_ITEM_VOIDED' AND a.entity_id = b.id),
                b.bill_date::date, CURRENT_DATE) AS entry_date
-        FROM posted p
-        JOIN patient_bills b ON b.id = p.bill_id
-       WHERE ABS(p.revenue - COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)) > 0.01
-       ORDER BY ABS(p.revenue - COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)) DESC`);
+        FROM patient_bills b
+        -- LEFT JOIN, not JOIN: a bill whose posting failed outright has no rows
+        -- in the posted CTE at all, and an inner join quietly excluded exactly
+        -- the bills that were most wrong -- the ones missing from the ledger.
+        LEFT JOIN posted p ON p.bill_id = b.id
+       WHERE ABS(COALESCE(p.revenue, 0) - COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)) > 0.01
+       ORDER BY ABS(COALESCE(p.revenue, 0) - COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)) DESC`);
 
     if (bills.length === 0) { console.log("Nothing to do — every bill's posted revenue matches its total."); return; }
 
@@ -133,19 +136,29 @@ async function main() {
       const arId = arRows[0]?.id
         || (await db.query(`SELECT id FROM chart_of_accounts WHERE clinic_id=$1 AND account_code='1200' LIMIT 1`, [b.clinic_id])).rows[0]?.id;
 
-      if (!byAccount.length || !arId) {
-        console.log(`  SKIP ${b.bill_number}: revenue accounts ${byAccount.length}, receivable ${arId ? 'ok' : 'missing'}`);
+      let allocationTargets = byAccount;
+      if (allocationTargets.length === 0) {
+        // Nothing posted for this bill yet: fall back to the catch-all so the
+        // money at least reaches the ledger, where the revenue-split repair can
+        // then attribute it properly.
+        const { rows: fb } = await db.query(
+          `SELECT id AS account_id, 1 AS amount FROM chart_of_accounts
+            WHERE clinic_id = $1 AND account_code = '4100' AND is_active LIMIT 1`, [b.clinic_id]);
+        allocationTargets = fb;
+      }
+      if (!allocationTargets.length || !arId) {
+        console.log(`  SKIP ${b.bill_number}: revenue accounts ${allocationTargets.length}, receivable ${arId ? 'ok' : 'missing'}`);
         skipped++; continue;
       }
 
       // Weight by magnitude: a net-negative line still tells us where this bill's
       // revenue was recognised, and a zero-sum weighting would divide by zero.
-      const weights = byAccount.map(r => Math.abs(Number(r.amount)) || 1);
+      const weights = allocationTargets.map(r => Math.abs(Number(r.amount)) || 1);
       const available = weights.reduce((s, w) => s + w, 0);
       const lines = [];
       let allocated = 0;
-      byAccount.forEach((r, i) => {
-        const share = i === byAccount.length - 1
+      allocationTargets.forEach((r, i) => {
+        const share = i === allocationTargets.length - 1
           ? round2(magnitude - allocated)
           : round2((weights[i] / available) * magnitude);
         allocated = round2(allocated + share);

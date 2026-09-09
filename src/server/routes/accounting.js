@@ -293,10 +293,14 @@ router.post('/general-ledger', authorize(ACCOUNTING_WRITE), async (req, res) => 
       return res.status(400).json({ error: 'glData and lineItems array are required' });
     }
 
+    // Explicitly a draft: this screen creates an entry and posts it as a
+    // separate, deliberate act (POST /general-ledger/:id/post below).
     const glEntry = await AccountingService.createGLEntry(
       glData, 
       lineItems, 
-      req.user?.id || 'system'
+      req.user?.id || 'system',
+      null,
+      { draft: true }
     );
 
     res.status(201).json(glEntry);

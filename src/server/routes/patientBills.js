@@ -718,6 +718,16 @@ router.post('/', authorize(BILLS_WRITE_CHARGE), async (req, res) => {
         console.log('Accounting entries created for bill:', bill.bill_number);
       } else {
         console.error('GL posting failed for bill (bill created, no accounting entry exists):', bill.bill_number);
+        // Try once more through the reconciler, which derives what should have
+        // been posted from the bill itself. Previously this branch only wrote an
+        // audit line, so the bill stayed missing from the ledger until somebody
+        // noticed the day did not add up.
+        try {
+          const recovered = await AccountingService.syncBillRevenueToGL(bill.id, req.user?.id || 'system');
+          if (recovered) console.log(`Bill ${bill.bill_number}: revenue recovered by reconciliation after the initial posting failed.`);
+        } catch (syncErr) {
+          console.error(`Bill ${bill.bill_number}: recovery posting also failed —`, syncErr.message);
+        }
         try {
           const rr = require('./reports');
           await rr.logAudit({
@@ -977,6 +987,15 @@ router.put('/:billId/add-services', authorize(BILLS_WRITE_CHARGE), async (req, r
       }
     }
 
+    // Safety net behind the top-up: a failure above used to leave the bill
+    // permanently under-posted with only a log line to show for it. This brings
+    // the ledger back in line whether the top-up worked, partly worked, or threw.
+    try {
+      await AccountingService.syncBillRevenueToGL(bill.id, req.user?.id || 'system');
+    } catch (syncErr) {
+      console.error(`Bill ${bill.bill_number}: revenue sync after add-services failed —`, syncErr.message);
+    }
+
     // Adding a lab-test service to an *existing* bill previously never created a lab
     // order at all — only bill *creation* did. Fixed by running the same lab-order
     // creation here, scoped to just the newly-added items (not the whole bill) so it
@@ -1050,6 +1069,19 @@ router.put('/:billId', authorize(BILLS_FINANCIAL_ACTION), async (req, res) => {
     }
     
     const updatedBill = await currentBill.update(updateData);
+
+    // This endpoint can change total_amount and the service lines outright, and
+    // posted nothing — so editing a bill here moved the books out of step with
+    // it immediately. Rather than compute a delta at each call site, the ledger
+    // is brought back in line with whatever the bill now says it is worth.
+    if (updateData.total_amount !== undefined || updateData.services !== undefined) {
+      try {
+        await AccountingService.syncBillRevenueToGL(billId, req.user?.id || 'system');
+      } catch (syncErr) {
+        console.error(`Bill ${currentBill.bill_number}: revenue sync after update failed —`, syncErr.message);
+      }
+    }
+
     res.json(updatedBill);
   } catch (error) {
     console.error('Error updating patient bill:', error);
@@ -1223,6 +1255,14 @@ router.post('/:billId/void-item', authorize(BILLS_FINANCIAL_ACTION), async (req,
         // Logged loudly because the ledger now needs reconciling.
         console.error(`Void on ${bill.bill_number}: item voided but GL reversal of ${voidedAmount} failed —`, voidGlErr.message);
       }
+    }
+
+    // Safety net behind the explicit reversal above: if anything about it was
+    // incomplete, this brings the bill and the ledger back into agreement.
+    try {
+      await AccountingService.syncBillRevenueToGL(billId, req.user?.id || 'system');
+    } catch (syncErr) {
+      console.error(`Bill ${bill.bill_number}: revenue sync after void failed —`, syncErr.message);
     }
 
     const billData = updatedBill.toJSON();

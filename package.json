@@ -22,7 +22,9 @@
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration",
     "test:e2e-jest": "jest --selectProjects e2e",
-    "test:integrity": "jest --selectProjects integrity"
+    "test:integrity": "jest --selectProjects integrity",
+    "accounting:check": "node ./src/server/scripts/accountingHealthCheck.js --all",
+    "accounting:reconcile": "node ./src/server/scripts/reconcileBillRevenue.js"
   },
   "engines": {
     "node": ">=18.0.0",
