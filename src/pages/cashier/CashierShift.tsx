@@ -291,7 +291,9 @@ const CashierShift: React.FC = () => {
         setAllShifts(data);
       }
     } catch (error) {
-      console.error('Failed to fetch shifts');
+      // Log the error itself: discarding it left "Failed to fetch shifts" in the
+      // console with nothing to act on.
+      console.error('Failed to fetch shifts:', error);
     }
   };
 

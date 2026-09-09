@@ -305,7 +305,12 @@ export default function BillDetails() {
   const fetchShift = async () => {
     try {
       const res = await authFetch('/api/cashier/current-shift', { credentials: 'include' });
-      setHasActiveShift(res.ok);
+      // The body decides, not the status. The endpoint now answers 200 with null
+      // when no till is open — a normal state rather than an error — so treating
+      // a successful response as "a shift is open" would let dispensing and
+      // billing proceed with no shift at all.
+      const shift = res.ok ? await res.json().catch(() => null) : null;
+      setHasActiveShift(!!shift?.id);
     } catch {
       setHasActiveShift(false);
     }

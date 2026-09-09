@@ -201,8 +201,11 @@ router.get('/current-shift', async (req, res) => {
     console.log('Active shift found:', shift ? { id: shift.id, status: shift.status } : 'NOT FOUND');
     
     if (!shift) {
-      console.log('No active shift found, returning 404');
-      return res.status(404).json({ message: 'No active shift' });
+      // 200 with null, not 404. "Nobody has opened a till yet" is a normal
+      // state, not a failure, and four screens ask this question on load — so a
+      // 404 put a red error in the browser console every time any of them
+      // opened, which is how a genuine failure goes unnoticed.
+      return res.json(null);
     }
     
     console.log('Returning active shift');
