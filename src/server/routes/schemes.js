@@ -329,8 +329,8 @@ router.post('/:id/members', async (req, res) => {
       INSERT INTO scheme_membership (id, clinic_id, scheme_id, patient_id, member_number,
         effective_from, effective_to, is_active, relationship_to_member, notes)
       VALUES (:id, :cid, :sid, :pid, :mnum, :from, :to, true, :rel, :notes)
-      ON DUPLICATE KEY UPDATE member_number = VALUES(member_number), effective_from = VALUES(effective_from),
-        effective_to = VALUES(effective_to), is_active = true, relationship_to_member = VALUES(relationship_to_member), notes = VALUES(notes)
+      ON CONFLICT (patient_id, scheme_id) DO UPDATE SET member_number = EXCLUDED.member_number, effective_from = EXCLUDED.effective_from,
+        effective_to = EXCLUDED.effective_to, is_active = true, relationship_to_member = EXCLUDED.relationship_to_member, notes = EXCLUDED.notes
     `, {
       replacements: {
         id, cid, sid: schemeId, pid: patient_id, mnum: member_number || null,
@@ -437,7 +437,7 @@ router.post('/patient-schemes/:patientId', async (req, res) => {
     await sequelize.query(`
       INSERT INTO scheme_membership (id, clinic_id, scheme_id, patient_id, member_number, effective_from, is_active)
       VALUES (:id, :cid, :sid, :pid, :mnum, :ef, true)
-      ON DUPLICATE KEY UPDATE is_active = true, member_number = VALUES(member_number)
+      ON CONFLICT (patient_id, scheme_id) DO UPDATE SET is_active = true, member_number = EXCLUDED.member_number
     `, {
       replacements: {
         id, cid, sid: scheme_id, pid: req.params.patientId,
@@ -525,13 +525,13 @@ router.post('/:id/service-pricing', async (req, res) => {
         :price, :curr, :markup, :disc,
         :copay, :copayPct, :coverage,
         :ef, :et, true, :notes, :revAcct, :by)
-      ON DUPLICATE KEY UPDATE
-        scheme_price = VALUES(scheme_price), scheme_currency = VALUES(scheme_currency),
-        markup_percentage = VALUES(markup_percentage), discount_percentage = VALUES(discount_percentage),
-        insurance_copay = VALUES(insurance_copay), insurance_copay_percentage = VALUES(insurance_copay_percentage),
-        insurance_coverage_amount = VALUES(insurance_coverage_amount),
-        effective_to = VALUES(effective_to), is_active = true, notes = VALUES(notes),
-        revenue_account_id = VALUES(revenue_account_id)
+      ON CONFLICT (scheme_id, service_id, effective_from) DO UPDATE SET
+        scheme_price = EXCLUDED.scheme_price, scheme_currency = EXCLUDED.scheme_currency,
+        markup_percentage = EXCLUDED.markup_percentage, discount_percentage = EXCLUDED.discount_percentage,
+        insurance_copay = EXCLUDED.insurance_copay, insurance_copay_percentage = EXCLUDED.insurance_copay_percentage,
+        insurance_coverage_amount = EXCLUDED.insurance_coverage_amount,
+        effective_to = EXCLUDED.effective_to, is_active = true, notes = EXCLUDED.notes,
+        revenue_account_id = EXCLUDED.revenue_account_id
     `, {
       replacements: {
         id, cid, sid: schemeId, svid: service_id,
@@ -640,10 +640,10 @@ router.post('/:id/service-pricing/bulk-update', async (req, res) => {
         INSERT INTO scheme_service_pricing (id, clinic_id, scheme_id, service_id, scheme_price, markup_percentage,
           discount_percentage, insurance_copay, insurance_copay_percentage, effective_from, is_active, created_by)
         VALUES (:id, :cid, :sid, :svid, :price, :markup, :disc, :copay, :copayPct, CURRENT_DATE, true, :by)
-        ON DUPLICATE KEY UPDATE
-          scheme_price = VALUES(scheme_price), markup_percentage = VALUES(markup_percentage),
-          discount_percentage = VALUES(discount_percentage), insurance_copay = VALUES(insurance_copay),
-          insurance_copay_percentage = VALUES(insurance_copay_percentage), is_active = true
+        ON CONFLICT (scheme_id, service_id, effective_from) DO UPDATE SET
+          scheme_price = EXCLUDED.scheme_price, markup_percentage = EXCLUDED.markup_percentage,
+          discount_percentage = EXCLUDED.discount_percentage, insurance_copay = EXCLUDED.insurance_copay,
+          insurance_copay_percentage = EXCLUDED.insurance_copay_percentage, is_active = true
       `, {
         replacements: {
           id, cid, sid: schemeId, svid: p.service_id,
@@ -753,13 +753,13 @@ router.post('/:id/product-pricing', async (req, res) => {
         :price, :curr, :markup, :disc,
         :copay, :copayPct, :coverage,
         :minQty, :maxQty, :ef, :et, true, :notes, :by)
-      ON DUPLICATE KEY UPDATE
-        scheme_price = VALUES(scheme_price), scheme_currency = VALUES(scheme_currency),
-        markup_percentage = VALUES(markup_percentage), discount_percentage = VALUES(discount_percentage),
-        insurance_copay = VALUES(insurance_copay), insurance_copay_percentage = VALUES(insurance_copay_percentage),
-        insurance_coverage_amount = VALUES(insurance_coverage_amount),
-        min_quantity = VALUES(min_quantity), max_quantity = VALUES(max_quantity),
-        effective_to = VALUES(effective_to), is_active = true, notes = VALUES(notes)
+      ON CONFLICT (scheme_id, product_id, product_type, effective_from) DO UPDATE SET
+        scheme_price = EXCLUDED.scheme_price, scheme_currency = EXCLUDED.scheme_currency,
+        markup_percentage = EXCLUDED.markup_percentage, discount_percentage = EXCLUDED.discount_percentage,
+        insurance_copay = EXCLUDED.insurance_copay, insurance_copay_percentage = EXCLUDED.insurance_copay_percentage,
+        insurance_coverage_amount = EXCLUDED.insurance_coverage_amount,
+        min_quantity = EXCLUDED.min_quantity, max_quantity = EXCLUDED.max_quantity,
+        effective_to = EXCLUDED.effective_to, is_active = true, notes = EXCLUDED.notes
     `, {
       replacements: {
         id, cid, sid: schemeId, pid: product_id, pt: product_type || 'drug',
@@ -1725,8 +1725,8 @@ router.post('/bulk-csv-pricing', async (req, res) => {
               scheme_price, scheme_currency, markup_percentage, discount_percentage,
               effective_from, is_active, created_by)
             VALUES (:id, :cid, :sid, :svid, :price, :curr, 0, 0, :ef, true, :by)
-            ON DUPLICATE KEY UPDATE
-              scheme_price = VALUES(scheme_price), scheme_currency = VALUES(scheme_currency), is_active = true
+            ON CONFLICT (scheme_id, service_id, effective_from) DO UPDATE SET
+              scheme_price = EXCLUDED.scheme_price, scheme_currency = EXCLUDED.scheme_currency, is_active = true
           `, {
             replacements: { id, cid, sid: p.scheme_id, svid: p.item_id, price, curr, ef: today, by: req.user?.id || null }
           });
@@ -1742,8 +1742,8 @@ router.post('/bulk-csv-pricing', async (req, res) => {
               scheme_price, scheme_currency, markup_percentage, discount_percentage,
               effective_from, is_active, created_by)
             VALUES (:id, :cid, :sid, :pid, 'drug', :price, :curr, 0, 0, :ef, true, :by)
-            ON DUPLICATE KEY UPDATE
-              scheme_price = VALUES(scheme_price), scheme_currency = VALUES(scheme_currency), is_active = true
+            ON CONFLICT (scheme_id, product_id, product_type, effective_from) DO UPDATE SET
+              scheme_price = EXCLUDED.scheme_price, scheme_currency = EXCLUDED.scheme_currency, is_active = true
           `, {
             replacements: { id, cid, sid: p.scheme_id, pid: p.item_id, price, curr, ef: today, by: req.user?.id || null }
           });

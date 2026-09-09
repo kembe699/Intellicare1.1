@@ -64,9 +64,9 @@ async function migrateMultiCurrency() {
   // 2. Enhance existing exchange_rates table
   // ──────────────────────────────────────────
   console.log('2. Enhancing exchange_rates table...');
-  await addColumnSafe('exchange_rates', 'buy_rate', 'DECIMAL(18,6) DEFAULT NULL AFTER rate');
-  await addColumnSafe('exchange_rates', 'sell_rate', 'DECIMAL(18,6) DEFAULT NULL AFTER buy_rate');
-  await addColumnSafe('exchange_rates', 'spot_rate', 'DECIMAL(18,6) DEFAULT NULL AFTER sell_rate');
+  await addColumnSafe('exchange_rates', 'buy_rate', 'DECIMAL(18,6) DEFAULT NULL');
+  await addColumnSafe('exchange_rates', 'sell_rate', 'DECIMAL(18,6) DEFAULT NULL');
+  await addColumnSafe('exchange_rates', 'spot_rate', 'DECIMAL(18,6) DEFAULT NULL');
   await addColumnSafe('exchange_rates', 'notes', 'TEXT DEFAULT NULL');
   console.log('  exchange_rates table enhanced');
 

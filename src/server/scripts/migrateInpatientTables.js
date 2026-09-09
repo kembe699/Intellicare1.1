@@ -1,4 +1,5 @@
 const { sequelize } = require('../models');
+const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 
 async function migrateInpatientTables() {
   console.log('\n=== Inpatient Module Migration ===\n');
@@ -231,7 +232,7 @@ async function migrateInpatientTables() {
     await sequelize.query('ALTER TABLE rooms MODIFY COLUMN ward_id CHAR(36) NULL');
     console.log('  ✅ rooms.ward_id is now nullable (for consultation rooms)');
   } catch (err) {
-    console.log(`  ℹ️  rooms.ward_id nullable migration skipped: ${err.message}`);
+    reportSchemaGuardFailure('rooms.ward_id nullable', err);
   }
 
   // Create indexes

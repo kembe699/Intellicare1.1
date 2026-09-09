@@ -1,4 +1,5 @@
 const express = require('express');
+const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
@@ -727,7 +728,7 @@ router.post('/purchase-requisitions/:id/cancel', authorize(PROCUREMENT_WRITE), a
       MODIFY COLUMN status ENUM('draft','check','approved','authorized','received','cancelled') DEFAULT 'draft'
     `);
   } catch (e) {
-    console.warn('Could not widen purchase_orders.status enum:', e.message);
+    reportSchemaGuardFailure('purchase_orders.status enum', e);
   }
 })();
 
@@ -1580,7 +1581,7 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
           INSERT INTO inventory_items (id, clinic_id, branch_id, item_code, item_name, unit_of_measure,
             quantity_on_hand, current_unit_cost, average_unit_cost, created_at, updated_at)
           VALUES (:id, :clinic_id, :branch_id, :item_code, :item_name, :uom, 0, 0, 0, NOW(), NOW())
-          ON DUPLICATE KEY UPDATE item_name = VALUES(item_name)
+          ON CONFLICT (clinic_id, item_code) DO UPDATE SET item_name = EXCLUDED.item_name
         `, {
           replacements: {
             id: inventoryItemId, clinic_id: grn.clinic_id, branch_id: getCreateBranchId(req),
@@ -1672,8 +1673,10 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
         await sequelize.query(`
           INSERT INTO stock_by_location (id, clinic_id, item_id, location_id, quantity_on_hand, updated_at)
           VALUES (:id, :clinic_id, :item_id, :location_id, :qty, NOW())
-          ON DUPLICATE KEY UPDATE
-            quantity_on_hand = quantity_on_hand + :qty,
+          ON CONFLICT (item_id, location_id) DO UPDATE SET
+            -- Qualified: an unqualified quantity_on_hand here is ambiguous between
+            -- the existing row and the one being inserted.
+            quantity_on_hand = stock_by_location.quantity_on_hand + EXCLUDED.quantity_on_hand,
             updated_at = NOW()
         `, {
           replacements: {

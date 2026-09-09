@@ -119,13 +119,13 @@ async function adjustDepositBalance(t, {
   if (!(amount > 0)) throw new Error('amount must be greater than zero');
   const cur = currency || BASE_CURRENCY;
 
-  // Ensure the balance row exists, then lock it. The no-op ON DUPLICATE KEY UPDATE is the
-  // standard MySQL idiom for "insert if absent" without a separate existence check racing
+  // Ensure the balance row exists, then lock it. The no-op ON CONFLICT DO NOTHING is the
+  // standard idiom for "insert if absent" without a separate existence check racing
   // against another transaction doing the same thing.
   await sequelize.query(
     `INSERT INTO patient_deposit_balances (patient_id, clinic_id, currency, balance)
      VALUES (?, ?, ?, 0)
-     ON DUPLICATE KEY UPDATE patient_id = patient_id`,
+     ON CONFLICT (patient_id, clinic_id, currency) DO NOTHING`,
     { replacements: [patientId, clinicId, cur], transaction: t }
   );
   const [rows] = await sequelize.query(

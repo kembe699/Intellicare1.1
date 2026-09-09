@@ -1,4 +1,5 @@
 const express = require('express');
+const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const { sequelize, PatientBill, Receipt, CashierShift } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -81,7 +82,7 @@ const { Op } = require('sequelize');
         ALTER TABLE patient_bills MODIFY COLUMN status
         ENUM('pending','partial','paid','overdue','active','written_off') DEFAULT 'pending'
       `);
-    } catch (e) { console.warn('Could not extend patient_bills.status enum:', e.message); }
+    } catch (e) { reportSchemaGuardFailure('patient_bills.status enum', e); }
 
     // Billing settings
     await sequelize.query(`

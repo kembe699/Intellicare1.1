@@ -39,10 +39,10 @@ router.post('/currencies', async (req, res) => {
     await sequelize.query(`
       INSERT INTO currencies (code, name, symbol, decimal_places, is_base_currency, is_active)
       VALUES (?, ?, ?, ?, ?, TRUE)
-      ON DUPLICATE KEY UPDATE
-        name = VALUES(name), symbol = VALUES(symbol),
-        decimal_places = VALUES(decimal_places),
-        is_base_currency = VALUES(is_base_currency), is_active = TRUE
+      ON CONFLICT (code) DO UPDATE SET
+        name = EXCLUDED.name, symbol = EXCLUDED.symbol,
+        decimal_places = EXCLUDED.decimal_places,
+        is_base_currency = EXCLUDED.is_base_currency, is_active = TRUE
     `, { replacements: [code.toUpperCase(), name, symbol || '', decimal_places || 2, is_base_currency || false] });
 
     res.json({ success: true, message: `Currency ${code} saved` });
@@ -345,12 +345,12 @@ router.put('/report-settings', async (req, res) => {
     await sequelize.query(`
       INSERT INTO multicurrency_report_settings (clinic_id, base_currency_code, secondary_currencies, show_individual_currencies, show_base_currency_conversion, show_exchange_gains_losses)
       VALUES (?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        base_currency_code = VALUES(base_currency_code),
-        secondary_currencies = VALUES(secondary_currencies),
-        show_individual_currencies = VALUES(show_individual_currencies),
-        show_base_currency_conversion = VALUES(show_base_currency_conversion),
-        show_exchange_gains_losses = VALUES(show_exchange_gains_losses)
+      ON CONFLICT (clinic_id) DO UPDATE SET
+        base_currency_code = EXCLUDED.base_currency_code,
+        secondary_currencies = EXCLUDED.secondary_currencies,
+        show_individual_currencies = EXCLUDED.show_individual_currencies,
+        show_base_currency_conversion = EXCLUDED.show_base_currency_conversion,
+        show_exchange_gains_losses = EXCLUDED.show_exchange_gains_losses
     `, { replacements: [clinicId, base_currency_code || 'SSP', JSON.stringify(secondary_currencies || ['USD']), show_individual_currencies !== false, show_base_currency_conversion !== false, show_exchange_gains_losses !== false] });
 
     res.json({ success: true });

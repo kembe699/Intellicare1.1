@@ -1,4 +1,5 @@
 const express = require('express');
+const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const { DailyExpense, LedgerAccount, ChartOfAccounts, sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -57,7 +58,7 @@ async function ensureColumnType(table, column, expectedDataType, modifySql) {
     if (rows.length && rows[0].DATA_TYPE !== expectedDataType) {
       await sequelize.query(modifySql);
     }
-  } catch (e) { console.warn(`ensureColumnType(${table}.${column}) failed:`, e.message); }
+  } catch (e) { reportSchemaGuardFailure('daily_expenses column type', e); }
 }
 
 // Ensure supplier_bill_payments table

@@ -1,4 +1,5 @@
 const express = require('express');
+const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -24,7 +25,7 @@ const { APPROVAL_TYPES } = require('../middleware/requireApprovalPermission');
     `);
     console.log('✅ approval_permissions table ready');
   } catch (error) {
-    console.error('Error creating approval_permissions table:', error.message);
+    reportSchemaGuardFailure('approval_permissions table', error);
   }
 })();
 
@@ -84,7 +85,7 @@ router.post('/permissions', authorize(['admin']), async (req, res) => {
     await sequelize.query(
       `INSERT INTO approval_permissions (id, clinic_id, user_id, approval_type, granted_by)
        VALUES (:id, :clinicId, :userId, :approvalType, :grantedBy)
-       ON DUPLICATE KEY UPDATE updated_at = NOW()`,
+       ON CONFLICT (clinic_id, user_id, approval_type) DO UPDATE SET updated_at = NOW()`,
       {
         replacements: {
           id,

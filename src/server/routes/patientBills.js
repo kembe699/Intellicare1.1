@@ -1,4 +1,5 @@
 const express = require('express');
+const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const { PatientBill, Patient, Receipt, sequelize } = require('../models');
 const { Op } = require('sequelize');
@@ -35,7 +36,7 @@ const BILLS_DELETE = ['admin'];
     await sequelize.query(`ALTER TABLE receipts MODIFY COLUMN payment_method ENUM('cash','card','check','lease','insurance','bank_transfer','deposit') NOT NULL DEFAULT 'cash'`);
     console.log('✅ Ensured bank_transfer/deposit are valid receipts.payment_method values');
   } catch (e) {
-    console.log('Note: Could not modify receipts.payment_method enum:', e.message);
+    reportSchemaGuardFailure('receipts.payment_method enum', e);
   }
 })();
 
