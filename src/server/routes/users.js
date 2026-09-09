@@ -163,6 +163,14 @@ router.post('/', authorize(['admin']), async (req, res) => {
     // id is intentionally omitted — users.id is a real INT AUTO_INCREMENT column, not a
     // UUID, so MySQL assigns it (a manually-generated UUID string here would overflow
     // the column and fail with "Data truncated for column 'id'").
+    // 12 characters from crypto randomness, avoiding the pairs that get misread
+    // when a password is written down and typed in by hand (O/0, l/1/I).
+    const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const tempPassword = Array.from(
+      require('crypto').randomBytes(12),
+      (b) => ALPHABET[b % ALPHABET.length],
+    ).join('');
+
     const userData = {
       email: req.body.email,
       display_name: req.body.displayName,
@@ -183,7 +191,15 @@ router.post('/', authorize(['admin']), async (req, res) => {
       is_active: req.body.isActive !== undefined ? req.body.isActive : true,
       status: req.body.status || 'active',
       created_by: req.body.createdBy || 'system',
-      password_hash: await bcrypt.hash('password123', 10) // Default password
+      // A one-off random password, not a shared constant.
+      //
+      // Every account in every tenant was created with the literal 'password123'
+      // until its owner changed it — so anyone who knew the convention could sign
+      // in as any newly created user, on any deployment, without needing to guess
+      // anything. For a system holding patient records that is a hole, not an
+      // inconvenience. The password is returned once in the response for the
+      // admin to hand over, and never stored or shown again.
+      password_hash: await bcrypt.hash(tempPassword, 10),
     };
     
     console.log('Creating user with data:', userData);
@@ -245,7 +261,9 @@ router.post('/', authorize(['admin']), async (req, res) => {
       console.error(`Could not verify clinic scoping for new user ${user.id}:`, checkErr.message);
     }
 
-    res.status(201).json(user);
+    // Returned once, here, so the admin can pass it on. It is not recoverable
+    // afterwards — only a reset can replace it.
+    res.status(201).json({ ...user.toJSON(), tempPassword });
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user', details: error.message });

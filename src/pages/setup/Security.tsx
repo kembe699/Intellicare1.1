@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -114,6 +115,7 @@ const Security: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [newCredentials, setNewCredentials] = useState<{ name: string; email: string; password: string } | null>(null);
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
 
   // Create form
@@ -390,7 +392,16 @@ const Security: React.FC = () => {
         throw new Error(err.message || err.error || 'Failed to create user');
       }
 
-      toast.success(`User ${createFormData.displayName} created successfully`);
+      // Shown once, in a dialog the admin has to dismiss deliberately — a toast
+      // would disappear on its own and take the only copy of the password with
+      // it. There is no way to retrieve it afterwards; the account would have to
+      // be reset instead.
+      const created = await response.json().catch(() => null);
+      setNewCredentials({
+        name: createFormData.displayName,
+        email: createFormData.email.toLowerCase().trim(),
+        password: created?.tempPassword || '',
+      });
       setCreateFormData({ displayName: '', email: '', role: '', clinic: user?.clinic || 'IntelliCare', branch_id: '' });
       fetchUsers();
     } catch (error: any) {
@@ -1065,6 +1076,53 @@ const Security: React.FC = () => {
         </Dialog>
       </div>
       </div>
+      {/* ── NEW USER CREDENTIALS — shown once ── */}
+      <Dialog open={!!newCredentials} onOpenChange={(o) => { if (!o) setNewCredentials(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Account created</DialogTitle>
+            <DialogDescription>
+              Give these details to {newCredentials?.name}. The password is shown only now.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 px-6 pb-6 pt-2">
+            <div className="rounded-md border bg-muted/40 p-3 space-y-2 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Email</span>
+                <span className="font-medium break-all">{newCredentials?.email}</span>
+              </div>
+              <div className="flex justify-between gap-3 items-center">
+                <span className="text-muted-foreground">Temporary password</span>
+                <span className="font-mono font-semibold tracking-wide">{newCredentials?.password || '—'}</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              It cannot be shown again. If it is lost, reset the account instead.
+              Ask them to change it after signing in.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-4 text-xs"
+                onClick={() => {
+                  const text = `Email: ${newCredentials?.email}\nTemporary password: ${newCredentials?.password}`;
+                  navigator.clipboard?.writeText(text).then(
+                    () => toast.success('Copied'),
+                    () => toast.error('Could not copy — write it down instead'),
+                  );
+                }}
+              >
+                Copy
+              </Button>
+              <Button size="sm" className="h-8 px-4 text-xs" onClick={() => setNewCredentials(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 };

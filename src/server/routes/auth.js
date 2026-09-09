@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Client } = require('../models/platform');
 const { getTenantConnection } = require('../tenantDb');
-const { authLimiter } = require('../middleware/rateLimiters');
+const { authLimiter, authSourceLimiter } = require('../middleware/rateLimiters');
 const router = express.Router();
 
 // JWT secret - MUST be set in environment
@@ -164,7 +164,7 @@ function buildUserResponse(user, branchContext) {
 // Login endpoint — code selects which client/instance to authenticate against
 // (typed on the login page, e.g. "nationmc"); email/password are then checked
 // against that client's own, fully separate database.
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', authSourceLimiter, authLimiter, async (req, res) => {
   try {
     const { code, email, password } = req.body;
 
