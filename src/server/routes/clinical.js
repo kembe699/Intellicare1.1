@@ -747,8 +747,6 @@ router.get('/services/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params;
     
-    // Ensure services table exists
-    await Service.sync();
     
     // Since the services table doesn't have clinic_id, return all active services
     const services = await Service.findAll({
@@ -766,8 +764,6 @@ router.get('/services/:clinicId', async (req, res) => {
 // Create new service
 router.post('/services', authorize(SERVICE_CATALOGUE), async (req, res) => {
   try {
-    // Ensure services table exists
-    await Service.sync();
     
     const { service_name, category, price, description, revenue_account_id, department_id, created_by } = req.body;
     

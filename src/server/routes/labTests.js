@@ -241,8 +241,6 @@ router.get('/:id', async (req, res) => {
 // Create new lab test
 router.post('/', authorize(['admin']), async (req, res) => {
   try {
-    // Ensure table exists
-    await LabTest.sync();
     
     // Use raw SQL to insert directly into lab_tests table
     const { test_name, test_code, category, price, clinic_id } = req.body;
@@ -575,8 +573,6 @@ router.delete('/:id/with-components', authorize(['admin']), async (req, res) => 
 // Add sample lab test data for testing
 router.post('/seed', authorize(['admin']), async (req, res) => {
   try {
-    // Ensure table exists
-    await LabTest.sync();
     
     const sampleTests = [
       {

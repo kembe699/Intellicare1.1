@@ -5,6 +5,9 @@ async function addIndexes() {
   const indexes = [
     // Patients - most queried table
     `CREATE INDEX IF NOT EXISTS idx_patients_clinic_id ON patients(clinic_id)`,
+    // Both are filtered on every read of their table and had no index.
+    `CREATE INDEX IF NOT EXISTS idx_audit_logs_clinic ON audit_logs(clinic_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_receipts_branch ON receipts(branch_id)`,
     `CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(first_name, last_name)`,
 
