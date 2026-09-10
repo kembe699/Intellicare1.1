@@ -366,8 +366,40 @@ router.get('/shift/:shiftId/report', async (req, res) => {
       invoicedCollected: invoices.reduce((sum, r) => sum + (parseFloat(r.amount_paid) || 0), 0),
     };
 
+    // Report the shift's headline figures from the receipts loaded above rather
+    // than the columns frozen when it closed.
+    //
+    // A shift closed before refunds were netted out keeps its gross total on the
+    // row forever, so the report showed "Total Amount 1,631,000" directly above
+    // "Collected 1,433,000" — the same money, two numbers, on one card. Deriving
+    // them here means every past shift reads correctly the next time it is
+    // opened, instead of each historical row having to be rewritten.
+    //
+    // Expected cash follows the same rule it always did — opening float plus cash
+    // taken, less cash already moved to the safe — only now the cash taken is net
+    // of refunds handed back. Card and mobile money still never touch the drawer.
+    const cashTransferred = await getShiftCashTransferred(shift);
+    const expectedCash = Math.round(
+      (parseFloat(shift.opening_balance || 0) + totals.collectedCash - cashTransferred) * 100
+    ) / 100;
+    const closingBalance = shift.closing_balance === null || shift.closing_balance === undefined
+      ? null
+      : parseFloat(shift.closing_balance);
+
+    const reportedShift = {
+      ...shift.toJSON(),
+      total_amount: totals.collectedTotal,
+      expected_cash: expectedCash,
+      cash_transferred: cashTransferred,
+      // Recomputed against the corrected expectation: a shift that only looked
+      // balanced because the expectation was overstated should stop saying so.
+      cash_variance: closingBalance === null
+        ? shift.cash_variance
+        : Math.round((closingBalance - expectedCash) * 100) / 100,
+    };
+
     res.json({
-      shift,
+      shift: reportedShift,
       activeReceipts: activeReceipts.map(normalizeReceipt),
       voidedReceipts: voidedReceipts.map(normalizeReceipt),
       refundedReceipts: refundedReceipts.map(normalizeReceipt),
