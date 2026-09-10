@@ -1709,6 +1709,12 @@ export default function DispensingWorkflow() {
                                 searchPlaceholder="Search medications..."
                                 exportable
                                 exportFileName={`${selectedRx.prescription_number}-medications`}
+                                // Hold the list to five rows and scroll past them. A
+                                // prescription with a dozen items otherwise grew the card
+                                // taller than the space it had, and the rows past the edge
+                                // were cropped rather than reachable. The header stays put
+                                // while scrolling so the columns remain labelled.
+                                maxRows={5}
                                 pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
                                 rowClassName={(l) => {
                                   const remaining = l.quantity_prescribed - (l.total_quantity_dispensed || 0);

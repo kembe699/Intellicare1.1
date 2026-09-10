@@ -66,6 +66,15 @@ export interface AdvancedDataTableProps<T> {
   
   // Styling
   stickyHeader?: boolean;
+  /**
+   * Cap the table body's height, in rows, and scroll past it.
+   *
+   * Without a cap a long table simply keeps growing, and inside a card that
+   * clips its overflow the rows past the edge become unreachable. Pass a row
+   * count to hold the table to a fixed window instead. Implies a sticky header,
+   * since a header that scrolls away leaves the columns unlabelled.
+   */
+  maxRows?: number;
   compact?: boolean;
 }
 
@@ -90,6 +99,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   exportFileName = 'export',
   bulkActions = [],
   stickyHeader = false,
+  maxRows,
   compact = false,
 }: AdvancedDataTableProps<T>) {
   const [sortConfig, setSortConfig] = useState<{
@@ -287,9 +297,12 @@ export function AdvancedDataTable<T extends Record<string, any>>({
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div
+        className={cn('overflow-x-auto', maxRows && 'overflow-y-auto')}
+        style={maxRows ? { maxHeight: `calc(${maxRows + 1} * 2.75rem)` } : undefined}
+      >
         <table className="w-full border-collapse">
-          <thead className={cn(stickyHeader && 'sticky top-0 z-10')}>
+          <thead className={cn((stickyHeader || maxRows) && 'sticky top-0 z-10')}>
             <tr className="bg-muted/60 border-b border-border">
               {selectable && (
                 <th className="px-4 py-2.5 text-left w-12">
