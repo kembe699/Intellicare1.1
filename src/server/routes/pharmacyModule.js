@@ -1375,11 +1375,17 @@ router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
     console.log('Step 3: Generating dispensing number');
     const now = new Date();
     const dispPrefix = `DISP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    // Highest issued, not how many exist — a gap in the sequence otherwise puts
+    // this on a number already taken, and the dispense fails on the unique
+    // transaction_number of the inventory movement it writes.
     const [dispCount] = await sequelize.query(
-      "SELECT COUNT(*) AS cnt FROM dispensing_records WHERE dispensing_number LIKE :prefix",
+      `SELECT COALESCE(MAX(NULLIF(regexp_replace(dispensing_number, '^.*-', ''), '')::int), 0) AS cnt
+         FROM dispensing_records
+        WHERE dispensing_number LIKE :prefix
+          AND dispensing_number ~ '-[0-9]+$'`,
       { replacements: { prefix: `${dispPrefix}%` }, transaction: t }
     );
-    const dispSeq = (dispCount[0]?.cnt || 0) + 1;
+    const dispSeq = (parseInt(dispCount[0]?.cnt, 10) || 0) + 1;
     const dispensingNumber = `${dispPrefix}-${String(dispSeq).padStart(4, '0')}`;
     console.log('✅ Step 3 complete: Dispensing number:', dispensingNumber);
 

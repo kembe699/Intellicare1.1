@@ -72,11 +72,20 @@ async function dispenseLine(sequelize, line, quantity, pharmacistId, transaction
     : null;
   const now = new Date();
   const prefix = `DISP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // Next number comes from the highest one issued, not from how many exist.
+  // Counting assumes the sequence has no gaps, and it does: cancelled and
+  // deleted records leave holes, so the count lands on a number already taken
+  // and the insert dies on inventory_transactions' unique transaction_number —
+  // which surfaces only as "Validation error", giving no clue why nothing could
+  // be dispensed.
   const [[seqRow]] = await sequelize.query(
-    'SELECT COUNT(*) AS cnt FROM dispensing_records WHERE dispensing_number LIKE :prefix',
+    `SELECT COALESCE(MAX(NULLIF(regexp_replace(dispensing_number, '^.*-', ''), '')::int), 0) AS last
+       FROM dispensing_records
+      WHERE dispensing_number LIKE :prefix
+        AND dispensing_number ~ '-[0-9]+$'`,
     { replacements: { prefix: `${prefix}%` }, transaction }
   );
-  const dispensingNumber = `${prefix}-${String((parseInt(seqRow?.cnt, 10) || 0) + 1).padStart(4, '0')}`;
+  const dispensingNumber = `${prefix}-${String((parseInt(seqRow?.last, 10) || 0) + 1).padStart(4, '0')}`;
   const dispId = uuidv4();
   const unitPrice = parseFloat(line.unit_price) || 0;
 
@@ -122,13 +131,23 @@ async function dispenseLine(sequelize, line, quantity, pharmacistId, transaction
     transaction,
   });
 
+  // Two statements rather than one. A placeholder inside a CASE that also holds
+  // string literals trips Sequelize's replacement parser — it emits the ':' to
+  // PostgreSQL unsubstituted and the statement dies on a syntax error, which
+  // surfaces only as "Validation error" once the driver has wrapped it.
   await sequelize.query(
     `UPDATE prescription_lines
-        SET total_quantity_dispensed = COALESCE(total_quantity_dispensed, 0) + :qty,
-            status = CASE WHEN COALESCE(total_quantity_dispensed, 0) + :qty >= quantity_prescribed
-                          THEN 'dispensed' ELSE 'partial' END
+        SET total_quantity_dispensed = COALESCE(total_quantity_dispensed, 0) + :qty
       WHERE id = :id`,
     { replacements: { qty: quantity, id: line.line_id }, transaction }
+  );
+
+  await sequelize.query(
+    `UPDATE prescription_lines
+        SET status = CASE WHEN COALESCE(total_quantity_dispensed, 0) >= quantity_prescribed
+                          THEN 'dispensed' ELSE 'partial' END
+      WHERE id = :id`,
+    { replacements: { id: line.line_id }, transaction }
   );
 
   await sequelize.query(
@@ -183,9 +202,17 @@ async function dispensePaidFor(sequelize, patientId, pharmacistId = null, { dryR
       result.dispensed.push({ prescription: line.prescription_number, drug: line.drug_name, quantity: wanted });
     } catch (err) {
       if (!t.finished) await t.rollback().catch(() => {});
+      // "Validation error" is all Sequelize puts in .message for a constraint or
+      // type failure; the column and detail live on the driver error underneath.
+      // Without them a skipped line says nothing about why it was skipped, which
+      // is useless to the pharmacist who has to chase it.
+      const cause = err.parent || err.original;
+      const detail = [cause?.detail, cause?.column && `column ${cause.column}`, cause?.constraint]
+        .filter(Boolean).join('; ');
       result.skipped.push({
         prescription: line.prescription_number, drug: line.drug_name,
-        needed: wanted, stock, reason: err.message,
+        needed: wanted, stock,
+        reason: detail ? `${err.message} (${detail})` : err.message,
       });
     }
   }
