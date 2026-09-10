@@ -1814,6 +1814,57 @@ router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, r
       });
     } catch (e) {}
 
+    // Hand over anything this payment has now paid for.
+
+    //
+
+    // A prescription carries no reference to the bill that covers it, so it sat
+
+    // 'pending' after payment until someone opened it and dispensed by hand —
+
+    // which, at a couple of hundred prescriptions, did not happen. Dispensing
+
+    // here closes that gap at the moment the money is taken.
+
+    //
+
+    // Deliberately not fatal and deliberately not silent: the payment is already
+
+    // recorded and must not be undone because a drug was out of stock, but a
+
+    // pharmacist needs to know what was left behind, so skips are logged.
+
+    // Set PHARMACY_AUTO_DISPENSE=off to require the counter to dispense by hand.
+
+    if (String(process.env.PHARMACY_AUTO_DISPENSE || 'on').toLowerCase() !== 'off') {
+
+      try {
+
+        const { dispensePaidFor } = require('../services/autoDispense');
+
+        const outcome = await dispensePaidFor(sequelize, currentBill.patient_id, req.user?.id || null);
+
+        if (outcome.dispensed.length) {
+
+          console.log(`Auto-dispensed ${outcome.dispensed.length} line(s) for ${currentBill.patient_name} after payment on ${currentBill.bill_number}`);
+
+        }
+
+        for (const s of outcome.skipped) {
+
+          console.warn(`Not dispensed for ${currentBill.patient_name} — ${s.drug} (${s.prescription}): ${s.reason}, needed ${s.needed}, stock ${s.stock}`);
+
+        }
+
+      } catch (autoErr) {
+
+        console.error(`Auto-dispense after payment on ${currentBill.bill_number} failed:`, autoErr.message);
+
+      }
+
+    }
+
+
     res.json({
       message: 'Payment added successfully',
       bill: updatedBill,
