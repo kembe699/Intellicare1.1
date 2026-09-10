@@ -205,20 +205,31 @@ class AccountingService {
    * @param {string} userId - User posting the entry
    */
   async postGLEntry(glId, userId) {
+    // Read before opening the transaction. Querying without passing the
+    // transaction while holding one checks out a second connection from the
+    // same pool, and the pool is small: under concurrent billing every request
+    // ended up holding one connection and waiting for another, so bills were
+    // written while their ledger entry timed out — the income statement then
+    // reported less than the cashier had actually taken.
+    const glEntry = await GeneralLedger.findByPk(glId);
+    if (!glEntry) {
+      throw new Error('GL entry not found');
+    }
+
+    if (glEntry.status === 'posted' && glEntry.is_posted) {
+      // Not an error. createGLEntry posts by default now, and most callers
+      // still call this straight afterwards; throwing here would turn a
+      // correctly-posted entry into a failure at every one of those sites.
+      // This returns before any transaction is opened — it used to return out
+      // of an open one, which leaked that connection permanently. Since this
+      // is the common path, the pool drained a connection per bill until
+      // nothing could post at all.
+      return glEntry;
+    }
+
     const transaction = await sequelize.transaction();
-    
+
     try {
-      const glEntry = await GeneralLedger.findByPk(glId);
-      if (!glEntry) {
-        throw new Error('GL entry not found');
-      }
-      
-      if (glEntry.status === 'posted' && glEntry.is_posted) {
-        // Not an error. createGLEntry posts by default now, and most callers
-        // still call this straight afterwards; throwing here would turn a
-        // correctly-posted entry into a failure at every one of those sites.
-        return glEntry;
-      }
       
       // Update GL entry status
       await glEntry.update({

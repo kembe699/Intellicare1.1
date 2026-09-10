@@ -237,3 +237,43 @@ export const printThermalReceipt = (receiptElement: HTMLElement) => {
     win.document.close();
   }
 };
+
+/**
+ * Print the off-screen receipt once it has actually rendered.
+ *
+ * The receipt is mounted off-screen and its innerHTML is snapshotted at print
+ * time, so printing before React has painted it produces a receipt with the
+ * patient's name and details missing — which is what reached patients. The old
+ * code waited a flat 150ms and hoped, which held until the app was busy or the
+ * device slow, and then silently failed.
+ *
+ * This waits for the node to actually carry content instead of guessing, and
+ * gives up rather than printing a blank slip: an unprinted receipt can be
+ * reprinted from the Receipts page, a blank one handed over cannot be undone.
+ */
+export const printReceiptWhenPainted = (
+  getElement: () => HTMLElement | null,
+  onSettled: (printed: boolean) => void,
+  timeoutMs = 5000
+) => {
+  let cancelled = false;
+  const startedAt = Date.now();
+
+  const attempt = () => {
+    if (cancelled) return;
+    const el = getElement();
+    if (el && (el.textContent || '').trim().length > 0) {
+      printThermalReceipt(el);
+      onSettled(true);
+      return;
+    }
+    if (Date.now() - startedAt > timeoutMs) {
+      onSettled(false);
+      return;
+    }
+    requestAnimationFrame(attempt);
+  };
+
+  requestAnimationFrame(attempt);
+  return () => { cancelled = true; };
+};

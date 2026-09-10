@@ -66,6 +66,16 @@ function buildSequelize(schemaName, { logging } = {}) {
     hooks: {
       async afterConnect(connection) {
         await connection.query(`SET search_path TO "${schema}", public`);
+        // A transaction that opens and then stops issuing statements holds its
+        // connection forever. With a small per-tenant pool that is enough to
+        // starve the rest of the app: billing could still write the bill but
+        // could not get a connection to post the matching ledger entry, so the
+        // income statement silently drifted below the cashier's takings.
+        // Nothing here legitimately sits idle mid-transaction, so let Postgres
+        // reclaim those rather than relying on every path to unwind cleanly.
+        await connection.query(
+          `SET idle_in_transaction_session_timeout = '${parseInt(process.env.DB_IDLE_TX_TIMEOUT_MS || '60000', 10)}'`
+        );
       },
     },
     // Every tenant now shares one database, so the per-tenant pools add up

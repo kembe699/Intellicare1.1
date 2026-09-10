@@ -17,7 +17,7 @@ import {
   CreditCard, Printer, Pencil, Shield, FileText, User, Stethoscope, PackageX, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PaymentReceipt, printThermalReceipt } from '@/components/receipts/PaymentReceipt';
+import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 const API = '/api/pharmacy-module';
@@ -168,11 +168,17 @@ export default function DispensingWorkflow() {
   // click Print" confirmation step first. Let the off-screen receipt paint, then print.
   useEffect(() => {
     if (!receiptData) return;
-    const t = setTimeout(() => {
-      if (receiptRef.current) printThermalReceipt(receiptRef.current);
-      setReceiptData(null);
-    }, 150);
-    return () => clearTimeout(t);
+    // Wait for the off-screen receipt to actually paint rather than assuming a
+    // fixed delay is enough — a slow render used to print a receipt with the
+    // patient's details blank.
+    const cancel = printReceiptWhenPainted(
+      () => receiptRef.current,
+      (printed) => {
+        setReceiptData(null);
+        if (!printed) toast.error('Receipt could not be prepared for printing — reprint it from the Receipts page');
+      }
+    );
+    return cancel;
   }, [receiptData]);
 
   useEffect(() => {

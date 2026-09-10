@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { PaymentReceipt, printThermalReceipt } from '@/components/receipts/PaymentReceipt';
+import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
   ArrowLeft, Plus, DollarSign, X, Loader2, Check,
@@ -166,11 +166,17 @@ export default function BillDetails() {
   // click Print" confirmation step first. Let the off-screen receipt paint, then print.
   useEffect(() => {
     if (!receiptData) return;
-    const t = setTimeout(() => {
-      if (receiptRef.current) printThermalReceipt(receiptRef.current);
-      setReceiptData(null);
-    }, 150);
-    return () => clearTimeout(t);
+    // Wait for the off-screen receipt to actually paint rather than assuming a
+    // fixed delay is enough — a slow render used to print a receipt with the
+    // patient's details blank.
+    const cancel = printReceiptWhenPainted(
+      () => receiptRef.current,
+      (printed) => {
+        setReceiptData(null);
+        if (!printed) toast.error('Receipt could not be prepared for printing — reprint it from the Receipts page');
+      }
+    );
+    return cancel;
   }, [receiptData]);
 
   const fetchPatientDepositBalance = async (patientId: string) => {

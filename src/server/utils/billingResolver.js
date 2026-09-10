@@ -1,5 +1,23 @@
 const { normalizeServices } = require('./normalizeServices');
 
+// A failure to reach the database at all, as opposed to a query that legitimately
+// answered nothing. The visit helpers below deliberately treat their own errors as
+// "this patient has no open visit", which is right for a tenant whose lis_test_orders
+// table does not exist yet, and badly wrong for a connection-pool timeout: the charge
+// would silently land on a new bill instead of the patient's open one.
+function isInfrastructureError(e) {
+  const name = e?.name || '';
+  const msg = e?.message || '';
+  return (
+    name === 'SequelizeConnectionError' ||
+    name === 'SequelizeConnectionAcquireTimeoutError' ||
+    name === 'SequelizeConnectionRefusedError' ||
+    name === 'SequelizeHostNotReachableError' ||
+    name === 'TimeoutError' ||
+    /operation timeout|connection terminated|pool is draining/i.test(msg)
+  );
+}
+
 // The patient's current open (not-yet-closed) clinical encounter, if any.
 //
 // The live doctor workflow's unit of encounter is an `lis_test_orders` row (created per
@@ -10,16 +28,17 @@ const { normalizeServices } = require('./normalizeServices');
 // closed visit keeps absorbing charges from a brand-new one (or a brand-new bill gets
 // created next to one that should have been reused) purely because two code paths
 // disagreed on what "active" means.
-async function getCurrentOpenVisitId(patientId, clinicId) {
+async function getCurrentOpenVisitId(patientId, clinicId, { transaction } = {}) {
   if (!patientId) return null;
   try {
     const { sequelize } = require('../models');
     const [[order]] = await sequelize.query(
       `SELECT id FROM lis_test_orders WHERE participant_id = :pid AND status != 'closed' ORDER BY created_at DESC LIMIT 1`,
-      { replacements: { pid: patientId } }
+      { replacements: { pid: patientId }, transaction }
     );
     return order?.id || null;
   } catch (e) {
+    if (isInfrastructureError(e)) throw e;
     return null;
   }
 }
@@ -28,16 +47,17 @@ async function getCurrentOpenVisitId(patientId, clinicId) {
 // falls back to the pre-existing patient-wide bill lookup) from "has visit history but
 // every visit is closed right now" (must NOT fall back, or a bill from an already-closed
 // visit would keep being found and reused forever).
-async function hasAnyVisitHistory(patientId) {
+async function hasAnyVisitHistory(patientId, { transaction } = {}) {
   if (!patientId) return false;
   try {
     const { sequelize } = require('../models');
     const [[row]] = await sequelize.query(
       `SELECT COUNT(*) AS cnt FROM lis_test_orders WHERE participant_id = :pid`,
-      { replacements: { pid: patientId } }
+      { replacements: { pid: patientId }, transaction }
     );
     return (parseInt(row?.cnt, 10) || 0) > 0;
   } catch (e) {
+    if (isInfrastructureError(e)) throw e;
     return false;
   }
 }
@@ -51,7 +71,7 @@ async function resolveActiveBill(patientId, clinicId, { transaction, lock, visit
   const { PatientBill } = require('../models');
   const { Op } = require('sequelize');
 
-  const resolvedVisitId = visitId !== undefined ? visitId : await getCurrentOpenVisitId(patientId, clinicId);
+  const resolvedVisitId = visitId !== undefined ? visitId : await getCurrentOpenVisitId(patientId, clinicId, { transaction });
   const statusFilter = { [Op.in]: ['pending', 'partial', 'paid', 'active'] };
 
   if (resolvedVisitId) {
@@ -66,7 +86,7 @@ async function resolveActiveBill(patientId, clinicId, { transaction, lock, visit
 
   // No open visit. If this patient has visit history at all, every visit is closed —
   // there must be no reusable bill; the next charge starts a fresh one.
-  if (await hasAnyVisitHistory(patientId)) {
+  if (await hasAnyVisitHistory(patientId, { transaction })) {
     return { bill: null, resolvedVisitId: null };
   }
 

@@ -13,7 +13,7 @@ import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { PaymentReceipt, printThermalReceipt } from '@/components/receipts/PaymentReceipt';
+import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { DepositReceipt } from '@/components/receipts/DepositReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -140,21 +140,33 @@ export default function PatientsBill() {
   // click Print" confirmation step first. Let the off-screen receipt paint, then print.
   useEffect(() => {
     if (!receiptData) return;
-    const t = setTimeout(() => {
-      if (receiptRef.current) printThermalReceipt(receiptRef.current);
-      setReceiptData(null);
-    }, 150);
-    return () => clearTimeout(t);
+    // Wait for the off-screen receipt to actually paint rather than assuming a
+    // fixed delay is enough — a slow render used to print a receipt with the
+    // patient's details blank.
+    const cancel = printReceiptWhenPainted(
+      () => receiptRef.current,
+      (printed) => {
+        setReceiptData(null);
+        if (!printed) toast.error('Receipt could not be prepared for printing — reprint it from the Receipts page');
+      }
+    );
+    return cancel;
   }, [receiptData]);
 
   // Same auto-print pattern for a deposit/refund receipt.
   useEffect(() => {
     if (!depositReceiptData) return;
-    const t = setTimeout(() => {
-      if (depositReceiptRef.current) printThermalReceipt(depositReceiptRef.current);
-      setDepositReceiptData(null);
-    }, 150);
-    return () => clearTimeout(t);
+    // Wait for the off-screen receipt to actually paint rather than assuming a
+    // fixed delay is enough — a slow render used to print a receipt with the
+    // patient's details blank.
+    const cancel = printReceiptWhenPainted(
+      () => depositReceiptRef.current,
+      (printed) => {
+        setDepositReceiptData(null);
+        if (!printed) toast.error('Receipt could not be prepared for printing — reprint it from the Receipts page');
+      }
+    );
+    return cancel;
   }, [depositReceiptData]);
 
   // Whether this user can refund a deposit — admins always can; everyone else needs the
