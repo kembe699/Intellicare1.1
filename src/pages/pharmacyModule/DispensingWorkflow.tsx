@@ -1640,12 +1640,19 @@ export default function DispensingWorkflow() {
                   </div>
                 </div>
 
-                {/* Bill Items — full width, matching /patients-bill. */}
-                <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
+                {/* Bill Items — full width, matching /patients-bill.
+                    min-w-0 on the card and its body: a flex item's default
+                    min-width:auto makes it as wide as its widest cell, so the
+                    card outgrew the page and overflow-hidden cropped the table
+                    instead of the table scrolling within it. The medication
+                    name and the out-of-stock note are both long enough to
+                    trigger it, which put Total off the right edge with no way
+                    to reach it. */}
+                <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden min-w-0">
                   <div className="p-4 border-b bg-muted/30">
                     <h3 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary" /> Bill Items</h3>
                   </div>
-                  <div className="p-4">
+                  <div className="p-4 min-w-0">
                     {detailLoading ? (
                       <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
                     ) : !selectedRx ? (
@@ -1694,7 +1701,7 @@ export default function DispensingWorkflow() {
                             return sp ? sum + (parseFloat(sp.scheme_price) || 0) * (l.quantity_prescribed || 0) : sum;
                           }, 0);
                           return (
-                            <div className="border rounded-xl overflow-hidden">
+                            <div className="border rounded-xl overflow-x-auto min-w-0">
                               <AdvancedDataTable<any>
                                 data={activeLines}
                                 keyExtractor={(l) => l.id}
