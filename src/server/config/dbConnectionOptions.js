@@ -83,7 +83,13 @@ function buildSequelize(schemaName, { logging } = {}) {
     // far fewer connections than the old self-hosted server did, so this is
     // deliberately smaller than the previous 15 and tunable per environment.
     pool: {
-      max: parseInt(process.env.DB_POOL_MAX || '5', 10),
+      // Raised from 5. Five was enough only while nothing held a connection
+      // longer than it needed one; a single leaked connection left four, and
+      // ledger posting started timing out while bills kept saving. The leak is
+      // fixed, but the margin was too thin to absorb an ordinary busy moment.
+      // Managed Postgres allows 100 connections, so a handful of tenants at 10
+      // each still leaves room for migrations, the control plane and psql.
+      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
       min: 0,
       acquire: 30000,
       idle: 10000,

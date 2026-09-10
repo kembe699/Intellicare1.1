@@ -930,6 +930,28 @@ async function startServer() {
   if (dbReady) {
     console.log('✅ Database ready — server is now accepting requests');
     setImmediate(() => runBackgroundMigrations().catch(console.error));
+    // A bill is committed before its ledger entry is written, so any failure in
+    // between leaves revenue off the reports with nothing looking wrong — the
+    // bill saved, the receipt printed, the cashier balanced, and only the
+    // income statement was short. This closes that gap continuously instead of
+    // waiting for someone to notice a total disagreeing days later.
+    //
+    // Scheduled on its own rather than after the platform database finishes
+    // setting itself up: whether an admin account could be seeded has nothing
+    // to do with whether the books are correct, and chaining the two meant one
+    // unrelated startup failure silently switched this off.
+    setImmediate(() => {
+      const { sweepAllTenants } = require('./services/ledgerSweeper');
+      const runLedgerSweep = () => sweepAllTenants()
+        .then(({ repaired, corrected, failed }) => {
+          if (repaired > 0) console.log(`🧾 Ledger sweep: repaired ${repaired} bill(s), ${corrected.toFixed(2)} adjusted.`);
+          if (failed > 0) console.warn(`⚠️  Ledger sweep: ${failed} tenant(s) could not be swept.`);
+        })
+        .catch((err) => console.error('⚠️  Ledger sweep failed:', err.message));
+      runLedgerSweep();
+      setInterval(runLedgerSweep, 10 * 60 * 1000); // every 10 minutes
+    });
+
     setImmediate(() => {
       require('./models/platform').initializePlatformDatabase()
         .then(() => {
@@ -955,6 +977,7 @@ async function startServer() {
             .catch((err) => console.error('⚠️  DB usage snapshot failed:', err.message));
           runUsageSnapshot();
           setInterval(runUsageSnapshot, 6 * 60 * 60 * 1000); // every 6 hours
+
         })
         .catch((err) => console.error('⚠️  Platform database init failed:', err.message));
     });

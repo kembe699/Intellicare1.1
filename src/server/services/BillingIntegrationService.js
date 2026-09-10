@@ -1,6 +1,46 @@
 const AccountingService = require('./AccountingService');
 const { PatientBill, Receipt } = require('../models');
 
+/**
+ * Retry an operation that failed for a reason unrelated to its own correctness.
+ *
+ * A connection that was momentarily unavailable says nothing about whether the
+ * entry is valid, and the cost of giving up is silent: the bill is already
+ * committed, so the money simply never reaches the reports. Anything that looks
+ * like an accounting error is passed straight through — retrying a missing
+ * account or an unbalanced entry only produces the same failure again.
+ */
+const TRANSIENT = /operation timeout|connection terminated|connection refused|econnreset|etimedout|server closed the connection|too many clients|pool is draining/i;
+
+function isTransient(error) {
+  const name = error?.name || '';
+  if (name === 'SequelizeConnectionAcquireTimeoutError'
+    || name === 'SequelizeConnectionError'
+    || name === 'SequelizeConnectionRefusedError'
+    || name === 'SequelizeHostNotReachableError'
+    || name === 'TimeoutError') return true;
+  return TRANSIENT.test(error?.message || '');
+}
+
+async function withTransientRetry(operation, label, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === attempts) throw error;
+      // Back off before retrying so a pool under pressure is given a moment to
+      // drain rather than being hammered by the retry itself.
+      const waitMs = 250 * attempt;
+      console.warn(`${label}: ${error.message} — retrying in ${waitMs}ms (attempt ${attempt + 1}/${attempts})`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw lastError;
+}
+
+
 class BillingIntegrationService {
   
   /**
@@ -11,15 +51,26 @@ class BillingIntegrationService {
   async handleBillCreation(billData, userId) {
     try {
       console.log('Creating accounting entries for patient bill:', billData.bill_number);
-      
-      // Create GL entry for the bill (Debit Receivables, Credit Revenue)
-      const glEntry = await AccountingService.createGLFromPatientBill(billData, userId);
-      
+
+      // Retry a transient failure rather than dropping the entry on the floor.
+      // A busy moment — a connection briefly unavailable, a dropped socket — is
+      // not a reason for a bill's revenue to go unrecorded, and the ledger
+      // sweeper would otherwise not correct it for several minutes. A real
+      // accounting fault (a missing account, an unbalanced entry) is not
+      // retried: repeating it just produces the same error more slowly.
+      const glEntry = await withTransientRetry(
+        () => AccountingService.createGLFromPatientBill(billData, userId),
+        `ledger entry for bill ${billData.bill_number}`
+      );
+
       // Post the GL entry immediately for patient billing
-      await AccountingService.postGLEntry(glEntry.id, userId);
-      
+      await withTransientRetry(
+        () => AccountingService.postGLEntry(glEntry.id, userId),
+        `posting ledger entry for bill ${billData.bill_number}`
+      );
+
       console.log(`GL entry ${glEntry.gl_number} created and posted for bill ${billData.bill_number}`);
-      
+
       return glEntry;
     } catch (error) {
       // Deliberately not rethrown: a bill must not fail because its ledger entry

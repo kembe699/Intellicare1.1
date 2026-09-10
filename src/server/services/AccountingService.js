@@ -665,9 +665,18 @@ class AccountingService {
       description: `Receivable ${adding ? 'adjustment' : 'reversal'} - ${bill.bill_number}`,
     });
 
+    // Date the correction to the bill, not to the day the correction happened.
+    // Revenue belongs to the period the bill was raised in: dating a repair to
+    // today moves an old bill's money onto today's income statement and leaves
+    // the day it actually belonged to permanently short. A late repair must
+    // leave every day's total right, including days already reported on.
+    const billDay = bill.bill_date
+      ? new Date(bill.bill_date).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+
     const glEntry = await this.createGLEntry({
       clinic_id: bill.clinic_id,
-      transaction_date: new Date().toISOString().split('T')[0],
+      transaction_date: billDay,
       transaction_type: 'bill_revenue_adjustment',
       description: `Revenue brought in line with bill ${bill.bill_number}`,
       reference_id: bill.id,
