@@ -51,6 +51,25 @@ function normalizeReceipt(r) {
 // A shift's receipts are the *cashier's own* active receipts in the time window — not
 // every receipt in the branch, which would double-count when two cashiers work the same
 // branch concurrently, and not voided/refunded receipts, which never touched the drawer.
+// Cash handed back to a patient during the shift.
+//
+// A bill refund is written as its own receipt with a NEGATIVE payment_amount and
+// status 'refunded' (REF-...), leaving the original payment receipt 'active'. So
+// it never appears in getShiftReceipts, and nothing subtracted it: the shift
+// reported the gross takings while that money had physically left the drawer, so
+// the day's total read high and expected cash read high with it — the cashier
+// would come up short at reconciliation for money they had correctly paid out.
+//
+// Keyed on the negative sign rather than the status, because a refund recorded by
+// flipping the original receipt to 'refunded' (positive amount) is already
+// excluded from the active list; subtracting that too would count it twice.
+function refundedOut(receipts, predicate = () => true) {
+  return receipts
+    .filter((r) => (parseFloat(r.payment_amount) || 0) < 0)
+    .filter(predicate)
+    .reduce((sum, r) => sum + Math.abs(parseFloat(r.payment_amount) || 0), 0);
+}
+
 async function getShiftReceipts(req, shift, endTime) {
   return Receipt.findAll({
     where: {
@@ -266,7 +285,11 @@ router.get('/shifts', async (req, res) => {
     const shiftsWithTotals = await Promise.all(shifts.map(async (shift) => {
       if (shift.status === 'closed') return shift.toJSON();
       const receipts = await getShiftReceipts(req, shift, new Date());
-      const actualTotalAmount = receipts.reduce((sum, r) => sum + parseFloat(r.payment_amount || 0), 0);
+      // Net out cash refunded during the shift, for the same reason close-shift
+      // does: the running total is read as what the shift is holding.
+      const refunded = await getShiftReceiptsByStatus(req, shift, new Date(), ['refunded']);
+      const actualTotalAmount = receipts.reduce((sum, r) => sum + parseFloat(r.payment_amount || 0), 0)
+        - refundedOut(refunded);
       return {
         ...shift.toJSON(),
         total_amount: actualTotalAmount,
@@ -329,12 +352,14 @@ router.get('/shift/:shiftId/report', async (req, res) => {
       return r.receipt_type === 'deposit_refund' ? -magnitude : magnitude;
     };
     const sumBy = (list, pred) => list.filter(pred).reduce((sum, r) => sum + signedAmount(r), 0);
+    const byMethod = (method) => (r) => r.payment_method === method;
     const totals = {
-      collectedCash: sumBy(activeReceipts, r => r.payment_method === 'cash'),
-      collectedCard: sumBy(activeReceipts, r => r.payment_method === 'card'),
-      collectedMobile: sumBy(activeReceipts, r => r.payment_method === 'mobile_money'),
-      collectedOther: sumBy(activeReceipts, r => !['cash', 'card', 'mobile_money'].includes(r.payment_method)),
-      collectedTotal: activeReceipts.reduce((sum, r) => sum + signedAmount(r), 0),
+      collectedCash: sumBy(activeReceipts, byMethod('cash')) - refundedOut(refundedReceipts, byMethod('cash')),
+      collectedCard: sumBy(activeReceipts, byMethod('card')) - refundedOut(refundedReceipts, byMethod('card')),
+      collectedMobile: sumBy(activeReceipts, byMethod('mobile_money')) - refundedOut(refundedReceipts, byMethod('mobile_money')),
+      collectedOther: sumBy(activeReceipts, r => !['cash', 'card', 'mobile_money'].includes(r.payment_method))
+        - refundedOut(refundedReceipts, r => !['cash', 'card', 'mobile_money'].includes(r.payment_method)),
+      collectedTotal: activeReceipts.reduce((sum, r) => sum + signedAmount(r), 0) - refundedOut(refundedReceipts),
       voidedTotal: voidedReceipts.reduce((sum, r) => sum + Math.abs(parseFloat(r.payment_amount) || 0), 0),
       refundedTotal: refundedReceipts.reduce((sum, r) => sum + Math.abs(parseFloat(r.payment_amount) || 0), 0),
       invoicedTotal: invoices.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0),
@@ -429,10 +454,16 @@ router.post('/close-shift/:shiftId', authorize(CASHIER_WRITE), async (req, res) 
       const magnitude = parseFloat(r.payment_amount || 0);
       return r.receipt_type === 'deposit_refund' ? -magnitude : magnitude;
     };
-    const totalAmount = receipts.reduce((sum, r) => sum + signedAmount(r), 0);
+    // Refunds paid out during the shift are separate negative receipts that this
+    // list excludes, but the cash is gone from the drawer either way.
+    const refundedReceipts = await getShiftReceiptsByStatus(req, shift, endTime, ['refunded']);
+    const refundedOutTotal = refundedOut(refundedReceipts);
+    const refundedOutCash = refundedOut(refundedReceipts, r => r.payment_method === 'cash');
+
+    const totalAmount = receipts.reduce((sum, r) => sum + signedAmount(r), 0) - refundedOutTotal;
     const cashTotal = receipts
       .filter(r => r.payment_method === 'cash')
-      .reduce((sum, r) => sum + signedAmount(r), 0);
+      .reduce((sum, r) => sum + signedAmount(r), 0) - refundedOutCash;
     const cashTransferred = await getShiftCashTransferred(shift);
 
     // Expected cash is what should physically be in the drawer: opening float + cash
@@ -598,3 +629,7 @@ router.post('/transfer-cash', authorize(CASHIER_WRITE), async (req, res) => {
 });
 
 module.exports = router;
+// Exported for tests: the rule that decides how much cash left the drawer is the
+// difference between the shift balancing and the cashier being blamed for a
+// shortfall, so it is asserted directly rather than through the HTTP surface.
+module.exports.refundedOut = refundedOut;
