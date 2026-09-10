@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-09-10T09:17:55.101Z",
-  "totalTests": 180,
-  "passed": 180,
+  "timestamp": "2026-09-10T09:38:09.294Z",
+  "totalTests": 182,
+  "passed": 182,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 11722,
+  "duration": 13793,
   "success": false,
   "modules": [
     {
@@ -15,16 +15,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2542
-    },
-    {
-      "name": "completeWorkflow.test.js",
-      "tests": 12,
-      "passed": 12,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 990
+      "duration": 2675
     },
     {
       "name": "currencies.test.js",
@@ -33,25 +24,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1206
-    },
-    {
-      "name": "ledgerIntegration.test.js",
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1092
-    },
-    {
-      "name": "billing.test.js",
-      "tests": 10,
-      "passed": 10,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 970
+      "duration": 1259
     },
     {
       "name": "dataIntegrity.test.js",
@@ -60,16 +33,34 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1167
+      "duration": 973
     },
     {
-      "name": "invoices.test.js",
-      "tests": 14,
-      "passed": 14,
+      "name": "ledgerIntegration.test.js",
+      "tests": 16,
+      "passed": 16,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 846
+      "duration": 1437
+    },
+    {
+      "name": "completeWorkflow.test.js",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1452
+    },
+    {
+      "name": "billing.test.js",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1749
     },
     {
       "name": "insuranceClaims.test.js",
@@ -78,7 +69,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 966
+      "duration": 967
     },
     {
       "name": "multiCurrency.test.js",
@@ -87,7 +78,25 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 876
+      "duration": 948
+    },
+    {
+      "name": "invoices.test.js",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 924
+    },
+    {
+      "name": "transactionLeaks.test.js",
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 169
     },
     {
       "name": "accountingInvariants.test.js",
@@ -96,7 +105,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 619
+      "duration": 805
     },
     {
       "name": "roleAccess.test.js",
@@ -105,7 +114,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 203
+      "duration": 185
     }
   ],
   "errors": [],
