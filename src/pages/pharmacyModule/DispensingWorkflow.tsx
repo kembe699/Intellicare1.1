@@ -1398,6 +1398,16 @@ export default function DispensingWorkflow() {
                           ? Math.max(0, saleDiscountType === 'percent' ? basePrice * (1 - discountNum / 100) : basePrice - discountNum)
                           : basePrice;
                         const previewQty = parseInt(addLineQty, 10) || 0;
+                        // Stock is worth knowing before the click, not after it. Adding a
+                        // drug with none left was rejected only once Add had been pressed,
+                        // by which point the pharmacist had already told the patient it was
+                        // going on the bill.
+                        const stockLeft = selectedDrug && selectedDrug.stock_on_hand != null
+                          ? parseInt(selectedDrug.stock_on_hand, 10)
+                          : null;
+                        const knownStock = stockLeft != null && !isNaN(stockLeft);
+                        const outOfStock = knownStock && stockLeft <= 0;
+                        const notEnoughStock = knownStock && previewQty > stockLeft;
                         const lineTotal = discountedPrice * previewQty;
                         return (
                           <>
@@ -1433,8 +1443,13 @@ export default function DispensingWorkflow() {
                                     <Input value={selectedDrug?.unit_of_measure || ''} readOnly disabled className="mt-1 bg-muted/40" />
                                   </div>
                                   <div>
-                                    <Label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Stock</Label>
-                                    <Input value={selectedDrug?.stock_on_hand ?? ''} readOnly disabled className="mt-1 bg-muted/40" />
+                                    <Label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-red-700' : 'text-muted-foreground')}>Stock</Label>
+                                    <Input
+                                      value={selectedDrug?.stock_on_hand ?? ''}
+                                      readOnly
+                                      disabled
+                                      className={cn('mt-1', outOfStock ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-muted/40')}
+                                    />
                                   </div>
                                 </div>
                               </div>
@@ -1496,8 +1511,23 @@ export default function DispensingWorkflow() {
                               </div>
                             </div>
 
+                            {selectedDrug && (outOfStock || notEnoughStock) && (
+                              <p className="text-[11px] text-red-700 flex items-center gap-1.5">
+                                <PackageX className="w-3.5 h-3.5 shrink-0" />
+                                {outOfStock
+                                  ? `${selectedDrug.drug_name} is out of stock — receive stock before billing it.`
+                                  : `Only ${stockLeft} ${selectedDrug.unit_of_measure || 'unit'}(s) of ${selectedDrug.drug_name} in stock — reduce the quantity.`}
+                              </p>
+                            )}
+
                             <div className="flex justify-end">
-                              <Button type="button" size="sm" onClick={() => handleAddProduct()} disabled={addingLine}>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleAddProduct()}
+                                disabled={addingLine || outOfStock || notEnoughStock}
+                                title={outOfStock ? 'Out of stock' : notEnoughStock ? 'Not enough stock for that quantity' : undefined}
+                              >
                                 {addingLine ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
                                 Add
                               </Button>
@@ -1927,19 +1957,30 @@ export default function DispensingWorkflow() {
                       </div>
                     )}
                   </div>
-                  {selectedRx && (selectedRx.lines || []).length > 0 && (
+                  {selectedRx && (selectedRx.lines || []).length > 0 && (() => {
+                    // Nothing ticked means there is nothing for the button to do. It used
+                    // to stay enabled and fail on the click, which reads as the screen
+                    // being broken rather than as "you haven't chosen anything yet".
+                    const selectedCount = Object.values(checkedLines).filter(Boolean).length;
+                    const blockedByBalance = billBalance > 0 && !activeBill?.scheme_id;
+                    return (
                     <div className="p-4 border-t bg-muted/30 flex items-center justify-between gap-3">
                       <span className="text-xs text-muted-foreground">
-                        {Object.values(checkedLines).filter(Boolean).length > 0
-                          ? `${Object.values(checkedLines).filter(Boolean).length} item${Object.values(checkedLines).filter(Boolean).length > 1 ? 's' : ''} selected`
+                        {selectedCount > 0
+                          ? `${selectedCount} item${selectedCount > 1 ? 's' : ''} selected`
                           : 'Select items above to dispense'}
                       </span>
-                      <Button onClick={handleDispense} disabled={dispensing || checkingBill || (billBalance > 0 && !activeBill?.scheme_id)}>
+                      <Button
+                        onClick={handleDispense}
+                        disabled={dispensing || checkingBill || blockedByBalance || selectedCount === 0}
+                        title={selectedCount === 0 ? 'Tick the items to dispense first' : undefined}
+                      >
                         {dispensing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                         Dispense Selected
                       </Button>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
             </>
           </div>

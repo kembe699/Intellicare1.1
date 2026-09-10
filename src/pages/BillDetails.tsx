@@ -13,7 +13,7 @@ import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/
 import * as docTemplate from '@/utils/documentTemplate';
 import {
   ArrowLeft, Plus, DollarSign, X, Loader2, Check,
-  AlertTriangle, Shield, CreditCard, UserPlus, FileText, Wallet, ChevronsUpDown,
+  AlertTriangle, Shield, CreditCard, UserPlus, FileText, Wallet, ChevronsUpDown, PackageX,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -929,6 +929,15 @@ export default function BillDetails() {
                 ? inventoryItems.find((p: any) => p.id === newItemCatalogId)
                 : services.find((s: any) => s.id === newItemCatalogId);
               const catalogPrice = selectedRaw ? amt(itemType === 'product' ? selectedRaw.selling_price : selectedRaw.price) : 0;
+              // Products come out of stock; services do not. Billing a product with none
+              // left was only caught after Add was pressed, by which point the patient had
+              // already been told it was on the bill.
+              const stockLeft = itemType === 'product' && selectedRaw && selectedRaw.quantity_on_hand != null
+                ? parseInt(selectedRaw.quantity_on_hand, 10)
+                : null;
+              const knownStock = stockLeft != null && !isNaN(stockLeft);
+              const outOfStock = knownStock && stockLeft <= 0;
+              const notEnoughStock = knownStock && (parseInt(newItemQty, 10) || 0) > stockLeft;
               const basePrice = priceOverride !== '' ? (parseFloat(priceOverride) || 0) : catalogPrice;
               const discountNum = parseFloat(discountAmount) || 0;
               const discountedPrice = discountNum > 0
@@ -999,8 +1008,13 @@ export default function BillDetails() {
                               <Input value={selectedRaw?.unit_of_measure || ''} readOnly disabled className="mt-1 bg-muted/40" />
                             </div>
                             <div>
-                              <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Qty Left</label>
-                              <Input value={selectedRaw?.quantity_on_hand ?? ''} readOnly disabled className="mt-1 bg-muted/40" />
+                              <label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-red-700' : 'text-muted-foreground')}>Qty Left</label>
+                              <Input
+                                value={selectedRaw?.quantity_on_hand ?? ''}
+                                readOnly
+                                disabled
+                                className={cn('mt-1', outOfStock ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-muted/40')}
+                              />
                             </div>
                           </>
                         )}
@@ -1060,8 +1074,21 @@ export default function BillDetails() {
                     </p>
                   )}
 
+                  {selectedRaw && (outOfStock || notEnoughStock) && (
+                    <p className="text-[11px] text-red-700 flex items-center gap-1.5">
+                      <PackageX className="w-3.5 h-3.5 shrink-0" />
+                      {outOfStock
+                        ? `${selectedRaw.item_name || selectedRaw.name || 'This product'} is out of stock — receive stock before billing it.`
+                        : `Only ${stockLeft} ${selectedRaw.unit_of_measure || 'unit'}(s) in stock — reduce the quantity.`}
+                    </p>
+                  )}
+
                   <div className="flex justify-end">
-                    <Button onClick={handleAddItem} disabled={addingItem}>
+                    <Button
+                      onClick={handleAddItem}
+                      disabled={addingItem || outOfStock || notEnoughStock}
+                      title={outOfStock ? 'Out of stock' : notEnoughStock ? 'Not enough stock for that quantity' : undefined}
+                    >
                       {addingItem ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
                       Add
                     </Button>
