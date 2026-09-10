@@ -248,7 +248,7 @@ export default function BatchTracking() {
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
+      <div className="max-w-[1600px] mx-auto w-full flex flex-col">
         <PageHeader title="Batch & Expiry Tracking" icon={<Clock />} className="mb-3" />
 
         {selectedIds.size > 0 && (
@@ -267,16 +267,17 @@ export default function BatchTracking() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Form above, table below — the shape the rest of the app uses. */}
+        <div className="flex flex-col gap-6">
 
-          {/* LEFT: New Batch form (always visible) */}
-          <div className="lg:col-span-4 bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
+          {/* New Batch */}
+          <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden min-w-0">
             <div className="p-4 border-b bg-muted/30 flex justify-between items-center flex-shrink-0">
               <h3 className="font-medium flex items-center gap-2">
                 <Package className="w-4 h-4 text-primary" /> New Batch
               </h3>
             </div>
-            <form onSubmit={handleCreate} className="flex-1 overflow-auto">
+            <form onSubmit={handleCreate}>
               <div className="p-4 space-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Item</label>
@@ -339,7 +340,7 @@ export default function BatchTracking() {
                   />
                 </div>
               </div>
-              <div className="p-4 border-t bg-muted flex justify-end gap-2 sticky bottom-0">
+              <div className="p-4 border-t bg-muted flex justify-end gap-2">
                 <Button type="submit" disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                   {saving ? 'Creating...' : 'Create Batch'}
@@ -348,8 +349,8 @@ export default function BatchTracking() {
             </form>
           </div>
 
-          {/* RIGHT: Batch Directory */}
-          <div className="lg:col-span-8 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
+          {/* Batch Directory */}
+          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden min-w-0">
           <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
             <h3 className="font-medium">Batch Directory</h3>
             <div className="flex items-center gap-2 flex-wrap">
@@ -383,7 +384,7 @@ export default function BatchTracking() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-4">
+          <div className="p-4 min-w-0">
             <AdvancedDataTable<Batch>
               data={filteredBatches}
               keyExtractor={(batch) => batch.id}

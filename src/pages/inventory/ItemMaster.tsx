@@ -182,7 +182,17 @@ export default function ItemMaster() {
   const fetchLocations = async () => {
     try {
       const res = await authFetch(`/api/inventory/locations?clinic_id=${clinicId}`, { credentials: 'include' });
-      if (res.ok) setLocations(await res.json());
+      if (!res.ok) return;
+      const rows = await res.json();
+      setLocations(rows);
+      // A facility with one store has nothing to choose between, but the
+      // directory still opened empty behind a "choose a location" prompt and a
+      // dropdown holding a single option. Pick it, and the items are simply
+      // there. Anywhere with a real choice is left to make it.
+      const usable = rows.filter((l: any) => l.is_active !== false);
+      if (usable.length === 1) {
+        setViewLocationId((current: string) => current || String(usable[0].id));
+      }
     } catch (e) {
       console.error('Failed to fetch locations', e);
     }

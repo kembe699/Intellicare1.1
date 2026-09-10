@@ -266,7 +266,7 @@ export default function PhysicalCounts() {
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
+      <div className="max-w-[1600px] mx-auto w-full flex flex-col">
         <div className="flex justify-between items-start">
           <PageHeader title="Physical Counts & Adjustments" icon={<ClipboardList />} />
           <div className="flex bg-muted p-1 rounded-lg">
@@ -285,17 +285,18 @@ export default function PhysicalCounts() {
           </div>
         </div>
 
-        <div className={cn("mt-6 flex-1 min-h-0", activeMode === 'counts' ? "grid grid-cols-1 lg:grid-cols-12 gap-6" : "flex flex-col")}>
+        {/* Form above, table below — the shape the rest of the app uses. */}
+        <div className="mt-6 flex flex-col gap-6">
 
           {activeMode === 'counts' && (
-            /* LEFT: New Physical Count form (always visible) */
-            <div className="lg:col-span-4 bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
+            /* New Physical Count */
+            <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden min-w-0">
               <div className="p-4 border-b bg-muted/30 flex justify-between items-center flex-shrink-0">
                 <h3 className="font-medium flex items-center gap-2">
                   <ClipboardCheck className="w-4 h-4 text-primary" /> New Physical Count
                 </h3>
               </div>
-              <form onSubmit={createCount} className="flex-1 overflow-auto">
+              <form onSubmit={createCount}>
                 <div className="p-4 space-y-4">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Count Type</label>
@@ -319,7 +320,7 @@ export default function PhysicalCounts() {
                     />
                   </div>
                 </div>
-                <div className="p-4 border-t bg-muted flex justify-end gap-2 sticky bottom-0">
+                <div className="p-4 border-t bg-muted flex justify-end gap-2">
                   <Button type="submit" disabled={creatingCount}>
                     {creatingCount ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                     {creatingCount ? 'Starting...' : 'Start Count'}
@@ -329,8 +330,8 @@ export default function PhysicalCounts() {
             </div>
           )}
 
-          {/* RIGHT: Directory */}
-          <div className={cn("bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden", activeMode === 'counts' ? "lg:col-span-8" : "flex-1 min-h-0")}>
+          {/* Directory */}
+          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden min-w-0">
           <div className="p-4 border-b flex justify-between items-center bg-muted/30">
             <h3 className="font-medium">{activeMode === 'counts' ? 'Count Directory' : 'Adjustment Directory'}</h3>
             <div className="flex items-center gap-2">
@@ -345,7 +346,7 @@ export default function PhysicalCounts() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-4">
+          <div className="p-4 min-w-0">
             {activeMode === 'counts' ? (
               <AdvancedDataTable<any>
                 data={counts}

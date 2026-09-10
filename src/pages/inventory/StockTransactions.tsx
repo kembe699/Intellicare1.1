@@ -176,19 +176,23 @@ export default function StockTransactions() {
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
+      <div className="max-w-[1600px] mx-auto w-full flex flex-col">
         <PageHeader title="Stock Transactions" icon={<ArrowLeftRight />} className="mb-3" />
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Form above, table below — the shape the rest of the app uses. Side by
+            side, the form was squeezed into a third of the width while the table
+            it feeds had to be read in the remaining two thirds, so both were
+            cramped on the screens this is actually used on. */}
+        <div className="flex flex-col gap-6">
 
-          {/* LEFT: Create transaction form (always visible) */}
-          <div className="lg:col-span-4 bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
+          {/* Create transaction */}
+          <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden min-w-0">
             <div className="p-4 border-b bg-muted/30 flex justify-between items-center flex-shrink-0">
               <h3 className="font-medium flex items-center gap-2">
                 <ArrowLeftRight className="w-4 h-4 text-primary" /> New Stock Transaction
               </h3>
             </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-auto">
+            <form onSubmit={handleSubmit}>
               <div className="p-4 space-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Item</label>
@@ -285,7 +289,7 @@ export default function StockTransactions() {
                   />
                 </div>
               </div>
-              <div className="p-4 border-t bg-muted flex justify-end gap-2 sticky bottom-0">
+              <div className="p-4 border-t bg-muted flex justify-end gap-2">
                 <Button type="submit" disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                   {saving ? 'Recording...' : 'Record Transaction'}
@@ -294,8 +298,8 @@ export default function StockTransactions() {
             </form>
           </div>
 
-          {/* RIGHT: Transaction Log */}
-          <div className="lg:col-span-8 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
+          {/* Transaction Log */}
+          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden min-w-0">
             <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
               <h3 className="font-medium">Transaction Log</h3>
               <div className="flex items-center gap-2 flex-wrap">
