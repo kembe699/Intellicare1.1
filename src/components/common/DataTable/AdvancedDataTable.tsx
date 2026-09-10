@@ -303,7 +303,10 @@ export function AdvancedDataTable<T extends Record<string, any>>({
       >
         <table className="w-full border-collapse">
           <thead className={cn((stickyHeader || maxRows) && 'sticky top-0 z-10')}>
-            <tr className="bg-muted/60 border-b border-border">
+            {/* Opaque, not bg-muted/60, whenever the header is pinned: at 60%
+                the rows sliding underneath read straight through it, so the
+                first line of the list appeared to sit above the column names. */}
+            <tr className={cn('border-b border-border', (stickyHeader || maxRows) ? 'bg-muted' : 'bg-muted/60')}>
               {selectable && (
                 <th className="px-4 py-2.5 text-left w-12">
                   <Checkbox

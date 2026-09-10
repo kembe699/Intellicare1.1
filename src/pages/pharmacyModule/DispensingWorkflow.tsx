@@ -1648,7 +1648,11 @@ export default function DispensingWorkflow() {
                     name and the out-of-stock note are both long enough to
                     trigger it, which put Total off the right edge with no way
                     to reach it. */}
-                <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden min-w-0">
+                {/* shrink-0: this is a flex child of a column, and a flex item
+                    shrinks below its content by default. With the page short on
+                    room the card was compressed and its own overflow-hidden cut
+                    the table off mid-row — the rows were there, just cropped. */}
+                <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden min-w-0 shrink-0">
                   <div className="p-4 border-b bg-muted/30">
                     <h3 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary" /> Bill Items</h3>
                   </div>
