@@ -560,6 +560,17 @@ export default function DispensingWorkflow() {
       if (res.ok) {
         const detail = await res.json();
         setSelectedRx(detail);
+        // Show who this is for. The patient area is driven by saleForm, which only
+        // the picker's own onSelect used to fill, so arriving here from a
+        // prescription's Dispense button left it on its "Search patient..."
+        // placeholder — the prescription had loaded, but the page read as though
+        // nothing had, with no patient and no obvious way forward.
+        if (detail.patient_id) {
+          setSaleForm({
+            person_id: detail.patient_id,
+            person_name: detail.patient_name || detail.patient_id,
+          });
+        }
         const initialQty: Record<string, string> = {};
         const initialChecked: Record<string, boolean> = {};
         (detail.lines || []).forEach((l: any) => {
