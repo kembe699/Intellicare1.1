@@ -267,6 +267,16 @@ const FinancialReports: React.FC = () => {
                   <CardDescription>
                     Period: {new Date(startDate).toLocaleDateString()} &mdash; {new Date(endDate).toLocaleDateString()}
                   </CardDescription>
+                  {/* This statement stays on an accrual footing so it agrees with
+                      the trial balance and balance sheet beside it — a balance
+                      sheet showing receivables only makes sense if revenue was
+                      recognised when the bill was raised. Reports ▸ Income
+                      Statement answers the other question (what was collected),
+                      so the two legitimately differ and each says which it is. */}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Accrual basis — every bill raised in the period, paid or not. For money actually
+                    collected, use Reports &rsaquo; Income Statement.
+                  </p>
                 </div>
                 <Badge className={incomeStatement.net_income >= 0
                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'

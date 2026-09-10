@@ -1,6 +1,23 @@
 /**
  * Income Statement (Profit & Loss) — v2 report, PostgreSQL syntax.
  *
+ * Reports on a CASH basis by default: revenue counts when the patient pays, not
+ * when the bill is raised. A clinic that bills 265,000 and collects 195,000 has
+ * earned 195,000 in the sense that matters to whoever is reading this — the
+ * accrual figure was read as the day's takings and did not match the cashier,
+ * because an unpaid bill is not money in the drawer.
+ *
+ * The ledger itself stays on an accrual footing (Dr Receivable / Cr Revenue when
+ * the bill is raised), because that is what makes receivables and the aging
+ * report possible at all. This report converts: for each payment received in the
+ * period it recognises that payment across the revenue accounts the bill posted
+ * to, in the same proportion. A part-payment of a bill spanning consultation and
+ * laboratory therefore lands on both, proportionally, rather than arbitrarily on
+ * whichever came first. Refunds in the period count against it.
+ *
+ * Pass ?basis=accrual for the billed-not-collected view, which is what the
+ * receivable balance reconciles against.
+ *
  * Source of truth: chart_of_accounts joined against account_ledger.
  * Sign conventions:
  *   - Revenue accounts have normal balance = credit, so period amount = SUM(credit) - SUM(debit).
@@ -78,6 +95,82 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo) {
   }));
 }
 
+/**
+ * Revenue actually collected in the period, split across the revenue accounts
+ * each paying bill was posted to.
+ *
+ * The proportion comes from the bill's own ledger lines, so a payment is
+ * recognised the way that bill's revenue was classified. Bills whose ledger
+ * entry is missing contribute nothing rather than being lumped into a catch-all
+ * account — the ledger sweeper repairs those within minutes, and inventing a
+ * classification here would quietly disagree with it.
+ */
+async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
+  const [rows] = await sequelize.query(
+    `WITH bill_revenue AS (
+       SELECT gl.reference_id AS bill_id,
+              al.account_id,
+              SUM(al.credit_amount - al.debit_amount) AS amount
+         FROM account_ledger al
+         JOIN general_ledger gl ON gl.id = al.transaction_id
+         JOIN chart_of_accounts c ON c.id = al.account_id
+          AND c.account_type = 'revenue'
+        WHERE al.is_posted = true
+          AND al.clinic_id = :clinicId
+          AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+        GROUP BY 1, 2
+       HAVING SUM(al.credit_amount - al.debit_amount) <> 0
+     ),
+     bill_total AS (
+       SELECT bill_id, SUM(amount) AS total FROM bill_revenue GROUP BY 1
+     ),
+     movements AS (
+       -- money taken in during the period
+       SELECT r.bill_id::text AS bill_id,
+              SUM(COALESCE(NULLIF(r.base_currency_amount, 0), r.payment_amount)) AS amount
+         FROM receipts r
+        WHERE r.clinic_id = :clinicId
+          AND COALESCE(r.is_voided, false) = false
+          AND r.bill_id IS NOT NULL
+          AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
+        GROUP BY 1
+       UNION ALL
+       -- money handed back during the period reduces what was earned
+       SELECT r.bill_id::text AS bill_id,
+              -SUM(COALESCE(r.refund_amount, 0)) AS amount
+         FROM receipts r
+        WHERE r.clinic_id = :clinicId
+          AND COALESCE(r.refund_amount, 0) > 0
+          AND r.bill_id IS NOT NULL
+          AND r.refund_date::date BETWEEN :dateFrom AND :dateTo
+        GROUP BY 1
+     ),
+     collected AS (
+       SELECT bill_id, SUM(amount) AS amount FROM movements GROUP BY 1
+     )
+     SELECT coa.id AS account_id,
+            coa.account_code,
+            coa.account_name,
+            SUM(col.amount * (br.amount / bt.total)) AS amount
+       FROM collected col
+       JOIN bill_total bt ON bt.bill_id = col.bill_id AND bt.total <> 0
+       JOIN bill_revenue br ON br.bill_id = col.bill_id
+       JOIN chart_of_accounts coa ON coa.id = br.account_id
+      WHERE coa.is_active = true
+      GROUP BY 1, 2, 3
+     HAVING ABS(SUM(col.amount * (br.amount / bt.total))) > 0.001
+      ORDER BY coa.account_code ASC`,
+    { replacements: { clinicId, dateFrom, dateTo } }
+  );
+
+  return rows.map((r) => ({
+    account_id: r.account_id,
+    account_code: r.account_code,
+    account_name: r.account_name,
+    amount: Math.round((parseFloat(r.amount) || 0) * 100) / 100,
+  }));
+}
+
 router.get('/', async (req, res) => {
   try {
     const clinicId = req.user?.clinicId || req.query.clinic_id || 1;
@@ -85,8 +178,14 @@ router.get('/', async (req, res) => {
     const dateFrom = req.query.dateFrom || defaults.from;
     const dateTo = req.query.dateTo || defaults.to;
 
+    // Cash unless explicitly asked otherwise: what was collected is the figure
+    // people compare against the cashier and the dashboard.
+    const basis = String(req.query.basis || 'cash').toLowerCase() === 'accrual' ? 'accrual' : 'cash';
+
     const [revenue, expenses] = await Promise.all([
-      fetchSection(clinicId, 'revenue', dateFrom, dateTo),
+      basis === 'cash'
+        ? fetchCashRevenue(clinicId, dateFrom, dateTo)
+        : fetchSection(clinicId, 'revenue', dateFrom, dateTo),
       fetchSection(clinicId, 'expense', dateFrom, dateTo),
     ]);
 
@@ -96,6 +195,7 @@ router.get('/', async (req, res) => {
 
     res.json({
       period: { dateFrom, dateTo },
+      basis,
       revenue,
       expenses,
       totals: {

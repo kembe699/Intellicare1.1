@@ -13,8 +13,11 @@ interface AccountLine {
   amount: number;
 }
 
+type Basis = 'cash' | 'accrual';
+
 interface IncomeStatementData {
   period: { dateFrom: string; dateTo: string };
+  basis?: Basis;
   revenue: AccountLine[];
   expenses: AccountLine[];
   totals: {
@@ -42,6 +45,10 @@ export default function IncomeStatementReport() {
   const [dateTo, setDateTo] = useState(defaults.to);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<IncomeStatementData | null>(null);
+  // Cash by default: what was collected is the figure that should agree with
+  // the cashier and the dashboard. Accrual stays available because it is what
+  // the receivables balance reconciles against.
+  const [basis, setBasis] = useState<Basis>('cash');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -50,6 +57,7 @@ export default function IncomeStatementReport() {
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
       if (user?.clinic) params.append('clinic_id', user.clinic);
+      params.append('basis', basis);
       const res = await authFetch(`/api/reports-v2/income-statement?${params}`);
       if (!res.ok) throw new Error('Failed to load income statement');
       const json = await res.json();
@@ -60,7 +68,7 @@ export default function IncomeStatementReport() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, user?.clinic]);
+  }, [dateFrom, dateTo, user?.clinic, basis]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -72,6 +80,7 @@ export default function IncomeStatementReport() {
   const netPositive = netIncome >= 0;
 
   const csvRows = [
+    { section: '', account_code: '', account_name: basis === 'cash' ? 'Basis: cash received' : 'Basis: billed (accrual)', amount: 0 },
     ...revenue.map(r => ({ section: 'Revenue', account_code: r.account_code, account_name: r.account_name, amount: r.amount })),
     { section: '', account_code: '', account_name: 'Total Revenue', amount: totalRevenue },
     ...expenses.map(e => ({ section: 'Expenses', account_code: e.account_code, account_name: e.account_name, amount: e.amount })),
@@ -88,7 +97,9 @@ export default function IncomeStatementReport() {
   return (
     <ReportSubPageShell
       title="Income Statement"
-      description="Profit &amp; Loss — revenue and expenses for the selected period"
+      description={basis === 'cash'
+        ? 'Profit & Loss — revenue counted when the patient pays'
+        : 'Profit & Loss — revenue counted when the bill is raised, paid or not'}
       dateFrom={dateFrom}
       dateTo={dateTo}
       onDateFromChange={setDateFrom}
@@ -97,8 +108,31 @@ export default function IncomeStatementReport() {
       loading={loading}
       csvData={csvRows}
       csvColumns={csvColumns}
-      csvFilename={`income-statement-${dateFrom}-${dateTo}.csv`}
+      csvFilename={`income-statement-${basis}-${dateFrom}-${dateTo}.csv`}
     >
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border overflow-hidden" role="group" aria-label="Accounting basis">
+          {(['cash', 'accrual'] as Basis[]).map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => setBasis(b)}
+              aria-pressed={basis === b}
+              className={`px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                basis === b ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+              }`}
+            >
+              {b === 'cash' ? 'Cash received' : 'Billed (accrual)'}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {basis === 'cash'
+            ? 'Counting money actually received in this period. Unpaid and part-paid bills are excluded until they are paid.'
+            : 'Counting every bill raised in this period, whether or not it has been paid. Use this to reconcile receivables.'}
+        </p>
+      </div>
+
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
