@@ -231,6 +231,38 @@ const ChartOfAccounts: React.FC = () => {
     }
   };
 
+
+  // Two questions this page could not answer at a glance, and both matter more
+  // than the account list itself: where the money is sitting, and what each
+  // service line earned. They are different questions with different answers —
+  // cash collects in one place while revenue stays split by where it came from —
+  // and reading that off a paginated table of every account was not possible.
+  const position = useMemo(() => {
+    const live = accounts.filter((a) => a.is_active);
+    const balance = (a: Account) => parseFloat(String(a.current_balance ?? 0)) || 0;
+
+    const held = live
+      .filter((a) => a.account_type === 'asset' && /^1[01]/.test(a.account_code || ''))
+      .map((a) => ({ ...a, amount: balance(a) }))
+      .filter((a) => Math.abs(a.amount) > 0.001)
+      .sort((a, b) => b.amount - a.amount);
+
+    const owed = live
+      .filter((a) => a.account_type === 'asset' && /^12/.test(a.account_code || ''))
+      .map((a) => ({ ...a, amount: balance(a) }))
+      .filter((a) => Math.abs(a.amount) > 0.001)
+      .sort((a, b) => b.amount - a.amount);
+
+    const earned = live
+      .filter((a) => a.account_type === 'revenue')
+      .map((a) => ({ ...a, amount: balance(a) }))
+      .filter((a) => Math.abs(a.amount) > 0.001)
+      .sort((a, b) => b.amount - a.amount);
+
+    const sum = (rows: { amount: number }[]) => rows.reduce((t, r) => t + r.amount, 0);
+    return { held, owed, earned, totalHeld: sum(held), totalOwed: sum(owed), totalEarned: sum(earned) };
+  }, [accounts]);
+
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
@@ -266,6 +298,73 @@ const ChartOfAccounts: React.FC = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Where the money is, and what earned it */}
+        {!loading && (position.held.length > 0 || position.earned.length > 0) && (
+          <div className="grid gap-4 md:grid-cols-2 mb-4">
+            <div className="bg-card rounded-lg border shadow-sm">
+              <div className="px-4 py-2.5 border-b bg-muted/30">
+                <h3 className="font-medium text-sm">Where the money is</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Every payment collected lands here, whatever it was for.
+                </p>
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  {position.held.map((a) => (
+                    <tr key={a.id} className="border-b border-border/60 last:border-0">
+                      <td className="px-4 py-2">
+                        <span className="text-muted-foreground font-mono text-xs mr-2">{a.account_code}</span>
+                        {a.account_name}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatCurrency(a.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-muted/30 font-medium">
+                    <td className="px-4 py-2">Total held</td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums">{formatCurrency(position.totalHeld)}</td>
+                  </tr>
+                  {position.owed.map((a) => (
+                    <tr key={a.id} className="border-t border-border/60 text-muted-foreground">
+                      <td className="px-4 py-2">
+                        <span className="font-mono text-xs mr-2">{a.account_code}</span>
+                        {a.account_name}
+                        <span className="ml-2 text-xs">(billed, not yet collected)</span>
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatCurrency(a.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-card rounded-lg border shadow-sm">
+              <div className="px-4 py-2.5 border-b bg-muted/30">
+                <h3 className="font-medium text-sm">What earned it</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  The same money, shown by the service line it came from.
+                </p>
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  {position.earned.map((a) => (
+                    <tr key={a.id} className="border-b border-border/60 last:border-0">
+                      <td className="px-4 py-2">
+                        <span className="text-muted-foreground font-mono text-xs mr-2">{a.account_code}</span>
+                        {a.account_name}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatCurrency(a.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-muted/30 font-medium">
+                    <td className="px-4 py-2">Total earned</td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums">{formatCurrency(position.totalEarned)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Accounts Table */}
         <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col">

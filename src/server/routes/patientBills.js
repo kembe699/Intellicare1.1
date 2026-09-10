@@ -1624,6 +1624,14 @@ router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, r
           debitAccount = await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, account_name: { [COAOp.iLike]: 'cash at hand' }, is_active: true }
           }) || await ChartOfAccounts.findOne({
+            // Prefer anything that reads as cash-in-hand before falling back to
+            // whichever cash account happens to sort first. A facility with both
+            // "Cash" and "Cash at Hand" would otherwise start banking takings in
+            // "Cash" the moment the exact-name match stopped resolving, and the
+            // two would drift apart with nothing announcing it.
+            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%hand%' } },
+            order: [['account_code', 'ASC']]
+          }) || await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%' } },
             order: [['account_code', 'ASC']]
           });
@@ -1663,6 +1671,30 @@ router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, r
           where: { clinic_id: clinicId, account_type: 'asset', account_name: { [COAOp.iLike]: '%receivable%' }, is_active: true },
           order: [['account_code', 'ASC']]
         });
+
+        if (!debitAccount || !creditAccount) {
+          // Do not fall through quietly. This block is best-effort inside a
+          // try/catch, so an unresolved account used to mean the payment cleared
+          // no receivable and reached no cash account while the cashier's screen
+          // showed the money — 150 receipts went that way once and were only
+          // found by totals disagreeing weeks later.
+          const missing = [
+            !debitAccount && `no account to debit for a ${method} payment`,
+            !creditAccount && `no receivable account (${receivableCode}) to credit`,
+          ].filter(Boolean).join('; ');
+          console.error(`Payment on bill ${currentBill.bill_number}: not posted to the ledger — ${missing}`);
+          const rr = require('./reports');
+          await rr.logAudit({
+            req,
+            module: 'Billing',
+            action: 'PAYMENT_POSTING_FAILED',
+            entity_type: 'PatientBill',
+            entity_id: currentBill.id,
+            description: `Payment of ${paymentData.amount} on bill ${currentBill.bill_number} was recorded but did not reach the ledger — ${missing}. The receipt exists and the cash was taken; the accounts need this posting added.`,
+            new_values: { bill_number: currentBill.bill_number, amount: paymentData.amount, method, reason: missing },
+            status: 'failure',
+          }).catch(() => {});
+        }
 
         if (debitAccount && creditAccount) {
           // Generate JE number
