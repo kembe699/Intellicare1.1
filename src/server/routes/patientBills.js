@@ -21,9 +21,18 @@ const BILLS_READ = ['admin', 'reception', 'doctor', 'cashier', 'finance_manager'
 // (LIS ordering, pharmacy prescribing, reception's Patient Bills page) — anyone who can
 // generate a billable charge needs this, not just billing staff.
 const BILLS_WRITE_CHARGE = ['admin', 'reception', 'doctor', 'cashier', 'pharmacy', 'lab'];
-// Recording a payment, voiding a line item, or editing a bill's own fields are cashier/
-// finance actions — matches the sidebar's Billing Management / Cash Transfer roles.
+// Voiding a line item or editing a bill's own fields are cashier/finance actions —
+// matches the sidebar's Billing Management / Cash Transfer roles. Both change what
+// a patient owes, so they stay with the roles accountable for the figures.
 const BILLS_FINANCIAL_ACTION = ['admin', 'cashier', 'reception', 'finance_manager', 'accountant'];
+// Taking money over a counter is a different act from adjusting what is owed.
+// Pharmacy collects payment at the point of dispensing — that is the whole of the
+// "Save Payment & Dispense" flow — so it belongs here, while still being unable to
+// edit a bill or void a line off one. The money is not untracked: a non-credit
+// payment requires an open cashier shift, and pharmacy can already open one
+// (see CASHIER_WRITE in routes/cashier.js), so it lands in a shift that is counted
+// and reconciled like any other.
+const BILLS_COLLECT_PAYMENT = [...BILLS_FINANCIAL_ACTION, 'pharmacy'];
 // Deleting a bill outright is the most destructive action here — admin only.
 const BILLS_DELETE = ['admin'];
 
@@ -1314,7 +1323,7 @@ router.delete('/:billId', authorize(BILLS_DELETE), async (req, res) => {
 });
 
 // Add payment to a patient bill
-router.post('/:billId/payments', authorize(BILLS_FINANCIAL_ACTION), async (req, res) => {
+router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, res) => {
   let t;
   try {
     const { billId } = req.params;

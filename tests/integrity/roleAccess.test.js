@@ -158,3 +158,45 @@ describe('Patient directory is fetched in one place', () => {
     expect(src).toMatch(/403/);
   });
 });
+
+describe('Pharmacy can complete a dispensing sale', () => {
+  const bills = read('src/server/routes/patientBills.js');
+
+  const rolesFor = (constant) => {
+    const m = bills.match(new RegExp(`const\\s+${constant}\\s*=\\s*\\[([^\\]]*)\\]`));
+    return m ? m[1].split(',').map((r) => r.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean) : null;
+  };
+  const guardFor = (routeRe) => (bills.match(routeRe) || [])[1] || null;
+
+  // "Save Payment & Dispense" takes the money and hands over the medicine in one
+  // step. Pharmacy could raise the charge and dispense but not record the
+  // payment, so the flow died at the last click with "Insufficient permissions".
+  test('pharmacy may record a payment against a bill', () => {
+    const guard = guardFor(/router\.post\('\/:billId\/payments',\s*authorize\((\w+)\)/);
+    expect(guard).toBeTruthy();
+    expect(rolesFor(guard)).toContain('pharmacy');
+  });
+
+  // Taking money is not the same as changing what is owed. Widening the shared
+  // constant would have handed pharmacy bill editing and line voiding too, which
+  // is how a narrow permission fix quietly becomes a broad one.
+  test('pharmacy still may not edit a bill or void a line off one', () => {
+    for (const routeRe of [
+      /router\.put\('\/:billId',\s*authorize\((\w+)\)/,
+      /router\.post\('\/:billId\/void-item',\s*authorize\((\w+)\)/,
+    ]) {
+      const guard = guardFor(routeRe);
+      expect(guard).toBeTruthy();
+      expect(rolesFor(guard)).not.toContain('pharmacy');
+    }
+  });
+
+  // A non-credit payment is rejected without an open shift, so the ability to
+  // collect is useless — and the cash untracked — unless pharmacy can open one.
+  test('pharmacy can open the cashier shift its payments are recorded against', () => {
+    const cashier = read('src/server/routes/cashier.js');
+    const m = cashier.match(/const\s+CASHIER_WRITE\s*=\s*\[([^\]]*)\]/);
+    expect(m).toBeTruthy();
+    expect(m[1]).toMatch(/'pharmacy'/);
+  });
+});
