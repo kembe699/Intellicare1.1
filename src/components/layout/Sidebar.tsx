@@ -304,14 +304,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-4 border-b border-sidebar-border">
-            <div className="flex items-center gap-3">
-              <img src="/hjd.png" alt="IntelliCare Logo" className="h-20 w-auto object-contain" />
-            </div>
-            <button 
+          {/* Header — the logo's own white ground carried across the full width of
+              the panel, and sitting flush with the top of it. Padded and centred
+              on the teal gradient, the artwork read as a pale card floating on the
+              sidebar rather than as the header of it. */}
+          <div className="relative flex items-center justify-center px-3 pt-0 pb-2 border-b border-sidebar-border bg-white">
+            <img src="/hjd.png" alt="IntelliCare Logo" className="h-20 w-auto object-contain" />
+            <button
               onClick={onToggle}
-              className="lg:hidden p-2 rounded-sm hover:bg-sidebar-accent"
+              aria-label="Close menu"
+              className="lg:hidden absolute right-2 top-2 p-2 rounded-sm text-[#1e4d57] hover:bg-black/5"
             >
               <X className="w-5 h-5" />
             </button>
