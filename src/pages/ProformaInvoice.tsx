@@ -132,7 +132,7 @@ export default function ProformaInvoicePage() {
     const q = patientSearch.trim().toLowerCase();
     if (q.length < 2) return [];
     return people.filter(p =>
-      `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) ||
+      p.label?.toLowerCase().includes(q) ||
       p.code?.toLowerCase().includes(q)
     ).slice(0, 20);
   }, [patientSearch, people]);
@@ -221,7 +221,7 @@ export default function ProformaInvoicePage() {
         credentials: 'include',
         body: JSON.stringify({
           patient_id: selectedPatient.id,
-          patient_name: `${selectedPatient.first_name} ${selectedPatient.last_name}`.trim(),
+          patient_name: selectedPatient.label,
           items, notes, currency: baseCurrency.code || 'SSP', clinic_id: clinicId,
         }),
       });
@@ -371,7 +371,7 @@ export default function ProformaInvoicePage() {
                 {selectedPatient ? (
                   <div className="p-3 rounded-lg border bg-primary/5 border-primary flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-semibold text-sm">{selectedPatient.first_name} {selectedPatient.last_name}</div>
+                      <div className="font-semibold text-sm">{selectedPatient.label}</div>
                       <div className="text-xs text-muted-foreground font-mono mt-0.5">{selectedPatient.code || selectedPatient.id}</div>
                       {selectedPatient.phone && <div className="text-xs text-muted-foreground mt-0.5">{selectedPatient.phone}</div>}
                     </div>
@@ -398,7 +398,7 @@ export default function ProformaInvoicePage() {
                             onClick={() => { setSelectedPatient(p); setPatientSearch(''); }}
                             className="w-full text-left p-2.5 hover:bg-muted/50 transition-colors"
                           >
-                            <div className="font-medium text-sm">{p.first_name} {p.last_name}</div>
+                            <div className="font-medium text-sm">{p.label}</div>
                             <div className="text-xs text-muted-foreground font-mono">{p.code || p.id}</div>
                           </button>
                         ))}
