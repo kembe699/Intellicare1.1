@@ -147,11 +147,16 @@ export default function ItemMaster() {
   const [currentExchangeRate, setCurrentExchangeRate] = useState<number | null>(null);
 
   useEffect(() => { fetchLocations(); fetchCurrentExchangeRate(); }, []);
-  // Re-fetch whenever the chosen location changes; nothing is loaded until one is.
-  useEffect(() => {
-    if (!viewLocationId) { setItems([]); return; }
-    fetchItems();
-  }, [viewLocationId]);
+  // Load the catalogue, and re-load when a location filter is applied or cleared.
+  //
+  // This used to show nothing until a location was chosen, on the reasoning that a
+  // per-location quantity is more truthful than a clinic-wide one. That holds only
+  // while stock_by_location is maintained: on a tenant where it is not, the page
+  // reported a figure no other screen agreed with — an item read 48 here and "out
+  // of stock" at the dispensing counter. Unfiltered, the quantity shown is the
+  // item's own on-hand, which is the number every dispensing and billing gate
+  // actually enforces.
+  useEffect(() => { fetchItems(); }, [viewLocationId]);
 
   const fetchCurrentExchangeRate = async () => {
     try {
@@ -185,14 +190,6 @@ export default function ItemMaster() {
       if (!res.ok) return;
       const rows = await res.json();
       setLocations(rows);
-      // A facility with one store has nothing to choose between, but the
-      // directory still opened empty behind a "choose a location" prompt and a
-      // dropdown holding a single option. Pick it, and the items are simply
-      // there. Anywhere with a real choice is left to make it.
-      const usable = rows.filter((l: any) => l.is_active !== false);
-      if (usable.length === 1) {
-        setViewLocationId((current: string) => current || String(usable[0].id));
-      }
     } catch (e) {
       console.error('Failed to fetch locations', e);
     }
@@ -631,7 +628,7 @@ export default function ItemMaster() {
                   <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Store location</label>
                   <Combobox
                     options={[
-                      { value: '', label: 'Select a location…' },
+                      { value: '', label: 'All locations' },
                       ...locations.map((l: any) => ({
                         value: String(l.id),
                         label: `${l.location_name}${l.location_code ? ` (${l.location_code})` : ''}`,
@@ -639,12 +636,12 @@ export default function ItemMaster() {
                     ]}
                     value={viewLocationId}
                     onChange={setViewLocationId}
-                    placeholder="Select a location…"
+                    placeholder="All locations"
                     searchPlaceholder="Search locations..."
                     className="h-9 w-56"
                   />
                 </div>
-                <Button variant="outline" size="sm" className="h-9" onClick={exportCSV} disabled={!viewLocationId}>
+                <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
                   <Download className="w-4 h-4 mr-2" /> Export
                 </Button>
                 <Button variant="outline" size="sm" className="h-9" onClick={() => setShowBulkUpload(true)}>
@@ -657,15 +654,6 @@ export default function ItemMaster() {
             </div>
 
             <div className="p-4">
-              {!viewLocationId ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <MapPin className="mb-3 h-10 w-10 text-muted-foreground/40" />
-                  <p className="font-medium text-foreground">Choose a store location</p>
-                  <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                    Items are listed per location, so the quantity beside each one is the stock actually held there.
-                  </p>
-                </div>
-              ) : (
               <AdvancedDataTable<InventoryItem>
                 data={filteredItems}
                 keyExtractor={(item) => item.id}
@@ -687,7 +675,16 @@ export default function ItemMaster() {
                     ),
                   },
                   { key: 'item_category', header: 'Category', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
-                  { key: 'quantity_on_hand', header: 'On Hand', sortable: true },
+                  {
+                    key: 'quantity_on_hand',
+                    // Name the number rather than leaving the reader to assume. Filtered
+                    // to a store it is that store's stock; unfiltered it is the item's
+                    // on-hand, the figure dispensing and billing are gated on.
+                    header: viewLocationId
+                      ? `At ${locations.find((l: any) => String(l.id) === viewLocationId)?.location_name || 'location'}`
+                      : 'On Hand',
+                    sortable: true,
+                  },
                   { key: 'average_unit_cost', header: 'Unit Cost', sortable: true, render: (v) => <span className="text-muted-foreground">{formatCurrency(v)}</span> },
                   {
                     key: '__value', header: 'Value',
@@ -711,7 +708,6 @@ export default function ItemMaster() {
                   },
                 ]}
               />
-              )}
             </div>
           </div>
         </div>
