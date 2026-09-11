@@ -126,3 +126,29 @@ describe('every repair agrees on what "already posted" means', () => {
     expect(reconciler).toMatch(/GL-ADJ-\$\{b\.bill_number\}-\$\{taken\.length \+ 1\}/);
   });
 });
+
+describe('dispensing reduces the batches as well as the item', () => {
+  // Stock lives in two places that must fall together: the item's on-hand, which
+  // every dispensing gate reads, and the batch it came out of, which is the record
+  // of what arrived. Reducing only the item leaves the batches showing stock that
+  // has gone — and the on-hand reconciler, which treats batches as the truth of
+  // what was received, reads that gap as stock never posted and puts it back,
+  // quietly undoing a real dispense.
+  test('the automatic path consumes a batch', () => {
+    const src = read('src/server/services/autoDispense.js');
+    expect(src).toMatch(/UPDATE inventory_items[\s\S]{0,120}quantity_on_hand/);
+    expect(src).toMatch(/UPDATE inventory_batches[\s\S]{0,160}quantity_used/);
+  });
+
+  test('it takes short-dated stock first, as the counter does', () => {
+    const src = read('src/server/services/autoDispense.js');
+    expect(src).toMatch(/ORDER BY expiry_date ASC/);
+  });
+
+  test('a quantity larger than one batch is spread across several', () => {
+    // Taking only from the first batch would leave the remainder unaccounted.
+    const src = read('src/server/services/autoDispense.js');
+    expect(src).toMatch(/for \(const batch of batches\)/);
+    expect(src).toMatch(/Math\.min\(toTake/);
+  });
+});

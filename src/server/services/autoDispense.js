@@ -118,6 +118,44 @@ async function dispenseLine(sequelize, line, quantity, pharmacistId, transaction
     { replacements: { qty: quantity, id: line.inventory_item_id }, transaction }
   );
 
+  // Take the stock out of a batch as well as off the item.
+  //
+  // Dispensing has to reduce both, or the two drift apart: the item falls while
+  // the batches keep showing the same stock, and anything that treats batches as
+  // the record of what arrived — the on-hand reconciler does — reads the gap as
+  // stock never posted and puts it back, undoing a real dispense. Batch and
+  // expiry tracking would also keep offering stock that has already gone.
+  //
+  // Earliest expiry first, matching the manual counter route, so short-dated
+  // stock is used before it is wasted.
+  const [batches] = await sequelize.query(
+    `SELECT id, (quantity_received - COALESCE(quantity_used, 0)) AS remaining
+       FROM inventory_batches
+      WHERE item_id = :iid
+        AND COALESCE(status, 'active') = 'active'
+        AND (quantity_received - COALESCE(quantity_used, 0)) > 0
+      ORDER BY expiry_date ASC NULLS LAST, created_at ASC`,
+    { replacements: { iid: line.inventory_item_id }, transaction }
+  );
+
+  // Spread across batches when no single one covers it, rather than leaving the
+  // remainder unaccounted.
+  let toTake = quantity;
+  for (const batch of batches) {
+    if (toTake <= 0) break;
+    const take = Math.min(toTake, Number(batch.remaining) || 0);
+    if (take <= 0) continue;
+    await sequelize.query(
+      `UPDATE inventory_batches
+          SET quantity_used = COALESCE(quantity_used, 0) + :qty,
+              status = CASE WHEN (quantity_received - (COALESCE(quantity_used, 0) + :qty)) <= 0
+                            THEN 'depleted' ELSE status END
+        WHERE id = :id`,
+      { replacements: { qty: take, id: batch.id }, transaction }
+    );
+    toTake -= take;
+  }
+
   await sequelize.query(`
     INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,
       quantity_change, reference_type, reference_id, transaction_date, notes, created_by)
