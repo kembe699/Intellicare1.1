@@ -115,13 +115,13 @@ const Profile: React.FC = () => {
     setSaving(true);
     
     try {
-      const token = localStorage.getItem('token');
+      // No Authorization header here. authFetch attaches the session token
+      // itself, reading it from 'auth_token'; this read 'token', which does not
+      // exist, and then sent "Bearer null" — and because the caller's headers are
+      // spread over authFetch's, that null won. Every attempt came back 401 and
+      // the form reported the session had expired, on a session that was fine.
       const response = await authFetch('/api/auth/change-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         credentials: 'include',
         body: JSON.stringify({
           currentPassword: passwordFormData.currentPassword,
@@ -130,8 +130,11 @@ const Profile: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to change password');
+        // The API reports failures on `error`, not `message`, so "Current
+        // password is incorrect" was being swallowed and shown as a generic
+        // failure — leaving no way to tell a wrong password from a broken form.
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || body.message || 'Failed to change password');
       }
       
       toast.success('Password changed successfully');
