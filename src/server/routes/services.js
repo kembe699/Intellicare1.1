@@ -62,7 +62,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new service
-router.post('/', authorize(['admin']), async (req, res) => {
+router.post('/', authorize('setup.services.manage'), async (req, res) => {
   try {
     const serviceData = req.body;
     console.log('Creating service with data:', serviceData);
@@ -120,7 +120,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
 });
 
 // Update service
-router.put('/:id', authorize(['admin']), async (req, res) => {
+router.put('/:id', authorize('setup.services.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -185,7 +185,7 @@ router.put('/:id', authorize(['admin']), async (req, res) => {
 });
 
 // Delete service
-router.delete('/:id', authorize(['admin']), async (req, res) => {
+router.delete('/:id', authorize('setup.services.manage'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -241,7 +241,7 @@ router.get('/category/:category', async (req, res) => {
 
 // Seed the curated lab-test catalog (see scripts/labServicesData.js) — safely
 // re-runnable, only adds whatever isn't already in the services table.
-router.post('/seed-lab-services', authorize(['admin']), async (req, res) => {
+router.post('/seed-lab-services', authorize('setup.services.manage'), async (req, res) => {
   try {
     const { seedLabServices } = require('../scripts/seedLabServices');
     const result = await seedLabServices(req.body.clinic_id, req.user?.id, { Service, resolveRevenueAccount });

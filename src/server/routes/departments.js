@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new department
-router.post('/', authorize(['admin']), async (req, res) => {
+router.post('/', authorize('setup.departments.manage'), async (req, res) => {
   try {
     const { department_name, department_code, description, clinic_id, is_active } = req.body;
     
@@ -145,7 +145,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
 });
 
 // Update department
-router.put('/:id', authorize(['admin']), async (req, res) => {
+router.put('/:id', authorize('setup.departments.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     const { department_name, department_code, description, is_active } = req.body;
@@ -219,7 +219,7 @@ router.put('/:id', authorize(['admin']), async (req, res) => {
 });
 
 // Delete department
-router.delete('/:id', authorize(['admin']), async (req, res) => {
+router.delete('/:id', authorize('setup.departments.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     

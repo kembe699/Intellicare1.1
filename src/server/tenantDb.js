@@ -40,6 +40,14 @@ async function buildTenantConnection(schemaName) {
   const { backfillInventoryBranchIds } = require('./utils/inventoryMaintenance');
   backfillInventoryBranchIds(sequelize, schema).catch(() => {});
 
+  // roles/privileges/role_privileges tables, ensured per-tenant. The old
+  // boot-time IIFE in routes/roles.js only ever ran against the single
+  // default connection, never a real tenant schema — this is the actual
+  // per-tenant equivalent. Table-existence only, no seeding (that's
+  // reconcileRolePrivileges.js's job) — non-blocking for the same reason.
+  const { ensureRolesTables } = require('./config/ensureRolesTables');
+  ensureRolesTables(sequelize).catch(() => {});
+
   return { sequelize, models };
 }
 

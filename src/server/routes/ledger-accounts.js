@@ -4,7 +4,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /accounting, so the API enforces what the client already assumes.
-const LEDGER_WRITE = ['admin', 'accountant', 'finance_manager'];
 const router = express.Router();
 const { LedgerAccount } = require('../models');
 
@@ -36,7 +35,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new ledger account
-router.post('/', authorize(LEDGER_WRITE), async (req, res) => {
+router.post('/', authorize('ledger_accounts.write'), async (req, res) => {
   try {
     // Validate before writing. Without this the missing field surfaced as a 500
     // from the database driver, which reads to the caller as "the server broke"
@@ -63,7 +62,7 @@ router.post('/', authorize(LEDGER_WRITE), async (req, res) => {
 });
 
 // Update ledger account
-router.put('/:id', authorize(LEDGER_WRITE), async (req, res) => {
+router.put('/:id', authorize('ledger_accounts.write'), async (req, res) => {
   try {
     const { account_name, account_code, account_type, parent_account_id, description } = req.body;
     
@@ -88,7 +87,7 @@ router.put('/:id', authorize(LEDGER_WRITE), async (req, res) => {
 });
 
 // Delete ledger account
-router.delete('/:id', authorize(LEDGER_WRITE), async (req, res) => {
+router.delete('/:id', authorize('ledger_accounts.write'), async (req, res) => {
   try {
     const account = await LedgerAccount.findByPk(req.params.id);
     if (!account) {

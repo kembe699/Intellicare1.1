@@ -4,7 +4,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /accounting/exchange-rates, so the API enforces what the client already assumes.
-const FX_WRITE = ['admin', 'accountant', 'finance_manager'];
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -32,7 +31,7 @@ router.get('/currencies', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // POST /currencies — Add a new currency
 // ══════════════════════════════════════════════════════════════
-router.post('/currencies', authorize(FX_WRITE), async (req, res) => {
+router.post('/currencies', authorize('fx.write'), async (req, res) => {
   try {
     const { code, name, symbol, decimal_places, is_base_currency } = req.body;
     if (!code || !name) return res.status(400).json({ error: 'code and name required' });
@@ -61,7 +60,7 @@ router.post('/currencies', authorize(FX_WRITE), async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PUT /currencies/:code — Update currency
 // ══════════════════════════════════════════════════════════════
-router.put('/currencies/:code', authorize(FX_WRITE), async (req, res) => {
+router.put('/currencies/:code', authorize('fx.write'), async (req, res) => {
   try {
     const { name, symbol, decimal_places, is_active, is_base_currency } = req.body;
     const fields = [], reps = [];
@@ -90,7 +89,7 @@ router.put('/currencies/:code', authorize(FX_WRITE), async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // DELETE /currencies/:code — Deactivate currency
 // ══════════════════════════════════════════════════════════════
-router.delete('/currencies/:code', authorize(FX_WRITE), async (req, res) => {
+router.delete('/currencies/:code', authorize('fx.write'), async (req, res) => {
   try {
     const code = req.params.code.toUpperCase();
     const [base] = await sequelize.query(`SELECT is_base_currency FROM currencies WHERE code = ?`, { replacements: [code] });
@@ -138,7 +137,7 @@ router.get('/rates', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // POST /rates — Add / update exchange rate
 // ══════════════════════════════════════════════════════════════
-router.post('/rates', authorize(FX_WRITE), async (req, res) => {
+router.post('/rates', authorize('fx.write'), async (req, res) => {
   try {
     const clinicId = getClinicId(req);
     const { from_currency, to_currency, rate, buy_rate, sell_rate, spot_rate, effective_date, source, notes } = req.body;
@@ -171,7 +170,7 @@ router.post('/rates', authorize(FX_WRITE), async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // DELETE /rates/:id — Deactivate exchange rate
 // ══════════════════════════════════════════════════════════════
-router.delete('/rates/:id', authorize(FX_WRITE), async (req, res) => {
+router.delete('/rates/:id', authorize('fx.write'), async (req, res) => {
   try {
     await sequelize.query(`UPDATE exchange_rates SET is_active = FALSE WHERE id = ?`, { replacements: [req.params.id] });
     res.json({ success: true });
@@ -209,7 +208,7 @@ router.get('/rates/history', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // POST /convert — Convert an amount
 // ══════════════════════════════════════════════════════════════
-router.post('/convert', authorize(FX_WRITE), async (req, res) => {
+router.post('/convert', authorize('fx.write'), async (req, res) => {
   try {
     const clinicId = getClinicId(req);
     const { amount, from_currency, to_currency, date } = req.body;
@@ -314,7 +313,7 @@ router.get('/adjustments', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // POST /revalue — Revalue foreign currency balances
 // ══════════════════════════════════════════════════════════════
-router.post('/revalue', authorize(FX_WRITE), async (req, res) => {
+router.post('/revalue', authorize('fx.write'), async (req, res) => {
   try {
     const clinicId = getClinicId(req);
     const { date } = req.body;
@@ -343,7 +342,7 @@ router.get('/report-settings', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PUT /report-settings — Update report settings
 // ══════════════════════════════════════════════════════════════
-router.put('/report-settings', authorize(FX_WRITE), async (req, res) => {
+router.put('/report-settings', authorize('fx.write'), async (req, res) => {
   try {
     const clinicId = getClinicId(req);
     const { base_currency_code, secondary_currencies, show_individual_currencies, show_base_currency_conversion, show_exchange_gains_losses } = req.body;

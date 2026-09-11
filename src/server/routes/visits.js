@@ -7,11 +7,10 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on clinical visit creation, so the API enforces what the client already assumes.
-const VISIT_WRITE = ['admin', 'reception', 'doctor', 'nurse'];
 const router = express.Router();
 
 // Create new visit
-router.post('/', authorize(VISIT_WRITE), async (req, res) => {
+router.post('/', authorize('visits.write'), async (req, res) => {
   try {
     // Validate before writing. Without this the missing field surfaced as a 500
     // from the database driver, which reads to the caller as "the server broke"

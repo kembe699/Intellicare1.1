@@ -4,7 +4,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /pharmacy-dispensing, so the API enforces what the client already assumes.
-const PHARMACY_WRITE = ['admin', 'pharmacy'];
 const router = express.Router();
 const { Patient, DrugInventory, Prescription, PharmacyDispensing, Receipt, sequelize } = require('../models');
 
@@ -35,7 +34,7 @@ router.get('/inventory/:clinicId', async (req, res) => {
 });
 
 // Add inventory item
-router.post('/inventory', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/inventory', authorize('pharmacy.write'), async (req, res) => {
   try {
     console.log('=== ADD INVENTORY ITEM REQUEST ===');
     const inventoryData = req.body;
@@ -110,7 +109,7 @@ router.post('/inventory', authorize(PHARMACY_WRITE), async (req, res) => {
 });
 
 // Update inventory item
-router.put('/inventory/:itemId', authorize(PHARMACY_WRITE), async (req, res) => {
+router.put('/inventory/:itemId', authorize('pharmacy.write'), async (req, res) => {
   try {
     const { itemId } = req.params;
     const updateData = req.body;
@@ -147,7 +146,7 @@ router.put('/inventory/:itemId', authorize(PHARMACY_WRITE), async (req, res) => 
 });
 
 // Delete inventory item
-router.delete('/inventory/:itemId', authorize(PHARMACY_WRITE), async (req, res) => {
+router.delete('/inventory/:itemId', authorize('pharmacy.write'), async (req, res) => {
   try {
     const { itemId } = req.params;
     
@@ -189,7 +188,7 @@ router.get('/prescriptions/:clinicId', async (req, res) => {
 });
 
 // Update prescription status (e.g., mark as dispensed)
-router.put('/prescriptions/:prescriptionId', authorize(PHARMACY_WRITE), async (req, res) => {
+router.put('/prescriptions/:prescriptionId', authorize('pharmacy.write'), async (req, res) => {
   try {
     const { prescriptionId } = req.params;
     const { status } = req.body;
@@ -245,7 +244,7 @@ router.get('/dispensing/:clinicId', async (req, res) => {
 });
 
 // Add dispensing record
-router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
   try {
     const dispensingData = req.body;
     console.log('Adding dispensing record:', dispensingData);
@@ -286,7 +285,7 @@ router.get('/patients/:clinicId', async (req, res) => {
 });
 
 // Create pharmacy receipt
-router.post('/receipts', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/receipts', authorize('pharmacy.write'), async (req, res) => {
   try {
     const receiptData = req.body;
     console.log('Creating pharmacy receipt:', receiptData);

@@ -90,7 +90,7 @@ router.get('/branches/:id', async (req, res) => {
 });
 
 // POST /api/facilities/branches - Create new branch
-router.post('/branches', authorize(['admin']), async (req, res) => {
+router.post('/branches', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const {
       name, description, is_main_branch, phone, email,
@@ -149,7 +149,7 @@ router.post('/branches', authorize(['admin']), async (req, res) => {
 });
 
 // PUT /api/facilities/branches/:id - Update branch
-router.put('/branches/:id', authorize(['admin']), async (req, res) => {
+router.put('/branches/:id', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const branchId = req.params.id;
     const {
@@ -221,7 +221,7 @@ router.put('/branches/:id', authorize(['admin']), async (req, res) => {
 });
 
 // DELETE /api/facilities/branches/:id - Delete branch
-router.delete('/branches/:id', authorize(['admin']), async (req, res) => {
+router.delete('/branches/:id', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const branchId = req.params.id;
     const existing = await sequelize.query('SELECT id, name FROM branches WHERE id = $1', {
@@ -244,7 +244,7 @@ router.delete('/branches/:id', authorize(['admin']), async (req, res) => {
 });
 
 // PATCH /api/facilities/branches/:id/toggle - Toggle branch active status
-router.patch('/branches/:id/toggle', authorize(['admin']), async (req, res) => {
+router.patch('/branches/:id/toggle', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const branchId = req.params.id;
     const existing = await sequelize.query('SELECT id, is_active FROM branches WHERE id = $1', {
@@ -305,7 +305,7 @@ function sanitizeFacilityData(body) {
 }
 
 // POST /api/facilities - Create new facility
-router.post('/', authorize(['admin']), async (req, res) => {
+router.post('/', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const data = sanitizeFacilityData(req.body);
     const facility = await Facility.create(data);
@@ -317,7 +317,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
 });
 
 // PUT /api/facilities/:id - Update facility
-router.put('/:id', authorize(['admin']), async (req, res) => {
+router.put('/:id', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const facility = await Facility.findByPk(req.params.id);
     if (!facility) {
@@ -333,7 +333,7 @@ router.put('/:id', authorize(['admin']), async (req, res) => {
 });
 
 // DELETE /api/facilities/:id - Delete facility
-router.delete('/:id', authorize(['admin']), async (req, res) => {
+router.delete('/:id', authorize('setup.facilities.manage'), async (req, res) => {
   try {
     const facility = await Facility.findByPk(req.params.id);
     if (!facility) {

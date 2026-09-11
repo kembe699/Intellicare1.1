@@ -11,7 +11,6 @@ const { requireApprovalPermission } = require('../middleware/requireApprovalPerm
 const BASE_CURRENCY = 'SSP';
 // Same roles as BILLS_FINANCIAL_ACTION in patientBills.js — recording a payment/deposit
 // is a cashier/finance action, matching how the rest of the billing surface is gated.
-const DEPOSIT_ACTION = ['admin', 'cashier', 'reception', 'finance_manager', 'accountant'];
 
 // ─── Table Bootstrap ──────────────────────────────────────────────────────────
 // Self-migrating, matches the CREATE TABLE IF NOT EXISTS convention used throughout
@@ -268,7 +267,7 @@ async function requireOpenShift(req, res) {
 
 // ─── Routes ────────────────────────────────────────────────────────────────
 
-router.get('/:patientId/balance', authorize(['admin', 'cashier', 'reception', 'finance_manager', 'accountant', 'doctor']), async (req, res) => {
+router.get('/:patientId/balance', authorize('deposits.read'), async (req, res) => {
   try {
     const clinicId = parseInt(req.query.clinic_id) || req.user?.clinic || 1;
     const currency = req.query.currency || BASE_CURRENCY;
@@ -291,7 +290,7 @@ router.get('/:patientId/balance', authorize(['admin', 'cashier', 'reception', 'f
   }
 });
 
-router.get('/:patientId/history', authorize(['admin', 'cashier', 'reception', 'finance_manager', 'accountant', 'doctor']), async (req, res) => {
+router.get('/:patientId/history', authorize('deposits.read'), async (req, res) => {
   try {
     const clinicId = parseInt(req.query.clinic_id) || req.user?.clinic || 1;
     const [rows] = await sequelize.query(
@@ -305,7 +304,7 @@ router.get('/:patientId/history', authorize(['admin', 'cashier', 'reception', 'f
   }
 });
 
-router.post('/', authorize(DEPOSIT_ACTION), async (req, res) => {
+router.post('/', authorize('deposits.write'), async (req, res) => {
   let t;
   try {
     const shift = await requireOpenShift(req, res);

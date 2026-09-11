@@ -14,6 +14,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { DEFAULT_ROLE_PRIVILEGES } = require('../../src/server/config/permissionsCatalog');
 
 const root = path.resolve(__dirname, '../..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
@@ -39,11 +40,13 @@ function componentRoles(appSrc) {
   return out;
 }
 
-/** The role array a named authorize() constant is defined with. */
-function roleConst(src, name) {
-  const m = new RegExp(`const\\s+${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(src);
-  if (!m) return null;
-  return [...m[1].matchAll(/'([^']+)'/g)].map((r) => r[1]);
+/** The role array a privilege key currently grants, per the real catalog
+ * (src/server/config/permissionsCatalog.js) that authorize() actually reads
+ * from now — dynamic per-tenant DB grants beyond this initial seed are real
+ * and expected to diverge over time, but the seed itself must never
+ * regress below what these contracts require. */
+function roleConst(_src, key) {
+  return DEFAULT_ROLE_PRIVILEGES[key] || null;
 }
 
 describe('Route guards agree with API guards', () => {
@@ -74,12 +77,12 @@ describe('Route guards agree with API guards', () => {
     {
       what: 'read the patient directory',
       usesFeature: (src) => /fetchPatientDirectory/.test(src),
-      constant: 'LIS_PARTICIPANT_READ',
+      constant: 'lis.participants.read',
     },
     {
       what: 'register a walk-in patient',
       usesFeature: (src) => /authFetch\('\/api\/lis\/participants',\s*\{\s*\n?\s*method: 'POST'/.test(src),
-      constant: 'LIS_PARTICIPANT_CREATE',
+      constant: 'lis.participants.create',
     },
   ];
 
@@ -99,15 +102,15 @@ describe('Route guards agree with API guards', () => {
     );
   });
 
-  test('GET /api/lis/participants uses the shared read list, not an inline one', () => {
+  test('GET /api/lis/participants uses the shared read privilege, not an inline one', () => {
     const src = read('src/server/routes/lisModule.js');
-    expect(src).toMatch(/router\.get\('\/participants',\s*authorize\(LIS_PARTICIPANT_READ\)/);
+    expect(src).toMatch(/router\.get\('\/participants',\s*authorize\('lis\.participants\.read'\)/);
   });
 
   test('writing to the participant registry stays restricted', () => {
     const src = read('src/server/routes/lisModule.js');
     // Widening read access must not have widened writes.
-    expect(src).toMatch(/router\.put\('\/participants\/:id',\s*authorize\(LIS_REGISTRATION\)/);
+    expect(src).toMatch(/router\.put\('\/participants\/:id',\s*authorize\('lis\.registration\.write'\)/);
   });
 });
 
@@ -162,28 +165,29 @@ describe('Patient directory is fetched in one place', () => {
 describe('Pharmacy can complete a dispensing sale', () => {
   const bills = read('src/server/routes/patientBills.js');
 
-  const rolesFor = (constant) => {
-    const m = bills.match(new RegExp(`const\\s+${constant}\\s*=\\s*\\[([^\\]]*)\\]`));
-    return m ? m[1].split(',').map((r) => r.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean) : null;
-  };
+  // Which privilege key a given authorize() call site resolves to, then what
+  // roles that key currently grants per the seed catalog — the two-step
+  // replaces the old regex-scrape of a local role array, since the array no
+  // longer lives in this file at all.
   const guardFor = (routeRe) => (bills.match(routeRe) || [])[1] || null;
+  const rolesFor = (key) => DEFAULT_ROLE_PRIVILEGES[key] || null;
 
   // "Save Payment & Dispense" takes the money and hands over the medicine in one
   // step. Pharmacy could raise the charge and dispense but not record the
   // payment, so the flow died at the last click with "Insufficient permissions".
   test('pharmacy may record a payment against a bill', () => {
-    const guard = guardFor(/router\.post\('\/:billId\/payments',\s*authorize\((\w+)\)/);
+    const guard = guardFor(/router\.post\('\/:billId\/payments',\s*authorize\('([\w.]+)'\)/);
     expect(guard).toBeTruthy();
     expect(rolesFor(guard)).toContain('pharmacy');
   });
 
   // Taking money is not the same as changing what is owed. Widening the shared
-  // constant would have handed pharmacy bill editing and line voiding too, which
-  // is how a narrow permission fix quietly becomes a broad one.
+  // privilege would have handed pharmacy bill editing and line voiding too,
+  // which is how a narrow permission fix quietly becomes a broad one.
   test('pharmacy still may not edit a bill or void a line off one', () => {
     for (const routeRe of [
-      /router\.put\('\/:billId',\s*authorize\((\w+)\)/,
-      /router\.post\('\/:billId\/void-item',\s*authorize\((\w+)\)/,
+      /router\.put\('\/:billId',\s*authorize\('([\w.]+)'\)/,
+      /router\.post\('\/:billId\/void-item',\s*authorize\('([\w.]+)'\)/,
     ]) {
       const guard = guardFor(routeRe);
       expect(guard).toBeTruthy();
@@ -195,9 +199,9 @@ describe('Pharmacy can complete a dispensing sale', () => {
   // collect is useless — and the cash untracked — unless pharmacy can open one.
   test('pharmacy can open the cashier shift its payments are recorded against', () => {
     const cashier = read('src/server/routes/cashier.js');
-    const m = cashier.match(/const\s+CASHIER_WRITE\s*=\s*\[([^\]]*)\]/);
+    const m = cashier.match(/router\.post\('\/start-shift',\s*authorize\('([\w.]+)'\)/);
     expect(m).toBeTruthy();
-    expect(m[1]).toMatch(/'pharmacy'/);
+    expect(rolesFor(m[1])).toContain('pharmacy');
   });
 });
 

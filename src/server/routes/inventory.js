@@ -12,11 +12,8 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // App.tsx — that was only ever a UI-hiding mechanism; every route below was reachable
 // by any authenticated user via a direct API call regardless of role, since `authorize`
 // was imported but only ever used on one route (DELETE /items/clear-all) in this file.
-const INVENTORY_READ = ['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement'];
-const INVENTORY_WRITE = ['admin', 'pharmacy', 'procurement'];
 // Approving/rejecting a stock adjustment posts directly to the GL — kept narrower than
 // general write access, matching how financial approvals are gated elsewhere in the app.
-const INVENTORY_ADJUST_APPROVE = ['admin', 'finance_manager', 'procurement'];
 
 // Startup: ensure indexes + branch_id column exist.
 // Each statement gets its own try/catch — this MySQL version doesn't support
@@ -50,7 +47,7 @@ function bustInventoryCache(req) {
 // ═══════════════════════════════════════════════════
 
 // List all inventory items
-router.get('/items', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/items', authorize('inventory.read'), async (req, res) => {
   try {
     const { category, item_type, is_active, search, low_stock, expiring_soon } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -127,7 +124,7 @@ router.get('/items', authorize(INVENTORY_READ), async (req, res) => {
 });
 
 // Get single item with details
-router.get('/items/:id', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/items/:id', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [items] = await sequelize.query(`
@@ -191,7 +188,7 @@ router.get('/items/:id', authorize(INVENTORY_READ), async (req, res) => {
 });
 
 // Create inventory item
-router.post('/items', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/items', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const {
@@ -295,7 +292,7 @@ function parseCsvLine(line) {
   return fields;
 }
 
-router.post('/items/bulk-upload', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/items/bulk-upload', authorize('inventory.write'), async (req, res) => {
   try {
     // Get CSV data from request body
     let csvData = req.body.csvData;
@@ -470,7 +467,7 @@ router.post('/items/bulk-upload', authorize(INVENTORY_WRITE), async (req, res) =
 // selling_price moves; current_unit_cost is left alone since it's meant to reflect
 // actual purchase cost, not a markup decision. Scoped to the clinic (and optionally a
 // category/type) so this can't silently touch another clinic's catalog.
-router.post('/items/bulk-price-adjustment', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/items/bulk-price-adjustment', authorize('inventory.write'), async (req, res) => {
   try {
     const { mode, percentage, direction, new_rate, category, item_type, clinic_id } = req.body;
 
@@ -544,7 +541,7 @@ router.post('/items/bulk-price-adjustment', authorize(INVENTORY_WRITE), async (r
 });
 
 // Update inventory item
-router.put('/items/:id', authorize(INVENTORY_WRITE), async (req, res) => {
+router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const fields = [];
@@ -652,7 +649,7 @@ router.delete('/items/clear-all', authorize(['admin']), async (req, res) => {
 });
 
 // Items below reorder level
-router.get('/items-reorder-list', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/items-reorder-list', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { sql: branchSQL, params: branchParams } = getBranchConditionSQL(req, 'i');
@@ -674,7 +671,7 @@ router.get('/items-reorder-list', authorize(INVENTORY_READ), async (req, res) =>
 });
 
 // Items expiring soon
-router.get('/items-expiry-alert', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/items-expiry-alert', authorize('inventory.read'), async (req, res) => {
   try {
     const { days } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -702,7 +699,7 @@ router.get('/items-expiry-alert', authorize(INVENTORY_READ), async (req, res) =>
 // STOCK LOCATIONS
 // ═══════════════════════════════════════════════════
 
-router.get('/locations', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/locations', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [locations] = await sequelize.query(`
@@ -728,7 +725,7 @@ router.get('/locations', authorize(INVENTORY_READ), async (req, res) => {
   }
 });
 
-router.post('/locations', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/locations', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const { location_code, location_name, location_type, address, manager_user_id, capacity_description } = req.body;
@@ -752,7 +749,7 @@ router.post('/locations', authorize(INVENTORY_WRITE), async (req, res) => {
   }
 });
 
-router.put('/locations/:id', authorize(INVENTORY_WRITE), async (req, res) => {
+router.put('/locations/:id', authorize('inventory.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const fields = [];
@@ -772,7 +769,7 @@ router.put('/locations/:id', authorize(INVENTORY_WRITE), async (req, res) => {
 });
 
 // Get stock at a specific location
-router.get('/locations/:id/stock', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/locations/:id/stock', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [stock] = await sequelize.query(`
@@ -795,7 +792,7 @@ router.get('/locations/:id/stock', authorize(INVENTORY_READ), async (req, res) =
 // INVENTORY BATCHES
 // ═══════════════════════════════════════════════════
 
-router.get('/batches', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/batches', authorize('inventory.read'), async (req, res) => {
   try {
     const { item_id, status, expired, location_id } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -832,7 +829,7 @@ router.get('/batches', authorize(INVENTORY_READ), async (req, res) => {
 });
 
 // Create batch (usually from GRN)
-router.post('/batches', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/batches', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const {
@@ -910,7 +907,7 @@ router.post('/batches', authorize(INVENTORY_WRITE), async (req, res) => {
 });
 
 // Record batch usage
-router.post('/batches/:id/use', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/batches/:id/use', authorize('inventory.write'), async (req, res) => {
   try {
     const { quantity_used, usage_type, reference_id, reference_type, used_by, notes } = req.body;
     if (!quantity_used || quantity_used <= 0) return res.status(400).json({ error: 'quantity_used must be > 0' });
@@ -967,7 +964,7 @@ router.post('/batches/:id/use', authorize(INVENTORY_WRITE), async (req, res) => 
 });
 
 // Retire batches in bulk (write-off expired/damaged stock)
-router.post('/batches/retire-bulk', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/batches/retire-bulk', authorize('inventory.write'), async (req, res) => {
   try {
     const { batch_ids, reason, retired_by } = req.body;
     if (!Array.isArray(batch_ids) || batch_ids.length === 0) {
@@ -1028,7 +1025,7 @@ router.post('/batches/retire-bulk', authorize(INVENTORY_WRITE), async (req, res)
 // INVENTORY TRANSACTIONS
 // ═══════════════════════════════════════════════════
 
-router.get('/transactions', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/transactions', authorize('inventory.read'), async (req, res) => {
   try {
     const { item_id, transaction_type, date_from, date_to, limit: lim } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1065,7 +1062,7 @@ router.get('/transactions', authorize(INVENTORY_READ), async (req, res) => {
 });
 
 // Create inventory transaction
-router.post('/transactions', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/transactions', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const {
@@ -1178,7 +1175,7 @@ router.post('/transactions', authorize(INVENTORY_WRITE), async (req, res) => {
 // INVENTORY ADJUSTMENTS
 // ═══════════════════════════════════════════════════
 
-router.get('/adjustments', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/adjustments', authorize('inventory.read'), async (req, res) => {
   try {
     const { approval_status } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1204,7 +1201,7 @@ router.get('/adjustments', authorize(INVENTORY_READ), async (req, res) => {
   }
 });
 
-router.post('/adjustments', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/adjustments', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const { item_id, location_id, system_quantity, physical_count, variance_reason, counted_by, notes } = req.body;
@@ -1245,7 +1242,7 @@ router.post('/adjustments', authorize(INVENTORY_WRITE), async (req, res) => {
 });
 
 // Approve adjustment
-router.post('/adjustments/:id/approve', authorize(INVENTORY_ADJUST_APPROVE), async (req, res) => {
+router.post('/adjustments/:id/approve', authorize('inventory.adjustments.approve'), async (req, res) => {
   try {
     const { approved_by } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1314,7 +1311,7 @@ router.post('/adjustments/:id/approve', authorize(INVENTORY_ADJUST_APPROVE), asy
   }
 });
 
-router.post('/adjustments/:id/reject', authorize(INVENTORY_ADJUST_APPROVE), async (req, res) => {
+router.post('/adjustments/:id/reject', authorize('inventory.adjustments.approve'), async (req, res) => {
   try {
     const { reviewed_by, notes } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1334,7 +1331,7 @@ router.post('/adjustments/:id/reject', authorize(INVENTORY_ADJUST_APPROVE), asyn
 // PHYSICAL INVENTORY COUNTS
 // ═══════════════════════════════════════════════════
 
-router.get('/physical-counts', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/physical-counts', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { sql: pcBranchSQL, params: pcBranchParams } = getBranchConditionSQL(req, 'pc');
@@ -1353,7 +1350,7 @@ router.get('/physical-counts', authorize(INVENTORY_READ), async (req, res) => {
   }
 });
 
-router.post('/physical-counts', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/physical-counts', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const { count_type, location_id, created_by } = req.body;
@@ -1382,7 +1379,7 @@ router.post('/physical-counts', authorize(INVENTORY_WRITE), async (req, res) => 
 });
 
 // Get count detail with lines
-router.get('/physical-counts/:id', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/physical-counts/:id', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [counts] = await sequelize.query(
@@ -1409,7 +1406,7 @@ router.get('/physical-counts/:id', authorize(INVENTORY_READ), async (req, res) =
 });
 
 // Add count line
-router.post('/physical-counts/:id/add-line', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/physical-counts/:id/add-line', authorize('inventory.write'), async (req, res) => {
   try {
     const { item_id, location_id, counted_quantity, counted_by, notes } = req.body;
 
@@ -1449,7 +1446,7 @@ router.post('/physical-counts/:id/add-line', authorize(INVENTORY_WRITE), async (
 });
 
 // Complete count
-router.put('/physical-counts/:id/complete', authorize(INVENTORY_WRITE), async (req, res) => {
+router.put('/physical-counts/:id/complete', authorize('inventory.write'), async (req, res) => {
   try {
     const { completed_by } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1466,7 +1463,7 @@ router.put('/physical-counts/:id/complete', authorize(INVENTORY_WRITE), async (r
 });
 
 // Reconcile count - create adjustments for variances
-router.post('/physical-counts/:id/reconcile', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/physical-counts/:id/reconcile', authorize('inventory.write'), async (req, res) => {
   try {
     const { approved_by } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
@@ -1527,7 +1524,7 @@ router.post('/physical-counts/:id/reconcile', authorize(INVENTORY_WRITE), async 
 // INVENTORY VALUATION & COGS
 // ═══════════════════════════════════════════════════
 
-router.get('/valuation', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/valuation', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { sql: valBranchSQL, params: valBranchParams } = getBranchConditionSQL(req, 'i');
@@ -1628,7 +1625,7 @@ router.get('/valuation', authorize(INVENTORY_READ), async (req, res) => {
 });
 
 // COGS monthly summary
-router.get('/cogs/monthly/:period', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/cogs/monthly/:period', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const period = req.params.period; // YYYY-MM
@@ -1665,7 +1662,7 @@ router.get('/cogs/monthly/:period', authorize(INVENTORY_READ), async (req, res) 
 // INVENTORY REPORTS / DASHBOARD STATS
 // ═══════════════════════════════════════════════════
 
-router.get('/dashboard-stats', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/dashboard-stats', authorize('inventory.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
 
@@ -1735,7 +1732,7 @@ router.get('/dashboard-stats', authorize(INVENTORY_READ), async (req, res) => {
 });
 
 // Stock summary report
-router.get('/reports/stock-summary', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/reports/stock-summary', authorize('inventory.read'), async (req, res) => {
   try {
     const { category } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1768,7 +1765,7 @@ router.get('/reports/stock-summary', authorize(INVENTORY_READ), async (req, res)
 });
 
 // Usage history report
-router.get('/reports/usage-history', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/reports/usage-history', authorize('inventory.read'), async (req, res) => {
   try {
     const { item_id, date_from, date_to } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1802,7 +1799,7 @@ router.get('/reports/usage-history', authorize(INVENTORY_READ), async (req, res)
 // INVENTORY SETTINGS
 // ═══════════════════════════════════════════════════
 
-router.get('/settings/:clinicId', authorize(INVENTORY_READ), async (req, res) => {
+router.get('/settings/:clinicId', authorize('inventory.read'), async (req, res) => {
   try {
     // Path param, not query/body — a non-admin could otherwise read any other
     // clinic's inventory settings just by changing the URL.
@@ -1829,7 +1826,7 @@ router.get('/settings/:clinicId', authorize(INVENTORY_READ), async (req, res) =>
   }
 });
 
-router.put('/settings/:clinicId', authorize(INVENTORY_WRITE), async (req, res) => {
+router.put('/settings/:clinicId', authorize('inventory.write'), async (req, res) => {
   try {
     if (req.user?.role !== 'admin' && String(req.params.clinicId) !== String(req.user?.clinicId)) {
       return res.status(403).json({ error: 'Access denied to this clinic\'s settings' });
@@ -2067,7 +2064,7 @@ async function createInventoryGLEntry(clinicId, transaction, createdBy) {
 }
 
 // POST /gl-entry - manually trigger GL entry for an inventory transaction
-router.post('/gl-entry', authorize(INVENTORY_WRITE), async (req, res) => {
+router.post('/gl-entry', authorize('inventory.write'), async (req, res) => {
   try {
     const { transaction_id } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);

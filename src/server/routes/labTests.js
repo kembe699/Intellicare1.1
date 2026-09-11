@@ -239,7 +239,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new lab test
-router.post('/', authorize(['admin']), async (req, res) => {
+router.post('/', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     
     // Use raw SQL to insert directly into lab_tests table
@@ -271,7 +271,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
 });
 
 // Create lab test with components
-router.post('/with-components', authorize(['admin']), async (req, res) => {
+router.post('/with-components', authorize('setup.lab_tests.manage'), async (req, res) => {
   const transaction = await LabTest.sequelize.transaction();
   const crypto = require('crypto');
   
@@ -374,7 +374,7 @@ router.post('/with-components', authorize(['admin']), async (req, res) => {
 });
 
 // Update lab test
-router.put('/:id', authorize(['admin']), async (req, res) => {
+router.put('/:id', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     const { test_name, test_code, category, price } = req.body;
     
@@ -403,7 +403,7 @@ router.put('/:id', authorize(['admin']), async (req, res) => {
 });
 
 // Update lab test with components
-router.put('/:id/with-components', authorize(['admin']), async (req, res) => {
+router.put('/:id/with-components', authorize('setup.lab_tests.manage'), async (req, res) => {
   const transaction = await LabTest.sequelize.transaction();
   
   try {
@@ -496,7 +496,7 @@ router.put('/:id/with-components', authorize(['admin']), async (req, res) => {
 });
 
 // Delete lab test (soft delete)
-router.delete('/:id', authorize(['admin']), async (req, res) => {
+router.delete('/:id', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     // Check if test exists first
     const [test] = await LabTest.sequelize.query(`
@@ -527,7 +527,7 @@ router.delete('/:id', authorize(['admin']), async (req, res) => {
 });
 
 // Delete lab test with components (HARD DELETE)
-router.delete('/:id/with-components', authorize(['admin']), async (req, res) => {
+router.delete('/:id/with-components', authorize('setup.lab_tests.manage'), async (req, res) => {
   const transaction = await LabTest.sequelize.transaction();
   
   try {
@@ -571,7 +571,7 @@ router.delete('/:id/with-components', authorize(['admin']), async (req, res) => 
 });
 
 // Add sample lab test data for testing
-router.post('/seed', authorize(['admin']), async (req, res) => {
+router.post('/seed', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     
     const sampleTests = [
@@ -632,7 +632,7 @@ router.post('/seed', authorize(['admin']), async (req, res) => {
 });
 
 // Bulk upload lab tests from CSV
-router.post('/bulk-upload', authorize(['admin']), async (req, res) => {
+router.post('/bulk-upload', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     const { csvData, clinic_id } = req.body;
     
@@ -817,7 +817,7 @@ router.post('/bulk-upload', authorize(['admin']), async (req, res) => {
 // Seed the curated common lab-test catalog (see scripts/labTestsSeedData.js) —
 // each test gets a linked Service (found by name, or created on the spot if
 // missing) and one component matching the test itself. Safely re-runnable.
-router.post('/seed-common', authorize(['admin']), async (req, res) => {
+router.post('/seed-common', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     const { clinic_id } = req.body;
     if (!clinic_id) {

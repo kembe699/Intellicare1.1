@@ -41,8 +41,6 @@ const ATTACHMENT_ENTITY_TABLES = {
 // (a purpose-built approval-workflow gate, not touched here). Everything else gets the
 // same authorize([...]) role gate used across the rest of the app, matching the
 // Procurement sidebar section's own role groupings.
-const PROCUREMENT_READ = ['admin', 'finance_manager', 'accountant', 'procurement'];
-const PROCUREMENT_WRITE = ['admin', 'finance_manager', 'accountant', 'procurement'];
 // The sidebar restricts the Purchase Orders screen itself to admin (and now the dedicated
 // procurement role) — narrower than Suppliers/Requisitions/Goods Receipt — so PO
 // creation/modification follows suit; reads stay open to finance/accountant since they
@@ -191,7 +189,7 @@ const PO_WRITE = ['admin', 'procurement'];
 // ═══════════════════════════════════════════════════
 
 // List all suppliers (with filters)
-router.get('/suppliers', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/suppliers', authorize('procurement.read'), async (req, res) => {
   try {
     const { is_active, supplier_type, search, on_hold } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -221,7 +219,7 @@ router.get('/suppliers', authorize(PROCUREMENT_READ), async (req, res) => {
 });
 
 // Get single supplier with stats
-router.get('/suppliers/:id', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/suppliers/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [suppliers] = await sequelize.query(
@@ -260,7 +258,7 @@ router.get('/suppliers/:id', authorize(PROCUREMENT_READ), async (req, res) => {
 });
 
 // Create supplier
-router.post('/suppliers', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.post('/suppliers', authorize('procurement.write'), async (req, res) => {
   try {
     const { name, contact_person, phone, email, address, town, country,
       supplier_type, tax_id, bank_account_name, bank_account_number, bank_name,
@@ -305,7 +303,7 @@ router.post('/suppliers', authorize(PROCUREMENT_WRITE), async (req, res) => {
 });
 
 // Update supplier
-router.put('/suppliers/:id', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.put('/suppliers/:id', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const fields = [];
@@ -340,7 +338,7 @@ router.put('/suppliers/:id', authorize(PROCUREMENT_WRITE), async (req, res) => {
 });
 
 // Toggle supplier hold
-router.put('/suppliers/:id/hold', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.put('/suppliers/:id/hold', authorize('procurement.write'), async (req, res) => {
   try {
     const { on_hold, hold_reason } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -357,7 +355,7 @@ router.put('/suppliers/:id/hold', authorize(PROCUREMENT_WRITE), async (req, res)
 });
 
 // Rate supplier performance
-router.post('/suppliers/:id/performance', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.post('/suppliers/:id/performance', authorize('procurement.write'), async (req, res) => {
   try {
     const { delivery_timeliness, quality_of_goods, communication, pricing_competitiveness, comments, evaluator_id } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
@@ -393,7 +391,7 @@ router.post('/suppliers/:id/performance', authorize(PROCUREMENT_WRITE), async (r
 });
 
 // Get supplier performance history
-router.get('/suppliers/:id/performance', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/suppliers/:id/performance', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [ratings] = await sequelize.query(`
@@ -415,7 +413,7 @@ router.get('/suppliers/:id/performance', authorize(PROCUREMENT_READ), async (req
 // ═══════════════════════════════════════════════════
 
 // List PRs
-router.get('/purchase-requisitions', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/purchase-requisitions', authorize('procurement.read'), async (req, res) => {
   try {
     const { status, requested_by } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -445,7 +443,7 @@ router.get('/purchase-requisitions', authorize(PROCUREMENT_READ), async (req, re
 });
 
 // Get single PR with lines
-router.get('/purchase-requisitions/:id', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/purchase-requisitions/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [prs] = await sequelize.query(`
@@ -471,7 +469,7 @@ router.get('/purchase-requisitions/:id', authorize(PROCUREMENT_READ), async (req
 });
 
 // Create PR
-router.post('/purchase-requisitions', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.post('/purchase-requisitions', authorize('procurement.write'), async (req, res) => {
   try {
     const { requested_by, department, cost_center_id, requisition_type,
       delivery_date_required, currency, notes, lines } = req.body;
@@ -553,7 +551,7 @@ router.post('/purchase-requisitions', authorize(PROCUREMENT_WRITE), async (req, 
 });
 
 // Update PR (draft only)
-router.put('/purchase-requisitions/:id', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.put('/purchase-requisitions/:id', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [pr] = await sequelize.query('SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
@@ -612,7 +610,7 @@ router.put('/purchase-requisitions/:id', authorize(PROCUREMENT_WRITE), async (re
 });
 
 // Submit PR for approval
-router.post('/purchase-requisitions/:id/submit', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.post('/purchase-requisitions/:id/submit', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [pr] = await sequelize.query('SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
@@ -681,7 +679,7 @@ router.post('/purchase-requisitions/:id/reject', requireApprovalPermission('pr_a
 // any PR, not just their own). A cancel isn't an approval decision, so it
 // doesn't need pr_approve; instead it's limited to the PR's own requester,
 // an approver, or an admin.
-router.post('/purchase-requisitions/:id/cancel', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.post('/purchase-requisitions/:id/cancel', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [pr] = await sequelize.query('SELECT status, requested_by FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
@@ -789,7 +787,7 @@ router.post('/purchase-requisitions/:id/cancel', authorize(PROCUREMENT_WRITE), a
 })();
 
 // List POs with filters
-router.get('/purchase-orders', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/purchase-orders', authorize('procurement.read'), async (req, res) => {
   try {
     const { status, supplier_id } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -818,7 +816,7 @@ router.get('/purchase-orders', authorize(PROCUREMENT_READ), async (req, res) => 
 });
 
 // Get single PO with items
-router.get('/purchase-orders/:id', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/purchase-orders/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [pos] = await sequelize.query(`
@@ -853,7 +851,7 @@ router.get('/purchase-orders/:id', authorize(PROCUREMENT_READ), async (req, res)
 });
 
 // Create PO (from scratch or from approved PR)
-router.post('/purchase-orders', authorize(PO_WRITE), async (req, res) => {
+router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     // Validate before writing, so a missing supplier reads as a bad request
     // rather than a server error.
@@ -1033,7 +1031,7 @@ async function loadEditableP0(req) {
   return { po: pos[0] };
 }
 
-router.post('/purchase-orders/:id/items', authorize(PO_WRITE), async (req, res) => {
+router.post('/purchase-orders/:id/items', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     const { item_name, description, quantity, unit_price, unit_of_measure } = req.body;
     if (!item_name || !quantity || unit_price === undefined || unit_price === null) {
@@ -1077,7 +1075,7 @@ router.post('/purchase-orders/:id/items', authorize(PO_WRITE), async (req, res) 
 });
 
 // Edit a line on a draft PO
-router.put('/purchase-orders/:id/items/:itemId', authorize(PO_WRITE), async (req, res) => {
+router.put('/purchase-orders/:id/items/:itemId', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     const { po, error } = await loadEditableP0(req);
     if (error) return res.status(error.code).json(error.body);
@@ -1141,7 +1139,7 @@ router.put('/purchase-orders/:id/items/:itemId', authorize(PO_WRITE), async (req
 });
 
 // Remove a line from a draft PO
-router.delete('/purchase-orders/:id/items/:itemId', authorize(PO_WRITE), async (req, res) => {
+router.delete('/purchase-orders/:id/items/:itemId', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     const { po, error } = await loadEditableP0(req);
     if (error) return res.status(error.code).json(error.body);
@@ -1183,7 +1181,7 @@ router.delete('/purchase-orders/:id/items/:itemId', authorize(PO_WRITE), async (
 });
 
 // Update PO status (approve, send, cancel)
-router.post('/purchase-orders/:id/status', authorize(PO_WRITE), async (req, res) => {
+router.post('/purchase-orders/:id/status', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     const { action, user_id, user_name, signature } = req.body;
 
@@ -1273,7 +1271,7 @@ router.post('/purchase-orders/:id/status', authorize(PO_WRITE), async (req, res)
 // ═══════════════════════════════════════════════════
 
 // List GRNs
-router.get('/goods-receipt-notes', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/goods-receipt-notes', authorize('procurement.read'), async (req, res) => {
   try {
     const { status, po_id } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1305,7 +1303,7 @@ router.get('/goods-receipt-notes', authorize(PROCUREMENT_READ), async (req, res)
 });
 
 // Get single GRN with lines
-router.get('/goods-receipt-notes/:id', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/goods-receipt-notes/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [grns] = await sequelize.query(`
@@ -1334,7 +1332,7 @@ router.get('/goods-receipt-notes/:id', authorize(PROCUREMENT_READ), async (req, 
 });
 
 // Create GRN from PO
-router.post('/goods-receipt-notes', authorize(PROCUREMENT_WRITE), async (req, res) => {
+router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, res) => {
   try {
     const { po_id, received_by, received_location, received_condition, notes, invoice_number, lines } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
@@ -1846,7 +1844,7 @@ router.post('/goods-receipt-notes/:id/reject', requireApprovalPermission('grn_ac
 // PROCUREMENT DASHBOARD STATS
 // ═══════════════════════════════════════════════════
 
-router.get('/dashboard/stats', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) => {
   try {
     // Always resolved from the session (falls back to the client-supplied clinic_id
     // only for an admin) — never left null, which used to mean "every clinic's stats".
@@ -2064,7 +2062,7 @@ router.get('/dashboard/stats', authorize(PROCUREMENT_READ), async (req, res) => 
 // PROCUREMENT SETTINGS
 // ═══════════════════════════════════════════════════
 
-router.get('/settings/:clinicId', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/settings/:clinicId', authorize('procurement.read'), async (req, res) => {
   try {
     const [settings] = await sequelize.query(
       'SELECT * FROM procurement_settings WHERE clinic_id = :clinic_id',
@@ -2098,7 +2096,7 @@ router.get('/settings/:clinicId', authorize(PROCUREMENT_READ), async (req, res) 
   }
 });
 
-router.put('/settings/:clinicId', authorize(['admin']), async (req, res) => {
+router.put('/settings/:clinicId', authorize('procurement.settings.manage'), async (req, res) => {
   try {
     const clinicId = parseInt(req.params.clinicId);
     const [existing] = await sequelize.query(
@@ -2180,7 +2178,7 @@ router.put('/settings/:clinicId', authorize(['admin']), async (req, res) => {
 // ═══════════════════════════════════════════════════
 
 // Purchase summary report
-router.get('/reports/purchase-summary', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/reports/purchase-summary', authorize('procurement.read'), async (req, res) => {
   try {
     const { start_date, end_date, supplier_id, currency } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -2259,7 +2257,7 @@ router.get('/reports/purchase-summary', authorize(PROCUREMENT_READ), async (req,
 });
 
 // Delivery performance report
-router.get('/reports/delivery-performance', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/reports/delivery-performance', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     // Cancelled orders were never fulfilled, so they shouldn't count toward
@@ -2289,7 +2287,7 @@ router.get('/reports/delivery-performance', authorize(PROCUREMENT_READ), async (
 });
 
 // Purchase Order report — every PO in the filtered range with full status visibility.
-router.get('/reports/purchase-orders', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/reports/purchase-orders', authorize('procurement.read'), async (req, res) => {
   try {
     const { start_date, end_date, currency, user_id, supplier_id } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -2363,7 +2361,7 @@ router.get('/reports/purchase-orders', authorize(PROCUREMENT_READ), async (req, 
 });
 
 // Purchase Requisition report — every PR in the filtered range with full status visibility.
-router.get('/reports/purchase-requisitions', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/reports/purchase-requisitions', authorize('procurement.read'), async (req, res) => {
   try {
     const { start_date, end_date, currency, user_id } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -2411,7 +2409,7 @@ router.get('/reports/purchase-requisitions', authorize(PROCUREMENT_READ), async 
 });
 
 // Goods Receipt report — every GRN in the filtered range with full status visibility.
-router.get('/reports/goods-receipts', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/reports/goods-receipts', authorize('procurement.read'), async (req, res) => {
   try {
     const { start_date, end_date, currency, user_id, supplier_id } = req.query;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -2466,11 +2464,11 @@ router.get('/reports/goods-receipts', authorize(PROCUREMENT_READ), async (req, r
 
 // ═══════════════════════════════════════════════════
 // Attachments (PO quotations, GRN invoices) — optional, multi-file, persist
-// permanently with the record, viewable by anyone with PROCUREMENT_READ
+// permanently with the record, viewable by anyone with 'procurement.read'
 // (i.e. the same audience that can see the PO/GRN itself during approval).
 // ═══════════════════════════════════════════════════
 
-router.post('/attachments/:entityType/:entityId', authorize(PROCUREMENT_WRITE), (req, res, next) => {
+router.post('/attachments/:entityType/:entityId', authorize('procurement.write'), (req, res, next) => {
   attachmentUpload.array('files', 10)(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
     next();
@@ -2480,8 +2478,10 @@ router.post('/attachments/:entityType/:entityId', authorize(PROCUREMENT_WRITE), 
     const { entityType, entityId } = req.params;
     const entityDef = ATTACHMENT_ENTITY_TABLES[entityType];
     if (!entityDef) return res.status(400).json({ error: `Unknown attachment entity type: ${entityType}` });
-    // PO attachment uploads follow the same admin-only gate as PO creation/modification
-    // itself; GRN attachments follow the broader PROCUREMENT_WRITE gate already applied above.
+    // PO attachment uploads follow the same gate as PO creation/modification itself
+    // (kept as a literal array here, not authorize(), since it's a mid-handler check,
+    // not a route-entry gate); GRN attachments follow the broader 'procurement.write'
+    // gate already applied above.
     if (entityType === 'purchase-order' && !PO_WRITE.includes(req.user.role)) {
       return res.status(403).json({ error: 'Insufficient permissions', required: PO_WRITE, current: req.user.role });
     }
@@ -2527,7 +2527,7 @@ router.post('/attachments/:entityType/:entityId', authorize(PROCUREMENT_WRITE), 
 // /attachments/X/Y, and Express matches whichever route was registered first, so this
 // literal-suffix ".../file" route must come first or it gets swallowed by the list route
 // (entityType=<attachment id>, entityId="file").
-router.get('/attachments/:id/file', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/attachments/:id/file', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query(
@@ -2547,7 +2547,7 @@ router.get('/attachments/:id/file', authorize(PROCUREMENT_READ), async (req, res
   }
 });
 
-router.get('/attachments/:entityType/:entityId', authorize(PROCUREMENT_READ), async (req, res) => {
+router.get('/attachments/:entityType/:entityId', authorize('procurement.read'), async (req, res) => {
   try {
     const { entityType, entityId } = req.params;
     if (!ATTACHMENT_ENTITY_TABLES[entityType]) return res.status(400).json({ error: `Unknown attachment entity type: ${entityType}` });

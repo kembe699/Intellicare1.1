@@ -4,7 +4,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /accounting/cash-transfer, so the API enforces what the client already assumes.
-const TRANSFER_WRITE = ['admin', 'accountant', 'finance_manager', 'reception', 'pharmacy', 'cashier'];
 const router = express.Router();
 const { Op } = require('sequelize');
 const { LedgerAccount } = require('../models');
@@ -31,7 +30,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create new cash transfer
-router.post('/', authorize(TRANSFER_WRITE), async (req, res) => {
+router.post('/', authorize('cash_transfers.write'), async (req, res) => {
   try {
     const { from_account_id, to_account_id, amount, notes } = req.body;
 

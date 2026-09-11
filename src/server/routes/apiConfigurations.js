@@ -134,7 +134,7 @@ router.get('/', async (req, res) => {
 // Generates a new token for a given configType.
 // The full raw token is returned ONCE — it is not stored.
 // Only the SHA-256 hash is persisted.
-router.post('/generate', authorize(['admin']), async (req, res) => {
+router.post('/generate', authorize('setup.api_configurations.manage'), async (req, res) => {
   try {
     const { configType, label } = req.body;
 
@@ -184,7 +184,7 @@ router.post('/generate', authorize(['admin']), async (req, res) => {
 
 // ─── DELETE /api/configurations/:id/revoke ────────────────────────────────────
 // Revokes (deactivates) a specific token by ID.
-router.delete('/:id/revoke', authorize(['admin']), async (req, res) => {
+router.delete('/:id/revoke', authorize('setup.api_configurations.manage'), async (req, res) => {
   try {
     const { id } = req.params;
 

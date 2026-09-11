@@ -76,7 +76,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new clinic
-router.post('/', authorize(['admin']), async (req, res) => {
+router.post('/', authorize('setup.clinics.manage'), async (req, res) => {
   try {
     const clinicData = req.body;
     console.log('Creating clinic with data:', clinicData);
@@ -130,7 +130,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
 });
 
 // Update clinic
-router.put('/:id', authorize(['admin']), async (req, res) => {
+router.put('/:id', authorize('setup.clinics.manage'), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -188,7 +188,7 @@ router.put('/:id', authorize(['admin']), async (req, res) => {
 });
 
 // Delete clinic
-router.delete('/:id', authorize(['admin']), async (req, res) => {
+router.delete('/:id', authorize('setup.clinics.manage'), async (req, res) => {
   try {
     const { id } = req.params;
 

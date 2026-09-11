@@ -8,7 +8,6 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /lis/results-entry, so the API enforces what the client already assumes.
-const LAB_WRITE = ['admin', 'lab'];
 const router = express.Router();
 
 // Get lab results by clinic (branch-filtered)
@@ -47,7 +46,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create new lab result
-router.post('/', authorize(LAB_WRITE), async (req, res) => {
+router.post('/', authorize('lab.results.write'), async (req, res) => {
   try {
     const {
       request_id,
@@ -123,7 +122,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update lab result
-router.put('/:id', authorize(LAB_WRITE), async (req, res) => {
+router.put('/:id', authorize('lab.results.write'), async (req, res) => {
   try {
     const { id } = req.params;
     const {

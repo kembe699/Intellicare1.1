@@ -10,17 +10,12 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // Ward/room/bed layout is facility configuration — everyone who works with inpatient care
 // needs to read it, but only admin changes it (matches the admin-only pattern already used
 // for Clinics/Departments/Facilities in Setup).
-const INPATIENT_FACILITY_READ = ['admin', 'doctor', 'reception', 'lab'];
-const INPATIENT_FACILITY_WRITE = ['admin'];
 // Admitting/discharging a patient — matches the sidebar's Admissions/Admitted Patients roles.
-const INPATIENT_ADMIT = ['admin', 'doctor', 'reception'];
 // Clinical documentation (doctor notes, prescriptions, drug administration, nursing notes)
 // — no dedicated "nurse" role exists in this app's current role vocabulary, so these fall
 // to doctor/admin, matching how the rest of the app gates clinical actions.
-const INPATIENT_CLINICAL = ['admin', 'doctor'];
 // Lab/radiology requests raised from the ward — doctor orders, lab/radiology-adjacent
 // staff also need to see them; no separate radiology role exists either, so lab covers it.
-const INPATIENT_ANCILLARY = ['admin', 'doctor', 'lab'];
 
 // Bed/ward daily billing rate, used to charge patients for their stay.
 (async () => {
@@ -112,7 +107,7 @@ const INPATIENT_ANCILLARY = ['admin', 'doctor', 'lab'];
 // ======================== WARDS ========================
 
 // GET all wards
-router.get('/wards', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
+router.get('/wards', authorize('inpatient.facility.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query(
@@ -133,7 +128,7 @@ router.get('/wards', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
 });
 
 // POST create ward — billing rate is derived from the linked service's price, not typed manually
-router.post('/wards', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.post('/wards', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     // Validate before writing: wards.code and rooms.room_number are NOT NULL, so
     // a blank field reached the database as a constraint violation and came back
@@ -168,7 +163,7 @@ router.post('/wards', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
 });
 
 // PUT update ward — billing rate is derived from the linked service's price, not typed manually
-router.put('/wards/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.put('/wards/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const { name, code, description, ward_type, capacity, service_id } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -196,7 +191,7 @@ router.put('/wards/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) =
 });
 
 // DELETE ward
-router.delete('/wards/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.delete('/wards/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     // Check if ward has active admissions
@@ -219,7 +214,7 @@ router.delete('/wards/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res
 // ======================== ROOMS ========================
 
 // GET rooms
-router.get('/rooms', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
+router.get('/rooms', authorize('inpatient.facility.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const wardId = req.query.ward_id;
@@ -239,7 +234,7 @@ router.get('/rooms', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
 });
 
 // POST create room
-router.post('/rooms', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.post('/rooms', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     if (!req.body?.room_number?.trim()) {
       return res.status(400).json({ error: 'Room number is required' });
@@ -262,7 +257,7 @@ router.post('/rooms', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
 });
 
 // PUT update room
-router.put('/rooms/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.put('/rooms/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const { room_number, room_type, description, capacity } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -279,7 +274,7 @@ router.put('/rooms/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) =
 });
 
 // DELETE room
-router.delete('/rooms/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.delete('/rooms/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(`UPDATE rooms SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
@@ -294,7 +289,7 @@ router.delete('/rooms/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res
 // ======================== BEDS ========================
 
 // GET beds
-router.get('/beds', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
+router.get('/beds', authorize('inpatient.facility.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const roomId = req.query.room_id;
@@ -317,7 +312,7 @@ router.get('/beds', authorize(INPATIENT_FACILITY_READ), async (req, res) => {
 });
 
 // POST create bed
-router.post('/beds', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.post('/beds', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const { room_id, ward_id, bed_number, bed_type, status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -338,7 +333,7 @@ router.post('/beds', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
 });
 
 // PUT update bed status
-router.put('/beds/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.put('/beds/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const { status, bed_number, bed_type } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -358,7 +353,7 @@ router.put('/beds/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) =>
 });
 
 // DELETE bed
-router.delete('/beds/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res) => {
+router.delete('/beds/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [active] = await sequelize.query(
@@ -380,7 +375,7 @@ router.delete('/beds/:id', authorize(INPATIENT_FACILITY_WRITE), async (req, res)
 // ======================== ADMISSION REQUESTS ========================
 
 // GET admission requests
-router.get('/admission-requests', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.get('/admission-requests', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const status = req.query.status || 'pending';
@@ -396,7 +391,7 @@ router.get('/admission-requests', authorize(INPATIENT_ADMIT), async (req, res) =
 });
 
 // POST create admission request (doctor flags a patient for admission)
-router.post('/admission-requests', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.post('/admission-requests', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const { patient_id, patient_name, reason, diagnosis } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -416,7 +411,7 @@ router.post('/admission-requests', authorize(INPATIENT_ADMIT), async (req, res) 
 });
 
 // PUT cancel/decline an admission request
-router.put('/admission-requests/:id/cancel', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.put('/admission-requests/:id/cancel', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(`UPDATE admission_requests SET status = 'cancelled' WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
@@ -431,7 +426,7 @@ router.put('/admission-requests/:id/cancel', authorize(INPATIENT_ADMIT), async (
 // ======================== ADMISSIONS ========================
 
 // GET admissions
-router.get('/admissions', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.get('/admissions', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const status = req.query.status;
@@ -471,7 +466,7 @@ router.get('/admissions', authorize(INPATIENT_ADMIT), async (req, res) => {
 });
 
 // GET single admission with full details
-router.get('/admissions/:id', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.get('/admissions/:id', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query(
@@ -512,7 +507,7 @@ router.get('/admissions/:id', authorize(INPATIENT_ADMIT), async (req, res) => {
 });
 
 // POST create admission
-router.post('/admissions', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.post('/admissions', authorize('inpatient.admissions.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { patient_id, ward_id, room_id, bed_id, admission_reason, diagnosis, diagnosis_code, admission_type, attending_doctor_id, request_id } = req.body;
@@ -792,7 +787,7 @@ async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, de
 }
 
 // PUT discharge patient
-router.put('/admissions/:id/discharge', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { discharge_reason, discharge_summary } = req.body;
@@ -847,7 +842,7 @@ router.put('/admissions/:id/discharge', authorize(INPATIENT_ADMIT), async (req, 
 // ======================== DOCTOR NOTES ========================
 
 // GET doctor notes for admission
-router.get('/doctor-notes', authorize(INPATIENT_CLINICAL), async (req, res) => {
+router.get('/doctor-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
@@ -866,7 +861,7 @@ router.get('/doctor-notes', authorize(INPATIENT_CLINICAL), async (req, res) => {
 });
 
 // POST create doctor note
-router.post('/doctor-notes', authorize(INPATIENT_CLINICAL), async (req, res) => {
+router.post('/doctor-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const { admission_id, patient_id, note_type, clinical_assessment, examination_findings, vital_signs, diagnosis, diagnosis_code, treatment_plan, progress_status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -887,7 +882,7 @@ router.post('/doctor-notes', authorize(INPATIENT_CLINICAL), async (req, res) => 
 // ======================== INPATIENT PRESCRIPTIONS ========================
 
 // GET prescriptions for admission
-router.get('/prescriptions', authorize(['admin', 'doctor', 'pharmacy']), async (req, res) => {
+router.get('/prescriptions', authorize('inpatient.medications.manage'), async (req, res) => {
   try {
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
@@ -909,7 +904,7 @@ router.get('/prescriptions', authorize(['admin', 'doctor', 'pharmacy']), async (
 });
 
 // POST create prescription
-router.post('/prescriptions', authorize(INPATIENT_CLINICAL), async (req, res) => {
+router.post('/prescriptions', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const { admission_id, patient_id, drug_id, medication_name, dosage, frequency, duration, route, instructions, quantity, unit_of_measure, start_date, end_date, unit_price,
             duration_days, dose_amount, is_external, external_drug_name } = req.body;
@@ -962,7 +957,7 @@ router.post('/prescriptions', authorize(INPATIENT_CLINICAL), async (req, res) =>
 });
 
 // PUT update prescription status
-router.put('/prescriptions/:id', authorize(['admin', 'doctor', 'pharmacy']), async (req, res) => {
+router.put('/prescriptions/:id', authorize('inpatient.medications.manage'), async (req, res) => {
   try {
     const { status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -978,7 +973,7 @@ router.put('/prescriptions/:id', authorize(['admin', 'doctor', 'pharmacy']), asy
 // ======================== DRUG ADMINISTRATION ========================
 
 // GET administrations for admission or prescription
-router.get('/drug-administrations', authorize(['admin', 'doctor', 'pharmacy']), async (req, res) => {
+router.get('/drug-administrations', authorize('inpatient.medications.manage'), async (req, res) => {
   try {
     const admissionId = req.query.admission_id;
     const prescriptionId = req.query.prescription_id;
@@ -998,7 +993,7 @@ router.get('/drug-administrations', authorize(['admin', 'doctor', 'pharmacy']), 
 });
 
 // POST create drug administration
-router.post('/drug-administrations', authorize(INPATIENT_CLINICAL), async (req, res) => {
+router.post('/drug-administrations', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const { prescription_id, admission_id, patient_id, drug_id, medication_name, dosage_given, route, notes, patient_reaction, status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1019,7 +1014,7 @@ router.post('/drug-administrations', authorize(INPATIENT_CLINICAL), async (req, 
 // ======================== NURSING NOTES ========================
 
 // GET nursing notes
-router.get('/nursing-notes', authorize(INPATIENT_CLINICAL), async (req, res) => {
+router.get('/nursing-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
@@ -1038,7 +1033,7 @@ router.get('/nursing-notes', authorize(INPATIENT_CLINICAL), async (req, res) => 
 });
 
 // POST create nursing note
-router.post('/nursing-notes', authorize(INPATIENT_CLINICAL), async (req, res) => {
+router.post('/nursing-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const { admission_id, patient_id, shift, care_activities, patient_condition, vital_signs, fluid_intake, fluid_output, wound_care, pain_level, mobility_status, notes } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1059,7 +1054,7 @@ router.post('/nursing-notes', authorize(INPATIENT_CLINICAL), async (req, res) =>
 // ======================== INPATIENT LAB REQUESTS ========================
 
 // GET lab requests
-router.get('/lab-requests', authorize(INPATIENT_ANCILLARY), async (req, res) => {
+router.get('/lab-requests', authorize('inpatient.ancillary.write'), async (req, res) => {
   try {
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
@@ -1080,7 +1075,7 @@ router.get('/lab-requests', authorize(INPATIENT_ANCILLARY), async (req, res) => 
 });
 
 // POST create lab request
-router.post('/lab-requests', authorize(INPATIENT_ANCILLARY), async (req, res) => {
+router.post('/lab-requests', authorize('inpatient.ancillary.write'), async (req, res) => {
   try {
     const { admission_id, patient_id, test_type, test_code, category, urgent, clinical_indication, sample_type, unit_price } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1109,7 +1104,7 @@ router.post('/lab-requests', authorize(INPATIENT_ANCILLARY), async (req, res) =>
 });
 
 // PUT update lab request (for results)
-router.put('/lab-requests/:id', authorize(INPATIENT_ANCILLARY), async (req, res) => {
+router.put('/lab-requests/:id', authorize('inpatient.ancillary.write'), async (req, res) => {
   try {
     const { status, results, result_notes } = req.body;
     const completedBy = req.user?.id;
@@ -1131,7 +1126,7 @@ router.put('/lab-requests/:id', authorize(INPATIENT_ANCILLARY), async (req, res)
 // ======================== INPATIENT RADIOLOGY REQUESTS ========================
 
 // GET radiology requests
-router.get('/radiology-requests', authorize(INPATIENT_ANCILLARY), async (req, res) => {
+router.get('/radiology-requests', authorize('inpatient.ancillary.write'), async (req, res) => {
   try {
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
@@ -1152,7 +1147,7 @@ router.get('/radiology-requests', authorize(INPATIENT_ANCILLARY), async (req, re
 });
 
 // POST create radiology request
-router.post('/radiology-requests', authorize(INPATIENT_ANCILLARY), async (req, res) => {
+router.post('/radiology-requests', authorize('inpatient.ancillary.write'), async (req, res) => {
   try {
     const { admission_id, patient_id, imaging_type, body_part, urgent, clinical_indication, unit_price } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1179,7 +1174,7 @@ router.post('/radiology-requests', authorize(INPATIENT_ANCILLARY), async (req, r
 });
 
 // PUT update radiology request
-router.put('/radiology-requests/:id', authorize(INPATIENT_ANCILLARY), async (req, res) => {
+router.put('/radiology-requests/:id', authorize('inpatient.ancillary.write'), async (req, res) => {
   try {
     const { status, findings, impression } = req.body;
     const completedBy = req.user?.id;
@@ -1200,7 +1195,7 @@ router.put('/radiology-requests/:id', authorize(INPATIENT_ANCILLARY), async (req
 
 // ======================== DASHBOARD STATS ========================
 
-router.get('/stats', authorize(INPATIENT_ADMIT), async (req, res) => {
+router.get('/stats', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [[admissions]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'active'`, { replacements: { clinicId } });

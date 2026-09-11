@@ -14,15 +14,8 @@ const { sequelize: db } = require('../models');
 // Matches this app's existing sidebar role groupings for the corresponding screens, so
 // API-level enforcement lines up with what's actually shown/hidden in the UI instead of
 // drifting into its own separate policy.
-const LIS_REGISTRATION = ['admin', 'reception'];          // Patient Registry
-const LIS_QUEUE = ['admin', 'reception', 'lab', 'doctor', 'nurse']; // Queue Display / Triage
-const LIS_CLINICAL = ['admin', 'doctor', 'reception'];     // Clinical (/lis/orders)
-const LIS_SPECIMEN = ['admin', 'lab'];                     // Specimen Collection / QC / Results Entry
-const LIS_RESULTS_REVIEW = ['admin', 'lab'];               // Manager Review
 // Results/history reads are needed by doctors too (reviewing their own patients' results),
 // not just lab staff.
-const LIS_RESULTS_READ = ['admin', 'lab', 'doctor'];
-const LIS_TRIAGE = ['admin', 'nurse'];                     // Nurse Triage vitals entry
 
 // Who may look a person up in order to serve them.
 //
@@ -34,7 +27,6 @@ const LIS_TRIAGE = ['admin', 'nurse'];                     // Nurse Triage vital
 // patient registry — the frontend requests patients and participants together
 // and just skips whichever half fails, so a 403 here looked like "no patients"
 // rather than a permission error.
-const LIS_PARTICIPANT_READ = ['admin', 'reception', 'doctor', 'lab', 'nurse', 'pharmacy', 'cashier', 'finance_manager', 'accountant'];
 
 // Who may register a walk-in.
 //
@@ -44,7 +36,6 @@ const LIS_PARTICIPANT_READ = ['admin', 'reception', 'doctor', 'lab', 'nurse', 'p
 // pharmacy and doctor respectively, so restricting this to reception meant the
 // button was visible, enabled, and returned 403 — the same shape of mismatch as
 // the participant list, and just as invisible from either file alone.
-const LIS_PARTICIPANT_CREATE = ['admin', 'reception', 'doctor', 'pharmacy', 'lab'];
 
 // mysql2 auto-parses a true JSON-typed column into an object, but MariaDB (common on
 // shared hosts like Hostinger) stores its JSON columns as LONGTEXT under the hood, so the
@@ -148,7 +139,7 @@ async function findByPhone(phone, replacementsFn = db.query) {
   return existing[0] || null;
 }
 
-router.post('/participants', authorize(LIS_PARTICIPANT_CREATE), async (req, res) => {
+router.post('/participants', authorize('lis.participants.create'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics, doctor_id, room_number, clinic_id, clinic_name } = req.body;
   const id = uuidv4();
@@ -294,7 +285,7 @@ router.post('/participants', authorize(LIS_PARTICIPANT_CREATE), async (req, res)
 // become permanently unfindable here. `search` now matches server-side against name,
 // participant number, and phone; LIMIT still applies (raised to 200) but only as a page
 // size, not as the entire searchable universe.
-router.get('/participants', authorize(LIS_PARTICIPANT_READ), async (req, res) => {
+router.get('/participants', authorize('lis.participants.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const { search } = req.query;
@@ -333,7 +324,7 @@ router.get('/participants', authorize(LIS_PARTICIPANT_READ), async (req, res) =>
   }
 });
 
-router.put('/participants/:id', authorize(LIS_REGISTRATION), async (req, res) => {
+router.put('/participants/:id', authorize('lis.registration.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics } = req.body;
@@ -355,7 +346,7 @@ router.put('/participants/:id', authorize(LIS_REGISTRATION), async (req, res) =>
   }
 });
 
-router.post('/participants/:id/queue', authorize(LIS_QUEUE), async (req, res) => {
+router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { doctor_id, room_number, clinic_id, clinic_name } = req.body;
@@ -382,7 +373,7 @@ router.post('/participants/:id/queue', authorize(LIS_QUEUE), async (req, res) =>
 // scope on, so this stays a single pooled queue (correct for this single-facility
 // deployment) until one is added. The clinic_id query param is accepted but ignored —
 // kept only so older callers passing it don't break.
-router.get('/queue', authorize(LIS_QUEUE), async (req, res) => {
+router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const [queue] = await db.query(`
@@ -408,7 +399,7 @@ router.get('/queue', authorize(LIS_QUEUE), async (req, res) => {
 // doctor_id): only ever touches vitals + who/when triaged, so it can never clobber
 // anything the doctor has already started, and can safely run before an order even has a
 // doctor assigned.
-router.put('/orders/:id/triage', authorize(LIS_TRIAGE), async (req, res) => {
+router.put('/orders/:id/triage', authorize('lis.triage.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { vitals } = req.body;
@@ -441,7 +432,7 @@ async function orderExists(db, id) {
   return !!row;
 }
 
-router.post('/queue/:id/call', authorize(LIS_QUEUE), async (req, res) => {
+router.post('/queue/:id/call', authorize('lis.queue.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   try {
@@ -456,7 +447,7 @@ router.post('/queue/:id/call', authorize(LIS_QUEUE), async (req, res) => {
 });
 
 // Doctor updates the clinical notes (e.g. adding a diagnosis) from the Visit Summary view.
-router.put('/orders/:id/notes', authorize(LIS_CLINICAL), async (req, res) => {
+router.put('/orders/:id/notes', authorize('lis.clinical.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { clinical_notes } = req.body;
@@ -478,7 +469,7 @@ router.put('/orders/:id/notes', authorize(LIS_CLINICAL), async (req, res) => {
 // Doctor closes out a visit episode from the Visit Summary view — final state, distinct
 // from 'waiting'/'called'/'ordered' so it's clearly done with (still shown in the summary
 // history, just marked closed).
-router.put('/orders/:id/close', authorize(LIS_CLINICAL), async (req, res) => {
+router.put('/orders/:id/close', authorize('lis.clinical.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   try {
@@ -511,7 +502,7 @@ router.put('/orders/:id/close', authorize(LIS_CLINICAL), async (req, res) => {
 // ==========================================
 // 2. Test Orders
 // ==========================================
-router.post('/orders', authorize(LIS_CLINICAL), async (req, res) => {
+router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { participant_id, visit_id, doctor_id, clinical_notes, vitals, tests, order_id } = req.body;
   
@@ -596,7 +587,7 @@ router.post('/orders', authorize(LIS_CLINICAL), async (req, res) => {
 // clinical_notes/vitals and forces status back to 'ordered' whenever order_id is passed) —
 // this only ever inserts lis_specimens rows, so it can never wipe the visit's existing notes
 // or silently reopen a closed visit.
-router.post('/orders/:id/add-tests', authorize(LIS_CLINICAL), async (req, res) => {
+router.post('/orders/:id/add-tests', authorize('lis.clinical.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { tests } = req.body;
@@ -652,7 +643,7 @@ router.post('/orders/:id/add-tests', authorize(LIS_CLINICAL), async (req, res) =
   }
 });
 
-router.get('/orders', authorize(LIS_CLINICAL.concat(['lab'])), async (req, res) => {
+router.get('/orders', authorize('lis.clinical.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const [orders] = await db.query(`
@@ -677,7 +668,7 @@ router.get('/orders', authorize(LIS_CLINICAL.concat(['lab'])), async (req, res) 
 // `DATE(created_at) = :date` comparison against a browser-local date string would wrongly
 // exclude visits from the first few hours of the local day. This endpoint just returns a
 // bounded recent window (last 90 days) for the frontend to group/filter by local day.
-router.get('/visit-summaries', authorize(LIS_CLINICAL.concat(['lab'])), async (req, res) => {
+router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const { participant_id } = req.query;
@@ -818,7 +809,7 @@ function markCollectible(specimensForPatient, pool) {
   }
 }
 
-router.get('/specimens/pending', authorize(LIS_SPECIMEN), async (req, res) => {
+router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const [specimens] = await db.query(`
@@ -856,7 +847,7 @@ router.get('/specimens/pending', authorize(LIS_SPECIMEN), async (req, res) => {
   }
 });
 
-router.get('/specimens/history', authorize(LIS_RESULTS_READ), async (req, res) => {
+router.get('/specimens/history', authorize('lis.results.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const { dateFrom, dateTo } = req.query;
@@ -884,7 +875,7 @@ router.get('/specimens/history', authorize(LIS_RESULTS_READ), async (req, res) =
   }
 });
 
-router.post('/specimens/:id/collect', authorize(LIS_SPECIMEN), async (req, res) => {
+router.post('/specimens/:id/collect', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { collected_by } = req.body;
@@ -943,7 +934,7 @@ router.post('/specimens/:id/collect', authorize(LIS_SPECIMEN), async (req, res) 
   }
 });
 
-router.post('/specimens/:id/dispatch', authorize(LIS_SPECIMEN), async (req, res) => {
+router.post('/specimens/:id/dispatch', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   try {
@@ -954,7 +945,7 @@ router.post('/specimens/:id/dispatch', authorize(LIS_SPECIMEN), async (req, res)
   }
 });
 
-router.post('/specimens/:id/qc', authorize(LIS_SPECIMEN), async (req, res) => {
+router.post('/specimens/:id/qc', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { action, reason, checked_by } = req.body;
@@ -982,7 +973,7 @@ router.post('/specimens/:id/qc', authorize(LIS_SPECIMEN), async (req, res) => {
   }
 });
 
-router.post('/specimens/:id/route', authorize(LIS_SPECIMEN), async (req, res) => {
+router.post('/specimens/:id/route', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { department } = req.body;
@@ -1000,7 +991,7 @@ router.post('/specimens/:id/route', authorize(LIS_SPECIMEN), async (req, res) =>
 // ==========================================
 // 3.5. Simulation Endpoint (For Testing Without Analyzer)
 // ==========================================
-router.post('/specimens/:id/simulate', authorize(LIS_SPECIMEN), async (req, res) => {
+router.post('/specimens/:id/simulate', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   
@@ -1034,7 +1025,7 @@ router.post('/specimens/:id/simulate', authorize(LIS_SPECIMEN), async (req, res)
   }
 });
 
-router.get('/specimens/:id/results', authorize(LIS_RESULTS_READ), async (req, res) => {
+router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   try {
@@ -1057,7 +1048,7 @@ router.get('/specimens/:id/results', authorize(LIS_RESULTS_READ), async (req, re
 // ==========================================
 // 3.6. Manual Result Entry
 // ==========================================
-router.post('/specimens/:id/results', authorize(LIS_SPECIMEN), async (req, res) => {
+router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { results, test_code } = req.body;
@@ -1091,7 +1082,7 @@ router.post('/specimens/:id/results', authorize(LIS_SPECIMEN), async (req, res) 
 // ==========================================
 // 4. Lab Results (Manager Review)
 // ==========================================
-router.get('/results/pending-review', authorize(LIS_RESULTS_REVIEW), async (req, res) => {
+router.get('/results/pending-review', authorize('lis.results.review'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const [results] = await db.query(`
@@ -1115,7 +1106,7 @@ router.get('/results/pending-review', authorize(LIS_RESULTS_REVIEW), async (req,
   }
 });
 
-router.get('/results/history', authorize(LIS_RESULTS_READ), async (req, res) => {
+router.get('/results/history', authorize('lis.results.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const { dateFrom, dateTo } = req.query;
@@ -1146,7 +1137,7 @@ router.get('/results/history', authorize(LIS_RESULTS_READ), async (req, res) => 
   }
 });
 
-router.post('/results/:id/review', authorize(LIS_RESULTS_REVIEW), async (req, res) => {
+router.post('/results/:id/review', authorize('lis.results.review'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { action, manager_notes, manager_id } = req.body;
@@ -1190,7 +1181,7 @@ router.post('/results/:id/review', authorize(LIS_RESULTS_REVIEW), async (req, re
  * Counting analyzed as done would flatter the numbers: a result nobody has
  * verified is not a result the clinician can use yet.
  */
-router.get('/lab-dashboard', authorize(LIS_QUEUE.concat(['lab'])), async (req, res) => {
+router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) => {
   try {
     const db = req.models?.sequelize || sequelize;
     const today = new Date().toISOString().split('T')[0];

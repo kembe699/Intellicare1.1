@@ -4,7 +4,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /billing-management, so the API enforces what the client already assumes.
-const CLAIMS_WRITE = ['admin', 'reception', 'finance_manager', 'accountant'];
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -157,7 +156,7 @@ router.get('/unpaid-invoices', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // POST / — Create batch insurance claim
 // ══════════════════════════════════════════════════════════════
-router.post('/', authorize(CLAIMS_WRITE), async (req, res) => {
+router.post('/', authorize('claims.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { scheme_id, date_from, date_to, invoice_ids, claim_amount, notes, priority } = req.body;
@@ -379,7 +378,7 @@ router.get('/:id', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PUT /:id/status — Update claim status
 // ══════════════════════════════════════════════════════════════
-router.put('/:id/status', authorize(CLAIMS_WRITE), async (req, res) => {
+router.put('/:id/status', authorize('claims.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { status, notes, paid_amount, rejected_reason } = req.body;
@@ -529,7 +528,7 @@ router.put('/:id/status', authorize(CLAIMS_WRITE), async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // PUT /:id — Edit claim (before submission)
 // ══════════════════════════════════════════════════════════════
-router.put('/:id', authorize(CLAIMS_WRITE), async (req, res) => {
+router.put('/:id', authorize('claims.write'), async (req, res) => {
   try {
     const [claims] = await sequelize.query(`SELECT * FROM insurance_batch_claims WHERE id = ?`, { replacements: [req.params.id] });
     if (!claims.length) return res.status(404).json({ error: 'Claim not found' });
@@ -678,7 +677,7 @@ router.get('/:id/pdf', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // DELETE /:id — Cancel claim
 // ══════════════════════════════════════════════════════════════
-router.delete('/:id', authorize(CLAIMS_WRITE), async (req, res) => {
+router.delete('/:id', authorize('claims.write'), async (req, res) => {
   try {
     const [claims] = await sequelize.query(`SELECT * FROM insurance_batch_claims WHERE id = ?`, { replacements: [req.params.id] });
     if (!claims.length) return res.status(404).json({ error: 'Claim not found' });

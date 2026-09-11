@@ -5,7 +5,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /cashier/shift, so the API enforces what the client already assumes.
-const CASHIER_WRITE = ['admin', 'reception', 'pharmacy', 'cashier'];
 const router = express.Router();
 const { CashierShift, Receipt, sequelize } = require('../models');
 const { Op } = require('sequelize');
@@ -363,7 +362,7 @@ router.get('/shift/:shiftId/receipts', async (req, res) => {
   }
 });
 
-router.post('/start-shift', authorize(CASHIER_WRITE), async (req, res) => {
+router.post('/start-shift', authorize('cashier.write'), async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -388,7 +387,7 @@ router.post('/start-shift', authorize(CASHIER_WRITE), async (req, res) => {
   }
 });
 
-router.post('/close-shift/:shiftId', authorize(CASHIER_WRITE), async (req, res) => {
+router.post('/close-shift/:shiftId', authorize('cashier.write'), async (req, res) => {
   try {
     const shift = await CashierShift.findByPk(req.params.shiftId);
     if (!shift) return res.status(404).json({ error: 'Shift not found' });
@@ -448,7 +447,7 @@ router.post('/close-shift/:shiftId', authorize(CASHIER_WRITE), async (req, res) 
   }
 });
 
-router.post('/transfer-cash', authorize(CASHIER_WRITE), async (req, res) => {
+router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
   try {
     const { shift_id, amount, to_account_id, notes } = req.body;
     const { ChartOfAccounts, AccountLedger, JournalEntries, JournalEntryLines, sequelize: seq } = require('../models');

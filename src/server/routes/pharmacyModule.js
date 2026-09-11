@@ -14,13 +14,8 @@ const AccountingService = require('../services/AccountingService');
 // authenticated user regardless of role. Roles mirror what App.tsx already enforces
 // client-side per /pharmacy-* page: ['admin','pharmacy'] for DispensingWorkflow/
 // PharmacyReturns, ['admin','pharmacy','doctor'] for PrescriptionManagement.
-const PHARMACY_READ = ['admin', 'pharmacy', 'doctor'];
-const PHARMACY_WRITE = ['admin', 'pharmacy'];
-const PHARMACY_PRESCRIBE = ['admin', 'pharmacy', 'doctor'];
-const PHARMACY_ADMIN = ['admin'];
 // Controlled-substance stock/audit visibility — narrower than general pharmacy read
 // (no doctor access), matching how sensitive this data is everywhere else in healthcare software.
-const CONTROLLED_SUBSTANCE_READ = ['admin', 'pharmacy'];
 function bustPharmacyCache() { try { redisCache.delPattern('|pharmacy'); redisCache.delPattern('|inventory'); } catch(e) {} }
 
 // Safe schema migration: allow NULL patient_id for walk-in/OTC dispensing.
@@ -51,7 +46,7 @@ function bustPharmacyCache() { try { redisCache.delPattern('|pharmacy'); redisCa
 // ═══════════════════════════════════════════════════
 
 // List all inventory items for pharmacy use
-router.get('/drugs', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/drugs', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { is_active, category, search, item_category } = req.query;
     let where = 'WHERE i.clinic_id = :cid';
@@ -92,7 +87,7 @@ router.get('/drugs', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Get single inventory item for pharmacy
-router.get('/drugs/:id', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/drugs/:id', authorize('pharmacy.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query(`
@@ -121,7 +116,7 @@ router.get('/drugs/:id', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Save pharmacy metadata for an inventory item (upsert into drugs table)
-router.post('/drugs', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/drugs', authorize('pharmacy.write'), async (req, res) => {
   try {
     const {
       inventory_item_id, clinic_id, strength, dosage_form, generic_name,
@@ -182,7 +177,7 @@ router.post('/drugs', authorize(PHARMACY_WRITE), async (req, res) => {
 });
 
 // Update drug
-router.put('/drugs/:id', authorize(PHARMACY_WRITE), async (req, res) => {
+router.put('/drugs/:id', authorize('pharmacy.write'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const fields = [];
@@ -221,7 +216,7 @@ router.put('/drugs/:id', authorize(PHARMACY_WRITE), async (req, res) => {
 });
 
 // Get stock level for an inventory item (used by pharmacy)
-router.get('/drugs/:id/stock-level', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/drugs/:id/stock-level', authorize('pharmacy.read'), async (req, res) => {
   try {
     const itemId = req.params.id;
 
@@ -259,7 +254,7 @@ router.get('/drugs/:id/stock-level', authorize(PHARMACY_READ), async (req, res) 
 });
 
 // Update drug price
-router.post('/drugs/:id/update-price', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/drugs/:id/update-price', authorize('pharmacy.write'), async (req, res) => {
   try {
     const { price_currency, price_amount, reason, changed_by } = req.body;
     const drugId = req.params.id;
@@ -287,7 +282,7 @@ router.post('/drugs/:id/update-price', authorize(PHARMACY_WRITE), async (req, re
 });
 
 // Get drug pricing history
-router.get('/drugs/:id/pricing-history', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/drugs/:id/pricing-history', authorize('pharmacy.read'), async (req, res) => {
   try {
     const [rows] = await sequelize.query(`
       SELECT dph.*, u.display_name AS changed_by_name
@@ -303,7 +298,7 @@ router.get('/drugs/:id/pricing-history', authorize(PHARMACY_READ), async (req, r
 });
 
 // Get drug interactions for a drug
-router.get('/drugs/:id/interactions', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/drugs/:id/interactions', authorize('pharmacy.read'), async (req, res) => {
   try {
     const [rows] = await sequelize.query(`
       SELECT di.*,
@@ -324,7 +319,7 @@ router.get('/drugs/:id/interactions', authorize(PHARMACY_READ), async (req, res)
 // DRUG INTERACTIONS - CRUD
 // ═══════════════════════════════════════════════════
 
-router.get('/drug-interactions', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/drug-interactions', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { severity } = req.query;
     let where = 'WHERE di.is_active = true';
@@ -345,7 +340,7 @@ router.get('/drug-interactions', authorize(PHARMACY_READ), async (req, res) => {
   }
 });
 
-router.post('/drug-interactions', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/drug-interactions', authorize('pharmacy.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const { drug1_id, drug2_id, interaction_type, interaction_description, management_notes } = req.body;
@@ -360,7 +355,7 @@ router.post('/drug-interactions', authorize(PHARMACY_WRITE), async (req, res) =>
   }
 });
 
-router.put('/drug-interactions/:id', authorize(PHARMACY_WRITE), async (req, res) => {
+router.put('/drug-interactions/:id', authorize('pharmacy.write'), async (req, res) => {
   try {
     const fields = [];
     const replacements = { id: req.params.id };
@@ -375,7 +370,7 @@ router.put('/drug-interactions/:id', authorize(PHARMACY_WRITE), async (req, res)
   }
 });
 
-router.delete('/drug-interactions/:id', authorize(PHARMACY_WRITE), async (req, res) => {
+router.delete('/drug-interactions/:id', authorize('pharmacy.write'), async (req, res) => {
   try {
     await sequelize.query('UPDATE drug_interactions SET is_active = false WHERE id = :id', { replacements: { id: req.params.id } });
     res.json({ message: 'Interaction deactivated' });
@@ -389,7 +384,7 @@ router.delete('/drug-interactions/:id', authorize(PHARMACY_WRITE), async (req, r
 // PATIENT DRUG ALLERGIES
 // ═══════════════════════════════════════════════════
 
-router.get('/patient-allergies/:patientId', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.get('/patient-allergies/:patientId', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const [rows] = await sequelize.query(`
       SELECT da.*, d.drug_name
@@ -404,7 +399,7 @@ router.get('/patient-allergies/:patientId', authorize(PHARMACY_PRESCRIBE), async
   }
 });
 
-router.post('/patient-allergies', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.post('/patient-allergies', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const id = uuidv4();
     const { patient_id, drug_id, drug_class, allergy_description, severity, reaction_description, verified_by } = req.body;
@@ -425,7 +420,7 @@ router.post('/patient-allergies', authorize(PHARMACY_PRESCRIBE), async (req, res
   }
 });
 
-router.put('/patient-allergies/:id', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.put('/patient-allergies/:id', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const fields = [];
     const replacements = { id: req.params.id };
@@ -440,7 +435,7 @@ router.put('/patient-allergies/:id', authorize(PHARMACY_PRESCRIBE), async (req, 
   }
 });
 
-router.delete('/patient-allergies/:id', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.delete('/patient-allergies/:id', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     await sequelize.query('DELETE FROM drug_allergies WHERE id = :id', { replacements: { id: req.params.id } });
     res.json({ message: 'Allergy removed' });
@@ -455,7 +450,7 @@ router.delete('/patient-allergies/:id', authorize(PHARMACY_PRESCRIBE), async (re
 // ═══════════════════════════════════════════════════
 
 // List clinical (doctor) prescriptions from the prescriptions table
-router.get('/clinical-prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.get('/clinical-prescriptions', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { status, patient_id, from_date, to_date } = req.query;
     let where = 'WHERE v.clinic_id = :cid';
@@ -524,7 +519,7 @@ router.get('/clinical-prescriptions', authorize(PHARMACY_PRESCRIBE), async (req,
 });
 
 // List prescriptions
-router.get('/prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.get('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { status, patient_id, from_date, to_date } = req.query;
     let where = 'WHERE pp.clinic_id = :cid';
@@ -566,7 +561,7 @@ router.get('/prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) => 
 });
 
 // Get prescription with lines
-router.get('/prescriptions/:id', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.get('/prescriptions/:id', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const [rx] = await sequelize.query(`
@@ -601,7 +596,7 @@ router.get('/prescriptions/:id', authorize(PHARMACY_PRESCRIBE), async (req, res)
 });
 
 // Create prescription
-router.post('/prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.post('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const id = uuidv4();
     const {
@@ -682,7 +677,7 @@ router.post('/prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) =>
 });
 
 // Update prescription
-router.put('/prescriptions/:id', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.put('/prescriptions/:id', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const fields = [];
     const replacements = { id: req.params.id };
@@ -698,7 +693,7 @@ router.put('/prescriptions/:id', authorize(PHARMACY_PRESCRIBE), async (req, res)
 });
 
 // Cancel prescription
-router.post('/prescriptions/:id/cancel', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.post('/prescriptions/:id/cancel', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { reason } = req.body;
     await sequelize.query(
@@ -729,7 +724,7 @@ router.post('/prescriptions/:id/cancel', authorize(PHARMACY_PRESCRIBE), async (r
 });
 
 // Allergy check for prescription
-router.post('/prescriptions/:id/allergy-check', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.post('/prescriptions/:id/allergy-check', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { checked_by } = req.body;
     // Get prescription lines (drug_id now references inventory_items)
@@ -781,7 +776,7 @@ router.post('/prescriptions/:id/allergy-check', authorize(PHARMACY_PRESCRIBE), a
 });
 
 // Interaction check for prescription
-router.post('/prescriptions/:id/interaction-check', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.post('/prescriptions/:id/interaction-check', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     // Get prescription items (drug_id now references inventory_items)
     const [lines] = await sequelize.query(`
@@ -825,7 +820,7 @@ router.post('/prescriptions/:id/interaction-check', authorize(PHARMACY_PRESCRIBE
 });
 
 // Add prescription line
-router.post('/prescriptions/:id/lines', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.post('/prescriptions/:id/lines', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const lineId = uuidv4();
     const { drug_id, quantity_prescribed, unit_of_measure, dose_strength, frequency, duration_days, notes } = req.body;
@@ -867,7 +862,7 @@ router.post('/prescriptions/:id/lines', authorize(PHARMACY_PRESCRIBE), async (re
 // order (wrong drug, out of stock, etc.) before payment, rather than dispensing the
 // whole prescription as originally written or cancelling it entirely. Also reconciles
 // the patient's still-unpaid bill so the removed item isn't charged for.
-router.delete('/prescriptions/:id/lines/:lineId', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.delete('/prescriptions/:id/lines/:lineId', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { id, lineId } = req.params;
     const [lines] = await sequelize.query(
@@ -945,7 +940,7 @@ router.delete('/prescriptions/:id/lines/:lineId', authorize(PHARMACY_PRESCRIBE),
 // whole line. Mirrors the bill-reconciliation approach used by the DELETE handler above:
 // finds the matching still-unpaid charge by name+old quantity and rewrites its
 // quantity/total instead of leaving the bill silently out of sync with the order.
-router.put('/prescriptions/:id/lines/:lineId', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.put('/prescriptions/:id/lines/:lineId', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { id, lineId } = req.params;
     const newQty = parseInt(req.body.quantity_prescribed, 10);
@@ -1030,7 +1025,7 @@ router.put('/prescriptions/:id/lines/:lineId', authorize(PHARMACY_PRESCRIBE), as
 // rate here before payment. Only rewrites the matching unpaid bill line item's price —
 // never touches inventory_items.selling_price, which is the shared catalog price every
 // other patient is billed at.
-router.put('/prescriptions/:id/lines/:lineId/reprice', authorize(PHARMACY_PRESCRIBE), async (req, res) => {
+router.put('/prescriptions/:id/lines/:lineId/reprice', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const { id, lineId } = req.params;
     const unitPrice = parseFloat(req.body.unit_price);
@@ -1124,7 +1119,7 @@ router.put('/prescriptions/:id/lines/:lineId/reprice', authorize(PHARMACY_PRESCR
 // ═══════════════════════════════════════════════════
 
 // List dispensing records
-router.get('/dispensing', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/dispensing', authorize('pharmacy.read'), async (req, res) => {
   try {
     // Check if dispensing_records table exists
     const [tableCheck] = await sequelize.query(`
@@ -1191,7 +1186,7 @@ router.get('/dispensing', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Get dispensing record detail
-router.get('/dispensing/:id', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/dispensing/:id', authorize('pharmacy.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query(`
@@ -1218,7 +1213,7 @@ router.get('/dispensing/:id', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // DISPENSE - Main dispensing endpoint with full integration
-router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
   
   console.log('=== DISPENSING POST REQUEST START ===');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
@@ -1781,7 +1776,7 @@ router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
 // DISPENSING RETURNS
 // ═══════════════════════════════════════════════════
 
-router.get('/returns', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/returns', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { from_date, to_date } = req.query;
     let where = 'WHERE dr2.clinic_id = :cid';
@@ -1813,7 +1808,7 @@ router.get('/returns', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Process return
-router.post('/returns', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/returns', authorize('pharmacy.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { dispensing_record_id, return_reason, quantity_returned, processed_by, notes } = req.body;
@@ -1987,7 +1982,7 @@ router.post('/returns', authorize(PHARMACY_WRITE), async (req, res) => {
 // PHARMACY CHARGES
 // ═══════════════════════════════════════════════════
 
-router.get('/charges', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/charges', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { patient_id, is_billed, payment_status } = req.query;
     let where = 'WHERE pc.clinic_id = :cid';
@@ -2013,7 +2008,7 @@ router.get('/charges', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Mark charge as billed
-router.post('/charges/:id/bill', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/charges/:id/bill', authorize('pharmacy.write'), async (req, res) => {
   try {
     const { bill_id, bill_item_id } = req.body;
     await sequelize.query(
@@ -2028,7 +2023,7 @@ router.post('/charges/:id/bill', authorize(PHARMACY_WRITE), async (req, res) => 
 });
 
 // Bulk update charge payment status by dispensing numbers
-router.post('/charges/update-payment-status', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/charges/update-payment-status', authorize('pharmacy.write'), async (req, res) => {
   try {
     const { dispensing_numbers, payment_status, receipt_id } = req.body;
     if (!dispensing_numbers || !Array.isArray(dispensing_numbers) || dispensing_numbers.length === 0) {
@@ -2069,7 +2064,7 @@ router.post('/charges/update-payment-status', authorize(PHARMACY_WRITE), async (
 // INSURANCE PRICING
 // ═══════════════════════════════════════════════════
 
-router.get('/insurance-pricing/:drugId', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/insurance-pricing/:drugId', authorize('pharmacy.read'), async (req, res) => {
   try {
     const [rows] = await sequelize.query(
       'SELECT * FROM pharmacy_insurance_pricing WHERE drug_id = :did ORDER BY insurance_type',
@@ -2082,7 +2077,7 @@ router.get('/insurance-pricing/:drugId', authorize(PHARMACY_READ), async (req, r
   }
 });
 
-router.post('/insurance-pricing', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/insurance-pricing', authorize('pharmacy.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const { drug_id, insurance_type, unit_price, currency_code, patient_copay, insurance_covers, effective_from, effective_to } = req.body;
@@ -2109,7 +2104,7 @@ router.post('/insurance-pricing', authorize(PHARMACY_WRITE), async (req, res) =>
 // ═══════════════════════════════════════════════════
 
 // Dashboard stats
-router.get('/dashboard-stats', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/dashboard-stats', authorize('pharmacy.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
 
@@ -2169,7 +2164,7 @@ router.get('/dashboard-stats', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Dispensing summary report
-router.get('/reports/dispensing-summary', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/reports/dispensing-summary', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { from_date, to_date, group_by } = req.query;
     const cid = BranchQueryFilter.resolveClinicId(req);
@@ -2195,7 +2190,7 @@ router.get('/reports/dispensing-summary', authorize(PHARMACY_READ), async (req, 
 });
 
 // Revenue report
-router.get('/reports/revenue', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/reports/revenue', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { from_date, to_date } = req.query;
     const cid = BranchQueryFilter.resolveClinicId(req);
@@ -2225,7 +2220,7 @@ router.get('/reports/revenue', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Top drugs
-router.get('/reports/top-drugs', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/reports/top-drugs', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { from_date, to_date, limit: lim } = req.query;
     const cid = BranchQueryFilter.resolveClinicId(req);
@@ -2252,7 +2247,7 @@ router.get('/reports/top-drugs', authorize(PHARMACY_READ), async (req, res) => {
 });
 
 // Stock usage report
-router.get('/reports/stock-usage', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/reports/stock-usage', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { from_date, to_date } = req.query;
     const cid = BranchQueryFilter.resolveClinicId(req);
@@ -2293,7 +2288,7 @@ router.get('/reports/stock-usage', authorize(PHARMACY_READ), async (req, res) =>
 });
 
 // Billing status report
-router.get('/reports/billing-status', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/reports/billing-status', authorize('pharmacy.read'), async (req, res) => {
   try {
     const { from_date, to_date } = req.query;
     const cid = BranchQueryFilter.resolveClinicId(req);
@@ -2326,7 +2321,7 @@ router.get('/reports/billing-status', authorize(PHARMACY_READ), async (req, res)
 // PHARMACY SETTINGS
 // ═══════════════════════════════════════════════════
 
-router.get('/settings', authorize(PHARMACY_ADMIN), async (req, res) => {
+router.get('/settings', authorize('pharmacy.admin'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query('SELECT * FROM pharmacy_settings WHERE clinic_id = :cid LIMIT 1', { replacements: { cid } });
@@ -2337,7 +2332,7 @@ router.get('/settings', authorize(PHARMACY_ADMIN), async (req, res) => {
   }
 });
 
-router.put('/settings', authorize(PHARMACY_ADMIN), async (req, res) => {
+router.put('/settings', authorize('pharmacy.admin'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const [existing] = await sequelize.query('SELECT id FROM pharmacy_settings WHERE clinic_id = :cid', { replacements: { cid } });
@@ -2381,7 +2376,7 @@ router.put('/settings', authorize(PHARMACY_ADMIN), async (req, res) => {
 // CONTROLLED SUBSTANCES
 // ═══════════════════════════════════════════════════
 
-router.get('/controlled-substances', authorize(CONTROLLED_SUBSTANCE_READ), async (req, res) => {
+router.get('/controlled-substances', authorize('pharmacy.controlled_substances.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     const [rows] = await sequelize.query(`
@@ -2400,7 +2395,7 @@ router.get('/controlled-substances', authorize(CONTROLLED_SUBSTANCE_READ), async
   }
 });
 
-router.get('/controlled-substances/:drugId/audit-log', authorize(CONTROLLED_SUBSTANCE_READ), async (req, res) => {
+router.get('/controlled-substances/:drugId/audit-log', authorize('pharmacy.controlled_substances.read'), async (req, res) => {
   try {
     const [rows] = await sequelize.query(`
       SELECT csl.*, (p.first_name || ' ' || p.last_name) AS patient_name, u.display_name AS dispensed_by_name
@@ -2420,7 +2415,7 @@ router.get('/controlled-substances/:drugId/audit-log', authorize(CONTROLLED_SUBS
 // ACCOUNTING CURRENCY (read from accounting system)
 // ═══════════════════════════════════════════════════
 
-router.get('/currency-settings', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/currency-settings', authorize('pharmacy.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
     // Fetch base currency dynamically from CurrencyService
@@ -2454,7 +2449,7 @@ router.get('/currency-settings', authorize(PHARMACY_READ), async (req, res) => {
 // PHARMACY DISPENSING RECEIPTS
 // ═══════════════════════════════════════════════════
 
-router.post('/dispensing-receipt', authorize(PHARMACY_WRITE), async (req, res) => {
+router.post('/dispensing-receipt', authorize('pharmacy.write'), async (req, res) => {
   try {
     const data = req.body;
     console.log('=== Creating pharmacy dispensing receipt ===');
@@ -2541,7 +2536,7 @@ router.post('/dispensing-receipt', authorize(PHARMACY_WRITE), async (req, res) =
  * one would need different absolute cut-offs. Items never dispensed are folded
  * into slow deliberately: dead stock is the signal a pharmacist most needs.
  */
-router.get('/stock-movement', authorize(PHARMACY_READ), async (req, res) => {
+router.get('/stock-movement', authorize('pharmacy.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const days = Math.min(parseInt(req.query.days, 10) || 30, 365);

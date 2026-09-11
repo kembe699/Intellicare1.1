@@ -5,7 +5,6 @@ const { authorize } = require('../middleware/authorize');
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /invoices, so the API enforces what the client already assumes.
-const INVOICE_WRITE = ['admin', 'reception', 'finance_manager', 'accountant'];
 const router = express.Router();
 const { sequelize, ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -93,7 +92,7 @@ async function generateInvoiceNumber() {
 }
 
 // POST / — Create invoice
-router.post('/', authorize(INVOICE_WRITE), async (req, res) => {
+router.post('/', authorize('invoices.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { bill_id, patient_id, patient_name, clinic_id, amount, currency, payment_terms, due_date, notes, services, scheme_id, scheme_name } = req.body;
@@ -230,7 +229,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /:id/payments — Record payment
-router.post('/:id/payments', authorize(INVOICE_WRITE), async (req, res) => {
+router.post('/:id/payments', authorize('invoices.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id], transaction: t });
@@ -296,7 +295,7 @@ router.post('/:id/payments', authorize(INVOICE_WRITE), async (req, res) => {
 });
 
 // PUT /:id/cancel
-router.put('/:id/cancel', authorize(INVOICE_WRITE), async (req, res) => {
+router.put('/:id/cancel', authorize('invoices.write'), async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id] });
     if (!inv.length) return res.status(404).json({ error: 'Not found' });
@@ -308,7 +307,7 @@ router.put('/:id/cancel', authorize(INVOICE_WRITE), async (req, res) => {
 });
 
 // PUT /:id/mark-paid
-router.put('/:id/mark-paid', authorize(INVOICE_WRITE), async (req, res) => {
+router.put('/:id/mark-paid', authorize('invoices.write'), async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id] });
     if (!inv.length) return res.status(404).json({ error: 'Not found' });

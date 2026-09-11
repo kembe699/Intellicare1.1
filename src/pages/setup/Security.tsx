@@ -63,6 +63,12 @@ interface PrivilegeData {
 }
 
 // ─── Constants ──────────────────────────────────────────────
+// Loading-state fallback only, for the brief window before GET /api/roles
+// resolves (or if it fails) — roleOptions below already prefers the live
+// `roles` state once it has loaded. The real, authoritative role list is
+// whatever's in the database (src/server/config/permissionsCatalog.js seeds
+// it, but an admin can add more via the Roles tab) — do not treat this array
+// as complete or as a source of truth for anything beyond that brief window.
 const ROLES: { value: string; label: string }[] = [
   { value: 'admin', label: 'Administrator' },
   { value: 'reception', label: 'Reception' },
@@ -78,6 +84,10 @@ const ROLES: { value: string; label: string }[] = [
   { value: 'cashier', label: 'Cashier' },
 ];
 
+// Badge color for the 12 built-in roles only — StatusBadge already falls
+// back to a neutral tone for any role not listed here (custom roles created
+// via the Roles tab included), so this needs no entry added when a new
+// custom role is created.
 const ROLE_TONES: Record<string, StatusBadgeTone> = {
   admin: 'danger',
   doctor: 'primary',

@@ -32,20 +32,9 @@ function assertClinicAccess(record, req, res, label) {
   return false;
 }
 
-// Matches the Accounting sidebar section's own role groupings.
-const ACCOUNTING_READ = ['admin', 'accountant', 'finance_manager', 'auditor'];
-const ACCOUNTING_WRITE = ['admin', 'accountant', 'finance_manager'];
-// Exchange rates/currencies are consumed well beyond the Accounting module itself —
-// billing, pharmacy, and reception all need to read the current rate to price a bill.
-const RATES_READ = ['admin', 'accountant', 'finance_manager', 'cashier', 'reception', 'pharmacy'];
-const RATES_WRITE = ['admin', 'accountant', 'finance_manager'];
-// The account *list* is also a picker: recording a daily expense requires choosing
-// which account it comes out of, and /procurement/daily-expenses is open to cashier
-// and procurement (see App.tsx). Gating the list on ACCOUNTING_READ left those roles
-// with an empty, unsubmittable form. Same reasoning as RATES_READ above — reading the
-// list is not the same privilege as reading the ledgers, so only this one route
-// widens; every other accounting read stays on ACCOUNTING_READ.
-const COA_LIST_READ = [...ACCOUNTING_READ, 'cashier', 'procurement'];
+// Permission checks below use privilege keys resolved dynamically against
+// the Roles & Privileges tables — see src/server/config/permissionsCatalog.js
+// for what each key ('accounting.read', 'accounting.rates.read', etc.) grants.
 
 // Add request logging middleware
 router.use((req, res, next) => {
@@ -57,7 +46,7 @@ router.use((req, res, next) => {
 // ============ CHART OF ACCOUNTS ENDPOINTS ============
 
 // Get all accounts for a clinic
-router.get('/chart-of-accounts', authorize(COA_LIST_READ), async (req, res) => {
+router.get('/chart-of-accounts', authorize('accounting.chart_of_accounts.list'), async (req, res) => {
   try {
     const { clinic_id } = req.query;
     
@@ -110,7 +99,7 @@ router.get('/chart-of-accounts', authorize(COA_LIST_READ), async (req, res) => {
 });
 
 // Create new account
-router.post('/chart-of-accounts', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/chart-of-accounts', authorize('accounting.write'), async (req, res) => {
   try {
     const {
       clinic_id,
@@ -166,7 +155,7 @@ router.post('/chart-of-accounts', authorize(ACCOUNTING_WRITE), async (req, res) 
 });
 
 // Get account details
-router.get('/chart-of-accounts/:id', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/chart-of-accounts/:id', authorize('accounting.read'), async (req, res) => {
   try {
     const account = await ChartOfAccounts.findByPk(req.params.id);
 
@@ -189,7 +178,7 @@ router.get('/chart-of-accounts/:id', authorize(ACCOUNTING_READ), async (req, res
 });
 
 // Update account
-router.put('/chart-of-accounts/:id', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.put('/chart-of-accounts/:id', authorize('accounting.write'), async (req, res) => {
   try {
     const account = await ChartOfAccounts.findByPk(req.params.id);
 
@@ -207,7 +196,7 @@ router.put('/chart-of-accounts/:id', authorize(ACCOUNTING_WRITE), async (req, re
 });
 
 // Initialize Chart of Accounts for clinic
-router.post('/chart-of-accounts/initialize', authorize(['admin']), async (req, res) => {
+router.post('/chart-of-accounts/initialize', authorize('accounting.chart_of_accounts.initialize'), async (req, res) => {
   try {
     const { clinic_id } = req.body;
     
@@ -229,7 +218,7 @@ router.post('/chart-of-accounts/initialize', authorize(['admin']), async (req, r
 // ============ GENERAL LEDGER ENDPOINTS ============
 
 // Get GL entries
-router.get('/general-ledger', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/general-ledger', authorize('accounting.read'), async (req, res) => {
   try {
     // include: needs the real, tenant-bound model classes (not the
     // request-agnostic top-level import) so Sequelize's association lookup
@@ -285,7 +274,7 @@ router.get('/general-ledger', authorize(ACCOUNTING_READ), async (req, res) => {
 });
 
 // Create GL entry
-router.post('/general-ledger', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/general-ledger', authorize('accounting.write'), async (req, res) => {
   try {
     const { glData, lineItems } = req.body;
     
@@ -311,7 +300,7 @@ router.post('/general-ledger', authorize(ACCOUNTING_WRITE), async (req, res) => 
 });
 
 // Post GL entry
-router.post('/general-ledger/:id/post', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/general-ledger/:id/post', authorize('accounting.write'), async (req, res) => {
   try {
     const glEntry = await AccountingService.postGLEntry(req.params.id, req.user?.id || 'system');
     res.json(glEntry);
@@ -324,7 +313,7 @@ router.post('/general-ledger/:id/post', authorize(ACCOUNTING_WRITE), async (req,
 // ============ JOURNAL ENTRIES ENDPOINTS ============
 
 // Get journal entries
-router.get('/journal-entries', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/journal-entries', authorize('accounting.read'), async (req, res) => {
   try {
     const { JournalEntries, JournalEntryLines, ChartOfAccounts } = req.models;
     const { clinic_id, status } = req.query;
@@ -358,7 +347,7 @@ router.get('/journal-entries', authorize(ACCOUNTING_READ), async (req, res) => {
 });
 
 // Create journal entry
-router.post('/journal-entries', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/journal-entries', authorize('accounting.write'), async (req, res) => {
   try {
     const { sequelize, JournalEntries, JournalEntryLines, ChartOfAccounts } = req.models;
     const { clinic_id, entry_date, description, narration, reference, lines, transaction_currency, exchange_rate: reqExchangeRate } = req.body;
@@ -485,7 +474,7 @@ router.post('/journal-entries', authorize(ACCOUNTING_WRITE), async (req, res) =>
 });
 
 // Get single journal entry by ID
-router.get('/journal-entries/:id', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/journal-entries/:id', authorize('accounting.read'), async (req, res) => {
   try {
     const { JournalEntries, JournalEntryLines, ChartOfAccounts } = req.models;
     const journalEntry = await JournalEntries.findByPk(req.params.id, {
@@ -513,7 +502,7 @@ router.get('/journal-entries/:id', authorize(ACCOUNTING_READ), async (req, res) 
 });
 
 // Update journal entry (draft only)
-router.put('/journal-entries/:id', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.put('/journal-entries/:id', authorize('accounting.write'), async (req, res) => {
   try {
     const { sequelize, JournalEntries, JournalEntryLines, ChartOfAccounts } = req.models;
     const journalEntry = await JournalEntries.findByPk(req.params.id);
@@ -614,7 +603,7 @@ router.put('/journal-entries/:id', authorize(ACCOUNTING_WRITE), async (req, res)
 });
 
 // Submit journal entry for approval
-router.post('/journal-entries/:id/submit', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/journal-entries/:id/submit', authorize('accounting.write'), async (req, res) => {
   try {
     const journalEntry = await JournalEntries.findByPk(req.params.id);
     
@@ -636,7 +625,7 @@ router.post('/journal-entries/:id/submit', authorize(ACCOUNTING_WRITE), async (r
 });
 
 // Approve journal entry
-router.post('/journal-entries/:id/approve', authorize(['admin', 'finance_manager']), async (req, res) => {
+router.post('/journal-entries/:id/approve', authorize('accounting.journal_entries.approve'), async (req, res) => {
   try {
     const journalEntry = await JournalEntries.findByPk(req.params.id);
     
@@ -672,7 +661,7 @@ router.post('/journal-entries/:id/approve', authorize(['admin', 'finance_manager
 // row, and journal_entries itself had zero rows in the live DB despite this endpoint
 // existing). We now create a matching, immediately-posted GL entry — the same path
 // billing uses — so posting a JE has real accounting effect.
-router.post('/journal-entries/:id/post', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/journal-entries/:id/post', authorize('accounting.write'), async (req, res) => {
   try {
     const { JournalEntries, JournalEntryLines } = req.models;
     const journalEntry = await JournalEntries.findByPk(req.params.id, {
@@ -725,7 +714,7 @@ router.post('/journal-entries/:id/post', authorize(ACCOUNTING_WRITE), async (req
 });
 
 // Reject journal entry
-router.post('/journal-entries/:id/reject', authorize(['admin', 'finance_manager']), async (req, res) => {
+router.post('/journal-entries/:id/reject', authorize('accounting.journal_entries.approve'), async (req, res) => {
   try {
     const journalEntry = await JournalEntries.findByPk(req.params.id);
 
@@ -750,7 +739,7 @@ router.post('/journal-entries/:id/reject', authorize(['admin', 'finance_manager'
 });
 
 // Revert rejected entry back to draft
-router.post('/journal-entries/:id/revert-to-draft', authorize(ACCOUNTING_WRITE), async (req, res) => {
+router.post('/journal-entries/:id/revert-to-draft', authorize('accounting.write'), async (req, res) => {
   try {
     const journalEntry = await JournalEntries.findByPk(req.params.id);
 
@@ -784,7 +773,7 @@ router.post('/journal-entries/:id/revert-to-draft', authorize(ACCOUNTING_WRITE),
 // due_date defaults to 30 days after bill_date when unset, since a NULL
 // due_date otherwise reads as epoch (1970) on the client and wrongly flags
 // the bill as overdue.
-router.get('/receivables', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/receivables', authorize('accounting.read'), async (req, res) => {
   try {
     const { clinic_id, patient_id, status } = req.query;
     if (!clinic_id) return res.status(400).json({ error: 'clinic_id is required' });
@@ -821,7 +810,7 @@ router.get('/receivables', authorize(ACCOUNTING_READ), async (req, res) => {
 });
 
 // Get patient receivables
-router.get('/patient-receivables', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/patient-receivables', authorize('accounting.read'), async (req, res) => {
   try {
     const { PatientReceivables, Patient } = req.models;
     const { clinic_id, patient_id, status } = req.query;
@@ -852,7 +841,7 @@ router.get('/patient-receivables', authorize(ACCOUNTING_READ), async (req, res) 
 });
 
 // Get receivables aging report
-router.get('/patient-receivables/aging', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/patient-receivables/aging', authorize('accounting.read'), async (req, res) => {
   try {
     const { clinic_id } = req.query;
     
@@ -919,7 +908,7 @@ router.get('/patient-receivables/aging', authorize(ACCOUNTING_READ), async (req,
 // ============ FINANCIAL REPORTS ENDPOINTS ============
 
 // Get trial balance
-router.get('/reports/trial-balance', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/reports/trial-balance', authorize('accounting.read'), async (req, res) => {
   try {
     const { clinic_id, as_of_date } = req.query;
     
@@ -938,7 +927,7 @@ router.get('/reports/trial-balance', authorize(ACCOUNTING_READ), async (req, res
 });
 
 // Get income statement (P&L)
-router.get('/reports/income-statement', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/reports/income-statement', authorize('accounting.read'), async (req, res) => {
   try {
     const { clinic_id, start_date, end_date } = req.query;
     
@@ -1001,7 +990,7 @@ router.get('/reports/income-statement', authorize(ACCOUNTING_READ), async (req, 
 });
 
 // Get balance sheet
-router.get('/reports/balance-sheet', authorize(ACCOUNTING_READ), async (req, res) => {
+router.get('/reports/balance-sheet', authorize('accounting.read'), async (req, res) => {
   try {
     const { clinic_id, as_of_date } = req.query;
     
@@ -1111,7 +1100,7 @@ router.get('/reports/balance-sheet', authorize(ACCOUNTING_READ), async (req, res
 // ============ EXCHANGE RATE ENDPOINTS ============
 
 // Get all exchange rates for a clinic
-router.get('/exchange-rates', authorize(RATES_READ), async (req, res) => {
+router.get('/exchange-rates', authorize('accounting.rates.read'), async (req, res) => {
   try {
     const { clinic_id, active_only } = req.query;
     
@@ -1137,7 +1126,7 @@ router.get('/exchange-rates', authorize(RATES_READ), async (req, res) => {
 });
 
 // Get current rate for a currency pair
-router.get('/exchange-rates/current', authorize(RATES_READ), async (req, res) => {
+router.get('/exchange-rates/current', authorize('accounting.rates.read'), async (req, res) => {
   try {
     const { clinic_id, from_currency, to_currency, date } = req.query;
     
@@ -1160,7 +1149,7 @@ router.get('/exchange-rates/current', authorize(RATES_READ), async (req, res) =>
 });
 
 // Create or update exchange rate
-router.post('/exchange-rates', authorize(RATES_WRITE), async (req, res) => {
+router.post('/exchange-rates', authorize('accounting.rates.write'), async (req, res) => {
   try {
     const { clinic_id, from_currency, to_currency, rate, effective_date, expiry_date, source } = req.body;
 
@@ -1212,7 +1201,7 @@ router.post('/exchange-rates', authorize(RATES_WRITE), async (req, res) => {
 });
 
 // Update exchange rate
-router.put('/exchange-rates/:id', authorize(RATES_WRITE), async (req, res) => {
+router.put('/exchange-rates/:id', authorize('accounting.rates.write'), async (req, res) => {
   try {
     const exchangeRate = await ExchangeRate.findByPk(req.params.id);
 
@@ -1230,7 +1219,7 @@ router.put('/exchange-rates/:id', authorize(RATES_WRITE), async (req, res) => {
 });
 
 // Delete (deactivate) exchange rate
-router.delete('/exchange-rates/:id', authorize(RATES_WRITE), async (req, res) => {
+router.delete('/exchange-rates/:id', authorize('accounting.rates.write'), async (req, res) => {
   try {
     const exchangeRate = await ExchangeRate.findByPk(req.params.id);
 
@@ -1248,7 +1237,7 @@ router.delete('/exchange-rates/:id', authorize(RATES_WRITE), async (req, res) =>
 });
 
 // Get supported currencies
-router.get('/currencies', authorize(RATES_READ), async (req, res) => {
+router.get('/currencies', authorize('accounting.rates.read'), async (req, res) => {
   try {
     const currencies = await CurrencyService.getCurrencies();
     res.json(currencies);

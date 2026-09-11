@@ -5,6 +5,7 @@
 
 const USER_AUTH_TTL   = 2 * 60 * 1000;  // 2 min  – role + is_active
 const BRANCH_CTX_TTL  = 2 * 60 * 1000;  // 2 min  – user branch list
+const ROLE_PRIVS_TTL  = 60 * 1000;      // 1 min  – role -> privilege set, per tenant schema
 
 function makeTTLCache(ttl) {
   const store = new Map();
@@ -23,5 +24,6 @@ function makeTTLCache(ttl) {
 
 const userAuthCache   = makeTTLCache(USER_AUTH_TTL);
 const branchCtxCache  = makeTTLCache(BRANCH_CTX_TTL);
+const rolePrivilegesCache = makeTTLCache(ROLE_PRIVS_TTL);
 
-module.exports = { userAuthCache, branchCtxCache };
+module.exports = { userAuthCache, branchCtxCache, rolePrivilegesCache };

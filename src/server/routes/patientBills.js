@@ -16,15 +16,12 @@ const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } 
 // up a patient's bill (a doctor checking it's settled, pharmacy/lab billing against it,
 // a cashier collecting payment), matching the "Patient Bills" sidebar entry's own roles
 // plus the staff roles that trigger billing as a side effect of their own module.
-const BILLS_READ = ['admin', 'reception', 'doctor', 'cashier', 'finance_manager', 'accountant', 'auditor', 'pharmacy', 'lab'];
 // Creating a bill or adding services to one happens from several different screens
 // (LIS ordering, pharmacy prescribing, reception's Patient Bills page) — anyone who can
 // generate a billable charge needs this, not just billing staff.
-const BILLS_WRITE_CHARGE = ['admin', 'reception', 'doctor', 'cashier', 'pharmacy', 'lab'];
 // Voiding a line item or editing a bill's own fields are cashier/finance actions —
 // matches the sidebar's Billing Management / Cash Transfer roles. Both change what
 // a patient owes, so they stay with the roles accountable for the figures.
-const BILLS_FINANCIAL_ACTION = ['admin', 'cashier', 'reception', 'finance_manager', 'accountant'];
 // Taking money over a counter is a different act from adjusting what is owed.
 // Pharmacy collects payment at the point of dispensing — that is the whole of the
 // "Save Payment & Dispense" flow — so it belongs here, while still being unable to
@@ -32,9 +29,7 @@ const BILLS_FINANCIAL_ACTION = ['admin', 'cashier', 'reception', 'finance_manage
 // payment requires an open cashier shift, and pharmacy can already open one
 // (see CASHIER_WRITE in routes/cashier.js), so it lands in a shift that is counted
 // and reconciled like any other.
-const BILLS_COLLECT_PAYMENT = [...BILLS_FINANCIAL_ACTION, 'pharmacy'];
 // Deleting a bill outright is the most destructive action here — admin only.
-const BILLS_DELETE = ['admin'];
 
 // "Bank Transfer" is offered as a payment method in the UI but was never added to the
 // receipts.payment_method enum, so saving one would fail with a MySQL enum-constraint
@@ -442,7 +437,7 @@ async function computeBaseCurrencyTotal(services, clinicId, asOfDate = new Date(
 }
 
 // Get all patient bills for a clinic
-router.get('/clinic/:clinicId', authorize(BILLS_READ), async (req, res) => {
+router.get('/clinic/:clinicId', authorize('bills.read'), async (req, res) => {
   try {
     const { clinicId } = req.params;
     const { startDate, endDate } = req.query;
@@ -491,7 +486,7 @@ router.get('/clinic/:clinicId', authorize(BILLS_READ), async (req, res) => {
 });
 
 // Get a specific patient bill by ID
-router.get('/:billId', authorize(BILLS_READ), async (req, res) => {
+router.get('/:billId', authorize('bills.read'), async (req, res) => {
   try {
     const { billId } = req.params;
     
@@ -516,7 +511,7 @@ router.get('/:billId', authorize(BILLS_READ), async (req, res) => {
 });
 
 // Create a new patient bill
-router.post('/', authorize(BILLS_WRITE_CHARGE), async (req, res) => {
+router.post('/', authorize('bills.write_charge'), async (req, res) => {
   try {
     const billData = req.body;
     console.log('Creating patient bill with data:', JSON.stringify(billData, null, 2));
@@ -800,7 +795,7 @@ router.post('/', authorize(BILLS_WRITE_CHARGE), async (req, res) => {
 });
 
 // Find active patient bill for a patient in a clinic
-router.get('/active/:patientId/:clinicId', authorize(BILLS_READ), async (req, res) => {
+router.get('/active/:patientId/:clinicId', authorize('bills.read'), async (req, res) => {
   try {
     const { patientId, clinicId } = req.params;
     const branchWhere = BranchQueryFilter.buildBranchWhere(req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' });
@@ -861,7 +856,7 @@ router.get('/active/:patientId/:clinicId', authorize(BILLS_READ), async (req, re
 });
 
 // Add services to an existing bill
-router.put('/:billId/add-services', authorize(BILLS_WRITE_CHARGE), async (req, res) => {
+router.put('/:billId/add-services', authorize('bills.write_charge'), async (req, res) => {
   let t;
   try {
     const { billId } = req.params;
@@ -1042,7 +1037,7 @@ router.put('/:billId/add-services', authorize(BILLS_WRITE_CHARGE), async (req, r
 });
 
 // Update a patient bill
-router.put('/:billId', authorize(BILLS_FINANCIAL_ACTION), async (req, res) => {
+router.put('/:billId', authorize('bills.financial_action'), async (req, res) => {
   try {
     const { billId } = req.params;
     const updateData = req.body;
@@ -1105,7 +1100,7 @@ router.put('/:billId', authorize(BILLS_FINANCIAL_ACTION), async (req, res) => {
 // item surfaces as a credit/overpayment (negative balance_amount) rather than
 // silently fabricating a refund — an actual refund, if owed, is a separate,
 // explicit action (see the receipt-level "Cancel Receipt" flow).
-router.post('/:billId/void-item', authorize(BILLS_FINANCIAL_ACTION), async (req, res) => {
+router.post('/:billId/void-item', authorize('bills.financial_action'), async (req, res) => {
   try {
     const { billId } = req.params;
     const { serviceIndex, reason } = req.body;
@@ -1308,7 +1303,7 @@ router.post('/:billId/void-item', authorize(BILLS_FINANCIAL_ACTION), async (req,
 });
 
 // Delete a patient bill
-router.delete('/:billId', authorize(BILLS_DELETE), async (req, res) => {
+router.delete('/:billId', authorize('bills.delete'), async (req, res) => {
   try {
     const { billId } = req.params;
     const bill = await PatientBill.findByPk(billId);
@@ -1329,7 +1324,7 @@ router.delete('/:billId', authorize(BILLS_DELETE), async (req, res) => {
 });
 
 // Add payment to a patient bill
-router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, res) => {
+router.post('/:billId/payments', authorize('bills.collect_payment'), async (req, res) => {
   let t;
   try {
     const { billId } = req.params;
@@ -1904,7 +1899,7 @@ router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, r
 });
 
 // Get receipts for a specific bill
-router.get('/:billId/receipts', authorize(BILLS_READ), async (req, res) => {
+router.get('/:billId/receipts', authorize('bills.read'), async (req, res) => {
   try {
     const { billId } = req.params;
     
@@ -1930,7 +1925,7 @@ router.get('/:billId/receipts', authorize(BILLS_READ), async (req, res) => {
 });
 
 // Search patient bills
-router.get('/search/:clinicId', authorize(BILLS_READ), async (req, res) => {
+router.get('/search/:clinicId', authorize('bills.read'), async (req, res) => {
   try {
     const { clinicId } = req.params;
     const { q } = req.query; // search query

@@ -71,7 +71,7 @@ router.get('/permissions', async (req, res) => {
 
 // POST /api/approvals/permissions — grant a permission (upsert; ignore if
 // already granted).
-router.post('/permissions', authorize(['admin']), async (req, res) => {
+router.post('/permissions', authorize('approvals.manage'), async (req, res) => {
   try {
     const { user_id, approval_type, clinic_id } = req.body;
     if (!user_id || !approval_type) {
@@ -104,7 +104,7 @@ router.post('/permissions', authorize(['admin']), async (req, res) => {
 });
 
 // DELETE /api/approvals/permissions/:id — revoke.
-router.delete('/permissions/:id', authorize(['admin']), async (req, res) => {
+router.delete('/permissions/:id', authorize('approvals.manage'), async (req, res) => {
   try {
     await sequelize.query('DELETE FROM approval_permissions WHERE id = :id', {
       replacements: { id: req.params.id },

@@ -12,8 +12,6 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // Mirrors allowedRoles already enforced client-side for /procurement/daily-expenses in
 // App.tsx — none of these routes had any role gate server-side, including /:id/pay,
 // which releases an actual payment once an expense is approved.
-const DAILY_EXPENSES_READ = ['admin', 'cashier', 'finance_manager', 'accountant', 'procurement'];
-const DAILY_EXPENSES_WRITE = ['admin', 'cashier', 'procurement'];
 
 // Maps a daily-expense category to the Chart of Accounts expense-account code
 // it should be debited against when the expense is paid (see POST /:id/pay).
@@ -172,7 +170,7 @@ async function ensureColumnType(table, column, expectedDataType, modifySql) {
   } catch (e) { console.warn('FX Gain/Loss account migration:', e.message); }
 })();
 
-router.get('/', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/', authorize('expenses.read'), async (req, res) => {
   try {
     const { dateFrom, dateTo } = req.query;
     const where = { clinic_id: BranchQueryFilter.resolveClinicId(req) };
@@ -202,7 +200,7 @@ router.get('/', authorize(DAILY_EXPENSES_READ), async (req, res) => {
 });
 
 // Get supplier bills (authorized/received POs not fully paid)
-router.get('/supplier-bills', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/supplier-bills', authorize('expenses.read'), async (req, res) => {
   try {
     const cf = `AND po.clinic_id = ${BranchQueryFilter.resolveClinicId(req)}`;
     const [bills] = await sequelize.query(`
@@ -226,7 +224,7 @@ router.get('/supplier-bills', authorize(DAILY_EXPENSES_READ), async (req, res) =
 });
 
 // Get approvals for a PO
-router.get('/supplier-bills/:po_id/approvals', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/supplier-bills/:po_id/approvals', authorize('expenses.read'), async (req, res) => {
   try {
     const [approvals] = await sequelize.query(
       'SELECT * FROM supplier_bill_approvals WHERE po_id = :po_id ORDER BY approval_level ASC',
@@ -276,7 +274,7 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
 });
 
 // Get PO line items for a bill
-router.get('/supplier-bills/:po_id/items', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/supplier-bills/:po_id/items', authorize('expenses.read'), async (req, res) => {
   try {
     const [items] = await sequelize.query(
       `SELECT line_number, item_name, description, quantity, unit_of_measure, unit_price, total_price, status
@@ -290,7 +288,7 @@ router.get('/supplier-bills/:po_id/items', authorize(DAILY_EXPENSES_READ), async
 });
 
 // Get payments for a PO
-router.get('/supplier-bills/:po_id/payments', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/supplier-bills/:po_id/payments', authorize('expenses.read'), async (req, res) => {
   try {
     const [payments] = await sequelize.query(
       'SELECT * FROM supplier_bill_payments WHERE po_id = :po_id ORDER BY payment_date DESC',
@@ -303,7 +301,7 @@ router.get('/supplier-bills/:po_id/payments', authorize(DAILY_EXPENSES_READ), as
 });
 
 // Record supplier bill payment
-router.post('/supplier-bill-payment', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, res) => {
   try {
     const { po_id, po_number, supplier_id, supplier_name,
       payment_date, amount_paid, payment_method, account_id, account_name,
@@ -474,7 +472,7 @@ router.post('/supplier-bill-payment', authorize(DAILY_EXPENSES_WRITE), async (re
 });
 
 // Pay an approved expense — deducts from account and marks as paid
-router.post('/:id/pay', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
   try {
     const expenseId = parseInt(req.params.id);
     const payClinicId = BranchQueryFilter.resolveClinicId(req);
@@ -540,7 +538,7 @@ router.post('/:id/pay', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
 });
 
 // Get single expense by id
-router.get('/:id', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/:id', authorize('expenses.read'), async (req, res) => {
   try {
     const [rows] = await sequelize.query(
       'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :clinicId LIMIT 1',
@@ -554,7 +552,7 @@ router.get('/:id', authorize(DAILY_EXPENSES_READ), async (req, res) => {
 });
 
 // Get approvals for an expense
-router.get('/:id/approvals', authorize(DAILY_EXPENSES_READ), async (req, res) => {
+router.get('/:id/approvals', authorize('expenses.read'), async (req, res) => {
   try {
     const [approvals] = await sequelize.query(
       `SELECT dea.* FROM daily_expense_approvals dea
@@ -651,7 +649,7 @@ async function loadEditableExpense(req) {
 }
 
 // Edit an expense that has not been approved yet
-router.put('/:id', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+router.put('/:id', authorize('expenses.write'), async (req, res) => {
   try {
     const { expense, id, error } = await loadEditableExpense(req);
     if (error) return res.status(error.code).json(error.body);
@@ -718,7 +716,7 @@ router.put('/:id', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
 });
 
 // Remove an expense that has not been approved yet
-router.delete('/:id', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+router.delete('/:id', authorize('expenses.write'), async (req, res) => {
   try {
     const { expense, id, error } = await loadEditableExpense(req);
     if (error) return res.status(error.code).json(error.body);
@@ -805,7 +803,7 @@ router.post('/:id/reject', requireApprovalPermission('expense_approve'), async (
   }
 });
 
-router.post('/', authorize(DAILY_EXPENSES_WRITE), async (req, res) => {
+router.post('/', authorize('expenses.write'), async (req, res) => {
   try {
     // Validate before writing. Without this the missing field surfaced as a 500
     // from the database driver, which reads to the caller as "the server broke"
