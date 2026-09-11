@@ -49,145 +49,139 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/api/apiClient';
-import { UserRole } from '@/types';
 import { Combobox } from '@/components/ui/combobox';
 
+// privilege keys are from src/server/config/permissionsCatalog.js — the same
+// keys the backend's authorize() checks (src/server/middleware/authorize.js),
+// via useAuth().hasPrivilege(). A section's own visibility is no longer a
+// separate role list (that's what let it drift from its children — e.g. a
+// section shown to a role none of whose children were ever visible to) — it's
+// derived below as "does at least one of this dropdown's items pass".
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  roles: UserRole[];
+  privilege: string | string[];
 }
 
 interface NavDropdown {
   label: string;
   icon: React.ElementType;
-  roles: UserRole[];
   items: NavItem[];
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'nurse'] },
-  // 'doctor' intentionally excluded: /lis/registration's allowedRoles is admin/reception/lab only,
-  // so showing this to doctors would be a dead-end nav link.
-  { label: 'Patient Registry', href: '/lis/registration', icon: Users, roles: ['admin', 'reception'] },
-  { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, roles: ['admin', 'doctor', 'reception'] },
-  { label: 'Queue Display', href: '/lis/queue', icon: Users, roles: ['admin', 'reception', 'lab', 'doctor'] },
-  { label: 'Triage', href: '/triage', icon: Activity, roles: ['admin', 'nurse'] },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, privilege: 'pages.dashboard.view' },
+  { label: 'Patient Registry', href: '/lis/registration', icon: Users, privilege: 'pages.lis_registration.view' },
+  { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read' },
+  { label: 'Queue Display', href: '/lis/queue', icon: Users, privilege: 'lis.queue.write' },
+  { label: 'Triage', href: '/triage', icon: Activity, privilege: 'lis.triage.write' },
   // "Laboratory" (legacy /laboratory page) intentionally removed — it's a
   // disconnected, effectively-unused parallel system (lab_requests/lab_results
   // are nearly empty and stuck in pending/partial; the LIS Module dropdown
   // below is where real specimen/result activity happens). Redirected at the
   // route level in App.tsx rather than deleted, so old links still resolve.
-  { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'reports', 'finance_manager', 'accountant', 'auditor'] },
+  { label: 'Reports', href: '/reports', icon: BarChart3, privilege: 'pages.reports.view' },
 ];
 
 
 const pharmacyDropdown: NavDropdown = {
   label: 'Pharmacy',
   icon: Pill,
-  roles: ['admin', 'pharmacy', 'finance_manager'],
   items: [
-    { label: 'Prescriptions', href: '/pharmacy-prescriptions', icon: ClipboardList, roles: ['admin', 'pharmacy'] },
-    { label: 'Dispensing', href: '/pharmacy-dispensing', icon: Pill, roles: ['admin', 'pharmacy'] },
-    { label: 'Returns', href: '/pharmacy-returns', icon: ArrowRightLeft, roles: ['admin', 'pharmacy'] },
+    { label: 'Prescriptions', href: '/pharmacy-prescriptions', icon: ClipboardList, privilege: 'pharmacy.prescribe' },
+    { label: 'Dispensing', href: '/pharmacy-dispensing', icon: Pill, privilege: 'pharmacy.write' },
+    { label: 'Returns', href: '/pharmacy-returns', icon: ArrowRightLeft, privilege: 'pharmacy.write' },
   ]
 };
 
 const procurementDropdown: NavDropdown = {
   label: 'Procurement',
   icon: ShoppingCart,
-  roles: ['admin', 'cashier', 'finance_manager', 'accountant', 'procurement'],
   items: [
-    { label: 'Suppliers', href: '/procurement/suppliers-mgmt', icon: Building2, roles: ['admin', 'finance_manager', 'accountant', 'procurement'] },
-    { label: 'Requisitions', href: '/procurement/requisitions', icon: ClipboardList, roles: ['admin', 'finance_manager', 'accountant', 'procurement'] },
-    { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ShoppingCart, roles: ['admin', 'procurement'] },
-    { label: 'Goods Receipt', href: '/procurement/goods-receipt', icon: Truck, roles: ['admin', 'finance_manager', 'accountant', 'procurement'] },
-    { label: 'Daily Expenses', href: '/procurement/daily-expenses', icon: DollarSign, roles: ['admin', 'cashier', 'procurement'] },
-    { label: 'Reports', href: '/procurement/reports', icon: BarChart3, roles: ['admin', 'finance_manager', 'accountant', 'procurement'] },
+    { label: 'Suppliers', href: '/procurement/suppliers-mgmt', icon: Building2, privilege: 'procurement.read' },
+    { label: 'Requisitions', href: '/procurement/requisitions', icon: ClipboardList, privilege: 'pages.procurement_requisitions.view' },
+    { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ShoppingCart, privilege: 'procurement.purchase_orders.write' },
+    { label: 'Goods Receipt', href: '/procurement/goods-receipt', icon: Truck, privilege: ['procurement.write', 'pharmacy.write'] },
+    { label: 'Daily Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write' },
+    { label: 'Reports', href: '/procurement/reports', icon: BarChart3, privilege: 'procurement.read' },
   ]
 };
 
 const patientsBillDropdown: NavDropdown = {
   label: 'Patients Bill',
   icon: Receipt,
-  roles: ['admin', 'reception', 'doctor', 'pharmacy', 'cashier', 'finance_manager', 'accountant'],
   items: [
-    { label: 'Patient Bills', href: '/patients-bill', icon: Receipt, roles: ['admin', 'reception', 'doctor'] },
-    { label: 'Proforma Invoice', href: '/proforma-invoices', icon: FileSignature, roles: ['admin', 'reception', 'doctor'] },
-    { label: 'Receipts', href: '/receipts', icon: FileText, roles: ['admin', 'reception', 'doctor', 'pharmacy', 'cashier'] },
-    { label: 'Invoices', href: '/invoices', icon: FileBarChart, roles: ['admin', 'reception', 'finance_manager', 'accountant'] },
+    { label: 'Patient Bills', href: '/patients-bill', icon: Receipt, privilege: 'pages.patients_bill.view' },
+    { label: 'Proforma Invoice', href: '/proforma-invoices', icon: FileSignature, privilege: 'proforma.write' },
+    { label: 'Receipts', href: '/receipts', icon: FileText, privilege: 'receipts.write' },
+    { label: 'Invoices', href: '/invoices', icon: FileBarChart, privilege: 'invoices.write' },
   ]
 };
 
 const accountingDropdown: NavDropdown = {
   label: 'Accounting',
   icon: Calculator,
-  roles: ['admin', 'accountant', 'finance_manager', 'auditor', 'reception', 'cashier', 'pharmacy'],
   items: [
-    { label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileSpreadsheet, roles: ['admin', 'accountant', 'finance_manager'] },
-    { label: 'General Ledger', href: '/accounting/general-ledger', icon: BookOpen, roles: ['admin', 'accountant', 'finance_manager', 'auditor'] },
-    { label: 'Journal Entries', href: '/accounting/journal-entries', icon: ClipboardList, roles: ['admin', 'accountant', 'finance_manager'] },
-    { label: 'Receivables', href: '/accounting/receivables', icon: PiggyBank, roles: ['admin', 'accountant', 'finance_manager'] },
-    { label: 'Financial Reports', href: '/accounting/reports', icon: TrendingUp, roles: ['admin', 'accountant', 'finance_manager', 'auditor'] },
-    { label: 'Exchange Rates', href: '/accounting/exchange-rates', icon: ArrowRightLeft, roles: ['admin', 'accountant', 'finance_manager'] },
-    { label: 'Cash Transfer', href: '/accounting/cash-transfer', icon: Wallet, roles: ['admin', 'accountant', 'finance_manager', 'reception', 'pharmacy', 'cashier'] },
-    { label: 'Billing Management', href: '/billing-management', icon: FileSpreadsheet, roles: ['admin', 'reception', 'finance_manager', 'accountant'] },
-    { label: 'Schemes & Pricing', href: '/scheme-management', icon: Tag, roles: ['admin', 'finance_manager', 'accountant'] },
-    { label: 'Cashier Shift', href: '/cashier/shift', icon: Clock, roles: ['admin', 'reception', 'pharmacy', 'cashier'] },
+    { label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileSpreadsheet, privilege: 'accounting.write' },
+    { label: 'General Ledger', href: '/accounting/general-ledger', icon: BookOpen, privilege: 'accounting.read' },
+    { label: 'Journal Entries', href: '/accounting/journal-entries', icon: ClipboardList, privilege: 'accounting.write' },
+    { label: 'Receivables', href: '/accounting/receivables', icon: PiggyBank, privilege: 'accounting.read' },
+    { label: 'Financial Reports', href: '/accounting/reports', icon: TrendingUp, privilege: 'accounting.read' },
+    { label: 'Exchange Rates', href: '/accounting/exchange-rates', icon: ArrowRightLeft, privilege: 'accounting.rates.write' },
+    { label: 'Cash Transfer', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },
+    { label: 'Billing Management', href: '/billing-management', icon: FileSpreadsheet, privilege: 'billing.write' },
+    { label: 'Schemes & Pricing', href: '/scheme-management', icon: Tag, privilege: 'schemes.write' },
+    { label: 'Cashier Shift', href: '/cashier/shift', icon: Clock, privilege: 'cashier.write' },
   ]
 };
 
 const inventoryDropdown: NavDropdown = {
   label: 'Inventory',
   icon: Warehouse,
-  roles: ['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement'],
   items: [
-    { label: 'Item Master', href: '/inventory/items', icon: Package, roles: ['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement'] },
-    { label: 'Stock Locations', href: '/inventory/locations', icon: MapPin, roles: ['admin', 'pharmacy', 'finance_manager', 'procurement'] },
-    { label: 'Transactions', href: '/inventory/transactions', icon: ArrowRightLeft, roles: ['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement'] },
-    { label: 'Batch Tracking', href: '/inventory/batches', icon: Clock, roles: ['admin', 'pharmacy', 'procurement'] },
-    { label: 'Physical Counts', href: '/inventory/physical-counts', icon: ClipboardCheck, roles: ['admin', 'pharmacy', 'finance_manager', 'procurement'] },
-    { label: 'Valuation & COGS', href: '/inventory/valuation', icon: DollarSign, roles: ['admin', 'finance_manager', 'accountant', 'procurement'] },
+    { label: 'Item Master', href: '/inventory/items', icon: Package, privilege: 'inventory.read' },
+    { label: 'Stock Locations', href: '/inventory/locations', icon: MapPin, privilege: 'inventory.read' },
+    { label: 'Transactions', href: '/inventory/transactions', icon: ArrowRightLeft, privilege: 'inventory.read' },
+    { label: 'Batch Tracking', href: '/inventory/batches', icon: Clock, privilege: 'inventory.write' },
+    { label: 'Physical Counts', href: '/inventory/physical-counts', icon: ClipboardCheck, privilege: 'inventory.read' },
+    { label: 'Valuation & COGS', href: '/inventory/valuation', icon: DollarSign, privilege: ['inventory.adjustments.approve', 'inventory.read'] },
   ]
 };
 
 const lisDropdown: NavDropdown = {
   label: 'LIS Module',
   icon: FlaskConical,
-  roles: ['admin', 'lab', 'doctor', 'reception'],
   items: [
-    { label: 'Specimen Collection', href: '/lis/collection', icon: Activity, roles: ['admin', 'lab', 'doctor'] },
-    { label: 'Results Entry', href: '/lis/results-entry', icon: FileSpreadsheet, roles: ['admin', 'lab'] },
-    { label: 'Manager Review', href: '/lis/review', icon: ClipboardCheck, roles: ['admin', 'lab'] },
+    { label: 'Specimen Collection', href: '/lis/collection', icon: Activity, privilege: 'lis.results.read' },
+    { label: 'Results Entry', href: '/lis/results-entry', icon: FileSpreadsheet, privilege: 'lis.specimen.write' },
+    { label: 'Manager Review', href: '/lis/review', icon: ClipboardCheck, privilege: 'lis.results.review' },
   ]
 };
 
 const inpatientDropdown: NavDropdown = {
   label: 'Inpatient',
   icon: BedDouble,
-  roles: ['admin', 'doctor', 'reception'],
   items: [
-    { label: 'Admissions', href: '/inpatient/admissions', icon: LogIn, roles: ['admin', 'doctor', 'reception'] },
-    { label: 'Admitted Patients', href: '/inpatient/patients', icon: Users, roles: ['admin', 'doctor', 'reception'] },
+    { label: 'Admissions', href: '/inpatient/admissions', icon: LogIn, privilege: 'inpatient.admissions.write' },
+    { label: 'Admitted Patients', href: '/inpatient/patients', icon: Users, privilege: 'inpatient.admissions.write' },
   ]
 };
 
 const setupDropdown: NavDropdown = {
   label: 'Setup',
   icon: Settings,
-  roles: ['admin', 'lab', 'doctor'],
   items: [
-    { label: 'Lab Tests', href: '/setup/lab-tests', icon: TestTube, roles: ['admin', 'doctor', 'lab'] },
-    { label: 'Services', href: '/setup/services', icon: Wrench, roles: ['admin', 'lab', 'doctor'] },
-    { label: 'Departments', href: '/setup/departments', icon: Briefcase, roles: ['admin', 'doctor'] },
-    { label: 'Clinics', href: '/setup/clinics', icon: Stethoscope, roles: ['admin', 'doctor'] },
-    { label: 'Facility', href: '/setup/facility', icon: Hospital, roles: ['admin', 'doctor'] },
-    { label: 'Wards', href: '/setup/wards', icon: Building2, roles: ['admin', 'doctor'] },
-    { label: 'Rooms', href: '/setup/rooms', icon: DoorOpen, roles: ['admin', 'doctor'] },
-    { label: 'API Configurations', href: '/setup/api-configurations', icon: Key, roles: ['admin'] },
-    { label: 'Security', href: '/setup/security', icon: Shield, roles: ['admin', 'doctor'] },
-    { label: 'Approvals', href: '/setup/approvals', icon: ShieldCheck, roles: ['admin'] },
+    { label: 'Lab Tests', href: '/setup/lab-tests', icon: TestTube, privilege: 'pages.setup_lab_tests.view' },
+    { label: 'Services', href: '/setup/services', icon: Wrench, privilege: 'clinical.services.manage' },
+    { label: 'Departments', href: '/setup/departments', icon: Briefcase, privilege: 'pages.setup_departments.view' },
+    { label: 'Clinics', href: '/setup/clinics', icon: Stethoscope, privilege: 'pages.setup_clinics.view' },
+    { label: 'Facility', href: '/setup/facility', icon: Hospital, privilege: 'pages.setup_facility.view' },
+    { label: 'Wards', href: '/setup/wards', icon: Building2, privilege: 'pages.setup_wards.view' },
+    { label: 'Rooms', href: '/setup/rooms', icon: DoorOpen, privilege: 'pages.setup_rooms.view' },
+    { label: 'API Configurations', href: '/setup/api-configurations', icon: Key, privilege: 'setup.api_configurations.manage' },
+    { label: 'Security', href: '/setup/security', icon: Shield, privilege: 'pages.security.access' },
+    { label: 'Approvals', href: '/setup/approvals', icon: ShieldCheck, privilege: 'approvals.manage' },
   ]
 };
 
@@ -198,7 +192,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const location = useLocation();
-  const { user, signOut, updateCurrentRoom } = useAuth();
+  const { user, signOut, updateCurrentRoom, hasPrivilege } = useAuth();
   const [consultationRooms, setConsultationRooms] = useState<{ id: string; room_number: string }[]>([]);
   const [savingRoom, setSavingRoom] = useState(false);
   const [setupOpen, setSetupOpen] = useState(location.pathname.startsWith('/setup'));
@@ -231,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
         setPendingRxCount(count);
       } catch (e) { /* silent */ }
     };
-    if (user?.role && ['admin', 'pharmacy', 'doctor'].includes(user.role)) {
+    if (hasPrivilege('pharmacy.prescribe')) {
       fetchPendingRx();
       const interval = setInterval(fetchPendingRx, 30000);
       return () => clearInterval(interval);
@@ -266,18 +260,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     }
   };
 
-  const filteredNavItems = navItems.filter(item =>
-    user?.role && item.roles.includes(user.role)
-  );
+  const filteredNavItems = navItems.filter(item => hasPrivilege(item.privilege));
 
-  const showSetup = user?.role && setupDropdown.roles.includes(user.role);
-  const showPatientsBill = user?.role && patientsBillDropdown.roles.includes(user.role);
-  const showPharmacy = user?.role && pharmacyDropdown.roles.includes(user.role);
-  const showLIS = user?.role && lisDropdown.roles.includes(user.role);
-  const showProcurement = user?.role && procurementDropdown.roles.includes(user.role);
-  const showAccounting = user?.role && accountingDropdown.roles.includes(user.role);
-  const showInventory = user?.role && inventoryDropdown.roles.includes(user.role);
-  const showInpatient = user?.role && inpatientDropdown.roles.includes(user.role);
+  // A dropdown section shows if the user can actually use at least one of its
+  // items — derived from the same per-item privilege checks used to filter
+  // them below, rather than a separate section-level role list that could
+  // (and did) drift from what its children actually allow.
+  const dropdownVisible = (dropdown: NavDropdown) => dropdown.items.some(item => hasPrivilege(item.privilege));
+
+  const showSetup = dropdownVisible(setupDropdown);
+  const showPatientsBill = dropdownVisible(patientsBillDropdown);
+  const showPharmacy = dropdownVisible(pharmacyDropdown);
+  const showLIS = dropdownVisible(lisDropdown);
+  const showProcurement = dropdownVisible(procurementDropdown);
+  const showAccounting = dropdownVisible(accountingDropdown);
+  const showInventory = dropdownVisible(inventoryDropdown);
+  const showInpatient = dropdownVisible(inpatientDropdown);
   const hasNavLink = (href: string) => filteredNavItems.some(i => i.href === href);
 
   // A section label (e.g. "CLINICAL WORKFLOW") should never render on its own with nothing
@@ -411,7 +409,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {inpatientOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {inpatientDropdown.items.map((item) => {
+                          {inpatientDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (
@@ -451,8 +449,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {lisOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {lisDropdown.items.map((item) => {
-                            if (!user?.role || !item.roles.includes(user.role)) return null;
+                          {lisDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname.startsWith(item.href);
                             return (
@@ -495,7 +492,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {pharmacyOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {pharmacyDropdown.items.map((item) => {
+                          {pharmacyDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (
@@ -539,7 +536,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {patientsBillOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {patientsBillDropdown.items.filter(item => user?.role && item.roles.includes(user.role)).map((item) => {
+                          {patientsBillDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (
@@ -577,7 +574,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {accountingOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {accountingDropdown.items.filter(item => user?.role && item.roles.includes(user.role)).map((item) => {
+                          {accountingDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (
@@ -618,7 +615,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {inventoryOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {inventoryDropdown.items.map((item) => {
+                          {inventoryDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (
@@ -656,7 +653,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {procurementOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {procurementDropdown.items.map((item) => {
+                          {procurementDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (
@@ -700,7 +697,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       </button>
                       {setupOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {setupDropdown.items.map((item) => {
+                          {setupDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (

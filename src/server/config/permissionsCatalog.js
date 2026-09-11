@@ -126,6 +126,29 @@ const CATALOG = [
   ['setup.lab_tests.manage', 'Manage lab test catalogue', 'setup', 'Create/edit/delete/seed/bulk-upload lab tests', ['admin']],
   ['setup.api_configurations.manage', 'Manage API keys', 'setup', 'Generate/revoke integration API keys', ['admin']],
   ['approvals.manage', 'Grant approval permissions', 'setup', 'Grant/revoke a user’s per-action approval permission', ['admin']],
+
+  // Standalone navigation destinations with no single API resource behind
+  // them, so no existing privilege above already represents "can see this
+  // page" — used only by the frontend sidebar/route guards, not any API route.
+  ['pages.dashboard.view', 'View dashboard', 'pages', 'Access to the main dashboard landing page', ['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'accountant', 'finance_manager', 'auditor', 'nurse']],
+  ['pages.reports.view', 'View reports section', 'pages', 'Access to the Reports section and its sub-reports', ['admin', 'reports', 'finance_manager', 'accountant', 'auditor']],
+  ['pages.visits_history.view', 'View patient visits history', 'pages', 'Access to the clinical visits history page', ['admin', 'doctor']],
+  ['pages.patients_bill.view', 'View Patient Bills page', 'pages', 'Access to the Patient Bills page', ['admin', 'reception', 'doctor']],
+  ['pages.lis_registration.view', 'View patient registration page', 'pages', 'Access to the LIS patient registration page', ['admin', 'reception', 'lab']],
+  ['pages.setup_lab_tests.view', 'View lab tests setup page', 'pages', 'Access to the lab tests setup page', ['admin', 'doctor', 'lab']],
+  ['pages.setup_departments.view', 'View departments setup page', 'pages', 'Access to the departments setup page', ['admin', 'doctor']],
+  ['pages.setup_clinics.view', 'View clinics setup page', 'pages', 'Access to the clinics setup page', ['admin', 'doctor']],
+  ['pages.setup_facility.view', 'View facility setup page', 'pages', 'Access to the facility setup page', ['admin', 'doctor']],
+  ['pages.setup_wards.view', 'View wards setup page', 'pages', 'Access to the wards setup page', ['admin', 'doctor']],
+  ['pages.setup_rooms.view', 'View rooms setup page', 'pages', 'Access to the rooms setup page', ['admin', 'doctor']],
+  ['pages.procurement_requisitions.view', 'View purchase requisitions page', 'pages', 'Access to the purchase requisitions page', ['admin', 'finance_manager', 'accountant', 'doctor', 'pharmacy', 'procurement']],
+  // Deliberately never granted to any role — Setup > Security manages roles,
+  // privileges, and user accounts, so it must stay permanently admin-only,
+  // exactly like the backend routes it fronts (see roles.js, users.js
+  // create/delete) — admin passes via the unconditional bypass, never via a
+  // grant, so this can never be delegated by mistake through the UI it itself
+  // controls.
+  ['pages.security.access', 'View Security & User Management', 'pages', 'Permanently admin-only — manages roles, privileges, and user accounts', []],
 ];
 
 const PRIVILEGES = CATALOG.map(([privilege_key, name, module, description]) => ({ privilege_key, name, module, description }));

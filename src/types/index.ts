@@ -1,4 +1,8 @@
-export type UserRole = 'admin' | 'reception' | 'doctor' | 'lab' | 'pharmacy' | 'reports' | 'cashier' | 'accountant' | 'finance_manager' | 'auditor' | 'procurement' | 'nurse';
+// The 12 built-in roles, plus any custom role_key an admin creates via
+// Setup > Security > Roles & Privileges (src/server/routes/roles.js allows an
+// arbitrary role_key) — same "known literals | string" pattern as ClinicName
+// below, so a custom role doesn't silently fail every role check.
+export type UserRole = 'admin' | 'reception' | 'doctor' | 'lab' | 'pharmacy' | 'reports' | 'cashier' | 'accountant' | 'finance_manager' | 'auditor' | 'procurement' | 'nurse' | string;
 
 export type ClinicName = 'IntelliCare' | string;
 
@@ -23,6 +27,10 @@ export interface User {
   id?: string;
   isActive?: boolean;
   currentRoomId?: string | null;
+  // Resolved role_privileges grants for this user's role, from the login/verify
+  // response (src/server/routes/auth.js buildUserResponse) — empty for admin,
+  // which bypasses on isAdmin instead. See useAuth().hasPrivilege.
+  privileges?: string[];
 }
 
 export interface Patient {

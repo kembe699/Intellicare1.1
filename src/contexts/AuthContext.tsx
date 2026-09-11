@@ -21,6 +21,15 @@ interface AuthContextType {
    * after a refresh — which reads as the save not having worked.
    */
   updateUser: (changes: Partial<User>) => void;
+  /**
+   * Whether the signed-in user can do something gated by one or more
+   * privilege keys from src/server/config/permissionsCatalog.js — the same
+   * keys the backend's authorize() checks. Pass an array for "any of these"
+   * (e.g. a section header that should show if the role has any privilege
+   * relevant to that module). admin always passes, without needing an
+   * explicit grant for every key.
+   */
+  hasPrivilege: (required: string | string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -114,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAdmin: !!userData.isAdmin,
     id: userData.id,
     currentRoomId: userData.currentRoomId || null,
+    privileges: Array.isArray(userData.privileges) ? userData.privileges : [],
   });
 
   // Check for existing token on mount
@@ -206,6 +216,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser((prev) => (prev ? { ...prev, ...changes } : prev));
   };
 
+  const hasPrivilege = (required: string | string[]): boolean => {
+    if (!user) return false;
+    if (user.isAdmin) return true;
+    const granted = user.privileges || [];
+    return Array.isArray(required) ? required.some((k) => granted.includes(k)) : granted.includes(required);
+  };
+
   const updateCurrentRoom = async (roomId: string | null) => {
     if (!user?.uid) return;
     const res = await authFetch(`/api/users/${user.uid}/current-room`, {
@@ -220,7 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, token, currentBranchId, switchBranch, updateCurrentRoom, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, token, currentBranchId, switchBranch, updateCurrentRoom, updateUser, hasPrivilege }}>
       {children}
     </AuthContext.Provider>
   );

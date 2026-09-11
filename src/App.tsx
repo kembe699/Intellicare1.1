@@ -11,7 +11,6 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformAuthProvider, usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { DatabaseProvider } from "@/contexts/DatabaseContext.browser";
-import { UserRole } from "@/types";
 import { Loader2 } from "lucide-react";
 
 const PlatformLogin = lazyWithRetry(() => import('./pages/platform/PlatformLogin'));
@@ -106,40 +105,38 @@ const queryClient = new QueryClient({
   },
 });
 
-// Where a role goes when it hits a page it may not see.
+// Where a user goes when they hit a page they may not see, checked in order —
+// first candidate they actually have the privilege for wins.
 //
-// `currentPath` exists to break a redirect loop, and that loop was real: the
-// fallback used to be /dashboard, but /dashboard itself excludes some roles —
-// cashier among them. A cashier signing in was redirected to /dashboard, which
-// rejected them and redirected to /dashboard again, forever. React rendered
-// nothing, so login appeared to succeed (the welcome toast fired) and then left
-// a blank screen. Any role missing from the list below and from /dashboard's
-// allowlist would have hit exactly the same wall, so the guard is structural
-// rather than one more special case.
-const ROLE_LANDING: Record<string, string> = {
-  reception: '/lis/registration',
-  accountant: '/accounting/chart-of-accounts',
-  finance_manager: '/accounting/chart-of-accounts',
-  auditor: '/accounting/chart-of-accounts',
-  procurement: '/procurement/suppliers-mgmt',
-  nurse: '/triage',
-  cashier: '/cashier/shift',
-};
+// `currentPath` exists to break a redirect loop, and that loop was real: a
+// role rejected from every candidate (including /dashboard) used to fall back
+// to /dashboard itself, which then rejected them again, forever — a custom
+// role granted none of these specific privileges would hit exactly that wall.
+// Checking privileges (not a fixed per-role table) instead of a hardcoded role
+// string is also what makes a brand-new custom role land somewhere sane
+// automatically, with no code change, once it's granted any one of these.
+const LANDING_CANDIDATES: { path: string; privilege: string | string[] }[] = [
+  { path: '/lis/registration', privilege: 'pages.lis_registration.view' },
+  { path: '/procurement/suppliers-mgmt', privilege: 'procurement.read' },
+  { path: '/triage', privilege: 'lis.triage.write' },
+  { path: '/cashier/shift', privilege: 'cashier.write' },
+  { path: '/dashboard', privilege: 'pages.dashboard.view' },
+];
 
-function landingPathForRole(role: string, currentPath: string): string {
-  const target = ROLE_LANDING[role] || '/dashboard';
-  // Never bounce a role back to the page that just rejected it.
-  if (target === currentPath) return '/profile';
-  return target;
+function landingPathFor(hasPrivilege: (p: string | string[]) => boolean, currentPath?: string): string {
+  for (const c of LANDING_CANDIDATES) {
+    if (c.path !== currentPath && hasPrivilege(c.privilege)) return c.path;
+  }
+  return '/profile';
 }
 
-const ProtectedRoute: React.FC<{ 
+const ProtectedRoute: React.FC<{
   children: React.ReactNode;
-  allowedRoles?: UserRole[];
-}> = ({ children, allowedRoles }) => {
-  const { user, loading } = useAuth();
+  requiredPrivilege?: string | string[];
+}> = ({ children, requiredPrivilege }) => {
+  const { user, loading, hasPrivilege } = useAuth();
   const location = useLocation();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -147,14 +144,14 @@ const ProtectedRoute: React.FC<{
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
-  // Check role-based access
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to={landingPathForRole(user.role, location.pathname)} replace />;
+
+  // Check privilege-based access
+  if (requiredPrivilege && !hasPrivilege(requiredPrivilege)) {
+    return <Navigate to={landingPathFor(hasPrivilege, location.pathname)} replace />;
   }
 
   return <>{children}</>;
@@ -179,8 +176,8 @@ const ProtectedPlatformRoute: React.FC<{ children: React.ReactNode }> = ({ child
 };
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  
+  const { user, loading, hasPrivilege } = useAuth();
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -188,30 +185,21 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
     );
   }
-  
+
   if (user) {
-    // Redirect reception users to the patient registration page, procurement users to
-    // the procurement dashboard (they have no /dashboard access), others to dashboard
-    const redirectPath = user.role === 'reception' ? '/lis/registration'
-      : user.role === 'procurement' ? '/procurement/suppliers-mgmt'
-      : user.role === 'nurse' ? '/triage'
-      : '/dashboard';
-    return <Navigate to={redirectPath} replace />;
+    return <Navigate to={landingPathFor(hasPrivilege)} replace />;
   }
-  
+
   return <>{children}</>;
 };
 
 const AppRoutes = () => {
-  const { user } = useAuth();
-  
-  // Dynamic root redirect based on user role
+  const { user, hasPrivilege } = useAuth();
+
+  // Dynamic root redirect based on granted privileges
   const getRootRedirect = () => {
     if (!user) return "/login";
-    if (user.role === 'reception') return '/lis/registration';
-    if (user.role === 'procurement') return '/procurement/suppliers-mgmt';
-    if (user.role === 'nurse') return '/triage';
-    return '/dashboard';
+    return landingPathFor(hasPrivilege);
   };
 
   return (
@@ -250,52 +238,52 @@ const AppRoutes = () => {
           with both (Login.tsx:167). Routed standalone it received neither, so
           visiting the URL directly threw on email.toLowerCase(). */}
       <Route path="/dashboard" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'accountant', 'finance_manager', 'auditor', 'nurse']}>
+        <ProtectedRoute requiredPrivilege="pages.dashboard.view">
           <Dashboard />
         </ProtectedRoute>
       } />
       <Route path="/clinical/visits-history" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="pages.visits_history.view">
           <PatientVisitsHistory />
         </ProtectedRoute>
       } />
       <Route path="/patients-bill" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="pages.patients_bill.view">
           <PatientsBill />
         </ProtectedRoute>
       } />
       <Route path="/patients-bill/:billId" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="pages.patients_bill.view">
           <BillDetails />
         </ProtectedRoute>
       } />
       <Route path="/proforma-invoices" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="proforma.write">
           <ProformaInvoice />
         </ProtectedRoute>
       } />
       <Route path="/billing-management" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'finance_manager', 'accountant']}>
+        <ProtectedRoute requiredPrivilege="billing.write">
           <BillingManagement />
         </ProtectedRoute>
       } />
       <Route path="/billing-management/claims/:claimId" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'finance_manager', 'accountant']}>
+        <ProtectedRoute requiredPrivilege="claims.write">
           <ClaimDetails />
         </ProtectedRoute>
       } />
       <Route path="/scheme-management" element={
-        <ProtectedRoute allowedRoles={['admin', 'finance_manager', 'accountant']}>
+        <ProtectedRoute requiredPrivilege="schemes.write">
           <SchemeManagement />
         </ProtectedRoute>
       } />
       <Route path="/receipts" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'doctor', 'pharmacy']}>
+        <ProtectedRoute requiredPrivilege="receipts.write">
           <Receipts />
         </ProtectedRoute>
       } />
       <Route path="/invoices" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'finance_manager', 'accountant']}>
+        <ProtectedRoute requiredPrivilege="invoices.write">
           <Invoices />
         </ProtectedRoute>
       } />
@@ -305,7 +293,7 @@ const AppRoutes = () => {
       <Route path="/laboratory" element={<Navigate to="/lis/collection" replace />} />
       <Route path="/lis" element={<Navigate to="/lis/registration" replace />} />
       <Route path="/lis/registration" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'lab']}>
+        <ProtectedRoute requiredPrivilege="pages.lis_registration.view">
           <LISRegistration />
         </ProtectedRoute>
       } />
@@ -315,27 +303,27 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/triage" element={
-        <ProtectedRoute allowedRoles={['admin', 'nurse']}>
+        <ProtectedRoute requiredPrivilege="lis.triage.write">
           <Triage />
         </ProtectedRoute>
       } />
       <Route path="/lis/orders" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor', 'lab', 'reception']}>
+        <ProtectedRoute requiredPrivilege="lis.clinical.read">
           <LISTestOrders />
         </ProtectedRoute>
       } />
       <Route path="/lis/collection" element={
-        <ProtectedRoute allowedRoles={['admin', 'lab', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="lis.results.read">
           <LISCollection />
         </ProtectedRoute>
       } />
       <Route path="/lis/results-entry" element={
-        <ProtectedRoute allowedRoles={['admin', 'lab']}>
+        <ProtectedRoute requiredPrivilege="lis.specimen.write">
           <LISResultsEntry />
         </ProtectedRoute>
       } />
       <Route path="/lis/review" element={
-        <ProtectedRoute allowedRoles={['admin', 'lab']}>
+        <ProtectedRoute requiredPrivilege="lis.results.review">
           <LISManagerReview />
         </ProtectedRoute>
       } />
@@ -347,12 +335,12 @@ const AppRoutes = () => {
       <Route path="/pharmacy" element={<Navigate to="/pharmacy-dispensing" replace />} />
       <Route path="/pharmacy/inventory" element={<Navigate to="/inventory/items" replace />} />
       <Route path="/reports" element={
-        <ProtectedRoute allowedRoles={['admin', 'reports', 'finance_manager', 'accountant', 'auditor']}>
+        <ProtectedRoute requiredPrivilege="pages.reports.view">
           <PasswordVerification />
         </ProtectedRoute>
       } />
       <Route path="/reports/dashboard" element={
-        <ProtectedRoute allowedRoles={['admin', 'reports', 'finance_manager', 'accountant', 'auditor']}>
+        <ProtectedRoute requiredPrivilege="pages.reports.view">
           <ReportsDashboard />
         </ProtectedRoute>
       }>
@@ -376,190 +364,190 @@ const AppRoutes = () => {
           existed). Pure dead weight with nothing pointing to it and nothing
           it pointed to working. */}
       <Route path="/setup/lab-tests" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor', 'lab']}>
+        <ProtectedRoute requiredPrivilege="pages.setup_lab_tests.view">
           <LabTests />
         </ProtectedRoute>
       } />
       <Route path="/setup/services" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor', 'lab']}>
+        <ProtectedRoute requiredPrivilege="clinical.services.manage">
           <Services />
         </ProtectedRoute>
       } />
       <Route path="/setup/departments" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="pages.setup_departments.view">
           <Departments />
         </ProtectedRoute>
       } />
       <Route path="/setup/clinics" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="pages.setup_clinics.view">
           <Clinics />
         </ProtectedRoute>
       } />
       <Route path="/setup/api-configurations" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="setup.api_configurations.manage">
           <ApiConfigurations />
         </ProtectedRoute>
       } />
       <Route path="/setup/facility" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="pages.setup_facility.view">
           <FacilitySetup />
         </ProtectedRoute>
       } />
       <Route path="/setup/security" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="pages.security.access">
           <Security />
         </ProtectedRoute>
       } />
       <Route path="/setup/approvals" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="approvals.manage">
           <Approvals />
         </ProtectedRoute>
       } />
       <Route path="/accounting/cash-transfer" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager', 'reception', 'pharmacy', 'cashier']}>
+        <ProtectedRoute requiredPrivilege="cash_transfers.write">
           <AccountingCashTransfer />
         </ProtectedRoute>
       } />
       <Route path="/cashier/shift" element={
-        <ProtectedRoute allowedRoles={['admin', 'reception', 'pharmacy', 'cashier']}>
+        <ProtectedRoute requiredPrivilege="cashier.write">
           <CashierShift />
         </ProtectedRoute>
       } />
       <Route path="/procurement" element={<Navigate to="/procurement/suppliers-mgmt" replace />} />
       <Route path="/procurement/suppliers-mgmt" element={
-        <ProtectedRoute allowedRoles={['admin', 'finance_manager', 'accountant', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="procurement.read">
           <SuppliersManagement />
         </ProtectedRoute>
       } />
       <Route path="/procurement/requisitions" element={
-        <ProtectedRoute allowedRoles={['admin', 'finance_manager', 'accountant', 'doctor', 'pharmacy', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="pages.procurement_requisitions.view">
           <PurchaseRequisitions />
         </ProtectedRoute>
       } />
       <Route path="/procurement/purchase-orders" element={
-        <ProtectedRoute allowedRoles={['admin', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="procurement.purchase_orders.write">
           <PurchaseOrders />
         </ProtectedRoute>
       } />
       <Route path="/procurement/goods-receipt" element={
-        <ProtectedRoute allowedRoles={['admin', 'finance_manager', 'accountant', 'pharmacy', 'procurement']}>
+        <ProtectedRoute requiredPrivilege={['procurement.write', 'pharmacy.write']}>
           <GoodsReceiptNotes />
         </ProtectedRoute>
       } />
       <Route path="/procurement/daily-expenses" element={
-        <ProtectedRoute allowedRoles={['admin', 'cashier', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="expenses.write">
           <DailyExpenses />
         </ProtectedRoute>
       } />
       <Route path="/procurement/daily-expenses/:id" element={
-        <ProtectedRoute allowedRoles={['admin', 'cashier', 'finance_manager', 'accountant', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="expenses.read">
           <ExpenseDetail />
         </ProtectedRoute>
       } />
       <Route path="/procurement/reports" element={
-        <ProtectedRoute allowedRoles={['admin', 'finance_manager', 'accountant', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="procurement.read">
           <ProcurementReports />
         </ProtectedRoute>
       } />
       <Route path="/accounting" element={<Navigate to="/accounting/chart-of-accounts" replace />} />
       <Route path="/accounting/chart-of-accounts" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager']}>
+        <ProtectedRoute requiredPrivilege="accounting.write">
           <ChartOfAccounts />
         </ProtectedRoute>
       } />
       <Route path="/accounting/general-ledger" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager', 'auditor']}>
+        <ProtectedRoute requiredPrivilege="accounting.read">
           <GeneralLedger />
         </ProtectedRoute>
       } />
       <Route path="/accounting/journal-entries" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager']}>
+        <ProtectedRoute requiredPrivilege="accounting.write">
           <JournalEntriesPage />
         </ProtectedRoute>
       } />
       <Route path="/accounting/receivables" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager']}>
+        <ProtectedRoute requiredPrivilege="accounting.read">
           <ReceivablesPage />
         </ProtectedRoute>
       } />
       <Route path="/accounting/reports" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager', 'auditor']}>
+        <ProtectedRoute requiredPrivilege="accounting.read">
           <FinancialReports />
         </ProtectedRoute>
       } />
       <Route path="/accounting/exchange-rates" element={
-        <ProtectedRoute allowedRoles={['admin', 'accountant', 'finance_manager']}>
+        <ProtectedRoute requiredPrivilege="accounting.rates.write">
           <ExchangeRatesPage />
         </ProtectedRoute>
       } />
       <Route path="/inventory" element={<Navigate to="/inventory/items" replace />} />
       <Route path="/inventory/items" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="inventory.read">
           <ItemMaster />
         </ProtectedRoute>
       } />
       <Route path="/inventory/locations" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy', 'finance_manager', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="inventory.read">
           <StockLocations />
         </ProtectedRoute>
       } />
       <Route path="/inventory/transactions" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="inventory.read">
           <StockTransactions />
         </ProtectedRoute>
       } />
       <Route path="/inventory/batches" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="inventory.write">
           <BatchTracking />
         </ProtectedRoute>
       } />
       <Route path="/inventory/physical-counts" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy', 'finance_manager', 'procurement']}>
+        <ProtectedRoute requiredPrivilege="inventory.read">
           <PhysicalCounts />
         </ProtectedRoute>
       } />
       <Route path="/inventory/valuation" element={
-        <ProtectedRoute allowedRoles={['admin', 'finance_manager', 'accountant', 'procurement']}>
+        <ProtectedRoute requiredPrivilege={['inventory.adjustments.approve', 'inventory.read']}>
           <ValuationCOGS />
         </ProtectedRoute>
       } />
       <Route path="/pharmacy-prescriptions" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy', 'doctor']}>
+        <ProtectedRoute requiredPrivilege="pharmacy.prescribe">
           <PrescriptionManagement />
         </ProtectedRoute>
       } />
       <Route path="/pharmacy-dispensing" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy']}>
+        <ProtectedRoute requiredPrivilege="pharmacy.write">
           <DispensingWorkflow />
         </ProtectedRoute>
       } />
       <Route path="/pharmacy-returns" element={
-        <ProtectedRoute allowedRoles={['admin', 'pharmacy']}>
+        <ProtectedRoute requiredPrivilege="pharmacy.write">
           <PharmacyReturns />
         </ProtectedRoute>
       } />
       <Route path="/setup/wards" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="pages.setup_wards.view">
           <WardsManagement />
         </ProtectedRoute>
       } />
       <Route path="/setup/rooms" element={
-        <ProtectedRoute allowedRoles={['admin']}>
+        <ProtectedRoute requiredPrivilege="pages.setup_rooms.view">
           <RoomsManagement />
         </ProtectedRoute>
       } />
       <Route path="/inpatient/admissions" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor', 'reception']}>
+        <ProtectedRoute requiredPrivilege="inpatient.admissions.write">
           <Admissions />
         </ProtectedRoute>
       } />
       <Route path="/inpatient/patients" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor', 'reception']}>
+        <ProtectedRoute requiredPrivilege="inpatient.admissions.write">
           <AdmittedPatients />
         </ProtectedRoute>
       } />
       <Route path="/inpatient/patient/:id" element={
-        <ProtectedRoute allowedRoles={['admin', 'doctor', 'reception', 'pharmacy', 'lab']}>
+        <ProtectedRoute requiredPrivilege={['inpatient.admissions.write', 'inpatient.medications.manage', 'inpatient.ancillary.write']}>
           <PatientDetails />
         </ProtectedRoute>
       } />

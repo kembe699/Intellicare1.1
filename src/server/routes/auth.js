@@ -135,7 +135,23 @@ async function loadUserBranchContext(sequelize, user) {
   return { branches: [], primaryBranch: null };
 }
 
-function buildUserResponse(user, branchContext) {
+// privileges is the resolved role_privileges set for this user's role — the
+// same data authorize() checks server-side (src/server/middleware/authorize.js),
+// exposed here so the frontend's sidebar/route guards can check the same
+// thing instead of a hardcoded role list. admin gets [] on purpose: the
+// frontend already carries isAdmin and should bypass on that rather than
+// receiving every one of the 75+ catalog keys on every login.
+async function buildUserResponse(user, branchContext, sequelize, schemaName) {
+  let privileges = [];
+  if (user.role !== 'admin') {
+    try {
+      const { getRolePrivileges } = require('../middleware/authorize');
+      const grants = await getRolePrivileges(sequelize, schemaName);
+      privileges = [...(grants.get(user.role) || [])];
+    } catch (err) {
+      console.error(`Could not resolve privileges for role "${user.role}" on ${schemaName}:`, err.message);
+    }
+  }
   return {
     id: user.id,
     email: user.email,
@@ -150,6 +166,7 @@ function buildUserResponse(user, branchContext) {
     isAdmin: user.role === 'admin',
     status: user.status,
     currentRoomId: user.current_room_id || null,
+    privileges,
   };
 }
 
@@ -230,7 +247,7 @@ router.post('/login', authSourceLimiter, authLimiter, async (req, res) => {
     // Return user data and token
     res.json({
       token,
-      user: buildUserResponse(user, branchContext),
+      user: await buildUserResponse(user, branchContext, sequelize, client.schema_name),
       client: { name: client.name, code: client.code }
     });
   } catch (error) {
@@ -288,7 +305,7 @@ router.get('/verify', async (req, res) => {
       : null;
 
     res.json({
-      user: buildUserResponse(user, branchContext),
+      user: await buildUserResponse(user, branchContext, sequelize, decoded.schemaName),
       ...(freshToken && { token: freshToken })
     });
   } catch (error) {

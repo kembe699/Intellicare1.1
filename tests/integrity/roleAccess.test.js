@@ -28,14 +28,19 @@ function componentFiles(appSrc) {
   return out;
 }
 
-/** `<ProtectedRoute allowedRoles={[...]}> <Foo />` -> { Foo: [roles] } */
+/** `<ProtectedRoute requiredPrivilege="key"|{['k1','k2']}> <Foo />` -> { Foo: [roles] },
+ * each privilege key resolved to the roles it currently grants via the real
+ * catalog — App.tsx no longer names roles directly, it names privileges. */
 function componentRoles(appSrc) {
   const out = {};
-  const re = /allowedRoles=\{\[([^\]]*)\]\}[\s\S]{0,400}?<(\w+)\s*\/>/g;
+  const re = /requiredPrivilege=(?:"([\w.]+)"|\{\[([^\]]*)\]\})[\s\S]{0,400}?<(\w+)\s*\/>/g;
   let m;
   while ((m = re.exec(appSrc))) {
-    const roles = [...m[1].matchAll(/'([^']+)'/g)].map((r) => r[1]);
-    out[m[2]] = [...new Set([...(out[m[2]] || []), ...roles])];
+    const keys = m[1] ? [m[1]] : [...m[2].matchAll(/'([^']+)'/g)].map((r) => r[1]);
+    const component = m[3];
+    const roles = new Set(out[component] || []);
+    for (const key of keys) (DEFAULT_ROLE_PRIVILEGES[key] || []).forEach((r) => roles.add(r));
+    out[component] = [...roles];
   }
   return out;
 }
