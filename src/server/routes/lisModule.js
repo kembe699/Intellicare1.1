@@ -298,10 +298,25 @@ router.get('/participants', authorize(LIS_PARTICIPANT_READ), async (req, res) =>
   const { sequelize: db } = req.models;
   try {
     const { search } = req.query;
+    // ILIKE, not LIKE. MySQL's LIKE ignores case; PostgreSQL's does not, so
+    // searching "james" found nothing for a participant stored as "James".
     const where = search
-      ? `WHERE p.first_name LIKE ? OR p.last_name LIKE ? OR p.participant_number LIKE ? OR p.phone LIKE ?`
+      ? `WHERE p.first_name ILIKE ? OR p.last_name ILIKE ? OR p.participant_number ILIKE ? OR p.phone ILIKE ?`
       : '';
     const replacements = search ? Array(4).fill(`%${search}%`) : [];
+
+    // The cap was 200, applied to every request and ordered newest-first, while
+    // the patient pickers fetch this list once with no search and filter what
+    // comes back in the browser. On a tenant with 347 people registered through
+    // the LIS — and none in the patient registry — the 147 oldest could not be
+    // selected anywhere: the picker answered "No matching patients" for someone
+    // who was plainly registered.
+    //
+    // A cap still exists, because an unbounded list would eventually be worse.
+    // Anything approaching it should pass ?search= and let the database do the
+    // matching rather than relying on what happens to fit.
+    const LIMIT = parseInt(process.env.LIS_PARTICIPANT_LIMIT || '2000', 10);
+
     const [participants] = await db.query(`
       SELECT p.*,
         EXISTS(
@@ -310,7 +325,7 @@ router.get('/participants', authorize(LIS_PARTICIPANT_READ), async (req, res) =>
         ) AS is_queued
       FROM lis_participants p
       ${where}
-      ORDER BY p.created_at DESC LIMIT 200
+      ORDER BY p.created_at DESC LIMIT ${LIMIT}
     `, { replacements });
     res.json(participants.map(p => ({ ...p, demographics: parseJSONField(p.demographics, {}) })));
   } catch (error) {
