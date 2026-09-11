@@ -1542,7 +1542,10 @@ router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
           "SELECT COUNT(*) AS cnt FROM prescription_lines WHERE prescription_id = :id AND status IN ('pending', 'partial')",
           { replacements: { id: cleanPrescriptionId }, transaction: t }
         );
-        const rxStatus = (pendingLines[0]?.cnt || 0) === 0 ? 'dispensed' : 'partial_dispensed';
+        // COUNT(*) comes back from Postgres as the string "0", not the number 0 —
+        // "0" === 0 is false, so this always fell into the else branch and a
+        // prescription with every line dispensed stayed "partial_dispensed" forever.
+        const rxStatus = parseInt(pendingLines[0]?.cnt, 10) === 0 ? 'dispensed' : 'partial_dispensed';
         await sequelize.query('UPDATE pharmacy_prescriptions SET status = :st WHERE id = :id', { replacements: { st: rxStatus, id: cleanPrescriptionId }, transaction: t });
         console.log('✅ Prescription status updated:', cleanPrescriptionId, rxStatus);
       } catch (prescError) {
