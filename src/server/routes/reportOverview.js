@@ -82,11 +82,23 @@ router.get('/', async (req, res) => {
     const repl = { clinicId, fromTs, toTs };
     const days = dateRange(dateFrom, dateTo);
 
-    // 1. Total revenue in the period (clinic-scoped, active receipts only).
+    // 1. Total revenue in the period, net of what was handed back.
+    //
+    // A refund is its own receipt carrying a negative amount and status
+    // 'refunded', so filtering to 'active' alone reported the gross takings for
+    // money that had already gone back over the counter. Voided receipts stay
+    // out: those never moved money at all.
+    //
+    // The sign decides, not the status. A refund recorded by flipping the
+    // original receipt in place is positive and already absent from 'active';
+    // counting that too would subtract it twice.
     const [revenueRow] = await sequelize.query(
-      `SELECT COUNT(*) AS cnt, COALESCE(SUM(payment_amount), 0) AS total
+      `SELECT COUNT(*) FILTER (WHERE status = 'active') AS cnt,
+              COALESCE(SUM(CASE WHEN status = 'active' THEN payment_amount
+                       WHEN status = 'refunded' AND payment_amount < 0 THEN payment_amount
+                       ELSE 0 END), 0) AS total
        FROM receipts
-       WHERE clinic_id = :clinicId AND status = 'active'
+       WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
          AND payment_date BETWEEN :fromTs AND :toTs`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
@@ -159,11 +171,13 @@ router.get('/', async (req, res) => {
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
-    // 7. Daily revenue trend (clinic-scoped, active receipts).
+    // 7. Daily revenue trend, net of refunds (see note on the headline total).
     const revenueByDay = await sequelize.query(
-      `SELECT DATE(payment_date) AS day, COALESCE(SUM(payment_amount), 0) AS total
+      `SELECT DATE(payment_date) AS day, COALESCE(SUM(CASE WHEN status = 'active' THEN payment_amount
+                       WHEN status = 'refunded' AND payment_amount < 0 THEN payment_amount
+                       ELSE 0 END), 0) AS total
        FROM receipts
-       WHERE clinic_id = :clinicId AND status = 'active'
+       WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
          AND payment_date BETWEEN :fromTs AND :toTs
        GROUP BY DATE(payment_date)`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -200,9 +214,13 @@ router.get('/', async (req, res) => {
     // 9. Payment-method breakdown (clinic-scoped, active receipts).
     //    Real enum values, verified live: cash, card, check, lease, insurance.
     const paymentMethodRows = await sequelize.query(
-      `SELECT payment_method AS method, COUNT(*) AS cnt, COALESCE(SUM(payment_amount), 0) AS total
+      `SELECT payment_method AS method,
+              COUNT(*) FILTER (WHERE status = 'active') AS cnt,
+              COALESCE(SUM(CASE WHEN status = 'active' THEN payment_amount
+                       WHEN status = 'refunded' AND payment_amount < 0 THEN payment_amount
+                       ELSE 0 END), 0) AS total
        FROM receipts
-       WHERE clinic_id = :clinicId AND status = 'active'
+       WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
          AND payment_date BETWEEN :fromTs AND :toTs
        GROUP BY payment_method
        ORDER BY total DESC`,
@@ -219,7 +237,9 @@ router.get('/', async (req, res) => {
     //     section is to compare them side by side.
     const clinicRevenueRows = await sequelize.query(
       `SELECT cn.id AS "clinicId", cn.name AS "clinicName",
-              COALESCE(SUM(CASE WHEN r.status = 'active' THEN r.payment_amount ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN r.status = 'active' THEN r.payment_amount
+                                WHEN r.status = 'refunded' AND r.payment_amount < 0 THEN r.payment_amount
+                                ELSE 0 END), 0) AS revenue,
               COUNT(DISTINCT CASE WHEN r.status = 'active' THEN r.id END) AS "receiptCount"
        FROM clinic_names cn
        LEFT JOIN receipts r ON r.clinic_id = cn.id AND r.payment_date BETWEEN :fromTs AND :toTs

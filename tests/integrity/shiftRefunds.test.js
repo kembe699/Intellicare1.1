@@ -48,3 +48,47 @@ describe('refunds paid out reduce what the shift is holding', () => {
     expect(src).toMatch(/const cashTotal =[\s\S]{0,200}refundedOutCash/);
   });
 });
+
+describe('reported revenue is net of what was handed back', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const read = (p) => fs.readFileSync(path.resolve(__dirname, '../../', p), 'utf8');
+
+  // Every screen that states a revenue figure has to subtract refunds, or they
+  // disagree with each other and with the drawer. The cashier shift had this
+  // fault; so did the reports dashboard, which summed only status='active' and
+  // so reported gross takings for money already returned over the counter.
+  test('the dashboard overview counts refunds against revenue', () => {
+    const src = read('src/server/routes/reportOverview.js');
+
+    // Two things have to be true together, and checking either alone passes while
+    // the figure is still gross: the query has to READ refund rows, and it has to
+    // SUBTRACT them. Filtering to status='active' excludes them however carefully
+    // the SUM is written.
+    const readsRefunds = (src.match(/status IN \('active', 'refunded'\)/g) || []).length;
+    const subtractsThem = (src.match(/status = 'refunded' AND payment_amount < 0/g) || []).length
+      + (src.match(/r\.status = 'refunded' AND r\.payment_amount < 0/g) || []).length;
+
+    expect(readsRefunds).toBeGreaterThanOrEqual(3);
+    expect(subtractsThem).toBeGreaterThanOrEqual(4);
+
+    // And no revenue sum may still be scoped to active receipts alone.
+    const activeOnly = (src.match(/status = 'active'\s*\n\s*AND payment_date/g) || []).length;
+    expect(activeOnly).toBe(0);
+  });
+
+  test('voided receipts are still excluded — they never moved money', () => {
+    const src = read('src/server/routes/reportOverview.js');
+    // 'voided' must never appear in a revenue status filter.
+    const filters = src.match(/status IN \([^)]*\)/g) || [];
+    expect(filters.length).toBeGreaterThan(0);
+    for (const f of filters) expect(f).not.toContain('voided');
+  });
+
+  test('the sign decides, so a refund cannot be subtracted twice', () => {
+    // A refund recorded by flipping the original receipt in place is positive and
+    // already outside 'active'; keying on status alone would deduct it again.
+    const src = read('src/server/routes/reportOverview.js');
+    expect(src).toMatch(/payment_amount < 0/);
+  });
+});
