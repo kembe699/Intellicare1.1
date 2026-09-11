@@ -44,6 +44,14 @@ describe('new cash movements prefer account 1100', () => {
     const site = src.slice(src.indexOf('const cashAtHandAccount = await ChartOfAccounts.findOne'));
     expect(site.slice(0, 400)).toMatch(/account_code: '1100'/);
   });
+
+  test('refunding a cash pharmacy return', () => {
+    const src = read('src/server/routes/pharmacyModule.js');
+    const site = src.slice(src.indexOf('const cashAccount = (await AccountingService.getAccountByCode'));
+    expect(site.slice(0, 200)).toMatch(/getAccountByCode\(cid, '1100'\)/);
+    // 1100 must come first — a fallback-only reference to 1105 further down is fine.
+    expect(site.indexOf("getAccountByCode(cid, '1100')")).toBeLessThan(site.indexOf("getAccountByCode(cid, '1105')"));
+  });
 });
 
 describe("reversing an existing receipt uses the account it actually used", () => {

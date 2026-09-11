@@ -612,7 +612,6 @@ router.put('/credit-notes/:id/apply', authorize(BILLING_WRITE), async (req, res)
     // Create GL reversal (Cr. Revenue, Dr. AR)
     try {
       const AccountingService = require('../services/AccountingService');
-      const revenueAccount = await AccountingService.getAccountByCode(note.clinic_id, '4100');
       // credit_notes doesn't carry scheme_id/currency itself — look them up from the
       // bill this note is actually being applied against, same as discount/write-off above.
       const [targetBillRows] = await sequelize.query(
@@ -621,7 +620,53 @@ router.put('/credit-notes/:id/apply', authorize(BILLING_WRITE), async (req, res)
       );
       const receivablesAccount = await AccountingService.getReceivableAccount(note.clinic_id, targetBillRows[0]?.scheme_id);
 
-      if (revenueAccount && receivablesAccount) {
+      // Reverse from whichever revenue account(s) this bill's own creation actually
+      // posted to — not a hardcoded 4100 — so a credit note against a lab or pharmacy
+      // bill doesn't silently understate Consultation Revenue instead while leaving
+      // the real category overstated (same bug class fixed in
+      // AccountingService.syncBillRevenueToGL: a wrong-but-plausible account produces
+      // category totals that don't match any real service).
+      const [postedRevenueRows] = await sequelize.query(
+        `SELECT al.account_id, SUM(al.credit_amount) - SUM(al.debit_amount) AS amount
+           FROM account_ledger al
+           JOIN chart_of_accounts coa ON coa.id = al.account_id AND coa.account_type = 'revenue'
+           JOIN general_ledger gl ON gl.id = al.transaction_id
+          WHERE gl.reference_id = :billId
+            AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+          GROUP BY 1
+         HAVING SUM(al.credit_amount) - SUM(al.debit_amount) > 0.001
+          ORDER BY 2 DESC`,
+        { replacements: { billId: targetBillId }, transaction: t }
+      );
+
+      let revenueLines = [];
+      if (postedRevenueRows.length > 0) {
+        // Waterfall: take the credit out of the largest revenue account first,
+        // spilling into the next only once it's exhausted — same discipline as
+        // the cash-revenue allocation in reportIncomeStatement.js, so a partial
+        // credit lands on real posted amounts rather than a fraction of every
+        // category.
+        let remaining = Math.round(Number(note.credit_amount) * 100) / 100;
+        for (const row of postedRevenueRows) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, Math.round(Number(row.amount) * 100) / 100);
+          if (take <= 0) continue;
+          revenueLines.push({ account_id: row.account_id, amount: take });
+          remaining = Math.round((remaining - take) * 100) / 100;
+        }
+        if (remaining > 0.001 && revenueLines.length > 0) {
+          // The note exceeds everything this bill ever posted (e.g. adjusted
+          // since) — put the remainder on the largest account rather than
+          // losing it silently.
+          revenueLines[0].amount = Math.round((revenueLines[0].amount + remaining) * 100) / 100;
+        }
+      }
+      if (revenueLines.length === 0) {
+        const fallback = await AccountingService.getAccountByCode(note.clinic_id, '4100');
+        if (fallback) revenueLines = [{ account_id: fallback.id, amount: Number(note.credit_amount) }];
+      }
+
+      if (revenueLines.length > 0 && receivablesAccount) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: note.clinic_id,
           transaction_date: new Date(),
@@ -631,13 +676,15 @@ router.put('/credit-notes/:id/apply', authorize(BILLING_WRITE), async (req, res)
           transaction_currency: targetBillRows[0]?.bill_currency,
           reference_module: 'credit_note'
         }, [
-          { account_id: revenueAccount.id, debit_amount: note.credit_amount, credit_amount: 0, description: `Revenue reversal: ${note.credit_note_number}` },
+          ...revenueLines.map((r) => ({ account_id: r.account_id, debit_amount: r.amount, credit_amount: 0, description: `Revenue reversal: ${note.credit_note_number}` })),
           { account_id: receivablesAccount.id, debit_amount: 0, credit_amount: note.credit_amount, description: `AR credit: ${note.credit_note_number}` }
         ], req.user?.id || 'system');
 
         await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
         await sequelize.query('UPDATE credit_notes SET credit_gl_entry_id = :glId WHERE id = :id',
           { replacements: { glId: glEntry.id, id }, transaction: t });
+      } else {
+        console.error(`Credit note ${note.credit_note_number}: could not post GL entry — no revenue or receivable account resolved`);
       }
     } catch (glErr) {
       console.error('GL entry for credit note failed:', glErr.message);

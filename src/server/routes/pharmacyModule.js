@@ -1928,9 +1928,12 @@ router.post('/returns', authorize(PHARMACY_WRITE), async (req, res) => {
         const revenueAccount = (await AccountingService.getAccountByCode(cid, '4120'))
           || (await AccountingService.getAccountByCode(cid, '4100'));
         // refund_method is recorded as 'cash' above, so the credit goes to the
-        // cash account the cashier actually collects into (1105), not the bank.
-        const cashAccount = (await AccountingService.getAccountByCode(cid, '1105'))
-          || (await AccountingService.getAccountByCode(cid, '1100'));
+        // cash account collections actually land in — 1100 (Cash), matching the
+        // preference used everywhere else cash moves (patientBills.js,
+        // patientDeposits.js, cashier.js, receipts.js) — not the bank. 1105 (Cash
+        // at Hand) is the fallback for tenants that never got 1100 set up.
+        const cashAccount = (await AccountingService.getAccountByCode(cid, '1100'))
+          || (await AccountingService.getAccountByCode(cid, '1105'));
 
         if (revenueAccount && cashAccount) {
           const description = `Pharmacy refund ${retNum} — ${qty} unit(s) returned from ${record.dispensing_number} (${return_reason || 'unused'})`;
@@ -1951,7 +1954,7 @@ router.post('/returns', authorize(PHARMACY_WRITE), async (req, res) => {
           await sequelize.query('UPDATE dispensing_returns SET revenue_reversal_gl_id = :gid WHERE id = :id',
             { replacements: { gid: glEntry.id, id: retId } });
         } else {
-          console.error(`Pharmacy return ${retNum}: refund of ${refundAmount} NOT posted to the GL — missing account (revenue 4120/4100: ${!!revenueAccount}, cash 1105/1100: ${!!cashAccount}) for clinic ${cid}`);
+          console.error(`Pharmacy return ${retNum}: refund of ${refundAmount} NOT posted to the GL — missing account (revenue 4120/4100: ${!!revenueAccount}, cash 1100/1105: ${!!cashAccount}) for clinic ${cid}`);
         }
       } catch (glErr) {
         console.error(`Pharmacy return ${retNum}: refund of ${refundAmount} failed to post to the GL —`, glErr.message);
