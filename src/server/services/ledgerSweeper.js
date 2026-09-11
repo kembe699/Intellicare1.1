@@ -53,7 +53,27 @@ const UNRECONCILED_BILLS = `
     FROM patient_bills b
    WHERE b.created_at > NOW() - (:days * INTERVAL '1 day')
      AND COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount) > 0
-   ORDER BY b.created_at
+     -- Select on the drift itself, not on date.
+     --
+     -- Comparing in JavaScript after a LIMIT means the limit lands on the oldest
+     -- hundred bills in the window rather than on the hundred that are wrong. Once
+     -- a tenant bills more than that in the lookback — which nation does in days —
+     -- the sweep examines the same settled bills every pass and never reaches the
+     -- recent one that actually needs repairing. It reports "nothing to do" while
+     -- the health check reports a shortfall, and both are looking at the same data.
+     AND ABS(
+           COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)
+           - COALESCE((
+               SELECT SUM(al.credit_amount) - SUM(al.debit_amount)
+                 FROM account_ledger al
+                 JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+                 JOIN general_ledger gl ON gl.id = al.transaction_id
+                WHERE gl.reference_id = b.id::text
+                  AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+             ), 0)
+         ) >= 0.01
+   -- Newest first: a bill that has just gone wrong is the one someone is looking at.
+   ORDER BY b.created_at DESC
    LIMIT :limit
 `;
 

@@ -76,8 +76,16 @@ async function main() {
           FROM account_ledger al
           JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
           JOIN general_ledger gl ON gl.id = al.transaction_id
-         WHERE gl.reference_module IN ('patient_billing', 'bill_item_void')
+         WHERE gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
          GROUP BY 1)
+      -- bill_revenue_adjustment is counted, not excluded.
+      --
+      -- Leaving it out means this script cannot see its own previous corrections:
+      -- a bill repaired on one run looks equally short on the next, and the same
+      -- adjustment is posted again. It over-corrected a bill by 24,000 exactly
+      -- that way. The health check and the ledger sweeper have always counted
+      -- adjustments; this now agrees with them, which is what makes re-running it
+      -- safe.
       SELECT b.id, b.bill_number, b.clinic_id, b.scheme_id,
              COALESCE(p.revenue, 0)::float AS posted_revenue,
              COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)::float AS bill_total,
@@ -122,7 +130,7 @@ async function main() {
           FROM account_ledger al
           JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
           JOIN general_ledger gl ON gl.id = al.transaction_id
-         WHERE gl.reference_id = $1 AND gl.reference_module IN ('patient_billing','bill_item_void')
+         WHERE gl.reference_id = $1 AND gl.reference_module IN ('patient_billing','bill_item_void','bill_revenue_adjustment')
          GROUP BY 1
         -- Any account this bill has touched, not only those still carrying a
         -- positive balance. A bill voided for more than was ever posted ends up
@@ -169,7 +177,17 @@ async function main() {
       await db.query('BEGIN');
       try {
         const glId = uuidv4();
-        const glNumber = `GL-ADJ-${b.bill_number}`;
+        // One adjustment number per bill is not enough. A bill can drift twice —
+        // corrected once, then edited or part-voided again — and the second repair
+        // collided with the first on the unique gl_number, so the run reported a
+        // failure and left the bill short. Number them in sequence instead.
+        const { rows: taken } = await db.query(
+          `SELECT gl_number FROM general_ledger WHERE gl_number LIKE $1`,
+          [`GL-ADJ-${b.bill_number}%`]
+        );
+        const glNumber = taken.length === 0
+          ? `GL-ADJ-${b.bill_number}`
+          : `GL-ADJ-${b.bill_number}-${taken.length + 1}`;
         const description = adding
           ? `Revenue adjustment (under-posted) - ${b.bill_number}`
           : `Reversal of voided items - ${b.bill_number}`;
