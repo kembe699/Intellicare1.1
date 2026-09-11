@@ -89,14 +89,41 @@ async function reversePaymentGL({ clinicId, billId, amount, paymentMethod, refer
     const method = (paymentMethod || 'cash').toLowerCase();
     if (method === 'deposit' || amount <= 0) return;
 
+    // Find the account this specific payment actually debited, rather than
+    // re-deriving "the current default cash account".
+    //
+    // Which account cash collections prefer has changed over time — from Cash at
+    // Hand to Cash, and it could change again — so re-deriving it here for an
+    // old receipt would reverse the wrong account: crediting back an account the
+    // original payment never touched, and leaving the one it did touch
+    // permanently overstated. The original journal entry is right there, tagged
+    // with this receipt's own reference, so this uses that instead.
     let originalDebitAccount = null;
-    if (method === 'cash') {
-      originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_name: { [Op.iLike]: 'cash at hand' }, is_active: true } })
-        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } }, order: [['account_code', 'ASC']] });
-    } else {
-      // card, mobile_money, bank_transfer, insurance — all posted to the main bank account originally
-      originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, is_bank_account: true, is_active: true }, order: [['account_code', 'ASC']] })
-        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true }, order: [['account_code', 'ASC']] });
+    const originalJE = reference
+      ? await JournalEntries.findOne({ where: { clinic_id: clinicId, reference } })
+      : null;
+    if (originalJE) {
+      const originalLine = await JournalEntryLines.findOne({
+        where: { je_id: originalJE.id, debit_amount: { [Op.gt]: 0 } },
+      });
+      if (originalLine) {
+        originalDebitAccount = await ChartOfAccounts.findByPk(originalLine.account_id);
+      }
+    }
+
+    // No original entry to go on — a receipt from before this posting method
+    // existed, or one whose posting failed at the time. Fall back to today's
+    // preference, same as a forward payment would resolve.
+    if (!originalDebitAccount) {
+      if (method === 'cash') {
+        originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1100', is_active: true } })
+          || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: 'cash' } } })
+          || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } }, order: [['account_code', 'ASC']] });
+      } else {
+        // card, mobile_money, bank_transfer, insurance — all posted to the main bank account originally
+        originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, is_bank_account: true, is_active: true }, order: [['account_code', 'ASC']] })
+          || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true }, order: [['account_code', 'ASC']] });
+      }
     }
 
     const bill = billId ? await PatientBill.findByPk(billId) : null;

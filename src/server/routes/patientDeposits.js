@@ -180,8 +180,15 @@ async function getDepositBalance(patientId, clinicId, currency = BASE_CURRENCY) 
 // ─── GL posting (best-effort, mirrors patientBills.js:1324-1421) ─────────────
 async function resolveCashOrBankAccount(clinicId, method) {
   if (method === 'cash') {
+    // 1100 (Cash) first, matching patientBills.js's payment posting — a deposit
+    // taken in cash lands in the same account a bill payment would.
     return await ChartOfAccounts.findOne({
-      where: { clinic_id: clinicId, account_name: { [Op.iLike]: 'cash at hand' }, is_active: true }
+      where: { clinic_id: clinicId, account_code: '1100', is_active: true }
+    }) || await ChartOfAccounts.findOne({
+      where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: 'cash' } }
+    }) || await ChartOfAccounts.findOne({
+      where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%hand%' } },
+      order: [['account_code', 'ASC']]
     }) || await ChartOfAccounts.findOne({
       where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } },
       order: [['account_code', 'ASC']]

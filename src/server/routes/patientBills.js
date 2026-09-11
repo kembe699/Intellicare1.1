@@ -1231,7 +1231,13 @@ router.post('/:billId/void-item', authorize(BILLS_FINANCIAL_ACTION), async (req,
 
           if (autoRefundAmount > 0) {
             const cashAccount = await COA.findOne({
-              where: { clinic_id: clinicIdForVoid, account_name: { [COAOpVoid.iLike]: 'cash at hand' }, is_active: true },
+              // Same preference as taking payment: 1100 first.
+              where: { clinic_id: clinicIdForVoid, account_code: '1100', is_active: true },
+            }) || await COA.findOne({
+              where: { clinic_id: clinicIdForVoid, account_type: 'asset', is_active: true, account_name: { [COAOpVoid.iLike]: 'cash' } },
+            }) || await COA.findOne({
+              where: { clinic_id: clinicIdForVoid, account_type: 'asset', is_active: true, account_name: { [COAOpVoid.iLike]: '%cash%hand%' } },
+              order: [['account_code', 'ASC']],
             }) || await COA.findOne({
               where: { clinic_id: clinicIdForVoid, account_type: 'asset', is_active: true, account_name: { [COAOpVoid.iLike]: '%cash%' } },
               order: [['account_code', 'ASC']],
@@ -1620,15 +1626,18 @@ router.post('/:billId/payments', authorize(BILLS_COLLECT_PAYMENT), async (req, r
           // the cutover cleared no receivable and reached no cash account, so
           // the cashier's screen showed the money while the ledger and every
           // report built on it did not.
-          // Try "Cash at Hand" first, fall back to "Cash"
+          // Cash collections post to 1100 (Cash), not 1105 (Cash at Hand) — a
+          // deliberate change from the account this used to prefer. account_code
+          // is matched first because it is unambiguous where the by-name match
+          // below is not: a clinic can rename "Cash" without this silently
+          // drifting back to whatever sorts first.
           debitAccount = await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_name: { [COAOp.iLike]: 'cash at hand' }, is_active: true }
+            where: { clinic_id: clinicId, account_code: '1100', is_active: true }
           }) || await ChartOfAccounts.findOne({
-            // Prefer anything that reads as cash-in-hand before falling back to
-            // whichever cash account happens to sort first. A facility with both
-            // "Cash" and "Cash at Hand" would otherwise start banking takings in
-            // "Cash" the moment the exact-name match stopped resolving, and the
-            // two would drift apart with nothing announcing it.
+            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: 'cash' } }
+          }) || await ChartOfAccounts.findOne({
+            // Falls back toward cash-in-hand, then to sort order, only if there is
+            // no account that reads as plain "Cash" at all.
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%hand%' } },
             order: [['account_code', 'ASC']]
           }) || await ChartOfAccounts.findOne({

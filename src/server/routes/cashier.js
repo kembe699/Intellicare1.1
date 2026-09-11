@@ -544,8 +544,15 @@ router.post('/transfer-cash', authorize(CASHIER_WRITE), async (req, res) => {
       }
     }
 
-    // Find "Cash at Hand" (or nearest cash asset) in Chart of Accounts
+    // Find the account cash collections actually land in. 1100 (Cash) first —
+    // matching patientBills.js's payment posting — so a transfer moves money
+    // out of wherever it was actually collected rather than an account that
+    // reads like the right one but no longer receives anything.
     const cashAtHandAccount = await ChartOfAccounts.findOne({
+      where: { account_code: '1100', is_active: true }
+    }) || await ChartOfAccounts.findOne({
+      where: seq.where(seq.fn('LOWER', seq.col('account_name')), { [Op.iLike]: 'cash' })
+    }) || await ChartOfAccounts.findOne({
       where: seq.where(
         seq.fn('LOWER', seq.col('account_name')),
         { [Op.iLike]: '%cash at hand%' }
