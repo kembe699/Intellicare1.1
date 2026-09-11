@@ -200,3 +200,43 @@ describe('Pharmacy can complete a dispensing sale', () => {
     expect(m[1]).toMatch(/'pharmacy'/);
   });
 });
+
+describe('Pharmacy sees the work it did', () => {
+  // Reads filter on branch_id and an admin bypasses that filter, so a row written
+  // without one is visible to admins and to nobody else. Prescriptions and
+  // dispensing records were being created with branch_id NULL: the pharmacist who
+  // dispensed a drug could not find it in History, and the prescriptions list was
+  // empty for the very role the page exists for — while an admin on the same
+  // screen saw everything and could not reproduce it.
+  const pharmacy = read('src/server/routes/pharmacyModule.js');
+
+  test('a new prescription is stamped with a branch', () => {
+    const insert = pharmacy.slice(pharmacy.indexOf('INSERT INTO pharmacy_prescriptions'));
+    expect(insert.slice(0, 400)).toMatch(/branch_id/);
+    expect(insert.slice(0, 1400)).toMatch(/branchId:/);
+  });
+
+  test('a dispensing record is stamped with a branch', () => {
+    const insert = pharmacy.slice(pharmacy.indexOf('INSERT INTO dispensing_records'));
+    expect(insert.slice(0, 400)).toMatch(/branch_id/);
+    expect(insert.slice(0, 1800)).toMatch(/branchId:/);
+  });
+
+  test('an automatically dispensed record inherits the prescription branch', () => {
+    // The automatic path writes the same table and would otherwise reintroduce
+    // exactly the rows this fixes.
+    const auto = read('src/server/services/autoDispense.js');
+    const insert = auto.slice(auto.indexOf('INSERT INTO dispensing_records'));
+    expect(insert.slice(0, 400)).toMatch(/branch_id/);
+    expect(auto).toMatch(/branchId: line\.branch_id/);
+    // It can only inherit what it selected.
+    expect(auto).toMatch(/p\.branch_id/);
+  });
+
+  test('those tables are still filtered by branch on read', () => {
+    // The stamp only matters because reads are scoped; if that ever stopped,
+    // the fix above would be silently pointless.
+    expect(pharmacy).toMatch(/pp\.branch_id = :rxBranchId/);
+    expect(pharmacy).toMatch(/dr\.branch_id = :branchId/);
+  });
+});

@@ -627,14 +627,19 @@ router.post('/prescriptions', authorize(PHARMACY_PRESCRIBE), async (req, res) =>
     const expiresDate = new Date(new Date(rxDate).getTime() + validDays * 86400000).toISOString().split('T')[0];
 
     await sequelize.query(`
-      INSERT INTO pharmacy_prescriptions (id, clinic_id, prescription_number, visit_id, patient_id, doctor_id,
+      INSERT INTO pharmacy_prescriptions (id, clinic_id, branch_id, prescription_number, visit_id, patient_id, doctor_id,
         prescription_date, prescribed_by_name, prescription_notes, special_instructions,
         status, expires_date, valid_for_days, number_of_refills_allowed)
-      VALUES (:id, :cid, :rxn, :vid, :pid, :did, :rxdate, :pname, :notes, :instr,
+      VALUES (:id, :cid, :branchId, :rxn, :vid, :pid, :did, :rxdate, :pname, :notes, :instr,
         'pending', :exp, :vdays, :refills)
     `, {
       replacements: {
-        id, cid: clinic_id || 1, rxn: rxNumber, vid: visit_id || null,
+        id, cid: clinic_id || 1,
+        // Stamp the branch. Reads filter on it, so a row left NULL is invisible
+        // to everyone except an admin, who bypasses the filter — which is why
+        // this looked like "pharmacy sees nothing" rather than a missing column.
+        branchId: req.branchContext?.branchId || req.user?.branchId || null,
+        rxn: rxNumber, vid: visit_id || null,
         pid: patient_id, did: doctor_id || null, rxdate: rxDate,
         pname: prescribed_by_name || null, notes: prescription_notes || null,
         instr: special_instructions || null, exp: expiresDate,
@@ -1415,13 +1420,13 @@ router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
 
     try {
       await sequelize.query(`
-        INSERT INTO dispensing_records (id, clinic_id, dispensing_number, prescription_id, prescription_line_id,
+        INSERT INTO dispensing_records (id, clinic_id, branch_id, dispensing_number, prescription_id, prescription_line_id,
           patient_id, drug_id, pharmacist_id, inventory_item_id, batch_id, from_location_id,
           dispensing_date, dispensing_time, quantity_dispensed, unit_of_measure,
           unit_price, currency_code, exchange_rate, total_price, total_price_base,
           dispensing_notes, patient_counselling_provided, counselling_notes,
           status)
-        VALUES (:id, :cid, :dn, :rxid, :rxlid,
+        VALUES (:id, :cid, :branchId, :dn, :rxid, :rxlid,
           :pid, :did, :phid, :iid, :bid, :flid,
           :ddate, :dtime, :qty, :uom,
           :price, :curr, 1, :total, :total,
@@ -1429,7 +1434,9 @@ router.post('/dispensing', authorize(PHARMACY_WRITE), async (req, res) => {
           'dispensed')
       `, {
         replacements: {
-          id: dispId, cid, dn: dispensingNumber,
+          id: dispId, cid,
+          branchId: req.branchContext?.branchId || req.user?.branchId || null,
+          dn: dispensingNumber,
           rxid: cleanPrescriptionId, rxlid: cleanPrescriptionLineId,
           pid: cleanPatientId, did: inventoryItemId, phid: cleanPharmacistId,
           iid: inventoryItemId, bid: selectedBatch?.id || cleanBatchId,

@@ -39,6 +39,7 @@ const PAID_PENDING_LINES = `
          pl.drug_id       AS inventory_item_id,
          pl.unit_of_measure,
          p.clinic_id,
+         p.branch_id,
          p.patient_id,
          p.prescription_number,
          (pl.quantity_prescribed - COALESCE(pl.total_quantity_dispensed, 0)) AS outstanding,
@@ -90,19 +91,24 @@ async function dispenseLine(sequelize, line, quantity, pharmacistId, transaction
   const unitPrice = parseFloat(line.unit_price) || 0;
 
   await sequelize.query(`
-    INSERT INTO dispensing_records (id, clinic_id, dispensing_number, prescription_id, prescription_line_id,
+    INSERT INTO dispensing_records (id, clinic_id, branch_id, dispensing_number, prescription_id, prescription_line_id,
       patient_id, drug_id, pharmacist_id, inventory_item_id,
       dispensing_date, dispensing_time, quantity_dispensed, unit_of_measure,
       unit_price, currency_code, exchange_rate, total_price, total_price_base,
       dispensing_notes, patient_counselling_provided, status)
-    VALUES (:id, :cid, :dn, :rxid, :rxlid,
+    VALUES (:id, :cid, :branchId, :dn, :rxid, :rxlid,
       :pid, :did, :phid, :iid,
       CURRENT_DATE, CURRENT_TIME, :qty, :uom,
       :price, :cur, 1, :total, :total,
       :notes, false, 'completed')
   `, {
     replacements: {
-      id: dispId, cid: line.clinic_id, dn: dispensingNumber,
+      id: dispId, cid: line.clinic_id,
+      // Inherit the prescription's branch. Reads filter on it, so a record left
+      // NULL is invisible to the pharmacist who dispensed it — only an admin,
+      // who bypasses the filter, would ever see it in History.
+      branchId: line.branch_id || null,
+      dn: dispensingNumber,
       rxid: line.prescription_id, rxlid: line.line_id,
       pid: line.patient_id, did: line.inventory_item_id, phid: pharmacist,
       iid: line.inventory_item_id, qty: quantity, uom: line.unit_of_measure || null,
