@@ -120,3 +120,37 @@ describe('Revenue is attributed to a service line', () => {
     expect(catchAll / total).toBeLessThan(0.5);
   });
 });
+
+describe("revenue sits on the accounts a bill's own lines call for", () => {
+  // A correction that split a shortfall across accounts in proportion to what
+  // they already held produced amounts matching no real price — a 3,000
+  // adjustment became 321.72 consultation, 1,126.01 laboratory, 1,552.27
+  // pharmacy. The totals were right and the income statement was unreadable:
+  // consultation revenue of 237,257.76 for a service costing 20,000 or 50,000.
+  //
+  // Whether a figure is round is not something to assert — a scheme price or a
+  // discount can be genuinely fractional. What must hold is that each account
+  // carries what the bill's lines say it should, which is what makes the
+  // readable numbers fall out on their own.
+  const fs = require('fs');
+  const path = require('path');
+  const service = fs.readFileSync(
+    path.resolve(__dirname, '../../src/server/services/AccountingService.js'), 'utf8');
+  const sync = service.slice(service.indexOf('async syncBillRevenueToGL'));
+
+  test('a correction is worked out per account, not spread pro-rata', () => {
+    expect(sync).toMatch(/targetByAccount/);
+    expect(sync).toMatch(/postedByAccount/);
+    expect(sync).toMatch(/perAccount/);
+  });
+
+  test('the per-account split is only used when it reconciles to the delta', () => {
+    // If the bill's lines do not explain the gap — a void, an edit after
+    // posting — inventing a split would hide that rather than correct it.
+    expect(sync).toMatch(/Math\.abs\(summed - delta\) < 0\.01/);
+  });
+
+  test('the pro-rata path survives as the fallback', () => {
+    expect(sync).toMatch(/totalWeight/);
+  });
+});

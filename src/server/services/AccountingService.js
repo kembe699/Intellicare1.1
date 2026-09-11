@@ -615,9 +615,34 @@ class AccountingService {
     const delta = Math.round((worth - posted) * 100) / 100;
     if (Math.abs(delta) < 0.01) return 0;
 
-    // Put the adjustment where this bill's revenue already sits, so a service
-    // line is corrected on the account it was recognised on rather than all of
-    // it landing in one bucket.
+    // What each account should hold, taken from the bill's own lines.
+    //
+    // Splitting the shortfall across accounts in proportion to what they already
+    // hold produces amounts that match no real price: a 3,000 correction became
+    // 321.72 consultation, 1,126.01 laboratory and 1,552.27 pharmacy, and the
+    // income statement then reported consultation revenue of 237,257.76 for a
+    // service that costs 20,000 or 50,000. The figures were right in total and
+    // unreadable line by line.
+    //
+    // The bill already says what each line is worth and which account it belongs
+    // to, so the correction per account is simply its target less what it holds.
+    // Every amount posted is then a real price or the difference between two.
+    const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
+    const [[servicesRow]] = await sequelize.query(
+      'SELECT services FROM patient_bills WHERE id = :id', { replacements: { id: billId } });
+    let services = servicesRow?.services;
+    if (typeof services === 'string') { try { services = JSON.parse(services); } catch { services = []; } }
+
+    const targetByAccount = new Map();
+    for (const line of (Array.isArray(services) ? services : [])) {
+      if (!line || line.isVoided) continue;
+      const amount = parseFloat(line.totalPrice || line.total_price || 0) || 0;
+      if (amount <= 0) continue;
+      const acct = line.revenue_account_id || await resolveRevenueAccountForLine(line, bill.clinic_id);
+      if (!acct) continue;
+      targetByAccount.set(acct, Math.round(((targetByAccount.get(acct) || 0) + amount) * 100) / 100);
+    }
+
     const [byAccount] = await sequelize.query(
       `SELECT al.account_id, SUM(al.credit_amount) - SUM(al.debit_amount) AS amount
          FROM account_ledger al
@@ -627,26 +652,30 @@ class AccountingService {
           AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
         GROUP BY 1`,
       { replacements: { id: billId } });
+    const postedByAccount = new Map(
+      byAccount.map((r) => [String(r.account_id), Math.round((Number(r.amount) || 0) * 100) / 100]));
+
+    // Per-account differences, when the bill's lines account for the whole delta.
+    let perAccount = null;
+    if (targetByAccount.size > 0) {
+      const diffs = [];
+      let summed = 0;
+      for (const key of new Set([...targetByAccount.keys(), ...postedByAccount.keys()].map(String))) {
+        const diff = Math.round(((targetByAccount.get(key) || 0) - (postedByAccount.get(key) || 0)) * 100) / 100;
+        if (Math.abs(diff) < 0.01) continue;
+        diffs.push({ account_id: key, diff });
+        summed = Math.round((summed + diff) * 100) / 100;
+      }
+      // Only trust this when it reconciles to the delta already computed; if the
+      // bill's lines do not explain the gap, fall back rather than invent a split.
+      if (Math.abs(summed - delta) < 0.01) perAccount = diffs;
+    }
 
     let targets = byAccount.filter((r) => Math.abs(Number(r.amount)) > 0.001);
     if (targets.length === 0) {
-      // Nothing posted yet for this bill: classify its own lines instead.
-      const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
-      const [[row]] = await sequelize.query('SELECT services FROM patient_bills WHERE id = :id', { replacements: { id: billId } });
-      let services = row?.services;
-      if (typeof services === 'string') { try { services = JSON.parse(services); } catch { services = []; } }
-      const totals = new Map();
-      for (const line of (Array.isArray(services) ? services : [])) {
-        if (!line || line.isVoided) continue;
-        const amount = parseFloat(line.totalPrice || line.total_price || 0) || 0;
-        if (amount <= 0) continue;
-        const acct = line.revenue_account_id || await resolveRevenueAccountForLine(line, bill.clinic_id);
-        if (!acct) continue;
-        totals.set(acct, (totals.get(acct) || 0) + amount);
-      }
-      targets = [...totals.entries()].map(([account_id, amount]) => ({ account_id, amount }));
+      targets = [...targetByAccount.entries()].map(([account_id, amount]) => ({ account_id, amount }));
     }
-    if (targets.length === 0) {
+    if (!perAccount && targets.length === 0) {
       const fallback = await this.getAccountByCode(bill.clinic_id, '4100');
       if (!fallback) {
         console.error(`Bill ${bill.bill_number}: revenue is out by ${delta} but no account could be resolved to correct it.`);
@@ -663,24 +692,41 @@ class AccountingService {
 
     const adding = delta > 0;
     const magnitude = Math.abs(delta);
-    const weights = targets.map((r) => Math.abs(Number(r.amount)) || 1);
-    const totalWeight = weights.reduce((a, b) => a + b, 0);
-
     const lineItems = [];
-    let allocated = 0;
-    targets.forEach((r, i) => {
-      const share = i === targets.length - 1
-        ? Math.round((magnitude - allocated) * 100) / 100
-        : Math.round((weights[i] / totalWeight) * magnitude * 100) / 100;
-      allocated = Math.round((allocated + share) * 100) / 100;
-      if (share <= 0) return;
-      lineItems.push({
-        account_id: r.account_id,
-        debit_amount: adding ? 0 : share,
-        credit_amount: adding ? share : 0,
-        description: `Revenue ${adding ? 'adjustment' : 'reversal'} - ${bill.bill_number}`,
+
+    if (perAccount) {
+      // Each account moved to what the bill says it should hold. An account may
+      // move the opposite way to the overall delta — one line over-posted while
+      // another was missed — which proportional splitting could never express.
+      for (const { account_id, diff } of perAccount) {
+        lineItems.push({
+          account_id,
+          debit_amount: diff < 0 ? Math.abs(diff) : 0,
+          credit_amount: diff > 0 ? diff : 0,
+          description: `Revenue ${diff > 0 ? 'adjustment' : 'reversal'} - ${bill.bill_number}`,
+        });
+      }
+    } else {
+      // The bill's lines do not explain the gap — a voided item, a bill edited
+      // after posting. Spread it over the accounts this bill has touched, which
+      // keeps the total right even though the split is an estimate.
+      const weights = targets.map((r) => Math.abs(Number(r.amount)) || 1);
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      let allocated = 0;
+      targets.forEach((r, i) => {
+        const share = i === targets.length - 1
+          ? Math.round((magnitude - allocated) * 100) / 100
+          : Math.round((weights[i] / totalWeight) * magnitude * 100) / 100;
+        allocated = Math.round((allocated + share) * 100) / 100;
+        if (share <= 0) return;
+        lineItems.push({
+          account_id: r.account_id,
+          debit_amount: adding ? 0 : share,
+          credit_amount: adding ? share : 0,
+          description: `Revenue ${adding ? 'adjustment' : 'reversal'} - ${bill.bill_number}`,
+        });
       });
-    });
+    }
     lineItems.push({
       account_id: receivable.id,
       debit_amount: adding ? magnitude : 0,
