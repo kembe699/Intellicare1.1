@@ -163,12 +163,35 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
     { replacements: { clinicId, dateFrom, dateTo } }
   );
 
-  return rows.map((r) => ({
+  const lines = rows.map((r) => ({
     account_id: r.account_id,
     account_code: r.account_code,
     account_name: r.account_name,
+    exact: parseFloat(r.amount) || 0,
     amount: Math.round((parseFloat(r.amount) || 0) * 100) / 100,
   }));
+
+  // Put the rounding remainder back.
+  //
+  // Each account's share is a proportion of a payment, so it rarely lands on a
+  // whole cent. Rounding every line and then adding them is not the same as
+  // adding and then rounding: a day's takings of 2,009,500.00 came out as
+  // 2,009,499.99, and a total a penny away from the cashier's reads as the books
+  // being wrong rather than as a rounding artefact.
+  //
+  // The unrounded total is what was actually collected, so the difference goes
+  // onto the largest line — where a cent is least significant, and which is the
+  // only line certain to be big enough to absorb it.
+  const exactTotal = Math.round(lines.reduce((sum, l) => sum + l.exact, 0) * 100) / 100;
+  const roundedTotal = Math.round(lines.reduce((sum, l) => sum + l.amount, 0) * 100) / 100;
+  const remainder = Math.round((exactTotal - roundedTotal) * 100) / 100;
+
+  if (remainder !== 0 && lines.length > 0) {
+    const largest = lines.reduce((a, b) => (Math.abs(b.amount) > Math.abs(a.amount) ? b : a));
+    largest.amount = Math.round((largest.amount + remainder) * 100) / 100;
+  }
+
+  return lines.map(({ exact, ...line }) => line);
 }
 
 router.get('/', async (req, res) => {
