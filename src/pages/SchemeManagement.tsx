@@ -659,7 +659,7 @@ const SchemeManagement: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredSchemes.map(scheme => (
-            <div key={scheme.id} className={`ic-card ${!scheme.is_active ? 'opacity-50' : ''}`}>
+            <div key={scheme.id} className={`ic-card bg-card ${!scheme.is_active ? 'opacity-50' : ''}`}>
               <div className="ic-card-header">
                 <div className="flex items-start justify-between">
                   <div>
