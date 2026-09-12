@@ -92,8 +92,11 @@ interface PurchaseOrder {
 }
 
 
-const getNextStatus = (s: string) => ({ draft: 'check', check: 'approved', approved: 'authorized', authorized: 'received' }[s] || null);
-const getStatusAction = (s: string) => ({ draft: 'Submit for Check', check: 'Approve', approved: 'Authorize', authorized: 'Mark Received' }[s] || null);
+// Stops at 'authorized' on purpose — marking a PO received now happens only
+// through Goods Receipt Notes, driven by what was actually delivered, not a
+// one-click status change here.
+const getNextStatus = (s: string) => ({ draft: 'check', check: 'approved', approved: 'authorized' }[s] || null);
+const getStatusAction = (s: string) => ({ draft: 'Submit for Check', check: 'Approve', approved: 'Authorize' }[s] || null);
 const getStatusIcon = (s: string) => ({ draft: Check, check: CheckCircle, approved: Shield }[s] || CheckCircle);
 
 const PurchaseOrders: React.FC = () => {
@@ -127,6 +130,13 @@ const PurchaseOrders: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [savingItems, setSavingItems] = useState(false);
   const [processingId, setProcessingId] = useState<number | null>(null);
+
+  // Deleting a draft PO — kept as a separate confirmation step with a
+  // required reason, not a plain confirm(), since this permanently removes
+  // the record rather than just changing its status.
+  const [deletingOrder, setDeletingOrder] = useState<PurchaseOrder | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deletingInProgress, setDeletingInProgress] = useState(false);
 
   const [formData, setFormData] = useState({
     supplier_id: '', order_date: new Date().toISOString().split('T')[0],
@@ -337,12 +347,9 @@ const PurchaseOrders: React.FC = () => {
 
   const updateOrderStatus = async (orderId: number, newStatus: string) => {
     if (processingId === orderId) return;
-    const actionMap: Record<string, string> = { check: 'check', approved: 'approve', authorized: 'authorize', received: 'receive' };
+    const actionMap: Record<string, string> = { check: 'check', approved: 'approve', authorized: 'authorize' };
     const action = actionMap[newStatus] || newStatus;
-    // "receive" doesn't record a signature on the backend (it's a delivery
-    // confirmation, not an approval step) — only require a saved signature
-    // for the actual sign-off actions.
-    if (action !== 'receive' && !userSignature) { toast.error('Please add your electronic signature in your profile first'); return; }
+    if (!userSignature) { toast.error('Please add your electronic signature in your profile first'); return; }
     setProcessingId(orderId);
     try {
       const res = await authFetch(`/api/procurement/purchase-orders/${orderId}/status`, {
@@ -354,6 +361,31 @@ const PurchaseOrders: React.FC = () => {
       fetchOrders();
       if (showDetailsModal) { setShowDetailsModal(false); }
     } catch (error) { toast.error('Failed to update status'); } finally { setProcessingId(null); }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!deletingOrder) return;
+    if (!deleteReason.trim()) { toast.error('Please state a reason for deleting this purchase order'); return; }
+    setDeletingInProgress(true);
+    try {
+      const res = await authFetch(`/api/procurement/purchase-orders/${deletingOrder.id}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: deleteReason.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete purchase order');
+      }
+      toast.success(`Purchase order ${deletingOrder.po_number} deleted`);
+      setDeletingOrder(null);
+      setDeleteReason('');
+      setShowDetailsModal(false);
+      fetchOrders();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete purchase order');
+    } finally {
+      setDeletingInProgress(false);
+    }
   };
 
   const exportFilteredOrders = () => {
@@ -780,6 +812,11 @@ const PurchaseOrders: React.FC = () => {
                       {order.status === 'draft' && (
                         <Button size="sm" variant="ghost" onClick={() => openAddItems(order)}><Plus className="w-3.5 h-3.5 text-primary" /></Button>
                       )}
+                      {order.status === 'draft' && (
+                        <Button size="sm" variant="ghost" onClick={() => { setDeletingOrder(order); setDeleteReason(''); }}>
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      )}
                       {getNextStatus(order.status) && (
                         <Button size="sm" variant="ghost" onClick={() => updateOrderStatus(order.id, getNextStatus(order.status)!)} disabled={processingId === order.id}>
                           {processingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : React.createElement(getStatusIcon(order.status), { className: 'w-3.5 h-3.5 text-emerald-600' })}
@@ -1133,6 +1170,15 @@ const PurchaseOrders: React.FC = () => {
                       <Plus className="w-3 h-3 mr-2" /> Add Items
                     </Button>
                   )}
+                  {selectedOrder.status === 'draft' && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-8 px-4 text-xs text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => { setDeletingOrder(selectedOrder); setDeleteReason(''); }}
+                    >
+                      <Trash2 className="w-3 h-3 mr-2" /> Delete
+                    </Button>
+                  )}
                   {getNextStatus(selectedOrder.status) && (
                     <Button size="sm" className="ml-auto h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)} disabled={processingId === selectedOrder.id}>
                       {processingId === selectedOrder.id ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : React.createElement(getStatusIcon(selectedOrder.status), { className: 'w-3 h-3 mr-2' })}
@@ -1143,6 +1189,44 @@ const PurchaseOrders: React.FC = () => {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete draft PO confirmation — requires a stated reason */}
+        <Dialog open={!!deletingOrder} onOpenChange={(open) => { if (!open) { setDeletingOrder(null); setDeleteReason(''); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete {deletingOrder?.po_number}?</DialogTitle>
+              <DialogDescription>
+                This permanently deletes this draft purchase order and its items. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-6 pb-6 pt-2 space-y-3">
+              <div>
+                <Label htmlFor="delete-po-reason">Reason for deletion *</Label>
+                <Textarea
+                  id="delete-po-reason"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="e.g. duplicate PO, wrong supplier, no longer needed"
+                  rows={3}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => { setDeletingOrder(null); setDeleteReason(''); }} disabled={deletingInProgress}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm" variant="destructive"
+                  onClick={handleDeleteOrder}
+                  disabled={deletingInProgress || !deleteReason.trim()}
+                >
+                  {deletingInProgress ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-2" />}
+                  {deletingInProgress ? 'Deleting...' : 'Delete Purchase Order'}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

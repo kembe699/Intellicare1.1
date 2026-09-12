@@ -1239,11 +1239,10 @@ router.post('/purchase-orders/:id/status', authorize('procurement.purchase_order
         extraFields = ', expected_delivery_date = :expected_delivery_date';
         replacements.expected_delivery_date = req.body.expected_delivery_date || null;
         break;
-      case 'receive':
-        if (!['authorized', 'approved'].includes(currentStatus)) return res.status(400).json({ error: 'PO must be authorized to receive' });
-        newStatus = 'received';
-        extraFields = ', delivery_date_actual = CURRENT_DATE';
-        break;
+      // 'receive' was removed deliberately: marking a PO received here set the
+      // status with no check that anything was actually delivered. Goods
+      // Receipt Notes now own that transition exclusively (see
+      // POST /goods-receipt-notes below), driven by real received quantities.
       case 'cancel':
         if (['received', 'cancelled'].includes(currentStatus)) return res.status(400).json({ error: 'Cannot cancel this PO' });
         newStatus = 'cancelled';
