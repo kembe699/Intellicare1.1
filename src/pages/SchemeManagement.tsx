@@ -659,7 +659,7 @@ const SchemeManagement: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredSchemes.map(scheme => (
-            <div key={scheme.id} className={`ic-card bg-card ${!scheme.is_active ? 'opacity-50' : ''}`}>
+            <div key={scheme.id} className={`ic-card bg-white ${!scheme.is_active ? 'opacity-50' : ''}`}>
               <div className="ic-card-header">
                 <div className="flex items-start justify-between">
                   <div>
@@ -770,7 +770,7 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Set Service Price
               </Button>
             </div>
-            <div className="ic-card">
+            <div className="ic-card bg-white">
               <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Service Prices for {selectedScheme?.scheme_name}</span></div>
               <div className="ic-card-body">
                 <AdvancedDataTable<any>
@@ -841,7 +841,7 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Set Product Price
               </Button>
             </div>
-            <div className="ic-card">
+            <div className="ic-card bg-white">
               <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Product Prices for {selectedScheme?.scheme_name}</span></div>
               <div className="ic-card-body">
                 <AdvancedDataTable<any>
@@ -890,7 +890,7 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Add Member
               </Button>
             </div>
-            <div className="ic-card">
+            <div className="ic-card bg-white">
               <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Members of {selectedScheme?.scheme_name}</span></div>
               <div className="ic-card-body">
                 <AdvancedDataTable<any>
@@ -959,7 +959,7 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> New Discount
               </Button>
             </div>
-            <div className="ic-card">
+            <div className="ic-card bg-white">
               <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Discounts for {selectedScheme?.scheme_name}</span></div>
               <div className="ic-card-body">
                 <AdvancedDataTable<any>
@@ -997,7 +997,7 @@ const SchemeManagement: React.FC = () => {
         <div className="flex justify-end"><Button variant="outline" size="sm" onClick={loadReports}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button></div>
 
         {/* Membership Report */}
-        <div className="ic-card">
+        <div className="ic-card bg-white">
           <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Membership by Scheme</span></div>
           <div className="ic-card-body">
             <AdvancedDataTable<any>
@@ -1015,7 +1015,7 @@ const SchemeManagement: React.FC = () => {
         </div>
 
         {/* Margin Analysis */}
-        <div className="ic-card">
+        <div className="ic-card bg-white">
           <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Margin Analysis by Scheme</span></div>
           <div className="ic-card-body">
             <AdvancedDataTable<any>
