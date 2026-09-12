@@ -20,6 +20,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { toast } from 'sonner';
@@ -30,6 +31,10 @@ interface UserData {
   displayName: string;
   email: string;
   role: UserRole | string;
+  // Extra roles held alongside `role` — effective privileges are the union
+  // of every role held (see permissionsCatalog.js / authorize.js). Managed
+  // from the Edit User dialog below.
+  additionalRoles: string[];
   clinic: string;
   clinic_id?: number;
   branch_id?: number | null;
@@ -133,6 +138,7 @@ const Security: React.FC = () => {
     displayName: '',
     email: '',
     role: '' as string,
+    additionalRoles: [] as string[],
     clinic: user?.clinic || 'IntelliCare',
     branch_id: '' as string,
   });
@@ -141,6 +147,7 @@ const Security: React.FC = () => {
   const [editFormData, setEditFormData] = useState({
     displayName: '',
     role: '' as string,
+    additionalRoles: [] as string[],
     clinic: '',
     branch_id: '' as string,
   });
@@ -181,6 +188,7 @@ const Security: React.FC = () => {
         displayName: u.display_name || u.displayName || '',
         email: u.email || '',
         role: u.role || '',
+        additionalRoles: Array.isArray(u.additional_roles) ? u.additional_roles : [],
         clinic: clinicIdToName[u.clinic_id] || u.clinic || '',
         clinic_id: u.clinic_id,
         branch_id: u.branch_id || null,
@@ -385,6 +393,7 @@ const Security: React.FC = () => {
           email: createFormData.email.toLowerCase().trim(),
           displayName: createFormData.displayName.trim(),
           role: createFormData.role,
+          additionalRoles: createFormData.additionalRoles.filter((r) => r !== createFormData.role),
           // clinic is intentionally not sent. It used to carry a clinic *name*
           // that the server looked up in a hardcoded map from the original
           // single-tenant deployment, where the default 'IntelliCare' resolved
@@ -412,7 +421,7 @@ const Security: React.FC = () => {
         email: createFormData.email.toLowerCase().trim(),
         password: created?.tempPassword || '',
       });
-      setCreateFormData({ displayName: '', email: '', role: '', clinic: user?.clinic || 'IntelliCare', branch_id: '' });
+      setCreateFormData({ displayName: '', email: '', role: '', additionalRoles: [], clinic: user?.clinic || 'IntelliCare', branch_id: '' });
       fetchUsers();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create user');
@@ -433,6 +442,7 @@ const Security: React.FC = () => {
         body: JSON.stringify({
           displayName: (editFormData.displayName || '').trim(),
           role: editFormData.role,
+          additionalRoles: editFormData.additionalRoles.filter((r) => r !== editFormData.role),
           clinic: editFormData.clinic,
           branch_id: editFormData.branch_id ? parseInt(editFormData.branch_id) : null,
           updatedBy: user?.displayName,
@@ -496,6 +506,7 @@ const Security: React.FC = () => {
     setEditFormData({
       displayName: u.displayName || '',
       role: u.role || '',
+      additionalRoles: u.additionalRoles || [],
       clinic: u.clinic || 'IntelliCare',
       branch_id: u.branch_id ? String(u.branch_id) : '',
     });
@@ -602,11 +613,41 @@ const Security: React.FC = () => {
                   <Combobox
                     options={roleOptions}
                     value={createFormData.role}
-                    onChange={(value) => setCreateFormData({ ...createFormData, role: value })}
+                    onChange={(value) => setCreateFormData({
+                      ...createFormData,
+                      role: value,
+                      additionalRoles: createFormData.additionalRoles.filter((r) => r !== value),
+                    })}
                     placeholder="Select role"
                     searchPlaceholder="Search roles..."
                     className="mt-1"
                   />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Additional Roles</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                    This user gets everything each role below can do, on top of their primary role above.
+                  </p>
+                  <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1.5">
+                    {roleOptions.filter((r) => r.value !== createFormData.role).map((r) => (
+                      <label key={r.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={createFormData.additionalRoles.includes(r.value)}
+                          onCheckedChange={(checked) => setCreateFormData((prev) => ({
+                            ...prev,
+                            additionalRoles: checked
+                              ? [...prev.additionalRoles, r.value]
+                              : prev.additionalRoles.filter((x) => x !== r.value),
+                          }))}
+                        />
+                        {r.label}
+                      </label>
+                    ))}
+                    {roleOptions.filter((r) => r.value !== createFormData.role).length === 0 && (
+                      <p className="text-xs text-muted-foreground">No other roles available</p>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -697,7 +738,17 @@ const Security: React.FC = () => {
               columns={[
                 { key: 'displayName', header: 'Name', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'email', header: 'Email', sortable: true, render: (v) => <span className="text-muted-foreground">{v}</span> },
-                { key: 'role', header: 'Role', sortable: true, render: (v) => <StatusBadge status={v} map={ROLE_TONES} label={getRoleLabel(v)} /> },
+                {
+                  key: 'role', header: 'Role', sortable: true,
+                  render: (v, u) => (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StatusBadge status={v} map={ROLE_TONES} label={getRoleLabel(v)} />
+                      {u.additionalRoles?.map((r) => (
+                        <StatusBadge key={r} status={r} map={ROLE_TONES} label={`+ ${getRoleLabel(r)}`} />
+                      ))}
+                    </div>
+                  ),
+                },
                 { key: 'branchName', header: 'Branch', sortable: true, render: (_v, u) => <span className="text-muted-foreground">{u.branchName || getBranchName(u.branch_id)}</span> },
                 {
                   key: 'isActive', header: 'Status', sortable: true,
@@ -996,11 +1047,41 @@ const Security: React.FC = () => {
                   <Combobox
                     options={roleOptions}
                     value={editFormData.role}
-                    onChange={(value) => setEditFormData({ ...editFormData, role: value })}
+                    onChange={(value) => setEditFormData({
+                      ...editFormData,
+                      role: value,
+                      additionalRoles: editFormData.additionalRoles.filter((r) => r !== value),
+                    })}
                     placeholder="Select role"
                     searchPlaceholder="Search roles..."
                     className="mt-1"
                   />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium">Additional Roles</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                    This user gets everything each role below can do, on top of their primary role above.
+                  </p>
+                  <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1.5">
+                    {roleOptions.filter((r) => r.value !== editFormData.role).map((r) => (
+                      <label key={r.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={editFormData.additionalRoles.includes(r.value)}
+                          onCheckedChange={(checked) => setEditFormData((prev) => ({
+                            ...prev,
+                            additionalRoles: checked
+                              ? [...prev.additionalRoles, r.value]
+                              : prev.additionalRoles.filter((x) => x !== r.value),
+                          }))}
+                        />
+                        {r.label}
+                      </label>
+                    ))}
+                    {roleOptions.filter((r) => r.value !== editFormData.role).length === 0 && (
+                      <p className="text-xs text-muted-foreground">No other roles available</p>
+                    )}
+                  </div>
                 </div>
 
                 <div>

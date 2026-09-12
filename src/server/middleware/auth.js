@@ -76,6 +76,7 @@ const authenticateToken = (req, res, next) => {
         userId: decoded.userId,
         email: decoded.email,
         role: cached.role,
+        additionalRoles: cached.additionalRoles || [],
         clinicId: decoded.clinicId,
         branchId: decoded.branchId || null,
         schemaName: decoded.schemaName,
@@ -97,12 +98,26 @@ const authenticateToken = (req, res, next) => {
       if (!dbUser || !dbUser.is_active) {
         return res.status(401).json({ error: 'Account inactive or not found' });
       }
-      userAuthCache.set(cacheKey, { role: dbUser.role, is_active: dbUser.is_active });
+      // Extra roles granted on top of the primary one (routes/users.js,
+      // user_additional_roles) — effective permissions are the union, see
+      // authorize.js. Table may not exist yet on a tenant that hasn't been
+      // touched since this shipped; treat that the same as "no additional
+      // roles" rather than failing the whole login.
+      let additionalRoles = [];
+      try {
+        const [rows] = await tenantConnection.sequelize.query(
+          'SELECT role_key FROM user_additional_roles WHERE user_id = ?',
+          { replacements: [decoded.userId] }
+        );
+        additionalRoles = rows.map((r) => r.role_key);
+      } catch (_e) { /* table not ensured yet on this tenant — treat as none */ }
+      userAuthCache.set(cacheKey, { role: dbUser.role, is_active: dbUser.is_active, additionalRoles });
       req.user = {
         id: decoded.userId,
         userId: decoded.userId,
         email: decoded.email,
         role: dbUser.role,
+        additionalRoles,
         clinicId: decoded.clinicId,
         branchId: decoded.branchId || null,
         schemaName: decoded.schemaName,
@@ -115,6 +130,7 @@ const authenticateToken = (req, res, next) => {
         userId: decoded.userId,
         email: decoded.email,
         role: decoded.role,
+        additionalRoles: [],
         clinicId: decoded.clinicId,
         branchId: decoded.branchId || null,
         schemaName: decoded.schemaName,

@@ -31,6 +31,11 @@ export interface User {
   // response (src/server/routes/auth.js buildUserResponse) — empty for admin,
   // which bypasses on isAdmin instead. See useAuth().hasPrivilege.
   privileges?: string[];
+  // Extra roles granted on top of `role` (Setup > Security > Roles &
+  // Privileges) — `privileges` above already includes their grants unioned
+  // in, so most code should just use hasPrivilege() rather than reading this
+  // directly. Present mainly for displaying/editing what's assigned.
+  additionalRoles?: string[];
 }
 
 export interface Patient {

@@ -95,7 +95,11 @@ router.get('/', async (req, res) => {
 
     // Use raw query to LEFT JOIN branches for branch_name
     let sql = `
-      SELECT u.*, b.name AS branch_name
+      SELECT u.*, b.name AS branch_name,
+        COALESCE(
+          (SELECT array_agg(uar.role_key) FROM user_additional_roles uar WHERE uar.user_id = u.id),
+          ARRAY[]::varchar[]
+        ) AS additional_roles
       FROM users u
       LEFT JOIN branches b ON u.branch_id = b.id
     `;
@@ -143,7 +147,8 @@ router.get('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(user);
+    const [additionalRoleRows] = await sequelize.query('SELECT role_key FROM user_additional_roles WHERE user_id = :id', { replacements: { id: req.params.id } });
+    res.json({ ...user.toJSON(), additionalRoles: additionalRoleRows.map(r => r.role_key) });
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -289,9 +294,23 @@ router.post('/', authorize(['admin']), async (req, res) => {
       console.error(`Could not verify clinic scoping for new user ${user.id}:`, checkErr.message);
     }
 
+    // Extra roles on top of the primary one, same as PUT /:id — see
+    // user_additional_roles / authorize.js for how these combine.
+    const additionalRoles = Array.isArray(req.body.additionalRoles) ? req.body.additionalRoles : [];
+    for (const roleKey of additionalRoles) {
+      try {
+        await sequelize.query(
+          'INSERT INTO user_additional_roles (user_id, role_key) VALUES (:id, :roleKey) ON CONFLICT DO NOTHING',
+          { replacements: { id: user.id, roleKey } }
+        );
+      } catch (roleErr) {
+        console.error(`Could not grant additional role "${roleKey}" to new user ${user.id}:`, roleErr.message);
+      }
+    }
+
     // Returned once, here, so the admin can pass it on. It is not recoverable
     // afterwards — only a reset can replace it.
-    res.status(201).json({ ...user.toJSON(), tempPassword });
+    res.status(201).json({ ...user.toJSON(), additionalRoles, tempPassword });
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user', details: error.message });
@@ -310,7 +329,7 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Insufficient permissions', required: ['admin'], current: req.user?.role });
     }
 
-    const sensitiveFieldsRequested = ['role', 'clinic', 'branch_id', 'branchId', 'isActive', 'status']
+    const sensitiveFieldsRequested = ['role', 'clinic', 'branch_id', 'branchId', 'isActive', 'status', 'additionalRoles']
       .some(f => req.body[f] !== undefined);
     if (isSelf && req.user?.role !== 'admin' && sensitiveFieldsRequested) {
       return res.status(403).json({ error: 'You can only update your own display name' });
@@ -355,13 +374,45 @@ router.put('/:id', async (req, res) => {
     const [updatedRows] = await User.update(updateData, {
       where: { id: req.params.id },
     });
-    
+
     if (updatedRows === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
+    // Extra roles on top of the primary one — effective privileges are the
+    // union of every held role (see authorize.js, routes/auth.js
+    // buildUserResponse). Undefined means "not part of this update" (the
+    // field wasn't in the request); an explicit [] clears all additional
+    // roles, same replace-the-set convention as PUT /api/roles/:id/privileges.
+    if (req.body.additionalRoles !== undefined) {
+      const roleKeys = Array.isArray(req.body.additionalRoles) ? req.body.additionalRoles : [];
+      const t = await sequelize.transaction();
+      try {
+        await sequelize.query('DELETE FROM user_additional_roles WHERE user_id = :id', { replacements: { id: req.params.id }, transaction: t });
+        for (const roleKey of roleKeys) {
+          await sequelize.query(
+            'INSERT INTO user_additional_roles (user_id, role_key) VALUES (:id, :roleKey) ON CONFLICT DO NOTHING',
+            { replacements: { id: req.params.id, roleKey }, transaction: t }
+          );
+        }
+        await t.commit();
+      } catch (roleErr) {
+        await t.rollback();
+        throw roleErr;
+      }
+    }
+
+    // So this takes effect on the user's very next request instead of after
+    // the up-to-2-minute userAuthCache TTL — the exact staleness that made
+    // the original Roles & Privileges page look like it did nothing.
+    if (req.body.role !== undefined || req.body.additionalRoles !== undefined) {
+      const { userAuthCache } = require('../cache');
+      userAuthCache.del(`${req.tenantSchema}:${req.params.id}`);
+    }
+
     const updatedUser = await User.findByPk(req.params.id);
-    res.json(updatedUser);
+    const [additionalRoleRows] = await sequelize.query('SELECT role_key FROM user_additional_roles WHERE user_id = :id', { replacements: { id: req.params.id } });
+    res.json({ ...updatedUser.toJSON(), additionalRoles: additionalRoleRows.map(r => r.role_key) });
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ error: 'Failed to update user', details: error.message });

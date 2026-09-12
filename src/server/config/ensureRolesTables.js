@@ -37,6 +37,19 @@ async function ensureRolesTables(sequelize) {
       FOREIGN KEY (privilege_id) REFERENCES privileges(id) ON DELETE CASCADE
     )
   `);
+  // Extra roles a user holds beyond their primary users.role — effective
+  // privileges are the union of the primary role's grants and every
+  // additional role's grants (see authorize.js and routes/auth.js
+  // buildUserResponse). No FK to users: users.role itself is a bare string
+  // with no FK either, so this matches that existing loose-coupling
+  // convention rather than introducing a new one.
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS user_additional_roles (
+      user_id INT NOT NULL,
+      role_key VARCHAR(100) NOT NULL,
+      PRIMARY KEY (user_id, role_key)
+    )
+  `);
 }
 
 module.exports = { ensureRolesTables };

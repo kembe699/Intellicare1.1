@@ -143,11 +143,26 @@ async function loadUserBranchContext(sequelize, user) {
 // receiving every one of the 75+ catalog keys on every login.
 async function buildUserResponse(user, branchContext, sequelize, schemaName) {
   let privileges = [];
+  let additionalRoles = [];
+  try {
+    const [rows] = await sequelize.query(
+      'SELECT role_key FROM user_additional_roles WHERE user_id = ?',
+      { replacements: [user.id] }
+    );
+    additionalRoles = rows.map((r) => r.role_key);
+  } catch (_e) { /* table not ensured yet on this tenant — treat as none */ }
+
   if (user.role !== 'admin') {
     try {
       const { getRolePrivileges } = require('../middleware/authorize');
       const grants = await getRolePrivileges(sequelize, schemaName);
-      privileges = [...(grants.get(user.role) || [])];
+      // Effective privileges are the union of the primary role's grants and
+      // every additional role's grants — permissions combine, not replace.
+      const combined = new Set(grants.get(user.role) || []);
+      for (const roleKey of additionalRoles) {
+        for (const key of grants.get(roleKey) || []) combined.add(key);
+      }
+      privileges = [...combined];
     } catch (err) {
       console.error(`Could not resolve privileges for role "${user.role}" on ${schemaName}:`, err.message);
     }
@@ -157,6 +172,7 @@ async function buildUserResponse(user, branchContext, sequelize, schemaName) {
     email: user.email,
     displayName: user.display_name,
     role: user.role,
+    additionalRoles,
     clinicId: user.clinic_id,
     clinic: user.clinic_id,
     branchId: branchContext.primaryBranch?.id || user.branch_id || null,

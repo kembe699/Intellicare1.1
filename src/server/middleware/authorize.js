@@ -44,8 +44,14 @@ const authorize = (required) => async (req, res, next) => {
 
   if (req.user.role === 'admin') return next();
 
+  // A user's effective roles are their primary role plus whatever additional
+  // roles they've been granted (routes/users.js, user_additional_roles) —
+  // permissions combine, not replace, so someone who's primarily pharmacy but
+  // also holds procurement passes any check either role alone would pass.
+  const roles = [req.user.role, ...(req.user.additionalRoles || [])];
+
   if (Array.isArray(required)) {
-    if (!required.includes(req.user.role)) {
+    if (!roles.some((r) => required.includes(r))) {
       return res.status(403).json({
         error: 'Insufficient permissions',
         required,
@@ -63,7 +69,7 @@ const authorize = (required) => async (req, res, next) => {
       return res.status(503).json({ error: 'Could not verify permissions, please try again' });
     }
     const grants = await getRolePrivileges(sequelize, req.tenantSchema);
-    if (!grants.get(req.user.role)?.has(required)) {
+    if (!roles.some((r) => grants.get(r)?.has(required))) {
       return res.status(403).json({
         error: 'Insufficient permissions',
         required,

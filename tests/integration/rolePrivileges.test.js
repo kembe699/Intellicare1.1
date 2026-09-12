@@ -76,3 +76,43 @@ describe('the id-sequence fixup actually closes the collision bug', () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe('additional roles combine with the primary role, they do not replace it', () => {
+  test('user_additional_roles table exists', async () => {
+    const rows = await query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'user_additional_roles'`);
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  test('a privilege only the additional role grants is allowed (array shape)', async () => {
+    // 'lab' cannot approve inventory adjustments; 'procurement' can — pull the
+    // real grant from the catalog rather than hardcoding a role list here, so
+    // this doesn't rot if the catalog changes.
+    const key = 'inventory.adjustments.approve';
+    expect(DEFAULT_ROLE_PRIVILEGES[key]).toContain('procurement');
+    expect(DEFAULT_ROLE_PRIVILEGES[key]).not.toContain('lab');
+
+    const req = { user: { role: 'lab', additionalRoles: ['procurement'] }, models: { sequelize: getSequelize() }, tenantSchema: 'tenant_test' };
+    let calledNext = false;
+    const res = { status: () => ({ json: () => {} }) };
+    await authorize(key)(req, res, () => { calledNext = true; });
+    expect(calledNext).toBe(true);
+  });
+
+  test('neither role granting it is still rejected — union does not mean "allow everything"', async () => {
+    const req = { user: { role: 'lab', additionalRoles: ['nurse'] }, models: { sequelize: getSequelize() }, tenantSchema: 'tenant_test' };
+    let statusCode = null;
+    const res = { status: (c) => { statusCode = c; return { json: () => {} }; } };
+    let calledNext = false;
+    await authorize('inventory.adjustments.approve')(req, res, () => { calledNext = true; });
+    expect(calledNext).toBe(false);
+    expect(statusCode).toBe(403);
+  });
+
+  test('a hardcoded literal-array gate also honors an additional role', async () => {
+    const req = { user: { role: 'lab', additionalRoles: ['procurement'] } };
+    let calledNext = false;
+    const res = { status: () => ({ json: () => {} }) };
+    await authorize(['admin', 'procurement'])(req, res, () => { calledNext = true; });
+    expect(calledNext).toBe(true);
+  });
+});
