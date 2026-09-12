@@ -44,6 +44,13 @@ export default function RoomsManagement() {
   const [pendingBeds, setPendingBeds] = useState<{ bed_number: string; status: string }[]>([]);
   const [bedDraft, setBedDraft] = useState({ bed_number: '', status: 'available' });
   const [registering, setRegistering] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  const resetRoomForm = () => {
+    setRoomForm({ ward_id: '', room_number: '', room_type: '', capacity: '' });
+    setPendingBeds([]);
+    setBedDraft({ bed_number: '', status: 'available' });
+  };
 
   const { data: wards = [] } = useQuery({
     queryKey: ['wards', clinicId],
@@ -150,8 +157,8 @@ export default function RoomsManagement() {
       }
 
       toast.success('Room registered successfully');
-      setRoomForm({ ward_id: '', room_number: '', room_type: '', capacity: '' });
-      setPendingBeds([]);
+      resetRoomForm();
+      setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ['rooms-all'] });
       queryClient.invalidateQueries({ queryKey: ['wards'] });
     } catch {
@@ -169,14 +176,75 @@ export default function RoomsManagement() {
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
-        <PageHeader title="Rooms" icon={<DoorOpen />} className="mb-3" />
+      <div className="space-y-6 max-w-6xl mx-auto w-full flex flex-col">
+        <PageHeader
+          title="Rooms"
+          icon={<DoorOpen />}
+          actions={
+            <Button onClick={() => { resetRoomForm(); setShowForm(true); }} className="gap-2">
+              <Plus className="h-4 w-4" />Add Room
+            </Button>
+          }
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0">
-          {/* Add New Room */}
-          <div className="md:col-span-1 bg-card rounded-lg border shadow-sm p-4 h-fit">
-            <h3 className="font-medium mb-4 text-lg border-b pb-2">Register New Room</h3>
-            <form onSubmit={handleRegisterRoom} className="space-y-4">
+        {/* Search Bar and Actions */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by room or ward..."
+              className="pl-9 h-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => refetchRooms()} disabled={roomsLoading}>
+            <RefreshCw className={`w-4 h-4 ${roomsLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+
+        {/* Room Directory */}
+        <AdvancedDataTable<any>
+          data={filteredRooms}
+          keyExtractor={(room) => room.id}
+          loading={roomsLoading}
+          emptyMessage="No rooms found."
+          onRowClick={(room) => setSelectedRoom(room)}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'room_number', header: 'Room No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+            { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
+            {
+              key: 'room_type', header: 'Type', sortable: true,
+              render: (v) => <StatusBadge status={v} map={roomTypeToneMap} label={v === 'ward' ? 'Ward' : 'Consultation Room'} />,
+            },
+            { key: 'capacity', header: 'Capacity', render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
+            {
+              key: '__beds', header: 'Beds',
+              render: (_v, room) => <span className="text-muted-foreground">{room.room_type === 'ward' ? `${room.current_occupancy || 0}/${room.total_beds || 0}` : '-'}</span>,
+            },
+          ]}
+        />
+      </div>
+      </div>
+
+      {/* Add Room Modal */}
+      <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) resetRoomForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto gap-0 p-0">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-primary/10">
+                <DoorOpen className="w-3.5 h-3.5 text-primary" />
+              </div>
+              Register New Room
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Configure the room and, for a ward room, its beds
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-5 py-4">
+            <form id="room-form" onSubmit={handleRegisterRoom} className="space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">Room Type</Label>
                 <Combobox
@@ -273,61 +341,20 @@ export default function RoomsManagement() {
                   )}
                 </div>
               )}
-
-              <Button type="submit" className="w-full mt-6" disabled={registering}>
-                {registering ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                Register Room
-              </Button>
             </form>
           </div>
 
-          {/* Room Directory */}
-          <div className="md:col-span-2 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Room Directory</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-64">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by room or ward..."
-                    className="pl-8 h-9"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => refetchRooms()} disabled={roomsLoading}>
-                  <RefreshCw className={`w-4 h-4 ${roomsLoading ? 'animate-spin' : ''}`} />
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4">
-              <AdvancedDataTable<any>
-                data={filteredRooms}
-                keyExtractor={(room) => room.id}
-                loading={roomsLoading}
-                emptyMessage="No rooms found."
-                onRowClick={(room) => setSelectedRoom(room)}
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'room_number', header: 'Room No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
-                  {
-                    key: 'room_type', header: 'Type', sortable: true,
-                    render: (v) => <StatusBadge status={v} map={roomTypeToneMap} label={v === 'ward' ? 'Ward' : 'Consultation Room'} />,
-                  },
-                  { key: 'capacity', header: 'Capacity', render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
-                  {
-                    key: '__beds', header: 'Beds',
-                    render: (_v, room) => <span className="text-muted-foreground">{room.room_type === 'ward' ? `${room.current_occupancy || 0}/${room.total_beds || 0}` : '-'}</span>,
-                  },
-                ]}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
+          <DialogFooter className="px-5 py-4 border-t">
+            <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetRoomForm(); }} disabled={registering}>
+              Cancel
+            </Button>
+            <Button type="submit" form="room-form" disabled={registering}>
+              {registering ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Register Room
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Room Details Modal */}
       <Dialog open={!!selectedRoom} onOpenChange={(open) => { if (!open) setSelectedRoom(null); }}>
