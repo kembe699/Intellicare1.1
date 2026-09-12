@@ -809,8 +809,7 @@ export default function BillDetails() {
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="w-full flex flex-col">
         <PageHeader
-          title={bill.bill_number}
-          subtitle={bill.patient_name}
+          title={`${bill.bill_number} — ${bill.patient_name}`}
           icon={<DollarSign />}
           className="mb-3"
           actions={
