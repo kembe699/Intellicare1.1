@@ -93,9 +93,20 @@ router.get('/', async (req, res) => {
   try {
     const { clinic, all, role } = req.query;
 
-    // Use raw query to LEFT JOIN branches for branch_name
+    // Use raw query to LEFT JOIN branches for branch_name.
+    //
+    // Explicit column list — not u.* — because users also carries
+    // password_hash and signature (a base64 PNG). u.* shipped both to every
+    // caller of this list on every page that loads it, which is a real
+    // credential exposure for password_hash (a client has no business ever
+    // seeing a hash, ours or anyone else's) and, as the signature column
+    // filled in for more users, a growing amount of dead weight in a
+    // response nothing here reads a signature from (that only ever comes
+    // from the logged-in user's own profile/auth context, never this list).
     let sql = `
-      SELECT u.*, b.name AS branch_name,
+      SELECT u.id, u.email, u.role, u.clinic_id, u.branch_id, u.status, u.is_active,
+        u.display_name, u.current_room_id, u.created_at, u.updated_at,
+        b.name AS branch_name,
         COALESCE(
           (SELECT array_agg(uar.role_key) FROM user_additional_roles uar WHERE uar.user_id = u.id),
           ARRAY[]::varchar[]
@@ -143,7 +154,7 @@ router.get('/', async (req, res) => {
 // Get user by ID
 router.get('/:id', async (req, res) => {
   try {
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findByPk(req.params.id, { attributes: { exclude: ['password_hash', 'signature'] } });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -160,6 +171,7 @@ router.get('/email/:email', async (req, res) => {
   try {
     const user = await User.findOne({
       where: { email: req.params.email },
+      attributes: { exclude: ['password_hash', 'signature'] },
     });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -175,10 +187,11 @@ router.get('/email/:email', async (req, res) => {
 router.get('/clinic/:clinicId', async (req, res) => {
   try {
     const users = await User.findAll({
-      where: { 
+      where: {
         clinic_id: req.params.clinicId,
-        is_active: true 
+        is_active: true
       },
+      attributes: { exclude: ['password_hash', 'signature'] },
       order: [['display_name', 'ASC']],
     });
     res.json(users);

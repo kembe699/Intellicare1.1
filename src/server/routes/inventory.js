@@ -75,16 +75,13 @@ router.get('/items', authorize('inventory.read'), async (req, res) => {
 
     // Branch isolation: non-admin users only see their own branch's items
     const { sql: branchSQL, params: branchParams } = getBranchConditionSQL(req, 'i');
-    console.log('Branch filter for items list:', { branchSQL, branchParams, userRole: req.user?.role, userBranchId: req.user?.branchId });
     if (branchSQL && branchParams && branchParams.length > 0) {
       conditions.push('i.branch_id = :branchId');
       replacements.branchId = branchParams[0];
-      console.log('Applied branch filter:', replacements.branchId);
     } else if (req.user && req.user.role !== 'admin' && req.user.branchId) {
       // Fallback: if getBranchConditionSQL doesn't return proper filter, apply manually
       conditions.push('i.branch_id = :branchId');
       replacements.branchId = req.user.branchId;
-      console.log('Applied fallback branch filter:', replacements.branchId);
     }
 
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
