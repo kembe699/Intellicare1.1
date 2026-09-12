@@ -863,9 +863,20 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
       exchange_rate, notes, items, created_by } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
 
-    // Generate PO number
-    const [countResult] = await sequelize.query('SELECT COUNT(*) as cnt FROM purchase_orders');
-    const poNumber = `PO-${new Date().getFullYear()}-${String((countResult[0].cnt || 0) + 1).padStart(4, '0')}`;
+    // Generate PO number from the highest one issued this year, not how many
+    // exist — COUNT(*) assumes no gaps (a deleted draft leaves one), and worse,
+    // the pg driver returns COUNT(*) as a string, so `cnt + 1` was string
+    // concatenation ("2" + 1 = "21") rather than arithmetic. Either way it can
+    // land on a number already taken and die on purchase_orders_po_number_idx.
+    // Same fix as dispensing_number in autoDispense.js.
+    const poYear = new Date().getFullYear();
+    const [[poSeqRow]] = await sequelize.query(
+      `SELECT COALESCE(MAX(NULLIF(regexp_replace(po_number, '^.*-', ''), '')::int), 0) AS last
+         FROM purchase_orders
+        WHERE po_number LIKE :prefix AND po_number ~ '-[0-9]+$'`,
+      { replacements: { prefix: `PO-${poYear}-%` } }
+    );
+    const poNumber = `PO-${poYear}-${String((parseInt(poSeqRow?.last, 10) || 0) + 1).padStart(4, '0')}`;
 
     // Calculate totals
     let subtotal = 0;
@@ -960,7 +971,7 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
     res.status(201).json(newPO[0]);
   } catch (error) {
     console.error('Error creating PO:', error);
-    res.status(500).json({ error: 'Failed to create purchase order', detail: error.parent?.message || error.original?.message || error.message });
+    res.status(500).json({ error: 'Failed to create purchase order' });
   }
 });
 
