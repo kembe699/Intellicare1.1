@@ -781,6 +781,10 @@ const SchemeManagement: React.FC = () => {
                   keyExtractor={(sp) => sp.id}
                   emptyMessage="No service prices set for this scheme. Services will use base price or scheme markup/discount."
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+                  searchable
+                  searchPlaceholder="Search services..."
+                  exportable
+                  exportFileName={`${selectedScheme?.scheme_code || 'scheme'}-service-prices`}
                   columns={[
                     {
                       key: 'service_name', header: 'Service', sortable: true,
@@ -791,7 +795,7 @@ const SchemeManagement: React.FC = () => {
                         </>
                       ),
                     },
-                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => `${selectedScheme?.currency || currency.code} ${parseFloat(v || 0).toFixed(2)}` },
+                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => `${currency.code} ${parseFloat(v || 0).toFixed(2)}` },
                     {
                       key: 'scheme_price', header: 'Scheme Price', align: 'right',
                       render: (v) => <span className="font-bold">{v ? `${selectedScheme?.currency || currency.code} ${parseFloat(v).toFixed(2)}` : '-'}</span>,
@@ -852,10 +856,14 @@ const SchemeManagement: React.FC = () => {
                   keyExtractor={(pp) => pp.id}
                   emptyMessage="No product prices set for this scheme"
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+                  searchable
+                  searchPlaceholder="Search products..."
+                  exportable
+                  exportFileName={`${selectedScheme?.scheme_code || 'scheme'}-product-prices`}
                   columns={[
                     { key: 'product_name', header: 'Product', sortable: true, render: (v, pp) => <span className="font-medium">{v || pp.product_code}</span> },
                     { key: 'product_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
-                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => `${selectedScheme?.currency || currency.code} ${parseFloat(v || 0).toFixed(2)}` },
+                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => `${currency.code} ${parseFloat(v || 0).toFixed(2)}` },
                     { key: 'scheme_price', header: 'Scheme Price', align: 'right', render: (v) => <span className="font-bold">{v ? `${selectedScheme?.currency || currency.code} ${parseFloat(v).toFixed(2)}` : '-'}</span> },
                     {
                       key: 'insurance_copay', header: 'Copay', align: 'right',
