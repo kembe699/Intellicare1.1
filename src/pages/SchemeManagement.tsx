@@ -352,8 +352,10 @@ const SchemeManagement: React.FC = () => {
     setShowCsvUpload(true);
   }
 
-  async function downloadCsvTemplate() {
-    const activeSchemes = schemes.filter(s => s.is_active);
+  async function downloadCsvTemplate(scope: 'selected' | 'all' = 'all') {
+    const activeSchemes = scope === 'selected' && selectedScheme
+      ? [selectedScheme]
+      : schemes.filter(s => s.is_active);
     const schemeHeaders = activeSchemes.map(s => `${s.scheme_name} (${s.currency || currency.code})`);
 
     // Fetch existing prices to pre-fill template
@@ -403,7 +405,8 @@ const SchemeManagement: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `scheme_${csvUploadType}_pricing_template.csv`;
+    const scopeSuffix = scope === 'selected' && selectedScheme ? (selectedScheme.scheme_code || selectedScheme.scheme_name).replace(/\s+/g, '-') : 'all-schemes';
+    a.download = `scheme_${csvUploadType}_pricing_${scopeSuffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -1410,7 +1413,7 @@ const SchemeManagement: React.FC = () => {
               Upload {csvUploadType === 'service' ? 'Service' : 'Product'} Pricing CSV
             </DialogTitle>
             <DialogDescription>
-              Upload a CSV file with {csvUploadType} prices across multiple schemes. Each row is a {csvUploadType}, and each scheme has its own price column.
+              Upload a CSV file with {csvUploadType} prices for one scheme or every scheme at once. Each row is a {csvUploadType}, and each scheme has its own price column.
             </DialogDescription>
           </DialogHeader>
 
@@ -1418,15 +1421,20 @@ const SchemeManagement: React.FC = () => {
             {/* Step 1: Download template & Upload file */}
             <div className="flex items-center gap-3 p-4 bg-muted/30 rounded-lg border border-dashed">
               <div className="flex-1">
-                <p className="text-sm font-medium mb-1">Step 1: Download the template, fill in scheme prices, then upload</p>
+                <p className="text-sm font-medium mb-1">Step 1: Download a template, fill in the price column(s), then upload</p>
                 <p className="text-xs text-muted-foreground">
-                  The template includes all {csvUploadType === 'service' ? 'services' : 'products'} as rows and all active schemes as columns.
-                  Fill in the price for each {csvUploadType} under the appropriate scheme column. Leave cells blank to skip.
+                  Every {csvUploadType === 'service' ? 'service' : 'product'} is a row, with its current base price and any existing scheme price(s) pre-filled.
+                  Edit the price under a scheme's column and leave the rest blank to skip them — the upload applies each column to its own scheme.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={downloadCsvTemplate}>
-                <Download className="w-4 h-4 mr-2" /> Download Template
-              </Button>
+              <div className="flex flex-col gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => downloadCsvTemplate('selected')} disabled={!selectedScheme}>
+                  <Download className="w-4 h-4 mr-2" /> This Scheme{selectedScheme ? ` (${selectedScheme.scheme_name})` : ''}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => downloadCsvTemplate('all')}>
+                  <Download className="w-4 h-4 mr-2" /> All Schemes
+                </Button>
+              </div>
             </div>
 
             <div className="flex items-center gap-3 p-4 bg-muted/30 rounded-lg border border-dashed">
