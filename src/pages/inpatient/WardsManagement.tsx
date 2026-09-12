@@ -3,9 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Plus, Edit2, Trash2, Building2, Users, BedDouble, DoorOpen, X, Check, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building2, BedDouble, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,8 +12,20 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Combobox } from '@/components/ui/combobox';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeader, LoadingState } from '@/components/common';
+import { PageHeader, StatusBadge, type StatusBadgeTone } from '@/components/common';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+
+const wardTypeToneMap: Record<string, StatusBadgeTone> = {
+  general: 'neutral',
+  surgical: 'danger',
+  maternity: 'primary',
+  pediatric: 'info',
+  icu: 'danger',
+  emergency: 'danger',
+  psychiatric: 'warning',
+  isolation: 'warning',
+};
 
 export default function WardsManagement() {
   const { user } = useAuth();
@@ -206,70 +217,60 @@ export default function WardsManagement() {
           </DialogContent>
         </Dialog>
 
-        {/* Wards List */}
-        {isLoading ? (
-          <LoadingState message="Loading wards..." />
-        ) : wards.length === 0 ? (
-          <Card className="rounded-lg p-12 text-center border-dashed">
-            <Building2 className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="text-muted-foreground font-medium">No wards configured yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Click "Add Ward" to create your first ward</p>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {wards.map((ward: any) => {
-              const occupancyPct = ward.total_beds > 0 ? Math.round((ward.current_occupancy / ward.total_beds) * 100) : 0;
-              return (
-                <Card key={ward.id} className="rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-base font-semibold truncate">{ward.name}</h3>
-                          <Badge variant="outline" className="text-xs font-mono">{ward.code}</Badge>
-                          <Badge className="text-xs capitalize" variant="secondary">{ward.ward_type}</Badge>
-                        </div>
-                        {ward.description && <p className="text-sm text-muted-foreground mb-3">{ward.description}</p>}
-                        <div className="flex items-center gap-6 text-sm">
-                          <div className="flex items-center gap-1.5">
-                            <DoorOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="font-medium">{ward.total_rooms || 0}</span>
-                            <span className="text-muted-foreground">rooms</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <BedDouble className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="font-medium">{ward.total_beds || 0}</span>
-                            <span className="text-muted-foreground">beds</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="font-medium">{ward.current_occupancy || 0}</span>
-                            <span className="text-muted-foreground">occupied</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-20 h-2 rounded-full bg-muted overflow-hidden">
-                              <div className={`h-full rounded-full transition-all ${occupancyPct > 80 ? 'bg-red-500' : occupancyPct > 50 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${occupancyPct}%` }} />
-                            </div>
-                            <span className="text-xs text-muted-foreground">{occupancyPct}%</span>
-                          </div>
-                          {parseFloat(ward.daily_rate) > 0 && (
-                            <Badge variant="outline" className="text-xs font-normal">
-                              {ward.service_name ? `${ward.service_name} · ` : ''}{fmt(ward.daily_rate)}/day
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-1.5 flex-shrink-0">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { if (confirm('Delete this ward?')) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </div>
+        {/* Wards Table */}
+        <AdvancedDataTable<any>
+          data={wards}
+          keyExtractor={(ward) => ward.id}
+          loading={isLoading}
+          emptyMessage={'No wards configured yet — click "Add Ward" to create your first ward'}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            {
+              key: 'name', header: 'Ward', sortable: true,
+              render: (v, ward) => (
+                <div>
+                  <span className="font-medium">{v}</span>
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">{ward.code}</span>
+                </div>
+              ),
+            },
+            {
+              key: 'ward_type', header: 'Type', sortable: true,
+              render: (v) => <StatusBadge status={v} map={wardTypeToneMap} label={v ? v.charAt(0).toUpperCase() + v.slice(1) : '-'} />,
+            },
+            { key: 'total_rooms', header: 'Rooms', render: (v) => <span className="text-muted-foreground">{v || 0}</span> },
+            {
+              key: '__beds', header: 'Beds (Occupied/Total)',
+              render: (_v, ward) => {
+                const occupancyPct = ward.total_beds > 0 ? Math.round((ward.current_occupancy / ward.total_beds) * 100) : 0;
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{ward.current_occupancy || 0}/{ward.total_beds || 0}</span>
+                    <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${occupancyPct > 80 ? 'bg-red-500' : occupancyPct > 50 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${occupancyPct}%` }} />
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                    <span className="text-xs text-muted-foreground">{occupancyPct}%</span>
+                  </div>
+                );
+              },
+            },
+            {
+              key: 'daily_rate', header: 'Bed Charge / Day',
+              render: (v, ward) => parseFloat(v) > 0
+                ? <span className="text-muted-foreground">{ward.service_name ? `${ward.service_name} · ` : ''}{fmt(v)}</span>
+                : <span className="text-muted-foreground">-</span>,
+            },
+            {
+              key: '__actions', header: 'Actions', align: 'right',
+              render: (_v, ward) => (
+                <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { if (confirm('Delete this ward?')) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </div>
       </div>
     </AppLayout>
