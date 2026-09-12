@@ -367,16 +367,21 @@ router.put('/:id', async (req, res) => {
       updateData.updated_by = req.body.updatedBy;
     }
 
-    updateData.updated_at = new Date();
-    
-    console.log('Updating user:', req.params.id, 'with data:', updateData);
-    
-    const [updatedRows] = await User.update(updateData, {
-      where: { id: req.params.id },
-    });
-
-    if (updatedRows === 0) {
+    // Existence is checked directly rather than inferred from the update's
+    // affected-row count: a request touching only a field this handler didn't
+    // already recognize (additionalRoles alone, before it was added below)
+    // left `updateData` with nothing real in it, and Sequelize's own
+    // timestamp-only update() reported 0 rows changed for a user that
+    // genuinely existed — a real user's request came back "User not found".
+    const existingUser = await User.findByPk(req.params.id);
+    if (!existingUser) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      updateData.updated_at = new Date();
+      console.log('Updating user:', req.params.id, 'with data:', updateData);
+      await User.update(updateData, { where: { id: req.params.id } });
     }
 
     // Extra roles on top of the primary one — effective privileges are the
