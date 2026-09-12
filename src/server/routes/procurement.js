@@ -960,7 +960,7 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
     res.status(201).json(newPO[0]);
   } catch (error) {
     console.error('Error creating PO:', error);
-    res.status(500).json({ error: 'Failed to create purchase order', detail: error.message });
+    res.status(500).json({ error: 'Failed to create purchase order', detail: error.parent?.message || error.original?.message || error.message });
   }
 });
 
