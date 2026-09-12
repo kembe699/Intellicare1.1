@@ -1180,6 +1180,39 @@ router.delete('/purchase-orders/:id/items/:itemId', authorize('procurement.purch
   }
 });
 
+// Delete a whole draft PO — only while nothing has been signed off yet
+// (loadEditableP0 enforces draft-only + branch scoping), and only with a
+// stated reason, so there's a record of why it never went anywhere.
+router.delete('/purchase-orders/:id', authorize('procurement.purchase_orders.write'), async (req, res) => {
+  try {
+    const { po, error } = await loadEditableP0(req);
+    if (error) return res.status(error.code).json(error.body);
+
+    const reason = (req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A reason is required to delete a purchase order' });
+
+    await sequelize.query('DELETE FROM purchase_order_items WHERE purchase_order_id = :id', { replacements: { id: req.params.id } });
+    await sequelize.query('DELETE FROM purchase_orders WHERE id = :id', { replacements: { id: req.params.id } });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
+        user_role: req.user?.role, module: 'Procurement', action: 'PO_DELETED',
+        entity_type: 'PurchaseOrder', entity_id: String(po.id),
+        description: `PO ${po.po_number} deleted while in draft — reason: ${reason}`,
+        old_values: { po_number: po.po_number, status: po.status, reason },
+        ip_address: req.ip, status: 'success'
+      });
+    } catch (e) { /* audit must never block the deletion */ }
+
+    res.json({ message: 'Purchase order deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting purchase order:', error);
+    res.status(500).json({ error: 'Failed to delete purchase order' });
+  }
+});
+
 // Update PO status (approve, send, cancel)
 router.post('/purchase-orders/:id/status', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {

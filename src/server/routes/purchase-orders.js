@@ -247,45 +247,4 @@ router.put('/:id', authorize('procurement.purchase_orders.write'), async (req, r
   }
 });
 
-// Delete a purchase order — draft only, and only with a stated reason. A PO
-// that has left draft has already been through (or is in) an approval chain
-// with its own audit trail (check/approve/authorize signatures); deleting
-// that outright would erase the record of a decision that was made. A draft
-// hasn't been approved by anyone yet, so removing one is safe, but the
-// reason still gets logged so there's a record of why it never went anywhere.
-router.delete('/:id', authorize('procurement.purchase_orders.write'), async (req, res) => {
-  try {
-    const order = await PurchaseOrder.findByPk(req.params.id);
-    if (!order) {
-      return res.status(404).json({ error: 'Purchase order not found' });
-    }
-    if (order.status !== 'draft') {
-      return res.status(400).json({ error: 'Only draft purchase orders can be deleted' });
-    }
-    const reason = (req.body?.reason || '').trim();
-    if (!reason) {
-      return res.status(400).json({ error: 'A reason is required to delete a purchase order' });
-    }
-
-    await PurchaseOrderItem.destroy({ where: { purchase_order_id: req.params.id } });
-    await order.destroy();
-
-    try {
-      const rr = require('./reports');
-      await rr.logAudit({
-        user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role,
-        module: 'Procurement', action: 'PO_DELETED', entity_type: 'PurchaseOrder', entity_id: String(order.id),
-        description: `PO ${order.po_number} deleted while in draft — reason: ${reason}`,
-        old_values: { po_number: order.po_number, status: order.status, reason },
-        ip_address: req.ip, status: 'success'
-      });
-    } catch (e) { /* non-blocking */ }
-
-    res.json({ message: 'Purchase order deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting purchase order:', error);
-    res.status(500).json({ error: 'Failed to delete purchase order' });
-  }
-});
-
 module.exports = router;
