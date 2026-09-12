@@ -24,22 +24,21 @@ import { lazy, type ComponentType } from 'react';
  *   - the marker is cleared on a successful import, so a later deploy in the
  *     same tab is handled the same way.
  *
- * Only failures that look like a module-loading problem trigger this. A crash
- * inside a component that happens to be lazy is a real bug and must surface, not
- * be papered over by a refresh.
+ * Every failure caught below is a module-loading problem, full stop — the try
+ * block wraps nothing but the `import()` call itself, so the component has not
+ * even begun rendering yet. A crash inside the component is a separate,
+ * later failure (surfaced by RouteErrorBoundary instead) and never lands here.
+ *
+ * That means recovery does not need to pattern-match the error's message to
+ * decide whether it "looks like" a chunk-load failure — a browser rewords
+ * these constantly, and a connection reset mid-deploy (the server restarting
+ * while a chunk request is in flight, which this app's own deploys cause)
+ * produces a plain "Failed to fetch" that says nothing about modules at all.
+ * Requiring specific wording let exactly that case fall through uncaught,
+ * which is what a stuck-on-the-old-page report with no visible error looks
+ * like from the user's side. Retrying unconditionally closes that gap.
  */
 const RELOAD_KEY = 'chunk-reload-attempted';
-
-function isChunkLoadError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  return (
-    /Failed to fetch dynamically imported module/i.test(message) ||
-    /error loading dynamically imported module/i.test(message) ||
-    /Importing a module script failed/i.test(message) ||   // Safari
-    /ChunkLoadError/i.test(message) ||
-    /Loading chunk \d+ failed/i.test(message)
-  );
-}
 
 function readFlag(): boolean {
   try {
@@ -69,7 +68,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       writeFlag(false);
       return module;
     } catch (error) {
-      if (isChunkLoadError(error) && !readFlag()) {
+      if (!readFlag()) {
         writeFlag(true);
         window.location.reload();
         // Never resolves — the reload replaces this document. Returning a
