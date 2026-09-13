@@ -80,6 +80,26 @@ router.post('/', authorize('queue.write'), async (req, res) => {
     
     if (existingQueue) {
       console.log('Patient already in queue:', existingQueue.id);
+      // This used to return silently with no one notified — from the caller's
+      // side, "queue this patient" had visibly succeeded, but if the earlier
+      // queuing (possibly hours or days ago, if the entry was never resolved)
+      // never reached a doctor, nothing here ever told anyone a patient was
+      // waiting. Re-notifying every time this is hit is deliberate: calling
+      // this endpoint again for an already-queued patient is itself a signal
+      // worth surfacing, not just a no-op to swallow.
+      if ((existingQueue.queue_type || 'consultation') === 'consultation') {
+        try {
+          const { notifyRole } = require('../services/notificationService');
+          const BranchQueryFilter = require('../services/BranchQueryFilter');
+          const { sequelize: db } = req.models;
+          await notifyRole(db, {
+            clinic_id: BranchQueryFilter.resolveClinicId(req), role: 'doctor', branch_id: existingQueue.branch_id,
+            type: 'patient_queued', title: 'Patient waiting in queue',
+            message: `${patient.first_name} ${patient.last_name} is still waiting in the consultation queue`,
+            entity_type: 'PatientQueue', entity_id: existingQueue.id, link: '/lis/queue',
+          });
+        } catch (e) { /* non-blocking */ }
+      }
       return res.status(200).json(existingQueue); // Return existing queue entry
     }
     
