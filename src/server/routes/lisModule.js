@@ -221,15 +221,42 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
 
     // Only create a queue entry if the user actually chose to queue at registration time
     // (selected a clinic or doctor) — otherwise every fresh registration would show as "Queued".
+    let queuedVisitId = null;
     if (clinic_id || doctor_id) {
-      const visitId = uuidv4();
+      queuedVisitId = uuidv4();
       await db.query(
         `INSERT INTO lis_test_orders (id, participant_id, doctor_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, 'waiting')`,
-        { replacements: [visitId, id, doctor_id || null, room_number || null, clinic_id || null, clinic_name || null], transaction: t }
+        { replacements: [queuedVisitId, id, doctor_id || null, room_number || null, clinic_id || null, clinic_name || null], transaction: t }
       );
     }
 
     await t.commit();
+
+    // Same notification gap as /participants/:id/queue below, but for the far more common
+    // path: registering and queuing in one step from the registration form. Non-blocking,
+    // after commit — a notification failure must never surface as a failed registration.
+    if (queuedVisitId) {
+      try {
+        const { notifyUser, notifyRole } = require('../services/notificationService');
+        const patientName = `${first_name} ${last_name}`.trim();
+        if (doctor_id) {
+          await notifyUser(db, {
+            clinic_id: req.user?.clinicId, user_id: doctor_id,
+            type: 'patient_queued', title: 'New patient queued',
+            message: `${patientName} has been queued for you${clinic_name ? ` at ${clinic_name}` : ''}`,
+            entity_type: 'LisTestOrder', entity_id: queuedVisitId, link: '/lis/queue',
+          });
+        } else {
+          await notifyRole(db, {
+            clinic_id: req.user?.clinicId, role: 'doctor', branch_id: req.user?.branchId,
+            type: 'patient_queued', title: 'New patient queued',
+            message: `${patientName} has been added to the consultation queue`,
+            entity_type: 'LisTestOrder', entity_id: queuedVisitId, link: '/lis/queue',
+          });
+        }
+      } catch (e) { /* non-blocking */ }
+    }
+
     res.status(201).json({ success: true, id, message: 'Participant registered successfully' });
   } catch (error) {
     if (!t.finished) await t.rollback().catch(() => {});
@@ -356,6 +383,37 @@ router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req,
       `INSERT INTO lis_test_orders (id, participant_id, doctor_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, 'waiting')`,
       { replacements: [visitId, id, doctor_id || null, room_number || null, clinic_id || null, clinic_name || null] }
     );
+
+    // This is the actual "queue a patient to a doctor" path this app uses today
+    // (lis_test_orders, not the older patient_queue table) — it had no notification
+    // at all, so a doctor never learned a patient was waiting until they happened to
+    // open the queue screen. Non-blocking, and note clinic_id here is the *tenant's*
+    // clinic_id (req.user?.clinicId) — req.body's clinic_id/clinic_name is the
+    // destination department (e.g. "GP"), an unrelated UUID, not a notification target.
+    try {
+      const { notifyUser, notifyRole } = require('../services/notificationService');
+      const [[participant]] = await db.query(
+        `SELECT first_name, last_name FROM lis_participants WHERE id = ?`,
+        { replacements: [id] }
+      );
+      const patientName = participant ? `${participant.first_name} ${participant.last_name}`.trim() : 'A patient';
+      if (doctor_id) {
+        await notifyUser(db, {
+          clinic_id: req.user?.clinicId, user_id: doctor_id,
+          type: 'patient_queued', title: 'New patient queued',
+          message: `${patientName} has been queued for you${clinic_name ? ` at ${clinic_name}` : ''}`,
+          entity_type: 'LisTestOrder', entity_id: visitId, link: '/lis/queue',
+        });
+      } else {
+        await notifyRole(db, {
+          clinic_id: req.user?.clinicId, role: 'doctor', branch_id: req.user?.branchId,
+          type: 'patient_queued', title: 'New patient queued',
+          message: `${patientName} has been added to the consultation queue`,
+          entity_type: 'LisTestOrder', entity_id: visitId, link: '/lis/queue',
+        });
+      }
+    } catch (e) { /* non-blocking */ }
+
     res.json({ success: true, message: 'Participant queued to doctor successfully' });
   } catch (error) {
     console.error('Error queuing participant:', error);
