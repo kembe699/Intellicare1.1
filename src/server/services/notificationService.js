@@ -60,10 +60,24 @@ async function notifyRole(sequelize, { clinic_id, role, branch_id, excludeUserId
         WHERE ${conditions.join(' AND ')}`,
       { replacements }
     );
+    if (users.length === 0) return;
 
-    for (const u of users) {
-      await notifyUser(sequelize, { clinic_id, user_id: u.id, type, title, message, entity_type, entity_id, link });
-    }
+    // One multi-row INSERT rather than one round trip per recipient — a role
+    // with dozens of people (every nurse in a large facility, say) would
+    // otherwise serialize that many sequential queries for a single event.
+    const rowReplacements = { clinicId: parseInt(clinic_id) || null, type, title, message: message || null,
+      entityType: entity_type || null, entityId: entity_id != null ? String(entity_id) : null, link: link || null };
+    const valueRows = users.map((u, i) => {
+      rowReplacements[`userId${i}`] = u.id;
+      return `(:id${i}, :clinicId, :userId${i}, :type, :title, :message, :entityType, :entityId, :link, false, NOW())`;
+    });
+    for (let i = 0; i < users.length; i++) rowReplacements[`id${i}`] = uuidv4();
+
+    await sequelize.query(
+      `INSERT INTO app_notifications (id, clinic_id, user_id, type, title, message, entity_type, entity_id, link, is_read, created_at)
+       VALUES ${valueRows.join(', ')}`,
+      { replacements: rowReplacements }
+    );
   } catch (e) {
     console.error('notifyRole failed (non-blocking):', e.message);
   }
