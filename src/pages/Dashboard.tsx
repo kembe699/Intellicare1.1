@@ -593,7 +593,7 @@ const Dashboard: React.FC = () => {
               searchable
               searchPlaceholder="Search by patient or receipt number..."
               toolbarExtra={
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Label htmlFor="paymentsFrom" className="text-xs text-muted-foreground">From</Label>
                   <Input id="paymentsFrom" type="date" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} className="h-9 w-auto" />
                   <Label htmlFor="paymentsTo" className="text-xs text-muted-foreground">To</Label>

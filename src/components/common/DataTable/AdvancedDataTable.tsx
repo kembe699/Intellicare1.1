@@ -245,9 +245,9 @@ export function AdvancedDataTable<T extends Record<string, any>>({
       {/* Toolbar */}
       {(searchable || exportable || toolbarExtra || initialColumns.some((col) => col.hidden !== undefined)) && (
         <div className="flex items-center justify-between p-3 border-b border-border gap-3 flex-wrap">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
             {searchable && (
-              <div className="flex-1 max-w-2xl">
+              <div className="flex-1 min-w-[160px] max-w-2xl">
                 <TableSearch
                   value={searchQuery}
                   onChange={setSearchQuery}

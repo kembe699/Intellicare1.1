@@ -608,7 +608,7 @@ const SchemeManagement: React.FC = () => {
         />
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="space-y-6">
-          <TabsList className="w-full flex h-auto p-0 bg-transparent border-b border-border rounded-none gap-1 overflow-x-auto">
+          <TabsList className="w-full flex justify-start h-auto p-0 bg-transparent border-b border-border rounded-none gap-1 overflow-x-auto">
             {tabs.map(tab => (
               <TabsTrigger
                 key={tab.id}

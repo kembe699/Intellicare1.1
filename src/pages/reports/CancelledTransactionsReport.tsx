@@ -240,7 +240,7 @@ export default function CancelledTransactionsReport() {
               emptyMessage="No cancelled or refunded transactions in this period."
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               toolbarExtra={
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <UserCircle className="h-4 w-4 text-muted-foreground" />
                   <select
                     className="flex h-9 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm"

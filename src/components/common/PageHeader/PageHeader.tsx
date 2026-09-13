@@ -54,7 +54,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         </nav>
       )}
       
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5">
             {icon && (
@@ -62,15 +62,20 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                 {icon}
               </span>
             )}
-            <h1 className="text-2xl font-bold text-foreground truncate">{title}</h1>
+            {/* No truncate: on a narrow screen with wide actions (a button
+                group, an icon + label), squeezing the title down to fit one
+                row cut off the page's own name (e.g. "Purchas..." for
+                "Purchase Orders"). flex-wrap above lets actions drop to
+                their own row instead, so the title keeps its full width. */}
+            <h1 className="text-2xl font-bold text-foreground break-words">{title}</h1>
           </div>
           {subtitle && (
             <p className="text-muted-foreground mt-1">{subtitle}</p>
           )}
         </div>
-        
+
         {actions && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {actions}
           </div>
         )}

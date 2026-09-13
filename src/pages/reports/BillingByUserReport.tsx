@@ -213,7 +213,7 @@ export default function BillingByUserReport() {
               keyExtractor={(c, i) => c.cashierId ?? `${c.cashierName}-${i}`}
               emptyMessage="No receipts recorded for this period."
               toolbarExtra={
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <UserCircle className="h-4 w-4 text-muted-foreground" />
                   <select
                     className="flex h-9 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm"
