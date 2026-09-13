@@ -486,6 +486,21 @@ router.put('/:id/current-room', async (req, res) => {
     }
     const { room_id } = req.body;
 
+    // Two doctors both claiming "Consultation Room 1" used to be silently allowed —
+    // whoever set it second just overwrote the association with nothing to show for
+    // it, and LIS registration's doctor->room auto-fill (current_room_id) would then
+    // point a patient at a room someone else was actually sitting in. Clearing your
+    // own room (room_id falsy) is always allowed and never needs this check.
+    if (room_id) {
+      const [[holder]] = await sequelize.query(
+        'SELECT id, display_name FROM users WHERE current_room_id = ? AND id != ? AND is_active = true LIMIT 1',
+        { replacements: [room_id, req.params.id] }
+      );
+      if (holder) {
+        return res.status(409).json({ error: `This room is already occupied by Dr. ${holder.display_name}` });
+      }
+    }
+
     const [updatedRows] = await User.update(
       { current_room_id: room_id || null, updated_at: new Date() },
       { where: { id: req.params.id } }

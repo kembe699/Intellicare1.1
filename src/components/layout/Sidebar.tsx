@@ -51,6 +51,7 @@ import {
   Bell
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { authFetch } from '@/api/apiClient';
 import { Combobox } from '@/components/ui/combobox';
 
@@ -257,7 +258,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     try {
       await updateCurrentRoom(roomId || null);
     } catch (e) {
-      console.error('Failed to update current room', e);
+      // The backend rejects a room another active doctor already holds with a
+      // specific 409 message ("already occupied by Dr. X") — surface that
+      // instead of a silent console.error, since this is the one case where
+      // the picker's selection genuinely didn't take and the doctor needs to
+      // know why before picking a different room.
+      toast.error(e instanceof Error ? e.message : 'Failed to update current room');
+    } finally {
+      setSavingRoom(false);
+    }
+  };
+
+  const handleSignOutOfRoom = async () => {
+    setSavingRoom(true);
+    try {
+      await updateCurrentRoom(null);
+      toast.success('Signed out of room');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to sign out of room');
     } finally {
       setSavingRoom(false);
     }
@@ -334,6 +352,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     searchPlaceholder="Search rooms..."
                     className="mt-2 w-full h-8 text-[12px]"
                   />
+                  {user.currentRoomId && (
+                    <button
+                      onClick={handleSignOutOfRoom}
+                      disabled={savingRoom}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-sm border border-sidebar-border text-[11px] font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors disabled:opacity-50"
+                    >
+                      <DoorOpen className="w-3.5 h-3.5" />
+                      Sign out of room
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -891,13 +919,19 @@ const NotificationBell: React.FC = () => {
                 <button
                   key={n.id}
                   onClick={() => handleSelect(n)}
-                  className={cn('w-full text-left px-4 py-3 hover:bg-accent transition-colors flex items-start gap-2', !n.is_read && 'bg-primary/5')}
+                  className={cn('group w-full text-left px-4 py-3 hover:bg-accent transition-colors flex items-start gap-2', !n.is_read && 'bg-primary/5')}
                 >
-                  {!n.is_read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+                  {/* --accent is the same brand teal as --primary (see index.css), so on
+                      hover the unread dot and the muted-foreground/foreground text below
+                      would otherwise blend into the row's own hover background instead of
+                      just going unreadable — group-hover:text-white / bg-white make both
+                      track the hover background the same way the button variant fix
+                      earlier this session made outline-button text track its own bg. */}
+                  {!n.is_read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0 group-hover:bg-white" />}
                   <div className={cn('flex-1 min-w-0', n.is_read && 'ml-3.5')}>
-                    <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
-                    {n.message && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>}
-                    <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.created_at)}</p>
+                    <p className="text-sm font-medium text-foreground truncate group-hover:text-white">{n.title}</p>
+                    {n.message && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5 group-hover:text-white">{n.message}</p>}
+                    <p className="text-[11px] text-muted-foreground mt-1 group-hover:text-white">{timeAgo(n.created_at)}</p>
                   </div>
                 </button>
               ))}

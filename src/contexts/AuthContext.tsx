@@ -272,7 +272,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ room_id: roomId }),
     });
     if (!res.ok) {
-      throw new Error('Failed to update current room');
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || 'Failed to update current room');
     }
     setUser(prev => (prev ? { ...prev, currentRoomId: roomId } : prev));
   };
