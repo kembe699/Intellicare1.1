@@ -579,7 +579,14 @@ export default function LISRegistration() {
                               value={regForm.doctor_id}
                               onChange={v => {
                                 const doctorId = v;
-                                const doctor = doctors.find((d: any) => String(d.id) === doctorId);
+                                // doctors[].id comes straight from the users API as a number
+                                // (users.id is a real int column), but Combobox's declared
+                                // option type is string — so despite the String() on the left
+                                // side here, doctorId itself was still a number at runtime and
+                                // this comparison silently never matched, meaning the auto-fill
+                                // below never fired: doctor was always undefined regardless of
+                                // which doctor was picked.
+                                const doctor = doctors.find((d: any) => String(d.id) === String(doctorId));
                                 setRegForm({
                                   ...regForm,
                                   doctor_id: doctorId,
