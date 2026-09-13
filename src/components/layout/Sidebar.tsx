@@ -45,7 +45,9 @@ import {
   BedDouble,
   DoorOpen,
   LogIn,
-  Key
+  Key,
+  SignalHigh,
+  SignalZero
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/api/apiClient';
@@ -777,6 +779,61 @@ export const MobileHeader: React.FC<{ onMenuClick: () => void }> = ({ onMenuClic
   );
 };
 
+// Signal-bars indicator of whether the browser can actually reach our backend.
+//
+// navigator.onLine only reflects whether a network interface is up at all —
+// a device connected to a router with no real internet, or our own backend
+// being down, both still read as "online" through that API alone. Polling
+// /health (a plain, unauthenticated endpoint outside /api) closes that gap,
+// and doubles as an instant signal on the 'online'/'offline' browser events
+// rather than waiting for the next poll tick.
+const NetworkStatus: React.FC = () => {
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const ping = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (!cancelled) setIsOnline(false);
+        return;
+      }
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch('/health', { cache: 'no-store', signal: controller.signal });
+        clearTimeout(timeout);
+        if (!cancelled) setIsOnline(res.ok);
+      } catch {
+        if (!cancelled) setIsOnline(false);
+      }
+    };
+
+    ping();
+    const interval = setInterval(ping, 20000);
+    window.addEventListener('online', ping);
+    window.addEventListener('offline', ping);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('online', ping);
+      window.removeEventListener('offline', ping);
+    };
+  }, []);
+
+  const Icon = isOnline ? SignalHigh : SignalZero;
+  return (
+    <div
+      className={cn('flex items-center gap-1.5', isOnline ? 'text-green-600' : 'text-red-600')}
+      title={isOnline ? 'Connected to the internet' : 'No internet connection'}
+    >
+      <Icon className="w-4 h-4" />
+      <span className="text-xs font-medium hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
+    </div>
+  );
+};
+
 // Desktop top bar — shows the current branch + admin/role status that used to live in the
 // sidebar, and the branch switcher for multi-branch users. Sits above the main content area,
 // to the right of the fixed sidebar.
@@ -801,15 +858,18 @@ export const TopBar: React.FC = () => {
           {user.isAdmin ? 'Admin access enabled' : `Role: ${user.role}`}
         </span>
       </div>
-      {user.accessibleBranches && user.accessibleBranches.length > 1 && (
-        <Combobox
-          options={user.accessibleBranches.map((branch) => ({ value: String(branch.id), label: `${branch.name}${branch.isPrimary ? ' (Primary)' : ''}` }))}
-          value={String(currentBranchId || '')}
-          onChange={(v) => switchBranch(parseInt(v, 10))}
-          searchPlaceholder="Search branches..."
-          className="w-48 h-8 text-xs"
-        />
-      )}
+      <div className="flex items-center gap-3">
+        <NetworkStatus />
+        {user.accessibleBranches && user.accessibleBranches.length > 1 && (
+          <Combobox
+            options={user.accessibleBranches.map((branch) => ({ value: String(branch.id), label: `${branch.name}${branch.isPrimary ? ' (Primary)' : ''}` }))}
+            value={String(currentBranchId || '')}
+            onChange={(v) => switchBranch(parseInt(v, 10))}
+            searchPlaceholder="Search branches..."
+            className="w-48 h-8 text-xs"
+          />
+        )}
+      </div>
     </header>
   );
 };

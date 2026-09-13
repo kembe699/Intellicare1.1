@@ -208,6 +208,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Auto sign-out after 5 minutes with no interaction. A clinical/billing
+  // system left open at a shared terminal is a real exposure, so this closes
+  // the session automatically rather than relying on staff to remember to
+  // lock the screen — matches the request to log an idle user out for
+  // security, not just let the token quietly expire on the next API call.
+  //
+  // Depends on !!user (not user itself) so a profile-field update via
+  // updateUser doesn't tear down and re-arm the listeners on every render —
+  // only an actual sign-in/sign-out should do that.
+  useEffect(() => {
+    if (!user) return;
+
+    const IDLE_LIMIT_MS = 5 * 60 * 1000;
+    const THROTTLE_MS = 1000; // don't reset on every pixel of mouse movement
+    let timer: ReturnType<typeof setTimeout>;
+    let lastReset = 0;
+
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { void signOut(); }, IDLE_LIMIT_MS);
+    };
+
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastReset < THROTTLE_MS) return;
+      lastReset = now;
+      arm();
+    };
+
+    const events: (keyof WindowEventMap)[] = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'wheel'];
+    events.forEach((evt) => window.addEventListener(evt, onActivity, { passive: true }));
+    arm();
+
+    return () => {
+      clearTimeout(timer);
+      events.forEach((evt) => window.removeEventListener(evt, onActivity));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!user]);
+
   const switchBranch = (branchId: number) => {
     setCurrentBranchId(branchId);
     localStorage.setItem('current_branch_id', branchId.toString());

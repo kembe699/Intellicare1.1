@@ -12,6 +12,14 @@ export default defineConfig(({ mode }) => ({
         target: 'http://localhost:3002',
         changeOrigin: true,
         secure: false,
+      },
+      // Unauthenticated liveness ping used by the network-status indicator —
+      // outside /api specifically so a stale/expired login token never
+      // reads as "no connection".
+      '/health': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        secure: false,
       }
     }
   },
