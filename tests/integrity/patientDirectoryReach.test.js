@@ -21,7 +21,13 @@ describe('the patient directory can reach every patient', () => {
   const participants = lis.slice(lis.indexOf("router.get('/participants'"), lis.indexOf("router.put('/participants/:id'"));
 
   test('the participants list is not capped at a few hundred rows', () => {
-    const cap = participants.match(/LIMIT \$\{LIMIT\}|LIMIT (\d+)/);
+    // Anchored to "ORDER BY p.created_at DESC LIMIT ..." — the clause that actually
+    // bounds how many people the picker gets back — rather than the first bare
+    // "LIMIT <n>" in the handler. A per-row LATERAL subquery (fetching just that
+    // participant's own latest active visit) legitimately has its own small
+    // "LIMIT 1" earlier in the same query text; that's an unrelated cap on rows
+    // per participant, not on how many participants come back.
+    const cap = participants.match(/ORDER BY p\.created_at DESC LIMIT \$\{LIMIT\}|ORDER BY p\.created_at DESC LIMIT (\d+)/);
     expect(cap).toBeTruthy();
     if (cap[1]) expect(Number(cap[1])).toBeGreaterThanOrEqual(2000);
     else expect(participants).toMatch(/LIS_PARTICIPANT_LIMIT \|\| '(\d{4,})'/);

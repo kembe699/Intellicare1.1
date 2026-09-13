@@ -18,6 +18,16 @@ const GENDER_OPTIONS = [
   { value: 'Other', label: 'Other' },
 ];
 
+const timeAgo = (iso: string): string => {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+};
+
 // Local (not UTC) date string, so "today" matches the user's actual calendar day.
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -465,6 +475,20 @@ export default function LISRegistration() {
                 </Button>
               )}
             </div>
+            {editingParticipant?.is_queued && (
+              <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 mb-4 text-sm">
+                <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-foreground">This patient already has an active visit</p>
+                  <p className="text-muted-foreground">
+                    {editingParticipant.active_visit_status === 'ordered' ? 'Being seen' : 'Waiting'}
+                    {editingParticipant.active_visit_doctor ? ` by Dr. ${editingParticipant.active_visit_doctor}` : ''}
+                    {editingParticipant.active_visit_room ? ` in ${editingParticipant.active_visit_room}` : ''}
+                    {editingParticipant.active_visit_since ? ` — queued ${timeAgo(editingParticipant.active_visit_since)}` : ''}
+                  </p>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-3 rounded-lg border p-3 bg-card">

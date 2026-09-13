@@ -954,6 +954,23 @@ async function startServer() {
       setInterval(runLedgerSweep, 10 * 60 * 1000); // every 10 minutes
     });
 
+    // A doctor forgetting to close a visit leaves it open indefinitely — still
+    // counted as "active" everywhere that checks (duplicate-patient lookup,
+    // repeat-test guards, the queue/history views). Auto-closing anything still
+    // open 24h after it started keeps "active" meaningful without relying on
+    // staff to remember. Checked every 30 minutes — the close itself only needs
+    // to happen sometime after the 24h mark, not to the minute.
+    setImmediate(() => {
+      const { closeStaleVisitsAllTenants } = require('./services/visitAutoCloser');
+      const runVisitAutoClose = () => closeStaleVisitsAllTenants()
+        .then(({ closed, failed }) => {
+          if (failed > 0) console.warn(`⚠️  Visit auto-close: ${failed} tenant(s) could not be checked.`);
+        })
+        .catch((err) => console.error('⚠️  Visit auto-close failed:', err.message));
+      runVisitAutoClose();
+      setInterval(runVisitAutoClose, 30 * 60 * 1000); // every 30 minutes
+    });
+
     setImmediate(() => {
       require('./models/platform').initializePlatformDatabase()
         .then(() => {

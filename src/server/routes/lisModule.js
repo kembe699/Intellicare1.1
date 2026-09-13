@@ -132,7 +132,7 @@ function parseJSONField(v, fallback = {}) {
 async function findByPhone(phone, replacementsFn = db.query) {
   const [existing] = await replacementsFn(
     `SELECT id, participant_number, first_name, last_name, gender, date_of_birth, phone, residence, study_ref,
-       EXISTS(SELECT 1 FROM lis_test_orders o WHERE o.participant_id = lis_participants.id AND o.status IN ('waiting', 'called')) AS is_queued
+       EXISTS(SELECT 1 FROM lis_test_orders o WHERE o.participant_id = lis_participants.id AND o.status != 'closed') AS is_queued
      FROM lis_participants WHERE phone = ? LIMIT 1`,
     { replacements: [phone] }
   );
@@ -161,7 +161,7 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
     if (cleanPhone) {
       const [existing] = await db.query(
         `SELECT id, participant_number, first_name, last_name, gender, date_of_birth, phone, residence, study_ref,
-           EXISTS(SELECT 1 FROM lis_test_orders o WHERE o.participant_id = lis_participants.id AND o.status IN ('waiting', 'called')) AS is_queued
+           EXISTS(SELECT 1 FROM lis_test_orders o WHERE o.participant_id = lis_participants.id AND o.status != 'closed') AS is_queued
          FROM lis_participants WHERE phone = ? FOR UPDATE`,
         { replacements: [cleanPhone], transaction: t }
       );
@@ -185,7 +185,7 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
     if (first_name && last_name && date_of_birth) {
       const [nameDobMatch] = await db.query(
         `SELECT id, participant_number, first_name, last_name, gender, date_of_birth, phone, residence, study_ref,
-           EXISTS(SELECT 1 FROM lis_test_orders o WHERE o.participant_id = lis_participants.id AND o.status IN ('waiting', 'called')) AS is_queued
+           EXISTS(SELECT 1 FROM lis_test_orders o WHERE o.participant_id = lis_participants.id AND o.status != 'closed') AS is_queued
          FROM lis_participants
          WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?) AND date_of_birth = ?
          FOR UPDATE`,
@@ -335,13 +335,33 @@ router.get('/participants', authorize('lis.participants.read'), async (req, res)
     // matching rather than relying on what happens to fit.
     const LIMIT = parseInt(process.env.LIS_PARTICIPANT_LIMIT || '2000', 10);
 
+    // is_queued covers every non-closed status ('waiting', 'called', 'ordered'), not just
+    // the queue-stage ones — a patient a doctor has already started seeing (status
+    // 'ordered') still has an active visit and must not look selectable for a fresh
+    // "Queue on Registration" here just because they've moved past the waiting room.
+    //
+    // The active_visit_* columns exist so the registration screen can actually say what
+    // "already has an active visit" means (which doctor, which room, since when) instead
+    // of just refusing to let reception queue them again with no explanation.
     const [participants] = await db.query(`
       SELECT p.*,
         EXISTS(
           SELECT 1 FROM lis_test_orders o
-          WHERE o.participant_id = p.id AND o.status IN ('waiting', 'called')
-        ) AS is_queued
+          WHERE o.participant_id = p.id AND o.status != 'closed'
+        ) AS is_queued,
+        av.status AS active_visit_status,
+        av.room_number AS active_visit_room,
+        av.doctor_name AS active_visit_doctor,
+        av.created_at AS active_visit_since
       FROM lis_participants p
+      LEFT JOIN LATERAL (
+        SELECT o.status, o.room_number, o.created_at, u.display_name AS doctor_name
+        FROM lis_test_orders o
+        LEFT JOIN users u ON u.id = o.doctor_id
+        WHERE o.participant_id = p.id AND o.status != 'closed'
+        ORDER BY o.created_at DESC
+        LIMIT 1
+      ) av ON true
       ${where}
       ORDER BY p.created_at DESC LIMIT ${LIMIT}
     `, { replacements });
