@@ -48,6 +48,10 @@ async function buildTenantConnection(schemaName) {
   const { ensureRolesTables } = require('./config/ensureRolesTables');
   ensureRolesTables(sequelize).catch(() => {});
 
+  // In-app notifications table, ensured per-tenant the same way.
+  const { ensureNotificationsTable } = require('./config/ensureNotificationsTable');
+  ensureNotificationsTable(sequelize).catch(() => {});
+
   return { sequelize, models };
 }
 

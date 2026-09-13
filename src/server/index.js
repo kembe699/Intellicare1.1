@@ -531,6 +531,7 @@ app.use((req, res, next) => {
 
 // Import route handlers
 const usersRouter = require('./routes/users');
+const notificationsRouter = require('./routes/notifications');
 const patientsRouter = require('./routes/patients');
 const labTestsRouter = require('./routes/labTests');
 const authRouter = require('./routes/auth');
@@ -596,6 +597,7 @@ app.use('/api/platform/dashboard', platformDashboardRouter);
 app.use('/api/platform/admins', platformAdminsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/patients', patientsRouter);
 app.use('/api/lab-tests', labTestsRouter);
 app.use('/api/lab-requests', labRequestsRouter);

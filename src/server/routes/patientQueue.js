@@ -106,7 +106,25 @@ router.post('/', authorize('queue.write'), async (req, res) => {
     
     const queueEntry = await PatientQueue.create(queueData);
     console.log('Queue entry created successfully:', queueEntry.id);
-    
+
+    // Notify doctors — this queue has no per-doctor assignment (queueData has
+    // no doctor_id), any doctor picks up the next waiting patient, so this
+    // broadcasts to the whole role rather than one specific recipient.
+    // Non-blocking: never fail the queue entry over a notification hiccup.
+    if (queueData.queue_type === 'consultation') {
+      try {
+        const { notifyRole } = require('../services/notificationService');
+        const BranchQueryFilter = require('../services/BranchQueryFilter');
+        const { sequelize: db } = req.models;
+        await notifyRole(db, {
+          clinic_id: BranchQueryFilter.resolveClinicId(req), role: 'doctor', branch_id: queueData.branch_id,
+          type: 'patient_queued', title: 'New patient queued',
+          message: `${patient.first_name} ${patient.last_name} has been added to the consultation queue`,
+          entity_type: 'PatientQueue', entity_id: queueEntry.id, link: '/lis/queue',
+        });
+      } catch (e) { /* non-blocking */ }
+    }
+
     res.status(201).json(queueEntry);
   } catch (error) {
     console.error('=== ERROR ADDING PATIENT TO QUEUE ===');

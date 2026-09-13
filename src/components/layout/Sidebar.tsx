@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
@@ -47,7 +47,8 @@ import {
   LogIn,
   Key,
   Wifi,
-  WifiOff
+  WifiOff,
+  Bell
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/api/apiClient';
@@ -779,6 +780,135 @@ export const MobileHeader: React.FC<{ onMenuClick: () => void }> = ({ onMenuClic
   );
 };
 
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string | null;
+  link: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+const timeAgo = (iso: string) => {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
+// In-app notification bell. Polls the unread count continuously (cheap — a
+// single COUNT(*)) and only fetches the full list when the dropdown is
+// actually opened, so the badge stays live without every page load paying
+// for a list it may never show.
+const NotificationBell: React.FC = () => {
+  const navigate = useNavigate();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await authFetch('/api/notifications/unread-count');
+      if (res.ok) setUnreadCount((await res.json()).count || 0);
+    } catch { /* leave the last known count on a transient failure */ }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    authFetch('/api/notifications?limit=20')
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setNotifications)
+      .catch(() => setNotifications([]))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const handleSelect = async (n: NotificationItem) => {
+    setOpen(false);
+    if (!n.is_read) {
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      authFetch(`/api/notifications/${n.id}/read`, { method: 'PUT' }).catch(() => {});
+    }
+    if (n.link) navigate(n.link);
+  };
+
+  const markAllRead = async () => {
+    setNotifications((prev) => prev.map((x) => ({ ...x, is_read: true })));
+    setUnreadCount(0);
+    try { await authFetch('/api/notifications/read-all', { method: 'PUT' }); } catch { /* next poll reconciles */ }
+  };
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative p-1.5 rounded-md hover:bg-accent transition-colors"
+        title="Notifications"
+      >
+        <Bell className="w-6 h-6 text-muted-foreground" strokeWidth={2.25} />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-80 max-h-[28rem] overflow-y-auto bg-card border border-border rounded-lg shadow-lg z-50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border sticky top-0 bg-card">
+            <span className="text-sm font-semibold text-foreground">Notifications</span>
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="text-xs text-primary hover:underline">Mark all read</button>
+            )}
+          </div>
+          {loading ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">Loading...</div>
+          ) : notifications.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No notifications yet</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {notifications.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => handleSelect(n)}
+                  className={cn('w-full text-left px-4 py-3 hover:bg-accent transition-colors flex items-start gap-2', !n.is_read && 'bg-primary/5')}
+                >
+                  {!n.is_read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+                  <div className={cn('flex-1 min-w-0', n.is_read && 'ml-3.5')}>
+                    <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
+                    {n.message && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>}
+                    <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.created_at)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Signal-bars indicator of whether the browser can actually reach our backend.
 //
 // navigator.onLine only reflects whether a network interface is up at all —
@@ -858,6 +988,7 @@ export const TopBar: React.FC = () => {
         </span>
       </div>
       <div className="flex items-center gap-3">
+        <NotificationBell />
         <NetworkStatus />
         {user.accessibleBranches && user.accessibleBranches.length > 1 && (
           <Combobox

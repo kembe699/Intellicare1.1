@@ -573,6 +573,25 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
     }
 
     await t.commit();
+
+    // Notify lab staff — non-blocking, and after commit so a notification
+    // failure can never roll back an order that actually succeeded.
+    try {
+      const { notifyRole } = require('../services/notificationService');
+      const [[participant]] = await db.query(
+        `SELECT first_name, last_name FROM lis_participants WHERE id = ?`,
+        { replacements: [participant_id] }
+      );
+      const patientName = participant ? `${participant.first_name} ${participant.last_name}`.trim() : 'a patient';
+      const testNames = (tests || []).map(t2 => t2.name || t2.code).filter(Boolean).join(', ') || 'tests';
+      await notifyRole(db, {
+        clinic_id: req.user?.clinicId, role: 'lab', branch_id: req.user?.branchId,
+        type: 'lab_test_requested', title: 'New lab test requested',
+        message: `${testNames} requested for ${patientName}`,
+        entity_type: 'LisTestOrder', entity_id: orderId, link: '/lis/orders',
+      });
+    } catch (e) { /* non-blocking */ }
+
     res.status(201).json({ success: true, order_id: orderId, message: 'Order and specimens created', skipped_duplicates: skipped });
   } catch (error) {
     await t.rollback();
