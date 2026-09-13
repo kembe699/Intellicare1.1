@@ -46,8 +46,8 @@ import {
   DoorOpen,
   LogIn,
   Key,
-  SignalHigh,
-  SignalZero
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/api/apiClient';
@@ -822,14 +822,13 @@ const NetworkStatus: React.FC = () => {
     };
   }, []);
 
-  const Icon = isOnline ? SignalHigh : SignalZero;
+  const Icon = isOnline ? Wifi : WifiOff;
   return (
     <div
-      className={cn('flex items-center gap-1.5', isOnline ? 'text-green-600' : 'text-red-600')}
+      className={cn('flex items-center', isOnline ? 'text-green-600' : 'text-red-600')}
       title={isOnline ? 'Connected to the internet' : 'No internet connection'}
     >
-      <Icon className="w-4 h-4" />
-      <span className="text-xs font-medium hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
+      <Icon className="w-6 h-6" strokeWidth={2.5} />
     </div>
   );
 };
