@@ -208,7 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Auto sign-out after 5 minutes with no interaction. A clinical/billing
+  // Auto sign-out after 10 minutes with no interaction. A clinical/billing
   // system left open at a shared terminal is a real exposure, so this closes
   // the session automatically rather than relying on staff to remember to
   // lock the screen — matches the request to log an idle user out for
@@ -220,7 +220,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!user) return;
 
-    const IDLE_LIMIT_MS = 5 * 60 * 1000;
+    const IDLE_LIMIT_MS = 10 * 60 * 1000;
     const THROTTLE_MS = 1000; // don't reset on every pixel of mouse movement
     let timer: ReturnType<typeof setTimeout>;
     let lastReset = 0;
