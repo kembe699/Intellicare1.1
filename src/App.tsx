@@ -52,6 +52,7 @@ const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseO
 const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpenses'));
 const ExpenseDetail = lazyWithRetry(() => import('./pages/procurement/ExpenseDetail'));
 const SuppliersManagement = lazyWithRetry(() => import('./pages/procurement/SuppliersManagement'));
+const SupplierProfile = lazyWithRetry(() => import('./pages/procurement/SupplierProfile'));
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
@@ -417,6 +418,11 @@ const AppRoutes = () => {
       <Route path="/procurement/suppliers-mgmt" element={
         <ProtectedRoute requiredPrivilege="procurement.read">
           <SuppliersManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/procurement/suppliers-mgmt/:id" element={
+        <ProtectedRoute requiredPrivilege="procurement.read">
+          <SupplierProfile />
         </ProtectedRoute>
       } />
       <Route path="/procurement/requisitions" element={
