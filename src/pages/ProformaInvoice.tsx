@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
   FileSignature, Search, Plus, Minus, Trash2, User, Stethoscope, Package,
-  Printer, ArrowRightLeft, Loader2, X, Receipt, CheckCircle2, Clock, ChevronsUpDown, Check,
+  Printer, ArrowRightLeft, Loader2, X, Receipt, CheckCircle2, Clock, ChevronsUpDown, Check, UserPlus,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -58,6 +58,16 @@ export default function ProformaInvoicePage() {
   const [patientSearch, setPatientSearch] = useState('');
   const [people, setPeople] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+
+  // Walk-in patient (not previously registered) — proforma requests come from
+  // people just asking "how much would this cost" as often as they come from
+  // existing patients, so registration can't be a hard prerequisite here.
+  const [showWalkInForm, setShowWalkInForm] = useState(false);
+  const [walkInFirstName, setWalkInFirstName] = useState('');
+  const [walkInLastName, setWalkInLastName] = useState('');
+  const [walkInAge, setWalkInAge] = useState('');
+  const [walkInPhone, setWalkInPhone] = useState('');
+  const [creatingWalkIn, setCreatingWalkIn] = useState(false);
 
   // Catalog
   const [catalogTab, setCatalogTab] = useState<'services' | 'products'>('services');
@@ -103,6 +113,65 @@ export default function ProformaInvoicePage() {
       // A half that cannot be read must say so. Silently showing the other half
       // is how a permission error came to look like "this patient doesn't exist".
       toast.error(`Could not load ${failed.join(' and ')} — the patient list is incomplete.`);
+    }
+  };
+
+  // Registers a walk-in through the same /api/lis/participants endpoint LIS
+  // registration and pharmacy's own walk-in flow already use — a proforma
+  // request is exactly as valid a reason to register someone as a lab visit
+  // is, and this keeps them in the one shared directory rather than a
+  // proforma-only side list.
+  const handleCreateWalkIn = async () => {
+    if (creatingWalkIn) return;
+    if (!walkInFirstName.trim() || !walkInLastName.trim()) {
+      toast.error('First and last name are required');
+      return;
+    }
+    setCreatingWalkIn(true);
+    try {
+      const res = await authFetch('/api/lis/participants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          first_name: walkInFirstName.trim(),
+          last_name: walkInLastName.trim(),
+          phone: walkInPhone.trim() || undefined,
+          demographics: walkInAge.trim() ? { age: parseInt(walkInAge, 10) || undefined } : undefined,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        // The create response only carries { id }, not the server-generated
+        // participant_number — refetch so the badge shown next to "selected"
+        // is the real PTN-xxxx code, not a blank placeholder.
+        const { people: refreshed, failed } = await fetchPatientDirectory();
+        setPeople(refreshed);
+        const newPerson = refreshed.find((p: any) => p.id === created.id) || {
+          id: created.id,
+          label: `${walkInFirstName.trim()} ${walkInLastName.trim()}`.trim(),
+          firstName: walkInFirstName.trim(),
+          lastName: walkInLastName.trim(),
+          phone: walkInPhone.trim() || undefined,
+          source: 'lis' as const,
+        };
+        setSelectedPatient({ ...newPerson, phone: walkInPhone.trim() || undefined });
+        setShowWalkInForm(false);
+        setWalkInFirstName(''); setWalkInLastName(''); setWalkInAge(''); setWalkInPhone('');
+        toast.success(`${newPerson.label} registered`);
+        if (failed.length) toast.error(`Could not refresh ${failed.join(' and ')} — the patient list may be incomplete.`);
+      } else {
+        const err = await res.json();
+        if (err.error === 'duplicate_phone' || err.error === 'duplicate_name_dob') {
+          toast.error(err.message || 'This person may already be registered');
+        } else {
+          toast.error(err.error || 'Failed to register patient');
+        }
+      }
+    } catch (e) {
+      toast.error('Network error');
+    } finally {
+      setCreatingWalkIn(false);
     }
   };
 
@@ -407,6 +476,33 @@ export default function ProformaInvoicePage() {
                     {patientSearch.trim().length >= 2 && patientResults.length === 0 && (
                       <div className="text-xs text-muted-foreground text-center py-2">No matching patients.</div>
                     )}
+
+                    {!showWalkInForm ? (
+                      <Button type="button" variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => setShowWalkInForm(true)}>
+                        <UserPlus className="w-3.5 h-3.5 mr-1.5" /> New Walk-in Patient
+                      </Button>
+                    ) : (
+                      <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-muted-foreground">New Walk-in Patient</p>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowWalkInForm(false)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input placeholder="First name" className="h-8 text-sm" value={walkInFirstName} onChange={e => setWalkInFirstName(e.target.value)} />
+                          <Input placeholder="Last name" className="h-8 text-sm" value={walkInLastName} onChange={e => setWalkInLastName(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input type="number" min="0" placeholder="Age" className="h-8 text-sm" value={walkInAge} onChange={e => setWalkInAge(e.target.value)} />
+                          <Input placeholder="Phone number" className="h-8 text-sm" value={walkInPhone} onChange={e => setWalkInPhone(e.target.value)} />
+                        </div>
+                        <Button type="button" size="sm" className="w-full" onClick={handleCreateWalkIn} disabled={creatingWalkIn}>
+                          {creatingWalkIn ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5 mr-1.5" />}
+                          {creatingWalkIn ? 'Registering...' : 'Register & Use'}
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -482,13 +578,15 @@ export default function ProformaInvoicePage() {
                         </PopoverContent>
                       </Popover>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Quantity</label>
-                      <Input type="number" min="1" value={catalogQty} onChange={e => setCatalogQty(e.target.value)} />
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">Quantity</label>
+                        <Input type="number" min="1" value={catalogQty} onChange={e => setCatalogQty(e.target.value)} />
+                      </div>
+                      <Button type="button" size="sm" onClick={handleAddSelected} disabled={!selectedCatalogId}>
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Add to Quote
+                      </Button>
                     </div>
-                    <Button type="button" variant="outline" className="w-full" onClick={handleAddSelected} disabled={!selectedCatalogId}>
-                      <Plus className="w-4 h-4 mr-2" /> Add to Quote
-                    </Button>
                   </>
                 )}
 
