@@ -69,6 +69,13 @@ const DailyExpenses: React.FC = () => {
   const [busyExpId, setBusyExpId] = useState<number | null>(null);
   const [openEditCombo, setOpenEditCombo] = useState(false);
   const [searchBills, setSearchBills] = useState('');
+  // Empty by default — unlike Daily Expenses (a daily log, so "today" is the
+  // natural default), this is a worklist of whatever's still unpaid regardless
+  // of when it was raised; defaulting to a date window would hide bills nobody
+  // has gotten around to paying yet.
+  const [billFrom, setBillFrom] = useState('');
+  const [billTo, setBillTo] = useState('');
+  const [supplierFilter, setSupplierFilter] = useState('all');
   const [showExpModal, setShowExpModal] = useState(false);
   const [expForm, setExpForm] = useState({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', notes: '', payment_method: 'Cash' });
   const [openExpCombo, setOpenExpCombo] = useState(false);
@@ -210,6 +217,78 @@ const DailyExpenses: React.FC = () => {
       `expenses_${expFrom}_to_${expTo}`,
     );
     toast.success(`Exported ${filteredExpenses.length} expense(s)`);
+  };
+
+  const exportBillsCSV = () => {
+    if (filteredBills.length === 0) { toast.error('Nothing to export'); return; }
+    exportCSV(
+      filteredBills,
+      [
+        { key: 'po_number', header: 'PO Number' },
+        { key: 'order_date', header: 'Date', transform: (v: any) => (v ? new Date(v).toLocaleDateString() : '') },
+        { key: 'supplier_name', header: 'Supplier' },
+        { key: 'po_currency', header: 'Currency' },
+        { key: 'total_amount', header: 'PO Total', transform: (v: any) => parseFloat(String(v || 0)).toFixed(2) },
+        { key: 'paid_amount', header: 'Paid', transform: (v: any) => parseFloat(String(v || 0)).toFixed(2) },
+        { key: 'balance_due', header: 'Balance Due', transform: (v: any) => parseFloat(String(v || 0)).toFixed(2) },
+        { key: 'payment_status', header: 'Status', transform: (v: any) => v || 'unpaid' },
+      ],
+      `supplier-bills_${billFrom || 'all'}_to_${billTo || 'all'}`,
+    );
+    toast.success(`Exported ${filteredBills.length} bill(s)`);
+  };
+
+  const generateBillsReportPDF = () => {
+    if (filteredBills.length === 0) { toast.error('Nothing to export'); return; }
+
+    const periodLabel = billFrom || billTo
+      ? `${billFrom ? new Date(billFrom).toLocaleDateString() : 'Earliest'} — ${billTo ? new Date(billTo).toLocaleDateString() : 'Latest'}`
+      : 'All dates';
+
+    const bodyHTML = [
+      docTemplate.buildInfoGrid(
+        { title: 'Report Filters', rows: [
+          { label: 'Period', value: periodLabel },
+          { label: 'Supplier', value: supplierFilter === 'all' ? 'All Suppliers' : supplierFilter },
+          { label: 'Bills', value: filteredBills.length, bold: true },
+        ]},
+        { title: 'Totals by Currency', rows: billTotalsByCurrency.flatMap(c => ([
+          { label: `Billed (${c.currency})`, value: docTemplate.formatCurrency(c.total_billed, c.currency) },
+          { label: `Paid (${c.currency})`, value: docTemplate.formatCurrency(c.total_paid, c.currency) },
+          { label: `Outstanding (${c.currency})`, value: docTemplate.formatCurrency(c.total_outstanding, c.currency), bold: true },
+        ])) },
+      ),
+      `<div class="ic-section-title">Supplier Bills</div>`,
+      docTemplate.buildTable(
+        [
+          { label: 'PO Number' }, { label: 'Date' }, { label: 'Supplier' },
+          { label: 'Total', align: 'right' }, { label: 'Paid', align: 'right' },
+          { label: 'Balance Due', align: 'right' }, { label: 'Status' },
+        ],
+        filteredBills.map(b => ({
+          cells: [
+            b.po_number, docTemplate.formatDate(b.order_date), b.supplier_name || '-',
+            docTemplate.formatCurrency(b.total_amount, b.po_currency),
+            docTemplate.formatCurrency(b.paid_amount, b.po_currency),
+            docTemplate.formatCurrency(b.balance_due, b.po_currency),
+            b.payment_status || 'unpaid',
+          ],
+        })),
+      ),
+    ].join('\n');
+
+    const html = docTemplate.buildDocument({
+      title: 'Supplier Bills Report',
+      docType: 'Supplier Bills Report',
+      date: new Date(),
+      bodyHTML,
+      facilityInfo: fi(),
+      branchInfo: bi(),
+    });
+
+    const pw = docTemplate.openPrintWindow(html);
+    if (pw) toast.success('PDF generated');
+    else toast.error('Please allow popups');
   };
 
   const fetchExpApprovals = async (expId: number) => {
@@ -396,7 +475,33 @@ const DailyExpenses: React.FC = () => {
   };
 
   const filteredExpenses = useMemo(() => expenses.filter(e => !searchExp || e.description?.toLowerCase().includes(searchExp.toLowerCase()) || e.category?.toLowerCase().includes(searchExp.toLowerCase())), [expenses, searchExp]);
-  const filteredBills = useMemo(() => bills.filter(b => !searchBills || b.po_number?.toLowerCase().includes(searchBills.toLowerCase()) || b.supplier_name?.toLowerCase().includes(searchBills.toLowerCase())), [bills, searchBills]);
+  const filteredBills = useMemo(() => bills.filter(b => {
+    if (searchBills && !b.po_number?.toLowerCase().includes(searchBills.toLowerCase()) && !b.supplier_name?.toLowerCase().includes(searchBills.toLowerCase())) return false;
+    if (supplierFilter !== 'all' && b.supplier_name !== supplierFilter) return false;
+    if (billFrom && b.order_date < billFrom) return false;
+    if (billTo && b.order_date > billTo) return false;
+    return true;
+  }), [bills, searchBills, supplierFilter, billFrom, billTo]);
+
+  const supplierOptions = useMemo(() => {
+    const names = Array.from(new Set(bills.map(b => b.supplier_name).filter(Boolean))).sort();
+    return [{ value: 'all', label: 'All Suppliers' }, ...names.map(n => ({ value: n, label: n }))];
+  }, [bills]);
+
+  // Broken out per currency, same as the Supplier Profile and Procurement
+  // Reports fixes — a supplier billed in both USD and SSP would otherwise get
+  // summed into one number that isn't really either currency's total.
+  const billTotalsByCurrency = useMemo(() => {
+    const byCurrency: Record<string, { currency: string; total_billed: number; total_paid: number; total_outstanding: number }> = {};
+    for (const b of filteredBills) {
+      const cur = b.po_currency || currency.code;
+      if (!byCurrency[cur]) byCurrency[cur] = { currency: cur, total_billed: 0, total_paid: 0, total_outstanding: 0 };
+      byCurrency[cur].total_billed += parseFloat(String(b.total_amount || 0));
+      byCurrency[cur].total_paid += parseFloat(String(b.paid_amount || 0));
+      byCurrency[cur].total_outstanding += parseFloat(String(b.balance_due || 0));
+    }
+    return Object.values(byCurrency).sort((a, b) => b.total_billed - a.total_billed);
+  }, [filteredBills, currency.code]);
   const todayTotal = useMemo(() => { const t = today(); return expenses.filter(e => e.expense_date?.startsWith(t) && e.status === 'paid').reduce((s, e) => s + parseFloat(String(e.amount || 0)), 0); }, [expenses]);
   const billsTotal = useMemo(() => bills.reduce((s, b) => s + parseFloat(String(b.balance_due || 0)), 0), [bills]);
   const pendingCount = useMemo(() => expenses.filter(e => e.status === 'pending_approval').length, [expenses]);
@@ -795,11 +900,63 @@ const DailyExpenses: React.FC = () => {
           {/* ── SUPPLIER BILLS TAB ── */}
           <TabsContent value="bills" className="mt-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-base">Authorized PO Bills — Awaiting Payment</CardTitle>
-                <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search PO or supplier..." className="pl-8 h-8 w-52 text-sm" value={searchBills} onChange={e => setSearchBills(e.target.value)} /></div>
+              <CardHeader className="flex flex-row items-center justify-between py-3 flex-wrap gap-2">
+                <CardTitle className="text-base">
+                  Authorized PO Bills — Awaiting Payment
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">{filteredBills.length} bill{filteredBills.length === 1 ? '' : 's'}</span>
+                </CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input type="date" className="h-8 w-[9.5rem] text-sm" value={billFrom} max={billTo || undefined}
+                    onChange={e => setBillFrom(e.target.value)} title="From date" />
+                  <span className="text-muted-foreground text-xs">to</span>
+                  <Input type="date" className="h-8 w-[9.5rem] text-sm" value={billTo} min={billFrom || undefined}
+                    onChange={e => setBillTo(e.target.value)} title="To date" />
+                  {(billFrom || billTo) && (
+                    <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setBillFrom(''); setBillTo(''); }}>Clear</Button>
+                  )}
+                  <Combobox
+                    options={supplierOptions}
+                    value={supplierFilter}
+                    onChange={setSupplierFilter}
+                    searchPlaceholder="Search suppliers..."
+                    className="h-8 w-44 text-sm"
+                  />
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportBillsCSV}>
+                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />CSV
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={generateBillsReportPDF}>
+                    <Download className="w-3.5 h-3.5 mr-1.5" />PDF
+                  </Button>
+                  <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search PO or supplier..." className="pl-8 h-8 w-52 text-sm" value={searchBills} onChange={e => setSearchBills(e.target.value)} /></div>
+                </div>
               </CardHeader>
-              <CardContent className="p-4">
+              <CardContent className="p-4 space-y-4">
+                {/* Totals broken out by currency — see billTotalsByCurrency: summing a USD
+                    bill and an SSP bill into one number would blend two different
+                    currencies together as though they were the same money. */}
+                {billTotalsByCurrency.length > 0 && (
+                  <div className="flex flex-wrap gap-3">
+                    {billTotalsByCurrency.map(c => (
+                      <div key={c.currency} className="flex-1 min-w-[220px] border rounded-lg p-3 bg-muted/20">
+                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">{c.currency}</p>
+                        <div className="grid grid-cols-3 gap-2 text-sm">
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Total Billed</p>
+                            <p className="font-mono font-semibold">{docTemplate.formatCurrency(c.total_billed, c.currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Total Paid</p>
+                            <p className="font-mono font-semibold text-emerald-700">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Outstanding</p>
+                            <p className="font-mono font-semibold text-amber-700">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <AdvancedDataTable<SupplierBill>
                   data={filteredBills}
                   keyExtractor={(bill) => bill.id}
