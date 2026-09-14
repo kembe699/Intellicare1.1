@@ -230,14 +230,25 @@ router.get('/suppliers/:id', authorize('procurement.read'), async (req, res) => 
 
     const supplier = suppliers[0];
 
-    // Get PO stats
-    const [poStats] = await sequelize.query(`
-      SELECT 
+    // Order counts are currency-agnostic, so still one row. total_po_amount is
+    // not: summing a USD PO and an SSP PO into one number and labeling it with
+    // whatever the base currency happens to be silently blends two different
+    // currencies together as though they were the same money. Broken out by
+    // po_currency instead — the frontend renders one line per currency actually
+    // used, same fix already applied to Procurement Reports' Total Spend tile.
+    const [poCounts] = await sequelize.query(`
+      SELECT
         COUNT(*) as total_pos,
         SUM(CASE WHEN status = 'received' THEN 1 ELSE 0 END) as completed_pos,
-        SUM(CASE WHEN status IN ('draft','check','approved','authorized') THEN 1 ELSE 0 END) as open_pos,
-        COALESCE(SUM(total_amount), 0) as total_po_amount
+        SUM(CASE WHEN status IN ('draft','check','approved','authorized') THEN 1 ELSE 0 END) as open_pos
       FROM purchase_orders WHERE supplier_id = :id
+    `, { replacements: { id: req.params.id } });
+
+    const [spendByCurrency] = await sequelize.query(`
+      SELECT po_currency AS currency, COALESCE(SUM(total_amount), 0) as total_amount
+      FROM purchase_orders WHERE supplier_id = :id
+      GROUP BY po_currency
+      ORDER BY total_amount DESC
     `, { replacements: { id: req.params.id } });
 
     // Get performance ratings
@@ -248,7 +259,7 @@ router.get('/suppliers/:id', authorize('procurement.read'), async (req, res) => 
 
     res.json({
       ...supplier,
-      stats: poStats[0] || {},
+      stats: { ...(poCounts[0] || {}), spend_by_currency: spendByCurrency },
       performance: ratings[0] || {}
     });
   } catch (error) {
@@ -1078,21 +1089,34 @@ router.get('/suppliers/:id/purchase-orders', authorize('procurement.read'), asyn
       ORDER BY order_date DESC, id DESC
     `, { replacements: { id: req.params.id } });
 
-    const summary = pos.reduce((acc, po) => {
+    // Broken out per currency — summing a USD bill and an SSP bill into one
+    // "outstanding" figure would blend two different currencies together as
+    // though they were the same money. by_currency carries one row per
+    // po_currency actually used; the flat totals are kept too but are only
+    // meaningful for a supplier that has ever used a single currency.
+    const byCurrency = {};
+    for (const po of pos) {
+      const cur = po.po_currency;
+      if (!byCurrency[cur]) byCurrency[cur] = { currency: cur, total_billed: 0, total_paid: 0, total_outstanding: 0 };
       const total = parseFloat(po.total_amount) || 0;
       const paid = parseFloat(po.paid_amount) || 0;
-      acc.total_billed += total;
-      acc.total_paid += paid;
+      byCurrency[cur].total_billed += total;
+      byCurrency[cur].total_paid += paid;
       // A draft or cancelled PO isn't a real liability yet/anymore — matches
       // the same status filter GET /supplier-bills already uses for "what's
       // actually owed" rather than everything ever entered.
       if (po.status === 'authorized' || po.status === 'received') {
-        acc.total_outstanding += Math.max(0, total - paid);
+        byCurrency[cur].total_outstanding += Math.max(0, total - paid);
       }
-      return acc;
-    }, { total_billed: 0, total_paid: 0, total_outstanding: 0 });
+    }
+    const by_currency = Object.values(byCurrency).sort((a, b) => b.total_billed - a.total_billed);
+    const summary = by_currency.reduce((acc, c) => ({
+      total_billed: acc.total_billed + c.total_billed,
+      total_paid: acc.total_paid + c.total_paid,
+      total_outstanding: acc.total_outstanding + c.total_outstanding,
+    }), { total_billed: 0, total_paid: 0, total_outstanding: 0 });
 
-    res.json({ purchase_orders: pos, summary });
+    res.json({ purchase_orders: pos, summary, by_currency });
   } catch (error) {
     console.error('Error fetching supplier purchase orders:', error);
     res.status(500).json({ error: 'Failed to fetch supplier purchase orders' });

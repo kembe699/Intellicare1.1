@@ -47,7 +47,7 @@ const renderStars = (rating: number) => {
 export default function SupplierProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currency, fmt } = useCurrency();
+  const { currency } = useCurrency();
 
   const [supplier, setSupplier] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export default function SupplierProfile() {
   const [holdingId, setHoldingId] = useState<number | null>(null);
 
   const [bills, setBills] = useState<any[]>([]);
-  const [billSummary, setBillSummary] = useState({ total_billed: 0, total_paid: 0, total_outstanding: 0 });
+  const [billByCurrency, setBillByCurrency] = useState<Array<{ currency: string; total_billed: number; total_paid: number; total_outstanding: number }>>([]);
   const [loadingBills, setLoadingBills] = useState(false);
 
   const [showCreateBill, setShowCreateBill] = useState(false);
@@ -87,7 +87,7 @@ export default function SupplierProfile() {
       if (res.ok) {
         const data = await res.json();
         setBills(data.purchase_orders || []);
-        setBillSummary(data.summary || { total_billed: 0, total_paid: 0, total_outstanding: 0 });
+        setBillByCurrency(data.by_currency || []);
       }
     } catch (e) {
       toast.error("Failed to load this supplier's purchase orders");
@@ -263,9 +263,15 @@ export default function SupplierProfile() {
                 </div>
                 <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><Wallet className="w-4 h-4 text-primary" /></div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Total Spend</p>
-                    <p className="text-lg font-bold font-mono">{fmt(supplier.stats?.total_po_amount || 0)}</p>
+                    {(supplier.stats?.spend_by_currency || []).length === 0 ? (
+                      <p className="text-lg font-bold font-mono">{formatInCurrency(0, supplier.currency)}</p>
+                    ) : (
+                      supplier.stats.spend_by_currency.map((c: any) => (
+                        <p key={c.currency} className="text-lg font-bold font-mono leading-tight">{formatInCurrency(c.total_amount, c.currency)}</p>
+                      ))
+                    )}
                   </div>
                 </div>
                 <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">
@@ -300,13 +306,25 @@ export default function SupplierProfile() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 min-w-0">
                     <p className="text-xs text-amber-800">Outstanding</p>
-                    <p className="text-xl font-bold font-mono text-amber-900">{fmt(billSummary.total_outstanding)}</p>
+                    {billByCurrency.length === 0 ? (
+                      <p className="text-xl font-bold font-mono text-amber-900">{formatInCurrency(0, supplier.currency)}</p>
+                    ) : (
+                      billByCurrency.map(c => (
+                        <p key={c.currency} className="text-xl font-bold font-mono text-amber-900 leading-tight">{formatInCurrency(c.total_outstanding, c.currency)}</p>
+                      ))
+                    )}
                   </div>
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 min-w-0">
                     <p className="text-xs text-emerald-800">Paid</p>
-                    <p className="text-xl font-bold font-mono text-emerald-900">{fmt(billSummary.total_paid)}</p>
+                    {billByCurrency.length === 0 ? (
+                      <p className="text-xl font-bold font-mono text-emerald-900">{formatInCurrency(0, supplier.currency)}</p>
+                    ) : (
+                      billByCurrency.map(c => (
+                        <p key={c.currency} className="text-xl font-bold font-mono text-emerald-900 leading-tight">{formatInCurrency(c.total_paid, c.currency)}</p>
+                      ))
+                    )}
                   </div>
                 </div>
 
