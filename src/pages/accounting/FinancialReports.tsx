@@ -31,9 +31,19 @@ const FinancialReports: React.FC = () => {
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null);
   const [balanceSheet, setBalanceSheet] = useState<{ assets: TrialBalanceAccount[]; liabilities: TrialBalanceAccount[]; equity: TrialBalanceAccount[] } | null>(null);
 
+  // Local (not UTC) date string — toISOString() shifts the calendar day for any
+  // timezone behind UTC late in the day, so "today" could silently default to
+  // tomorrow or yesterday depending on when and where this loads.
+  const toLocalDateStr = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
   const now = new Date();
-  const [startDate, setStartDate] = useState(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]);
+  const todayStr = toLocalDateStr(now);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
 
   const loadTrialBalance = async () => {
     try {
@@ -154,12 +164,16 @@ const FinancialReports: React.FC = () => {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => {
-                  setStartDate(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]);
-                  setEndDate(new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]);
+                  setStartDate(todayStr);
+                  setEndDate(todayStr);
+                }}>Today</Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  setStartDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1)));
+                  setEndDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
                 }}>This Month</Button>
                 <Button variant="outline" size="sm" onClick={() => {
-                  setStartDate(new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0]);
-                  setEndDate(new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0]);
+                  setStartDate(toLocalDateStr(new Date(now.getFullYear(), 0, 1)));
+                  setEndDate(toLocalDateStr(new Date(now.getFullYear(), 11, 31)));
                 }}>This Year</Button>
               </div>
             </div>
