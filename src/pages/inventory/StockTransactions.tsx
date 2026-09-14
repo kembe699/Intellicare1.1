@@ -76,7 +76,10 @@ export default function StockTransactions() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ clinic_id: String(clinicId), limit: '200' });
+      // 200 silently truncated real tenants with more history than that — no
+      // sign anything was missing, the visible rows just stopped at whatever
+      // fit. Matches the server's own raised ceiling (see GET /transactions).
+      const params = new URLSearchParams({ clinic_id: String(clinicId), limit: '5000' });
       if (typeFilter !== 'all') params.append('transaction_type', typeFilter);
       if (dateFrom) params.append('date_from', dateFrom);
       if (dateTo) params.append('date_to', dateTo);

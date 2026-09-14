@@ -1037,7 +1037,14 @@ router.get('/transactions', authorize('inventory.read'), async (req, res) => {
     if (tBranchSQL) { conditions.push('i.branch_id = :txnBranchId'); replacements.txnBranchId = tBranchParams[0]; }
 
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-    const queryLimit = parseInt(lim) || 100;
+    // A tenant with more transactions than the cap than a caller happened to
+    // request (this page's own default was 200, against 468 real rows for one
+    // branch in nation) silently truncated to "whatever fit" with no sign
+    // anything was missing — the newest transactions all looked present, only
+    // the tail quietly wasn't there. Same fix as LIS_PARTICIPANT_LIMIT: raise
+    // the ceiling well past today's real counts rather than the number that
+    // happened to be enough when this was first written.
+    const queryLimit = Math.min(parseInt(lim) || 200, parseInt(process.env.INVENTORY_TXN_LIMIT || '5000', 10));
 
     const [transactions] = await sequelize.query(`
       SELECT t.*, i.item_name, i.item_code, i.unit_of_measure,
