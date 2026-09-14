@@ -488,6 +488,12 @@ const DailyExpenses: React.FC = () => {
     return [{ value: 'all', label: 'All Suppliers' }, ...names.map(n => ({ value: n, label: n }))];
   }, [bills]);
 
+  // Now that /supplier-bills also returns fully-paid POs (see the backend
+  // comment), the tab's own red "needs attention" badge would otherwise count
+  // every bill ever raised, paid or not — meaningless as an attention count.
+  // Scoped to what's actually still owed.
+  const unpaidBillsCount = useMemo(() => bills.filter(b => b.payment_status !== 'paid').length, [bills]);
+
   // Broken out per currency, same as the Supplier Profile and Procurement
   // Reports fixes — a supplier billed in both USD and SSP would otherwise get
   // summed into one number that isn't really either currency's total.
@@ -792,7 +798,7 @@ const DailyExpenses: React.FC = () => {
             <TabsTrigger value="expenses" className="gap-2"><Receipt className="w-4 h-4" />Daily Expenses{pendingCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{pendingCount}</Badge>}</TabsTrigger>
             <TabsTrigger value="bills" className="gap-2">
               <Building2 className="w-4 h-4" />Supplier Bills
-              {bills.length > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{bills.length}</Badge>}
+              {unpaidBillsCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{unpaidBillsCount}</Badge>}
             </TabsTrigger>
           </TabsList>
 
@@ -902,7 +908,7 @@ const DailyExpenses: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between py-3 flex-wrap gap-2">
                 <CardTitle className="text-base">
-                  Authorized PO Bills — Awaiting Payment
+                  Authorized PO Bills
                   <span className="ml-2 text-xs font-normal text-muted-foreground">{filteredBills.length} bill{filteredBills.length === 1 ? '' : 's'}</span>
                 </CardTitle>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -937,20 +943,20 @@ const DailyExpenses: React.FC = () => {
                 {billTotalsByCurrency.length > 0 && (
                   <div className="flex flex-wrap gap-3">
                     {billTotalsByCurrency.map(c => (
-                      <div key={c.currency} className="flex-1 min-w-[220px] border rounded-lg p-3 bg-muted/20">
-                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">{c.currency}</p>
-                        <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div key={c.currency} className="flex-1 min-w-[280px] border rounded-lg p-4 bg-muted/20">
+                        <p className="text-sm font-bold text-foreground mb-2">{c.currency}</p>
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Total Billed</p>
-                            <p className="font-mono font-semibold">{docTemplate.formatCurrency(c.total_billed, c.currency)}</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Billed</p>
+                            <p className="font-mono font-bold text-xl leading-tight">{docTemplate.formatCurrency(c.total_billed, c.currency)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Total Paid</p>
-                            <p className="font-mono font-semibold text-emerald-700">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Paid</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-emerald-700">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Outstanding</p>
-                            <p className="font-mono font-semibold text-amber-700">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">Outstanding</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-amber-700">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
                           </div>
                         </div>
                       </div>
@@ -961,7 +967,7 @@ const DailyExpenses: React.FC = () => {
                   data={filteredBills}
                   keyExtractor={(bill) => bill.id}
                   loading={loadingBills}
-                  emptyMessage="No unpaid supplier bills found"
+                  emptyMessage="No supplier bills found"
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
                     { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono font-medium text-xs">{v}</span> },

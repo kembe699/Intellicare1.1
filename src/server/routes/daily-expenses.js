@@ -199,7 +199,14 @@ router.get('/', authorize('expenses.read'), async (req, res) => {
   }
 });
 
-// Get supplier bills (authorized/received POs not fully paid)
+// Get supplier bills (all authorized/received POs — paid, partial, and unpaid)
+//
+// Used to exclude fully-paid bills entirely, on the reasoning that this is an
+// "awaiting payment" worklist. That also meant a currency with no *outstanding*
+// bills right now — every bill in it already settled — vanished completely
+// from the page, including its own Total Billed/Paid figures: a real supplier
+// paid in full in SSP looked like it had never been billed in SSP at all.
+// Paid bills are still clearly marked via payment_status in the response.
 router.get('/supplier-bills', authorize('expenses.read'), async (req, res) => {
   try {
     const cf = `AND po.clinic_id = ${BranchQueryFilter.resolveClinicId(req)}`;
@@ -213,7 +220,6 @@ router.get('/supplier-bills', authorize('expenses.read'), async (req, res) => {
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id
       WHERE po.status IN ('authorized','received')
-        AND COALESCE(po.payment_status,'unpaid') != 'paid'
         ${cf}
       ORDER BY po.order_date DESC
     `);
