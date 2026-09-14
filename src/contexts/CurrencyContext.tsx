@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CurrencyData {
   code: string;
@@ -27,8 +28,20 @@ const CurrencyContext = createContext<CurrencyContextValue>({
 
 export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currency, setCurrency] = useState<CurrencyData>(DEFAULT_CURRENCY);
+  // /api/currencies/base requires auth (it's tenant-scoped — see server/index.js),
+  // and this provider wraps the whole app including the public /login route. An
+  // unconditional fetch here 401'd on first paint before any token existed, and
+  // authFetch hard-redirects to /login on any 401 — which re-mounted this same
+  // effect and 401'd again, an infinite reload loop. Gate on token, and reset to
+  // defaults on logout so a previous session's currency doesn't linger into the
+  // next login before its own fetch completes.
+  const { token } = useAuth();
 
   useEffect(() => {
+    if (!token) {
+      setCurrency(DEFAULT_CURRENCY);
+      return;
+    }
     const load = async () => {
       try {
         const res = await authFetch('/api/currencies/base');
@@ -48,7 +61,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
     load();
-  }, []);
+  }, [token]);
 
   const fmt = (amount: number | string): string => {
     const n = parseFloat(String(amount || 0)).toFixed(currency.decimal_places);

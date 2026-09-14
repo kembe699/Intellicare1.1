@@ -111,10 +111,7 @@ app.use((err, req, res, next) => {
   return next(err);
 });
 
-// Public routes (no authentication required)
 const currenciesRouter = require('./routes/currencies');
-app.use('/api/currencies', currenciesRouter);
-
 const facilitiesRouter = require('./routes/facilities');
 
 // NOTE: /api/facilities/branches/all and /api/facilities/name used to be
@@ -635,9 +632,16 @@ app.use('/api/cashier', cashierRouter);
 app.use('/api/cash-transfers', cashTransfersRouter);
 app.use('/api/purchase-orders', purchaseOrdersRouter);
 app.use('/api/daily-expenses', dailyExpensesRouter);
-// Note: /api/facilities/branches/all is handled as public route above (before auth)
-// Other facilities routes (like GET /api/facilities) require authentication
 app.use('/api/facilities', facilitiesRouter);
+
+// Was mounted before authenticateToken (see the facilities note above for the
+// exact same bug, already diagnosed and fixed there): with no tenant context,
+// the models proxy fell back to the default connection — tenant_template —
+// so every tenant's currency picker actually showed template's currencies
+// (including UGX, which template has active but most real tenants never
+// added) instead of their own. Same fix: mount after auth like every other
+// tenant-scoped route.
+app.use('/api/currencies', currenciesRouter);
 
 // Database diagnostic route
 app.get('/api/test-db', async (req, res) => {
