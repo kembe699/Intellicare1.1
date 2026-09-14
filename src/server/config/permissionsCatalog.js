@@ -119,6 +119,16 @@ const CATALOG = [
   ['procurement.purchase_orders.write', 'Manage purchase orders', 'procurement', 'Create/edit purchase orders and PO items', ['admin', 'procurement']],
   ['procurement.settings.manage', 'Manage procurement settings', 'procurement', 'Clinic-level procurement settings', ['admin']],
 
+  // Payroll data is sensitive (salaries, bank details) — admin-only by default.
+  // A tenant that wants to delegate this can create a custom role via Roles &
+  // Privileges and grant these exact keys, rather than this app adding a new
+  // 'hr' role to the users.role ENUM (real MySQL-widen-list friction for no
+  // real benefit over the existing custom-role mechanism).
+  ['hr.employees.read', 'View employees & consultants', 'hr', 'Employee/consultant profiles and salary structures', ['admin']],
+  ['hr.employees.write', 'Manage employees & consultants', 'hr', 'Create/edit employees, consultants, and salary components', ['admin']],
+  ['hr.payroll.read', 'View payroll', 'hr', 'Payroll runs, payslips, and payroll history', ['admin']],
+  ['hr.payroll.write', 'Run and manage payroll', 'hr', 'Create, approve, and pay payroll runs', ['admin']],
+
   ['setup.facilities.manage', 'Manage facilities & branches', 'setup', 'Create/edit/delete facilities and branches', ['admin']],
   ['setup.clinics.manage', 'Manage clinics', 'setup', 'Create/edit/delete clinics', ['admin']],
   ['setup.departments.manage', 'Manage departments', 'setup', 'Create/edit/delete departments', ['admin']],

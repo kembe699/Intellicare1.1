@@ -52,6 +52,10 @@ async function buildTenantConnection(schemaName) {
   const { ensureNotificationsTable } = require('./config/ensureNotificationsTable');
   ensureNotificationsTable(sequelize).catch(() => {});
 
+  // HR/payroll tables, ensured per-tenant the same way.
+  const { ensureHRTables } = require('./config/ensureHRTables');
+  ensureHRTables(sequelize).catch(() => {});
+
   return { sequelize, models };
 }
 

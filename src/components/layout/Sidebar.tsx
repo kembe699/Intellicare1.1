@@ -112,6 +112,16 @@ const procurementDropdown: NavDropdown = {
   ]
 };
 
+const hrDropdown: NavDropdown = {
+  label: 'Human Resources',
+  icon: Users,
+  items: [
+    { label: 'Employees', href: '/hr/employees', icon: Users, privilege: 'hr.employees.read' },
+    { label: 'Consultants & Doctors', href: '/hr/consultants', icon: Stethoscope, privilege: 'hr.employees.read' },
+    { label: 'Payroll', href: '/hr/payroll', icon: Wallet, privilege: 'hr.payroll.read' },
+  ]
+};
+
 const patientsBillDropdown: NavDropdown = {
   label: 'Patients Bill',
   icon: Receipt,
@@ -208,6 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   );
   const [pharmacyOpen, setPharmacyOpen] = useState(location.pathname.startsWith('/pharmacy'));
   const [procurementOpen, setProcurementOpen] = useState(location.pathname.startsWith('/procurement'));
+  const [hrOpen, setHrOpen] = useState(location.pathname.startsWith('/hr'));
   const [accountingOpen, setAccountingOpen] = useState(location.pathname.startsWith('/accounting') || location.pathname.startsWith('/scheme-management') || location.pathname.startsWith('/cashier/shift'));
   const [inventoryOpen, setInventoryOpen] = useState(location.pathname.startsWith('/inventory'));
   const [lisOpen, setLisOpen] = useState(lisDropdown.items.some(item => location.pathname.startsWith(item.href)));
@@ -294,6 +305,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const showPharmacy = dropdownVisible(pharmacyDropdown);
   const showLIS = dropdownVisible(lisDropdown);
   const showProcurement = dropdownVisible(procurementDropdown);
+  const showHr = dropdownVisible(hrDropdown);
   const showAccounting = dropdownVisible(accountingDropdown);
   const showInventory = dropdownVisible(inventoryDropdown);
   const showInpatient = dropdownVisible(inpatientDropdown);
@@ -685,6 +697,47 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       {procurementOpen && (
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {procurementDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname === item.href;
+                            return (
+                              <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                  isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                                )}
+                              >
+                                <Icon className="w-4 h-4" /><span>{item.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ══ HUMAN RESOURCES SECTION ══ */}
+                  {showHr && sectionLabel('Human Resources')}
+
+                  {/* 9b. Human Resources */}
+                  {showHr && (
+                    <div className="pt-0.5">
+                      <button
+                        onClick={() => setHrOpen(!hrOpen)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          location.pathname.startsWith('/hr')
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Users className="w-4 h-4" />
+                          <span className="font-medium leading-none">Human Resources</span>
+                        </div>
+                        <ChevronDown className={cn("w-4 h-4 transition-transform", hrOpen && "rotate-180")} />
+                      </button>
+                      {hrOpen && (
+                        <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
+                          {hrDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
                             return (

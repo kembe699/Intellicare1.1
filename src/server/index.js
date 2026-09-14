@@ -632,6 +632,7 @@ app.use('/api/cashier', cashierRouter);
 app.use('/api/cash-transfers', cashTransfersRouter);
 app.use('/api/purchase-orders', purchaseOrdersRouter);
 app.use('/api/daily-expenses', dailyExpensesRouter);
+app.use('/api/hr', require('./routes/hr'));
 app.use('/api/facilities', facilitiesRouter);
 
 // Was mounted before authenticateToken (see the facilities note above for the

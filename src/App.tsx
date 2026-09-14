@@ -53,6 +53,11 @@ const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpen
 const ExpenseDetail = lazyWithRetry(() => import('./pages/procurement/ExpenseDetail'));
 const SuppliersManagement = lazyWithRetry(() => import('./pages/procurement/SuppliersManagement'));
 const SupplierProfile = lazyWithRetry(() => import('./pages/procurement/SupplierProfile'));
+const EmployeesManagement = lazyWithRetry(() => import('./pages/hr/EmployeesManagement'));
+const ConsultantsManagement = lazyWithRetry(() => import('./pages/hr/ConsultantsManagement'));
+const EmployeeProfile = lazyWithRetry(() => import('./pages/hr/EmployeeProfile'));
+const PayrollManagement = lazyWithRetry(() => import('./pages/hr/PayrollManagement'));
+const PayrollRunDetail = lazyWithRetry(() => import('./pages/hr/PayrollRunDetail'));
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
@@ -423,6 +428,36 @@ const AppRoutes = () => {
       <Route path="/procurement/suppliers-mgmt/:id" element={
         <ProtectedRoute requiredPrivilege="procurement.read">
           <SupplierProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/employees" element={
+        <ProtectedRoute requiredPrivilege="hr.employees.read">
+          <EmployeesManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/employees/:id" element={
+        <ProtectedRoute requiredPrivilege="hr.employees.read">
+          <EmployeeProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/consultants" element={
+        <ProtectedRoute requiredPrivilege="hr.employees.read">
+          <ConsultantsManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/consultants/:id" element={
+        <ProtectedRoute requiredPrivilege="hr.employees.read">
+          <EmployeeProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/payroll" element={
+        <ProtectedRoute requiredPrivilege="hr.payroll.read">
+          <PayrollManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/payroll/:id" element={
+        <ProtectedRoute requiredPrivilege="hr.payroll.read">
+          <PayrollRunDetail />
         </ProtectedRoute>
       } />
       <Route path="/procurement/requisitions" element={
