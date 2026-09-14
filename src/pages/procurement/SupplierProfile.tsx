@@ -5,6 +5,7 @@ import { PageHeader, StatusBadge, LoadingState, type StatusBadgeTone } from '@/c
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
@@ -60,6 +61,7 @@ export default function SupplierProfile() {
   const [showCreateBill, setShowCreateBill] = useState(false);
   const [billAmount, setBillAmount] = useState('');
   const [billDescription, setBillDescription] = useState('');
+  const [billCurrency, setBillCurrency] = useState('');
   const [creatingBill, setCreatingBill] = useState(false);
 
   const [currencies, setCurrencies] = useState<any[]>([]);
@@ -143,13 +145,16 @@ export default function SupplierProfile() {
       const res = await authFetch('/api/procurement/purchase-orders/quick-bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supplier_id: supplier.id, amount: amt, description: billDescription.trim() }),
+        body: JSON.stringify({
+          supplier_id: supplier.id, amount: amt, description: billDescription.trim(),
+          currency: billCurrency || supplier.currency,
+        }),
       });
       if (res.ok) {
         const created = await res.json();
         toast.success(`Bill ${created.po_number} recorded`);
         setShowCreateBill(false);
-        setBillAmount(''); setBillDescription('');
+        setBillAmount(''); setBillDescription(''); setBillCurrency('');
         fetchBills();
         fetchSupplier();
       } else {
@@ -289,7 +294,7 @@ export default function SupplierProfile() {
               <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium flex items-center gap-2"><Receipt className="w-4 h-4 text-primary" /> Billing &amp; Purchase Orders</h3>
-                  <Button size="sm" variant="outline" onClick={() => setShowCreateBill(v => !v)}>
+                  <Button size="sm" variant="outline" onClick={() => { setShowCreateBill(v => !v); setBillCurrency(c => c || supplier.currency || currency.code); }}>
                     <Plus className="w-4 h-4 mr-2" /> Create Bill
                   </Button>
                 </div>
@@ -308,10 +313,20 @@ export default function SupplierProfile() {
                 {showCreateBill && (
                   <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
                     <p className="text-sm font-medium">New bill for {supplier.name} — items not required</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <Label className="text-xs font-medium text-muted-foreground">Amount ({supplier.currency || currency.code})</Label>
+                        <Label className="text-xs font-medium text-muted-foreground">Amount</Label>
                         <Input type="number" step="0.01" min="0" className="mt-1" placeholder="0.00" value={billAmount} onChange={e => setBillAmount(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Currency</Label>
+                        <Combobox
+                          options={(currencies.length ? currencies : [{ code: supplier.currency || currency.code }]).map((c: any) => ({ value: c.code, label: c.code }))}
+                          value={billCurrency || supplier.currency || currency.code}
+                          onChange={setBillCurrency}
+                          searchPlaceholder="Search..."
+                          className="mt-1"
+                        />
                       </div>
                       <div>
                         <Label className="text-xs font-medium text-muted-foreground">What's it for?</Label>

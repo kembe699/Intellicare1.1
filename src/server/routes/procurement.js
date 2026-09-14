@@ -986,7 +986,7 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
 // draft — since there's nothing to draft when there are no items to add.
 router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
-    const { supplier_id, amount, description } = req.body;
+    const { supplier_id, amount, description, currency } = req.body;
     if (!supplier_id) return res.status(400).json({ error: 'supplier_id is required' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ error: 'A positive amount is required' });
@@ -994,14 +994,25 @@ router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_order
 
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
 
-    // The supplier's own currency, not always the tenant's base — a USD supplier's
-    // bill amount means USD. Looked up server-side rather than trusting whatever
-    // currency the client happened to have in state for a financial record.
     const [[supplierRow]] = await sequelize.query(
       `SELECT currency, payment_terms FROM suppliers WHERE id = :id AND clinic_id = :clinic_id`,
       { replacements: { id: parseInt(supplier_id), clinic_id: clinic_id || null } }
     );
     if (!supplierRow) return res.status(404).json({ error: 'Supplier not found' });
+
+    // Defaults to the supplier's own currency (most bills from them arrive in it),
+    // but reception can pick a different one for a one-off bill in another
+    // currency — validated against the real currencies table rather than trusting
+    // an arbitrary client-supplied string into a financial record.
+    let poCurrency = supplierRow.currency;
+    if (currency) {
+      const [[currencyRow]] = await sequelize.query(
+        `SELECT code FROM currencies WHERE code = :code`,
+        { replacements: { code: currency } }
+      );
+      if (!currencyRow) return res.status(400).json({ error: `Unknown currency: ${currency}` });
+      poCurrency = currencyRow.code;
+    }
 
     const poYear = new Date().getFullYear();
     const [[poSeqRow]] = await sequelize.query(
@@ -1014,7 +1025,7 @@ router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_order
 
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'USD';
-    const poCurrency = supplierRow.currency || baseCurrency;
+    poCurrency = poCurrency || baseCurrency;
 
     let xRate = 1;
     if (poCurrency !== baseCurrency) {
