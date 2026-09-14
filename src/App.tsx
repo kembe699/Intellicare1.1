@@ -58,6 +58,7 @@ const ConsultantsManagement = lazyWithRetry(() => import('./pages/hr/Consultants
 const EmployeeProfile = lazyWithRetry(() => import('./pages/hr/EmployeeProfile'));
 const PayrollManagement = lazyWithRetry(() => import('./pages/hr/PayrollManagement'));
 const PayrollRunDetail = lazyWithRetry(() => import('./pages/hr/PayrollRunDetail'));
+const SalaryStructuresManagement = lazyWithRetry(() => import('./pages/hr/SalaryStructuresManagement'));
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
@@ -458,6 +459,11 @@ const AppRoutes = () => {
       <Route path="/hr/payroll/:id" element={
         <ProtectedRoute requiredPrivilege="hr.payroll.read">
           <PayrollRunDetail />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/salary-structures" element={
+        <ProtectedRoute requiredPrivilege="hr.employees.read">
+          <SalaryStructuresManagement />
         </ProtectedRoute>
       } />
       <Route path="/procurement/requisitions" element={

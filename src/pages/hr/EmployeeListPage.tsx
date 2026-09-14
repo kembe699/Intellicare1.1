@@ -19,6 +19,7 @@ export interface Employee {
   id: string;
   employee_number: string;
   employment_type: 'staff' | 'consultant';
+  user_id?: number | null;
   first_name: string;
   last_name: string;
   gender?: string;
@@ -57,12 +58,11 @@ const CONTRACT_TYPES = [
   { value: 'contract', label: 'Contract' },
 ];
 
-const emptyForm = (employmentType: 'staff' | 'consultant', currencyCode: string) => ({
-  first_name: '', last_name: '', gender: '', date_of_birth: '', national_id: '', phone: '', email: '', address: '',
+const emptyForm = (employmentType: 'staff' | 'consultant') => ({
+  user_id: '', first_name: '', last_name: '', gender: '', date_of_birth: '', national_id: '', phone: '', email: '', address: '',
   job_title: '', department: '', hire_date: '', contract_type: 'full_time', employment_status: 'active',
   bank_name: '', bank_account_name: '', bank_account_number: '',
-  emergency_contact_name: '', emergency_contact_phone: '',
-  basic_salary: '0', salary_currency: currencyCode, pay_frequency: 'monthly', notes: '',
+  emergency_contact_name: '', emergency_contact_phone: '', notes: '',
   employment_type: employmentType,
 });
 
@@ -82,13 +82,15 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [currencies, setCurrencies] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [formData, setFormData] = useState(emptyForm(employmentType, currency.code));
+  const [formData, setFormData] = useState(emptyForm(employmentType));
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -110,13 +112,21 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
     } catch (e) { /* non-blocking */ }
   };
 
-  useEffect(() => { fetchEmployees(); fetchCurrencies(); }, [employmentType]);
+  const fetchUsers = async () => {
+    try {
+      const res = await authFetch('/api/users?all=true');
+      if (res.ok) setUsers(await res.json());
+    } catch (e) { /* non-blocking */ }
+  };
 
-  useEffect(() => {
-    if (!editingEmployee && currency.code) {
-      setFormData(f => (f.salary_currency ? f : { ...f, salary_currency: currency.code }));
-    }
-  }, [currency.code]);
+  const fetchDepartments = async () => {
+    try {
+      const res = await authFetch(`/api/departments?clinic=${user?.clinic || 1}`);
+      if (res.ok) setDepartments((await res.json()).filter((d: any) => d.is_active));
+    } catch (e) { /* non-blocking */ }
+  };
+
+  useEffect(() => { fetchEmployees(); fetchCurrencies(); fetchUsers(); fetchDepartments(); }, [employmentType]);
 
   // Coming back from the profile page's Edit link (?edit=<id>)
   useEffect(() => {
@@ -139,6 +149,16 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
     return true;
   }), [employees, searchQuery, statusFilter]);
 
+  const userOptions = useMemo(() => [
+    { value: '', label: '— Not linked —' },
+    ...users.filter((u: any) => u.is_active !== false).map((u: any) => ({ value: String(u.id), label: `${u.display_name || u.email} (${u.role})` })),
+  ], [users]);
+
+  const departmentOptions = useMemo(() => [
+    { value: '', label: '— None —' },
+    ...departments.map((d: any) => ({ value: d.department_name, label: d.department_name })),
+  ], [departments]);
+
   const formatInCurrency = (amount: number, code?: string) => {
     const match = currencies.find((c: any) => c.code === code);
     const symbol = match?.symbol || code || currency.symbol || currency.code;
@@ -148,12 +168,13 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
 
   const openCreate = () => {
     setEditingEmployee(null);
-    setFormData(emptyForm(employmentType, currency.code));
+    setFormData(emptyForm(employmentType));
   };
 
   const openEdit = (e: Employee) => {
     setEditingEmployee(e);
     setFormData({
+      user_id: e.user_id ? String(e.user_id) : '',
       first_name: e.first_name || '', last_name: e.last_name || '', gender: e.gender || '',
       date_of_birth: e.date_of_birth ? e.date_of_birth.split('T')[0] : '', national_id: e.national_id || '',
       phone: e.phone || '', email: e.email || '', address: e.address || '',
@@ -162,8 +183,7 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
       employment_status: e.employment_status || 'active',
       bank_name: e.bank_name || '', bank_account_name: e.bank_account_name || '', bank_account_number: e.bank_account_number || '',
       emergency_contact_name: e.emergency_contact_name || '', emergency_contact_phone: e.emergency_contact_phone || '',
-      basic_salary: String(e.basic_salary || 0), salary_currency: e.salary_currency || currency.code,
-      pay_frequency: e.pay_frequency || 'monthly', notes: e.notes || '', employment_type: e.employment_type,
+      notes: e.notes || '', employment_type: e.employment_type,
     });
   };
 
@@ -244,7 +264,29 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 overflow-auto">
-            <div className="p-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {employmentType === 'consultant' ? (
+              <div className="p-4">
+                <div className="border rounded-lg p-4 space-y-3 bg-card max-w-2xl">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{singularLabel} Details</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><Label className="text-xs font-medium text-muted-foreground">First Name *</Label><Input className="mt-1" value={formData.first_name} onChange={e => setFormData({ ...formData, first_name: e.target.value })} required /></div>
+                    <div><Label className="text-xs font-medium text-muted-foreground">Last Name *</Label><Input className="mt-1" value={formData.last_name} onChange={e => setFormData({ ...formData, last_name: e.target.value })} required /></div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><Label className="text-xs font-medium text-muted-foreground">Specialty</Label><Input className="mt-1" placeholder="e.g. Cardiology" value={formData.job_title} onChange={e => setFormData({ ...formData, job_title: e.target.value })} /></div>
+                    <div><Label className="text-xs font-medium text-muted-foreground">Date of Birth</Label><Input type="date" className="mt-1" value={formData.date_of_birth} onChange={e => setFormData({ ...formData, date_of_birth: e.target.value })} /></div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><Label className="text-xs font-medium text-muted-foreground">Phone Number</Label><Input className="mt-1" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /></div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Link to User Account</Label>
+                      <Combobox options={userOptions} value={formData.user_id} onChange={v => setFormData({ ...formData, user_id: v })} searchPlaceholder="Search users..." className="mt-1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+            <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="border rounded-lg p-3 space-y-3 bg-card">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Basic Information</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -265,7 +307,10 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
               <div className="border rounded-lg p-3 space-y-3 bg-card">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Employment Details</p>
                 <div><Label className="text-xs font-medium text-muted-foreground">Job Title</Label><Input className="mt-1" value={formData.job_title} onChange={e => setFormData({ ...formData, job_title: e.target.value })} /></div>
-                <div><Label className="text-xs font-medium text-muted-foreground">Department</Label><Input className="mt-1" value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} /></div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Department</Label>
+                  <Combobox options={departmentOptions} value={formData.department} onChange={v => setFormData({ ...formData, department: v })} searchPlaceholder="Search departments..." emptyText="No departments yet — add one under Setup > Departments." className="mt-1" />
+                </div>
                 <div><Label className="text-xs font-medium text-muted-foreground">Hire Date</Label><Input type="date" className="mt-1" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} /></div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Contract Type</Label>
@@ -276,10 +321,9 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                   <Combobox options={[{ value: 'active', label: 'Active' }, { value: 'on_leave', label: 'On Leave' }, { value: 'terminated', label: 'Terminated' }]} value={formData.employment_status} onChange={v => setFormData({ ...formData, employment_status: v })} searchPlaceholder="Search..." className="mt-1" />
                 </div>
                 <div className="pt-1 border-t">
-                  <Label className="text-xs font-medium text-muted-foreground">Emergency Contact Name</Label>
-                  <Input className="mt-1" value={formData.emergency_contact_name} onChange={e => setFormData({ ...formData, emergency_contact_name: e.target.value })} />
+                  <Label className="text-xs font-medium text-muted-foreground">Link to User Account</Label>
+                  <Combobox options={userOptions} value={formData.user_id} onChange={v => setFormData({ ...formData, user_id: v })} searchPlaceholder="Search users..." className="mt-1" />
                 </div>
-                <div><Label className="text-xs font-medium text-muted-foreground">Emergency Contact Phone</Label><Input className="mt-1" value={formData.emergency_contact_phone} onChange={e => setFormData({ ...formData, emergency_contact_phone: e.target.value })} /></div>
               </div>
 
               <div className="border rounded-lg p-3 space-y-3 bg-card">
@@ -288,25 +332,18 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                 <div><Label className="text-xs font-medium text-muted-foreground">Account Name</Label><Input className="mt-1" value={formData.bank_account_name} onChange={e => setFormData({ ...formData, bank_account_name: e.target.value })} /></div>
                 <div><Label className="text-xs font-medium text-muted-foreground">Account Number</Label><Input className="mt-1" value={formData.bank_account_number} onChange={e => setFormData({ ...formData, bank_account_number: e.target.value })} /></div>
                 <div className="pt-1 border-t">
+                  <Label className="text-xs font-medium text-muted-foreground">Emergency Contact Name</Label>
+                  <Input className="mt-1" value={formData.emergency_contact_name} onChange={e => setFormData({ ...formData, emergency_contact_name: e.target.value })} />
+                </div>
+                <div><Label className="text-xs font-medium text-muted-foreground">Emergency Contact Phone</Label><Input className="mt-1" value={formData.emergency_contact_phone} onChange={e => setFormData({ ...formData, emergency_contact_phone: e.target.value })} /></div>
+                <div className="pt-1 border-t">
                   <Label className="text-xs font-medium text-muted-foreground">Notes</Label>
-                  <Textarea className="mt-1 text-sm" rows={4} value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                  <Textarea className="mt-1 text-sm" rows={2} value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
                 </div>
               </div>
-
-              <div className="border rounded-lg p-3 space-y-3 bg-card">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Salary Structure</p>
-                <div><Label className="text-xs font-medium text-muted-foreground">Basic Salary</Label><Input type="number" step="0.01" min="0" className="mt-1" value={formData.basic_salary} onChange={e => setFormData({ ...formData, basic_salary: e.target.value })} /></div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Currency</Label>
-                  <Combobox options={(currencies.length ? currencies : [{ code: currency.code }]).map((c: any) => ({ value: c.code, label: c.code }))} value={formData.salary_currency} onChange={v => setFormData({ ...formData, salary_currency: v })} searchPlaceholder="Search..." className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Pay Frequency</Label>
-                  <Combobox options={[{ value: 'monthly', label: 'Monthly' }, { value: 'biweekly', label: 'Bi-weekly' }, { value: 'weekly', label: 'Weekly' }]} value={formData.pay_frequency} onChange={v => setFormData({ ...formData, pay_frequency: v })} searchPlaceholder="Search..." className="mt-1" />
-                </div>
-                <p className="text-xs text-muted-foreground pt-2">Allowances and deductions (housing, transport, loan repayments, etc.) are managed on the {singularLabel}'s profile page after they're added here.</p>
-              </div>
+              <p className="lg:col-span-3 text-xs text-muted-foreground -mt-1">Salary is set from the Salary Structures page after the {singularLabel.toLowerCase()} is added.</p>
             </div>
+            )}
 
             <div className="p-4 border-t bg-muted flex justify-end gap-2 sticky bottom-0">
               <Button type="submit" size="sm" className="px-6" disabled={saving}>

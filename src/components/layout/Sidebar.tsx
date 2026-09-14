@@ -118,6 +118,8 @@ const hrDropdown: NavDropdown = {
   items: [
     { label: 'Employees', href: '/hr/employees', icon: Users, privilege: 'hr.employees.read' },
     { label: 'Consultants & Doctors', href: '/hr/consultants', icon: Stethoscope, privilege: 'hr.employees.read' },
+    { label: 'Departments', href: '/setup/departments', icon: Briefcase, privilege: 'pages.setup_departments.view' },
+    { label: 'Salary Structures', href: '/hr/salary-structures', icon: Wallet, privilege: 'hr.employees.read' },
     { label: 'Payroll', href: '/hr/payroll', icon: Wallet, privilege: 'hr.payroll.read' },
   ]
 };

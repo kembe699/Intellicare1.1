@@ -118,6 +118,39 @@ async function ensureHRTables(sequelize) {
     )
   `);
 
+  // Standard salary structure templates — defined once, then applied to a set
+  // of employees (copies basic_salary/currency/pay_frequency + components
+  // onto each, same values employee_salary_components already uses).
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS salary_structures (
+      id VARCHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      branch_id INTEGER,
+      name VARCHAR(150) NOT NULL,
+      description TEXT,
+      basic_salary NUMERIC(15,2) NOT NULL DEFAULT 0,
+      currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+      pay_frequency VARCHAR(20) NOT NULL DEFAULT 'monthly',
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS salary_structure_components (
+      id VARCHAR(36) PRIMARY KEY,
+      salary_structure_id VARCHAR(36) NOT NULL,
+      component_type VARCHAR(20) NOT NULL,
+      name VARCHAR(150) NOT NULL,
+      amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+      is_percentage BOOLEAN NOT NULL DEFAULT FALSE,
+      account_code VARCHAR(50),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   for (const [idxName, idxSql] of [
     ['employees_clinic_idx', 'CREATE INDEX employees_clinic_idx ON employees(clinic_id)'],
     ['employees_type_status_idx', 'CREATE INDEX employees_type_status_idx ON employees(employment_type, employment_status)'],
@@ -128,6 +161,8 @@ async function ensureHRTables(sequelize) {
     ['payroll_run_lines_run_idx', 'CREATE INDEX payroll_run_lines_run_idx ON payroll_run_lines(payroll_run_id)'],
     ['payroll_run_lines_employee_idx', 'CREATE INDEX payroll_run_lines_employee_idx ON payroll_run_lines(employee_id)'],
     ['payroll_run_line_components_line_idx', 'CREATE INDEX payroll_run_line_components_line_idx ON payroll_run_line_components(payroll_run_line_id)'],
+    ['salary_structures_clinic_idx', 'CREATE INDEX salary_structures_clinic_idx ON salary_structures(clinic_id)'],
+    ['salary_structure_components_structure_idx', 'CREATE INDEX salary_structure_components_structure_idx ON salary_structure_components(salary_structure_id)'],
   ]) {
     try {
       const [[check]] = await sequelize.query(
@@ -137,6 +172,19 @@ async function ensureHRTables(sequelize) {
       if (!check.cnt) await sequelize.query(idxSql);
     } catch (e) { /* index creation is best-effort */ }
   }
+
+  // Some tenants' chart of accounts (older template seed) has 5100/5110/2200
+  // present but marked inactive, which silently blocks payroll's /pay step
+  // with "accounts are missing" even though they exist. Payroll cannot work
+  // at all without these three accounts active, so reactivate them here —
+  // safe to run on every connection, and self-heals every tenant on deploy
+  // without needing a one-off manual DB fix per tenant.
+  try {
+    await sequelize.query(`
+      UPDATE chart_of_accounts SET is_active = true, updated_at = NOW()
+      WHERE account_code IN ('5100', '5110', '2200') AND is_active = false
+    `);
+  } catch (e) { /* chart_of_accounts may not exist yet for this tenant */ }
 }
 
 module.exports = { ensureHRTables };

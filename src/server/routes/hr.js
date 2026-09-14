@@ -116,7 +116,7 @@ router.post('/employees', authorize('hr.employees.write'), async (req, res) => {
       )
     `, {
       replacements: {
-        id, clinicId, branchId: b.branch_id || getCreateBranchId(req), userId: b.user_id || null,
+        id, clinicId, branchId: b.branch_id || getCreateBranchId(req), userId: b.user_id ? parseInt(b.user_id, 10) : null,
         employeeNumber, employmentType: b.employment_type || 'staff',
         firstName: b.first_name.trim(), lastName: b.last_name.trim(), gender: b.gender || null,
         dateOfBirth: b.date_of_birth || null, nationalId: b.national_id || null,
@@ -144,7 +144,8 @@ router.put('/employees/:id', authorize('hr.employees.write'), async (req, res) =
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const b = req.body || {};
     const fields = {
-      user_id: b.user_id, employment_type: b.employment_type,
+      user_id: b.user_id !== undefined ? (b.user_id ? parseInt(b.user_id, 10) : null) : undefined,
+      employment_type: b.employment_type,
       first_name: b.first_name, last_name: b.last_name, gender: b.gender,
       date_of_birth: b.date_of_birth, national_id: b.national_id, phone: b.phone, email: b.email, address: b.address,
       job_title: b.job_title, department: b.department, hire_date: b.hire_date, termination_date: b.termination_date,
@@ -267,6 +268,211 @@ router.delete('/salary-components/:id', authorize('hr.employees.write'), async (
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove salary component' });
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// SALARY STRUCTURES (standard templates, assignable to employees)
+// ═══════════════════════════════════════════════════
+
+router.get('/salary-structures', authorize('hr.employees.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [structures] = await sequelize.query(`
+      SELECT s.*, (SELECT COUNT(*) FROM salary_structure_components c WHERE c.salary_structure_id = s.id) AS component_count
+      FROM salary_structures s WHERE s.clinic_id = :clinicId AND s.is_active = true
+      ORDER BY s.name ASC
+    `, { replacements: { clinicId } });
+    res.json(structures);
+  } catch (error) {
+    console.error('Error fetching salary structures:', error);
+    res.status(500).json({ error: 'Failed to fetch salary structures' });
+  }
+});
+
+router.get('/salary-structures/:id', authorize('hr.employees.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [[structure]] = await sequelize.query(
+      `SELECT * FROM salary_structures WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (!structure) return res.status(404).json({ error: 'Salary structure not found' });
+    const [components] = await sequelize.query(
+      `SELECT * FROM salary_structure_components WHERE salary_structure_id = :id ORDER BY component_type, name`,
+      { replacements: { id: req.params.id } }
+    );
+    res.json({ ...structure, components });
+  } catch (error) {
+    console.error('Error fetching salary structure:', error);
+    res.status(500).json({ error: 'Failed to fetch salary structure' });
+  }
+});
+
+router.post('/salary-structures', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.name?.trim()) return res.status(400).json({ error: 'Name is required' });
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const id = uuidv4();
+    await sequelize.query(`
+      INSERT INTO salary_structures (id, clinic_id, branch_id, name, description, basic_salary, currency, pay_frequency, is_active, created_at, updated_at)
+      VALUES (:id, :clinicId, :branchId, :name, :description, :basicSalary, :currency, :payFrequency, true, NOW(), NOW())
+    `, {
+      replacements: {
+        id, clinicId, branchId: getCreateBranchId(req), name: b.name.trim(), description: b.description || null,
+        basicSalary: parseFloat(b.basic_salary) || 0, currency: b.currency || 'USD', payFrequency: b.pay_frequency || 'monthly',
+      }
+    });
+    const [[created]] = await sequelize.query(`SELECT * FROM salary_structures WHERE id = :id`, { replacements: { id } });
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Error creating salary structure:', error);
+    res.status(500).json({ error: 'Failed to create salary structure' });
+  }
+});
+
+router.put('/salary-structures/:id', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const b = req.body || {};
+    const fields = {
+      name: b.name?.trim(), description: b.description,
+      basic_salary: b.basic_salary !== undefined ? parseFloat(b.basic_salary) || 0 : undefined,
+      currency: b.currency, pay_frequency: b.pay_frequency,
+    };
+    const setClauses = [];
+    const replacements = { id: req.params.id, clinicId };
+    for (const [col, val] of Object.entries(fields)) {
+      if (val === undefined) continue;
+      setClauses.push(`${col} = :${col}`);
+      replacements[col] = val;
+    }
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    setClauses.push('updated_at = NOW()');
+    const [, meta] = await sequelize.query(
+      `UPDATE salary_structures SET ${setClauses.join(', ')} WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements }
+    );
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Salary structure not found' });
+    const [[updated]] = await sequelize.query(`SELECT * FROM salary_structures WHERE id = :id`, { replacements: { id: req.params.id } });
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating salary structure:', error);
+    res.status(500).json({ error: 'Failed to update salary structure' });
+  }
+});
+
+router.delete('/salary-structures/:id', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [, meta] = await sequelize.query(
+      `UPDATE salary_structures SET is_active = false, updated_at = NOW() WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Salary structure not found' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove salary structure' });
+  }
+});
+
+router.post('/salary-structures/:id/components', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.name?.trim() || !b.component_type) return res.status(400).json({ error: 'name and component_type are required' });
+    if (!['allowance', 'deduction'].includes(b.component_type)) {
+      return res.status(400).json({ error: "component_type must be 'allowance' or 'deduction'" });
+    }
+    const id = uuidv4();
+    await sequelize.query(`
+      INSERT INTO salary_structure_components (id, salary_structure_id, component_type, name, amount, is_percentage, account_code, created_at, updated_at)
+      VALUES (:id, :structureId, :componentType, :name, :amount, :isPercentage, :accountCode, NOW(), NOW())
+    `, {
+      replacements: {
+        id, structureId: req.params.id, componentType: b.component_type, name: b.name.trim(),
+        amount: parseFloat(b.amount) || 0, isPercentage: !!b.is_percentage, accountCode: b.account_code || null,
+      }
+    });
+    const [[created]] = await sequelize.query(`SELECT * FROM salary_structure_components WHERE id = :id`, { replacements: { id } });
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Error adding salary structure component:', error);
+    res.status(500).json({ error: 'Failed to add component' });
+  }
+});
+
+router.delete('/salary-structure-components/:id', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const [, meta] = await sequelize.query(`DELETE FROM salary_structure_components WHERE id = :id`, { replacements: { id: req.params.id } });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Component not found' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove component' });
+  }
+});
+
+// Applies a structure's basic_salary/currency/pay_frequency and components
+// onto each selected employee. Existing active components are deactivated
+// (not deleted — same soft-removal convention as the rest of this file)
+// before the structure's components are cloned in, so re-assigning a
+// structure cleanly replaces what an employee had rather than piling on.
+router.post('/salary-structures/:id/assign', authorize('hr.employees.write'), async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const employeeIds = Array.isArray(req.body?.employee_ids) ? req.body.employee_ids : [];
+    if (employeeIds.length === 0) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Select at least one employee' });
+    }
+    const [[structure]] = await sequelize.query(
+      `SELECT * FROM salary_structures WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId }, transaction: t }
+    );
+    if (!structure) {
+      await t.rollback();
+      return res.status(404).json({ error: 'Salary structure not found' });
+    }
+    const [components] = await sequelize.query(
+      `SELECT * FROM salary_structure_components WHERE salary_structure_id = :id`,
+      { replacements: { id: req.params.id }, transaction: t }
+    );
+
+    const [employees] = await sequelize.query(
+      `SELECT id FROM employees WHERE clinic_id = :clinicId AND id IN (:employeeIds)`,
+      { replacements: { clinicId, employeeIds }, transaction: t }
+    );
+
+    for (const emp of employees) {
+      await sequelize.query(
+        `UPDATE employees SET basic_salary = :basicSalary, salary_currency = :currency, pay_frequency = :payFrequency, updated_at = NOW() WHERE id = :id`,
+        { replacements: { id: emp.id, basicSalary: structure.basic_salary, currency: structure.currency, payFrequency: structure.pay_frequency }, transaction: t }
+      );
+      await sequelize.query(
+        `UPDATE employee_salary_components SET is_active = false, updated_at = NOW() WHERE employee_id = :id AND is_active = true`,
+        { replacements: { id: emp.id }, transaction: t }
+      );
+      for (const c of components) {
+        await sequelize.query(`
+          INSERT INTO employee_salary_components (id, employee_id, component_type, name, amount, is_percentage, account_code, is_active, created_at, updated_at)
+          VALUES (:id, :employeeId, :componentType, :name, :amount, :isPercentage, :accountCode, true, NOW(), NOW())
+        `, {
+          replacements: {
+            id: uuidv4(), employeeId: emp.id, componentType: c.component_type, name: c.name,
+            amount: c.amount, isPercentage: c.is_percentage, accountCode: c.account_code,
+          },
+          transaction: t,
+        });
+      }
+    }
+
+    await t.commit();
+    res.json({ success: true, applied_to: employees.length });
+  } catch (error) {
+    await t.rollback();
+    console.error('Error assigning salary structure:', error);
+    res.status(500).json({ error: 'Failed to assign salary structure' });
   }
 });
 
