@@ -975,6 +975,119 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
   }
 });
 
+// Records a straight "we owe this supplier X for Y" liability without going
+// through the item-by-item PO builder — reception/procurement staff often
+// just need to record a bill amount and what it's for (a repair, a one-off
+// service, a bill that arrived with no itemized breakdown), not draft a full
+// purchase order line-by-line. Reuses purchase_orders so it plugs straight
+// into the existing supplier-bills payment/outstanding tracking (GET
+// /supplier-bills, POST /supplier-bill-payment) rather than inventing a
+// parallel record type; it's created directly as 'authorized' — skipping
+// draft — since there's nothing to draft when there are no items to add.
+router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_orders.write'), async (req, res) => {
+  try {
+    const { supplier_id, amount, description } = req.body;
+    if (!supplier_id) return res.status(400).json({ error: 'supplier_id is required' });
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'A positive amount is required' });
+    if (!description || !description.trim()) return res.status(400).json({ error: 'A description of what this bill is for is required' });
+
+    const clinic_id = BranchQueryFilter.resolveClinicId(req);
+
+    // The supplier's own currency, not always the tenant's base — a USD supplier's
+    // bill amount means USD. Looked up server-side rather than trusting whatever
+    // currency the client happened to have in state for a financial record.
+    const [[supplierRow]] = await sequelize.query(
+      `SELECT currency, payment_terms FROM suppliers WHERE id = :id AND clinic_id = :clinic_id`,
+      { replacements: { id: parseInt(supplier_id), clinic_id: clinic_id || null } }
+    );
+    if (!supplierRow) return res.status(404).json({ error: 'Supplier not found' });
+
+    const poYear = new Date().getFullYear();
+    const [[poSeqRow]] = await sequelize.query(
+      `SELECT COALESCE(MAX(NULLIF(regexp_replace(po_number, '^.*-', ''), '')::int), 0) AS last
+         FROM purchase_orders
+        WHERE po_number LIKE :prefix AND po_number ~ '-[0-9]+$'`,
+      { replacements: { prefix: `PO-${poYear}-%` } }
+    );
+    const poNumber = `PO-${poYear}-${String((parseInt(poSeqRow?.last, 10) || 0) + 1).padStart(4, '0')}`;
+
+    const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`);
+    const baseCurrency = baseCurrencyRow?.code || 'USD';
+    const poCurrency = supplierRow.currency || baseCurrency;
+
+    let xRate = 1;
+    if (poCurrency !== baseCurrency) {
+      try {
+        xRate = await AccountingService.getExchangeRate(clinic_id, poCurrency, baseCurrency, new Date());
+      } catch (rateErr) {
+        console.warn(`No ${poCurrency}->${baseCurrency} rate available for quick-bill, using 1:1 fallback:`, rateErr.message);
+      }
+    }
+    const baseCurrencyTotal = Math.round(amt * xRate * 100) / 100;
+
+    await sequelize.query(`
+      INSERT INTO purchase_orders (po_number, supplier_id, order_date, total_amount, status, notes,
+        clinic_id, po_type, subtotal, tax_amount, tax_rate, shipping_cost, po_currency, exchange_rate,
+        base_currency_total, payment_terms, created_by, created_at, updated_at)
+      VALUES (:po_number, :supplier_id, NOW(), :amount, 'authorized', :notes,
+        :clinic_id, 'standard', :amount, 0, 0, 0, :po_currency, :exchange_rate,
+        :base_currency_total, :payment_terms, :created_by, NOW(), NOW())
+    `, {
+      replacements: {
+        po_number: poNumber, supplier_id: parseInt(supplier_id), amount: amt, notes: description.trim(),
+        clinic_id: clinic_id || null, po_currency: poCurrency, exchange_rate: xRate,
+        base_currency_total: baseCurrencyTotal, payment_terms: supplierRow.payment_terms || 'Net30',
+        created_by: req.user?.id || null,
+      }
+    });
+
+    const [newPO] = await sequelize.query('SELECT * FROM purchase_orders WHERE po_number = :po_number', { replacements: { po_number: poNumber } });
+    res.status(201).json(newPO[0]);
+  } catch (error) {
+    console.error('Error creating quick supplier bill:', error);
+    res.status(500).json({ error: 'Failed to create supplier bill' });
+  }
+});
+
+// Every PO issued to one supplier, with what's owed vs paid on each — the
+// supplier profile view's "how much does this supplier want from us" answer.
+// Unlike GET /supplier-bills (only authorized/received, for the payables
+// worklist), this returns every status so a supplier's full history is
+// visible, and lets the frontend decide what counts as "outstanding".
+router.get('/suppliers/:id/purchase-orders', authorize('procurement.read'), async (req, res) => {
+  try {
+    const [pos] = await sequelize.query(`
+      SELECT id, po_number, order_date, status, total_amount, po_currency, notes,
+        COALESCE(paid_amount, 0) AS paid_amount,
+        COALESCE(payment_status, 'unpaid') AS payment_status,
+        (total_amount - COALESCE(paid_amount, 0)) AS balance_due
+      FROM purchase_orders
+      WHERE supplier_id = :id
+      ORDER BY order_date DESC, id DESC
+    `, { replacements: { id: req.params.id } });
+
+    const summary = pos.reduce((acc, po) => {
+      const total = parseFloat(po.total_amount) || 0;
+      const paid = parseFloat(po.paid_amount) || 0;
+      acc.total_billed += total;
+      acc.total_paid += paid;
+      // A draft or cancelled PO isn't a real liability yet/anymore — matches
+      // the same status filter GET /supplier-bills already uses for "what's
+      // actually owed" rather than everything ever entered.
+      if (po.status === 'authorized' || po.status === 'received') {
+        acc.total_outstanding += Math.max(0, total - paid);
+      }
+      return acc;
+    }, { total_billed: 0, total_paid: 0, total_outstanding: 0 });
+
+    res.json({ purchase_orders: pos, summary });
+  } catch (error) {
+    console.error('Error fetching supplier purchase orders:', error);
+    res.status(500).json({ error: 'Failed to fetch supplier purchase orders' });
+  }
+});
+
 // Add a line item to an existing (draft) PO and recompute totals.
 // The frontend previously called the unrelated, dead /api/purchase-orders/:id/items
 // router (a legacy Sequelize-model router mounted separately) — that endpoint

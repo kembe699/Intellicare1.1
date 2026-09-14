@@ -14,7 +14,8 @@ import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
-import { Building2, Edit, Search, Star, Phone, Mail, MapPin, RefreshCw, CheckCircle, Ban, Eye, Truck, Loader2, X, Check, FileSpreadsheet } from 'lucide-react';
+import { Building2, Edit, Search, Star, Phone, Mail, MapPin, RefreshCw, CheckCircle, Ban, Eye, Truck, Loader2, X, Check, FileSpreadsheet, Receipt, Plus, FileText } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 interface Supplier {
@@ -69,6 +70,15 @@ const SUPPLIER_STATUS_TONE: Record<string, StatusBadgeTone> = {
   inactive: 'neutral',
 };
 
+const PO_STATUS_TONE: Record<string, StatusBadgeTone> = {
+  draft: 'neutral',
+  check: 'warning',
+  approved: 'warning',
+  authorized: 'info',
+  received: 'success',
+  cancelled: 'danger',
+};
+
 const supplierStatus = (s: Supplier) => {
   if (s.on_hold) return { status: 'on_hold', label: 'On Hold' };
   if (s.is_active) return { status: 'active', label: 'Active' };
@@ -97,6 +107,15 @@ const SuppliersManagement: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [holdingId, setHoldingId] = useState<number | null>(null);
   const [formData, setFormData] = useState(emptyForm(currency.code));
+
+  // Supplier profile: this supplier's own PO/bill history, shown in the details view
+  const [supplierBills, setSupplierBills] = useState<any[]>([]);
+  const [billSummary, setBillSummary] = useState({ total_billed: 0, total_paid: 0, total_outstanding: 0 });
+  const [loadingBills, setLoadingBills] = useState(false);
+  const [showCreateBill, setShowCreateBill] = useState(false);
+  const [billAmount, setBillAmount] = useState('');
+  const [billDescription, setBillDescription] = useState('');
+  const [creatingBill, setCreatingBill] = useState(false);
 
   const fetchSuppliers = async () => {
     setLoading(true);
@@ -198,9 +217,58 @@ const SuppliersManagement: React.FC = () => {
       if (res.ok) {
         setSelectedSupplier(await res.json());
         setShowDetailsModal(true);
+        setShowCreateBill(false);
+        setBillAmount(''); setBillDescription('');
+        fetchSupplierBills(s.id);
       }
     } catch (error) {
       toast.error('Failed to load supplier details');
+    }
+  };
+
+  const fetchSupplierBills = async (supplierId: number) => {
+    setLoadingBills(true);
+    try {
+      const res = await authFetch(`/api/procurement/suppliers/${supplierId}/purchase-orders`);
+      if (res.ok) {
+        const data = await res.json();
+        setSupplierBills(data.purchase_orders || []);
+        setBillSummary(data.summary || { total_billed: 0, total_paid: 0, total_outstanding: 0 });
+      }
+    } catch (error) {
+      toast.error('Failed to load this supplier\'s purchase orders');
+    } finally {
+      setLoadingBills(false);
+    }
+  };
+
+  const handleCreateBill = async () => {
+    if (creatingBill || !selectedSupplier) return;
+    const amt = parseFloat(billAmount);
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return; }
+    if (!billDescription.trim()) { toast.error('Add a short description of what this bill is for'); return; }
+    setCreatingBill(true);
+    try {
+      const res = await authFetch('/api/procurement/purchase-orders/quick-bill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplier_id: selectedSupplier.id, amount: amt, description: billDescription.trim() }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        toast.success(`Bill ${created.po_number} recorded`);
+        setShowCreateBill(false);
+        setBillAmount(''); setBillDescription('');
+        fetchSupplierBills(selectedSupplier.id);
+        fetchSuppliers();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to create bill');
+      }
+    } catch (error) {
+      toast.error('Network error');
+    } finally {
+      setCreatingBill(false);
     }
   };
 
@@ -489,10 +557,10 @@ const SuppliersManagement: React.FC = () => {
 
         {/* Supplier Details Dialog */}
         <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Supplier Details</DialogTitle>
-              <DialogDescription>View supplier profile and performance.</DialogDescription>
+              <DialogTitle>Supplier Profile</DialogTitle>
+              <DialogDescription>Profile, performance, and billing history.</DialogDescription>
             </DialogHeader>
             {selectedSupplier && (
               <div className="space-y-4 px-6 pb-6 pt-2">
@@ -546,6 +614,92 @@ const SuppliersManagement: React.FC = () => {
                   <div className="flex justify-between"><span className="text-muted-foreground">Credit Limit</span><span className="font-mono">{formatInCurrency(selectedSupplier.credit_limit || 0, selectedSupplier.currency)}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Tax ID</span><span>{selectedSupplier.tax_id || '—'}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span>{selectedSupplier.bank_name || '—'}</span></div>
+                </div>
+
+                {/* Billing: what this supplier is owed, what's already been paid, and
+                    every PO/bill behind those numbers — the actual "how much does
+                    this supplier want from us" the profile view exists to answer. */}
+                <div className="border-t pt-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold flex items-center gap-2"><Receipt className="w-4 h-4 text-primary" /> Billing &amp; Purchase Orders</h4>
+                    <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => setShowCreateBill(v => !v)}>
+                      <Plus className="w-3 h-3 mr-1.5" /> Create Bill
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                      <p className="text-xs text-amber-800">Outstanding</p>
+                      <p className="text-lg font-bold font-mono text-amber-900">{fmt(billSummary.total_outstanding)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                      <p className="text-xs text-emerald-800">Paid</p>
+                      <p className="text-lg font-bold font-mono text-emerald-900">{fmt(billSummary.total_paid)}</p>
+                    </div>
+                  </div>
+
+                  {showCreateBill && (
+                    <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">New bill for {selectedSupplier.name} — items not required</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Amount ({selectedSupplier.currency || currency.code})</Label>
+                          <Input type="number" step="0.01" min="0" className="mt-1 h-9" placeholder="0.00" value={billAmount} onChange={e => setBillAmount(e.target.value)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">What's it for?</Label>
+                          <Input className="mt-1 h-9" placeholder="e.g. Equipment repair" value={billDescription} onChange={e => setBillDescription(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button size="sm" variant="ghost" className="h-7 px-3 text-xs" onClick={() => setShowCreateBill(false)}>Cancel</Button>
+                        <Button size="sm" className="h-7 px-3 text-xs" onClick={handleCreateBill} disabled={creatingBill}>
+                          {creatingBill ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Check className="w-3 h-3 mr-1.5" />}
+                          {creatingBill ? 'Saving...' : 'Save Bill'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border rounded-lg overflow-hidden">
+                    {loadingBills ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading...</div>
+                    ) : supplierBills.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-1">
+                        <FileText className="w-5 h-5 text-muted-foreground/50" />
+                        No purchase orders or bills for this supplier yet.
+                      </div>
+                    ) : (
+                      <div className="max-h-56 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-muted/30 sticky top-0">
+                            <tr className="text-left text-muted-foreground">
+                              <th className="px-3 py-2 font-medium">PO / Bill No.</th>
+                              <th className="px-3 py-2 font-medium">Date</th>
+                              <th className="px-3 py-2 font-medium">Status</th>
+                              <th className="px-3 py-2 font-medium text-right">Total</th>
+                              <th className="px-3 py-2 font-medium text-right">Paid</th>
+                              <th className="px-3 py-2 font-medium text-right">Balance Due</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {supplierBills.map((b: any) => (
+                              <tr key={b.id}>
+                                <td className="px-3 py-2 font-mono text-primary">{b.po_number}</td>
+                                <td className="px-3 py-2 text-muted-foreground">{new Date(b.order_date).toLocaleDateString()}</td>
+                                <td className="px-3 py-2"><StatusBadge status={b.status} label={b.status} map={PO_STATUS_TONE} /></td>
+                                <td className="px-3 py-2 text-right font-mono">{formatInCurrency(b.total_amount, b.po_currency)}</td>
+                                <td className="px-3 py-2 text-right font-mono">{formatInCurrency(b.paid_amount, b.po_currency)}</td>
+                                <td className={cn("px-3 py-2 text-right font-mono font-semibold", parseFloat(b.balance_due) > 0 ? "text-amber-700" : "text-emerald-700")}>
+                                  {formatInCurrency(b.balance_due, b.po_currency)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2">
