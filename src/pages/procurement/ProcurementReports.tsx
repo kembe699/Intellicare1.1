@@ -454,20 +454,21 @@ const ProcurementReports: React.FC = () => {
                     <DollarSign className="w-4 h-4 text-emerald-500" />
                     <span className="text-xs text-muted-foreground">Total Spend</span>
                   </div>
-                  {(() => {
-                    const ssp = byCurrency.find(c => c.currency === 'SSP')?.total_amount || 0;
-                    const usd = byCurrency.find(c => c.currency === 'USD')?.total_amount || 0;
-                    const others = byCurrency.filter(c => c.currency !== 'SSP' && c.currency !== 'USD');
-                    return (
-                      <div className="space-y-0.5">
-                        <p className="text-lg font-bold font-mono leading-tight">{fmtAmt(ssp, 'SSP')}</p>
-                        <p className="text-lg font-bold font-mono leading-tight">{fmtAmt(usd, 'USD')}</p>
-                        {others.map(c => (
-                          <p key={c.currency} className="text-lg font-bold font-mono leading-tight">{fmtAmt(c.total_amount, c.currency)}</p>
-                        ))}
-                      </div>
-                    );
-                  })()}
+                  {byCurrency.length === 0 ? (
+                    <p className="text-lg font-bold font-mono leading-tight text-muted-foreground">—</p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {/* Was hardcoded to always show SSP then USD (even as 0.00) with
+                          every other currency buried below as "others" — a tenant whose
+                          real spend is in a third currency (UGX, KES, whatever they're
+                          actually configured for) saw two irrelevant zero lines before
+                          their own total. Purely data-driven now: whatever currencies
+                          purchase orders actually exist in, largest first. */}
+                      {[...byCurrency].sort((a, b) => b.total_amount - a.total_amount).map(c => (
+                        <p key={c.currency} className="text-lg font-bold font-mono leading-tight">{fmtAmt(c.total_amount, c.currency)}</p>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <Card>

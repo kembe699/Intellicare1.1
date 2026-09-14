@@ -267,11 +267,12 @@ router.post('/drugs/:id/update-price', authorize('pharmacy.write'), async (req, 
     await sequelize.query(`UPDATE drugs SET ${col} = :price WHERE id = :id`, { replacements: { price: price_amount, id: drugId } });
 
     // Record history
+    const fallbackCurrency = price_currency || (await CurrencyService.getBaseCurrency()).code;
     await sequelize.query(`
       INSERT INTO drug_pricing_history (id, drug_id, price_currency, price_amount, effective_from, reason_for_change, changed_by)
       VALUES (:id, :did, :curr, :amt, CURRENT_DATE, :reason, :by)
     `, {
-      replacements: { id: uuidv4(), did: drugId, curr: price_currency || 'KES', amt: price_amount, reason: reason || null, by: changed_by || null }
+      replacements: { id: uuidv4(), did: drugId, curr: fallbackCurrency, amt: price_amount, reason: reason || null, by: changed_by || null }
     });
 
     res.json({ message: 'Price updated', old_price: old[0]?.old_price, new_price: price_amount });
@@ -2081,13 +2082,14 @@ router.post('/insurance-pricing', authorize('pharmacy.write'), async (req, res) 
   try {
     const id = uuidv4();
     const { drug_id, insurance_type, unit_price, currency_code, patient_copay, insurance_covers, effective_from, effective_to } = req.body;
+    const fallbackCurrency = currency_code || (await CurrencyService.getBaseCurrency()).code;
     await sequelize.query(`
       INSERT INTO pharmacy_insurance_pricing (id, clinic_id, drug_id, insurance_type, unit_price, currency_code, patient_copay, insurance_covers, effective_from, effective_to)
       VALUES (:id, :cid, :did, :type, :price, :curr, :copay, :covers, :from, :to)
     `, {
       replacements: {
         id, cid: BranchQueryFilter.resolveClinicId(req), did: drug_id, type: insurance_type || 'general',
-        price: unit_price || 0, curr: currency_code || 'KES',
+        price: unit_price || 0, curr: fallbackCurrency,
         copay: patient_copay || 0, covers: insurance_covers || 0,
         from: effective_from || null, to: effective_to || null
       }
@@ -2441,7 +2443,11 @@ router.get('/currency-settings', authorize('pharmacy.read'), async (req, res) =>
     });
   } catch (error) {
     console.error('Error getting currency settings:', error);
-    res.json({ base_currency: 'SSP', supported_currencies: ['SSP', 'USD', 'KES'], exchange_rates: [] });
+    // A real DB failure here has no honest answer for "which currencies does
+    // this tenant support" — asserting a fixed list (previously SSP/USD/KES)
+    // would just be a guess dressed up as data, and a wrong one for any tenant
+    // not actually using those three. Empty means "unknown", not "none exist".
+    res.status(503).json({ base_currency: null, supported_currencies: [], exchange_rates: [], error: 'Could not load currency settings' });
   }
 });
 

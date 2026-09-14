@@ -471,18 +471,27 @@ router.get('/medicines/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params;
     const cid = parseInt(clinicId) || 1;
-    
+
     // Build branch filter with named parameters
     const isAdmin = req.user?.role === 'admin';
     const branchId = req.branchContext?.branchId || req.user?.branchId || null;
-    
+
     let branchSQL = '';
     const replacements = { cid };
-    
+
     if (!isAdmin && branchId) {
       branchSQL = ' AND i.branch_id = :branchId';
       replacements.branchId = branchId;
     }
+
+    // price_usd/price_ssp were hardcoded to 0 regardless of what the drugs table
+    // actually held, and default_currency fell back to the literal 'KES' — both
+    // presumably copied from wherever this app's pharmacy module originated
+    // and never adapted. Read the real columns and fall back to this tenant's
+    // actual configured base currency instead of a fixed one.
+    const CurrencyService = require('../services/CurrencyService');
+    const baseCurrency = (await CurrencyService.getBaseCurrency()).code;
+    replacements.baseCurrency = baseCurrency;
 
     // Primary source is inventory_items (all drugs entered via inventory/pharmacy module).
     // LEFT JOIN drugs for extra pharmaceutical metadata when available.
@@ -498,9 +507,9 @@ router.get('/medicines/:clinicId', async (req, res) => {
         COALESCE(d.is_controlled_substance, FALSE)   AS is_controlled_substance,
         COALESCE(d.requires_prescription, TRUE)      AS requires_prescription,
         COALESCE(d.price_kes, i.selling_price, 0)    AS price_kes,
-        0                                            AS price_usd,
-        0                                            AS price_ssp,
-        COALESCE(d.default_currency, i.cost_currency, 'KES') AS default_currency,
+        COALESCE(d.price_usd, 0)                     AS price_usd,
+        COALESCE(d.price_ssp, 0)                     AS price_ssp,
+        COALESCE(d.default_currency, i.cost_currency, :baseCurrency) AS default_currency,
         i.quantity_on_hand                           AS current_stock,
         i.unit_of_measure                            AS inventory_uom
       FROM inventory_items i
