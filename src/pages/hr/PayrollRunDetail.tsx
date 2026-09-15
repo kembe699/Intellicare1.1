@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import * as docTemplate from '@/utils/documentTemplate';
-import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check } from 'lucide-react';
+import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check, FileSpreadsheet } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
@@ -125,6 +125,27 @@ export default function PayrollRunDetail() {
     } catch (e) { toast.error('Network error'); } finally { setPayingLineId(null); }
   };
 
+  const [downloadingSheet, setDownloadingSheet] = useState(false);
+  const handleDownloadSheet = async () => {
+    if (!run || downloadingSheet) return;
+    setDownloadingSheet(true);
+    try {
+      const res = await authFetch(`/api/hr/payroll/runs/${run.id}/sheet`);
+      if (!res.ok) { toast.error('Failed to generate payroll sheet'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `Payroll-${run.run_number}-Sheet.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Payroll sheet downloaded');
+    } catch (e) {
+      toast.error('Failed to generate payroll sheet');
+    } finally {
+      setDownloadingSheet(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (busy || !run) return;
     if (!confirm(`Cancel draft ${run.run_number}?`)) return;
@@ -229,6 +250,11 @@ export default function PayrollRunDetail() {
             actions={
               <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="outline" size="sm" onClick={() => navigate('/hr/payroll')}><ArrowLeft className="w-4 h-4 mr-2" /> Back</Button>
+                {(run.lines || []).length > 0 && (
+                  <Button variant="outline" size="sm" onClick={handleDownloadSheet} disabled={downloadingSheet}>
+                    {downloadingSheet ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 mr-2" />} Download Payroll Sheet
+                  </Button>
+                )}
                 {run.status === 'draft' && (
                   <>
                     <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/5" onClick={handleCancel} disabled={busy}>

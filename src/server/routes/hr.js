@@ -939,6 +939,121 @@ router.get('/payroll/runs/:id', authorize('hr.payroll.read'), async (req, res) =
   }
 });
 
+const PAYROLL_SHEET_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+// A printable cash-disbursement register — one row per employee with a
+// blank Signature/Date column, for cash payroll runs where the employee
+// signs on paper to prove they physically received it. Finance then comes
+// back into the app and marks each one paid there (POST .../lines/:lineId
+// /pay) — this sheet is only ever the paper trail, it never marks anything
+// paid itself.
+router.get('/payroll/runs/:id/sheet', authorize('hr.payroll.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [[run]] = await sequelize.query(
+      `SELECT pr.*, coa.account_name AS payment_account_name FROM payroll_runs pr
+       LEFT JOIN chart_of_accounts coa ON coa.id = pr.payment_account_id
+       WHERE pr.id = :id AND pr.clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+
+    const [lines] = await sequelize.query(`
+      SELECT prl.*, e.employee_number, e.first_name, e.last_name, e.job_title
+      FROM payroll_run_lines prl
+      JOIN employees e ON e.id = prl.employee_id
+      WHERE prl.payroll_run_id = :id
+      ORDER BY e.first_name, e.last_name
+    `, { replacements: { id: req.params.id } });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Payroll Sheet', { views: [{ state: 'frozen', ySplit: 6 }] });
+
+    sheet.columns = [
+      { key: 'num', width: 5 },
+      { key: 'empNo', width: 14 },
+      { key: 'name', width: 26 },
+      { key: 'title', width: 20 },
+      { key: 'currency', width: 10 },
+      { key: 'gross', width: 14 },
+      { key: 'deductions', width: 14 },
+      { key: 'net', width: 16 },
+      { key: 'status', width: 12 },
+      { key: 'signature', width: 28 },
+      { key: 'dateSigned', width: 16 },
+    ];
+
+    sheet.mergeCells('A1:K1');
+    sheet.getCell('A1').value = 'PAYROLL DISBURSEMENT SHEET';
+    sheet.getCell('A1').font = { bold: true, size: 14 };
+
+    sheet.getCell('A2').value = `Run: ${run.run_number}`;
+    sheet.getCell('D2').value = `Period: ${PAYROLL_SHEET_MONTHS[run.period_month - 1] || run.period_month} ${run.period_year}`;
+    sheet.getCell('G2').value = `Status: ${run.status.toUpperCase()}`;
+    sheet.getCell('A3').value = `Payment Account: ${run.payment_account_name || '—'}`;
+    sheet.getCell('D3').value = `Generated: ${new Date().toLocaleDateString()}`;
+    ['A2', 'D2', 'G2', 'A3', 'D3'].forEach(c => { sheet.getCell(c).font = { size: 10, italic: true }; });
+
+    const headerRow = sheet.getRow(6);
+    headerRow.values = ['#', 'Employee No.', 'Name', 'Job Title', 'Cur.', 'Gross', 'Deductions', 'Net Pay', 'Status', 'Signature (received cash)', 'Date'];
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
+    headerRow.eachCell(c => { c.border = { bottom: { style: 'thin' } }; });
+
+    const totalsByCurrency = {};
+    lines.forEach((l, i) => {
+      const row = sheet.addRow({
+        num: i + 1,
+        empNo: l.employee_number,
+        name: `${l.first_name} ${l.last_name}`,
+        title: l.job_title || '',
+        currency: l.currency,
+        gross: parseFloat(l.gross_pay) || 0,
+        deductions: parseFloat(l.deductions_total) || 0,
+        net: parseFloat(l.net_pay) || 0,
+        status: l.status === 'paid' ? 'PAID' : 'UNPAID',
+        signature: '',
+        dateSigned: '',
+      });
+      ['gross', 'deductions', 'net'].forEach(k => { row.getCell(k).numFmt = '#,##0.00'; });
+      row.getCell('signature').border = { bottom: { style: 'thin' } };
+      row.getCell('dateSigned').border = { bottom: { style: 'thin' } };
+      row.height = 22;
+
+      const t = (totalsByCurrency[l.currency] ||= { gross: 0, deductions: 0, net: 0, count: 0 });
+      t.gross += parseFloat(l.gross_pay) || 0;
+      t.deductions += parseFloat(l.deductions_total) || 0;
+      t.net += parseFloat(l.net_pay) || 0;
+      t.count++;
+    });
+
+    sheet.addRow([]);
+    // One totals line per currency actually present — never blended, same
+    // as every other multi-currency total in this app.
+    for (const [currency, t] of Object.entries(totalsByCurrency)) {
+      const totalRow = sheet.addRow({ name: `TOTAL (${currency}) — ${t.count} employee(s)`, gross: t.gross, deductions: t.deductions, net: t.net });
+      totalRow.font = { bold: true };
+      ['gross', 'deductions', 'net'].forEach(k => { totalRow.getCell(k).numFmt = '#,##0.00'; });
+    }
+
+    sheet.addRow([]);
+    const noteRow = sheet.addRow(['Each employee signs above to confirm they personally received the cash amount shown. Mark paid in the system only after a signature is collected.']);
+    noteRow.getCell(1).font = { size: 9, italic: true, color: { argb: 'FF6B7280' } };
+    sheet.mergeCells(`A${noteRow.number}:K${noteRow.number}`);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Payroll-${run.run_number}-Sheet.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error generating payroll sheet:', error);
+    res.status(500).json({ error: 'Failed to generate payroll sheet' });
+  }
+});
+
 // Creates a draft run and snapshots every active employee's current salary +
 // components into payroll_run_lines/payroll_run_line_components. Snapshotted
 // deliberately — editing an employee's standing salary later must never
