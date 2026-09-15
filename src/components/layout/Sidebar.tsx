@@ -48,7 +48,9 @@ import {
   Key,
   Wifi,
   WifiOff,
-  Bell
+  Bell,
+  HandCoins,
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -120,6 +122,8 @@ const hrDropdown: NavDropdown = {
     { label: 'Consultants & Doctors', href: '/hr/consultants', icon: Stethoscope, privilege: 'hr.employees.read' },
     { label: 'Departments', href: '/setup/departments', icon: Briefcase, privilege: 'pages.setup_departments.view' },
     { label: 'Salary Structures', href: '/hr/salary-structures', icon: Wallet, privilege: 'hr.employees.read' },
+    { label: 'Salary Advances', href: '/hr/salary-advances', icon: HandCoins, privilege: 'hr.salary_advances.read' },
+    { label: 'Leave', href: '/hr/leave', icon: CalendarDays, privilege: 'hr.leave.read' },
     { label: 'Payroll', href: '/hr/payroll', icon: Wallet, privilege: 'hr.payroll.read' },
   ]
 };

@@ -258,7 +258,16 @@ router.get('/employees/:id', authorize('hr.employees.read'), async (req, res) =>
       LIMIT 24
     `, { replacements: { id: req.params.id } });
 
-    res.json({ ...employee, salary_components: components, payroll_history: payrollHistory });
+    let salaryStructure = null;
+    if (employee.salary_structure_id) {
+      const [[s]] = await sequelize.query(
+        `SELECT id, name, basic_salary, currency, pay_frequency FROM salary_structures WHERE id = :id`,
+        { replacements: { id: employee.salary_structure_id } }
+      );
+      salaryStructure = s || null;
+    }
+
+    res.json({ ...employee, salary_components: components, payroll_history: payrollHistory, salary_structure: salaryStructure });
   } catch (error) {
     console.error('Error fetching employee:', error);
     res.status(500).json({ error: 'Failed to fetch employee' });
@@ -816,8 +825,8 @@ router.post('/salary-structures/:id/assign', authorize('hr.employees.write'), as
 
     for (const emp of employees) {
       await sequelize.query(
-        `UPDATE employees SET basic_salary = :basicSalary, salary_currency = :currency, pay_frequency = :payFrequency, updated_at = NOW() WHERE id = :id`,
-        { replacements: { id: emp.id, basicSalary: structure.basic_salary, currency: structure.currency, payFrequency: structure.pay_frequency }, transaction: t }
+        `UPDATE employees SET basic_salary = :basicSalary, salary_currency = :currency, pay_frequency = :payFrequency, salary_structure_id = :structureId, updated_at = NOW() WHERE id = :id`,
+        { replacements: { id: emp.id, basicSalary: structure.basic_salary, currency: structure.currency, payFrequency: structure.pay_frequency, structureId: structure.id }, transaction: t }
       );
       await sequelize.query(
         `UPDATE employee_salary_components SET is_active = false, updated_at = NOW() WHERE employee_id = :id AND is_active = true`,
@@ -843,6 +852,26 @@ router.post('/salary-structures/:id/assign', authorize('hr.employees.write'), as
     await t.rollback();
     console.error('Error assigning salary structure:', error);
     res.status(500).json({ error: 'Failed to assign salary structure' });
+  }
+});
+
+// Clears the reference only — deliberately does not touch basic_salary,
+// salary_currency, pay_frequency, or employee_salary_components, so an
+// employee's actual pay is never zeroed out by this. It just stops being
+// tracked as "on" a particular template, e.g. before hand-tuning their pay
+// individually.
+router.post('/employees/:id/unassign-salary-structure', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [, meta] = await sequelize.query(
+      `UPDATE employees SET salary_structure_id = NULL, updated_at = NOW() WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error unassigning salary structure:', error);
+    res.status(500).json({ error: 'Failed to unassign salary structure' });
   }
 });
 

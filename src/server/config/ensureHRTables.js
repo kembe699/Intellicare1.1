@@ -216,6 +216,109 @@ async function ensureHRTables(sequelize) {
     )
   `);
 
+  // Tracks which salary structure template (if any) an employee's current
+  // pay was last applied from, so a profile page can show "Standard Nurse
+  // Grade II" instead of just the raw numbers, and offer to change or clear
+  // it. Assigning a structure (POST /salary-structures/:id/assign) sets
+  // this; unassigning only clears the reference — it deliberately leaves
+  // the employee's current basic_salary/components alone rather than
+  // zeroing their pay.
+  try {
+    const [[col]] = await sequelize.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'employees' AND column_name = 'salary_structure_id'`
+    );
+    if (parseInt(col.cnt, 10) === 0) {
+      await sequelize.query(`ALTER TABLE employees ADD COLUMN salary_structure_id VARCHAR(36)`);
+    }
+  } catch (e) { /* best-effort column add */ }
+
+  // A cash advance against future salary — deliberately simple (no
+  // multi-level approval chain, matching Consultant Bills rather than
+  // Supplier Bills): request -> approve -> disburse (posts a GL entry) ->
+  // repay in one or more manually-recorded installments.
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS salary_advances (
+      id VARCHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      branch_id INTEGER,
+      employee_id VARCHAR(36) NOT NULL,
+      advance_number VARCHAR(50) NOT NULL,
+      amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+      currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+      reason TEXT,
+      request_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      balance_remaining NUMERIC(15,2) NOT NULL DEFAULT 0,
+      payment_account_id VARCHAR(36),
+      exchange_rate NUMERIC(15,6) NOT NULL DEFAULT 1,
+      base_currency_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+      disbursement_gl_entry_id VARCHAR(36),
+      created_by INTEGER,
+      approved_by INTEGER,
+      approved_at TIMESTAMPTZ,
+      disbursed_by INTEGER,
+      disbursed_at TIMESTAMPTZ,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS salary_advance_repayments (
+      id VARCHAR(36) PRIMARY KEY,
+      salary_advance_id VARCHAR(36) NOT NULL,
+      amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+      payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      payment_account_id VARCHAR(36),
+      gl_entry_id VARCHAR(36),
+      recorded_by INTEGER,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Leave types are clinic-scoped so a tenant can rename/retune them, but
+  // start every clinic off with a sensible default set — see hr.js's
+  // GET /leave-types, which lazily seeds these the first time a clinic's
+  // list comes back empty rather than trying to enumerate every clinic here.
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS leave_types (
+      id VARCHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      default_annual_days NUMERIC(5,1) NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // days is stored, not recomputed on read, so a later change to a leave
+  // type's default doesn't retroactively change what an already-approved
+  // request counted against the entitlement.
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS leave_requests (
+      id VARCHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      branch_id INTEGER,
+      employee_id VARCHAR(36) NOT NULL,
+      leave_type_id VARCHAR(36) NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      days NUMERIC(5,1) NOT NULL DEFAULT 0,
+      reason TEXT,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      requested_by INTEGER,
+      approved_by INTEGER,
+      approved_at TIMESTAMPTZ,
+      rejection_reason TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   for (const [idxName, idxSql] of [
     ['employees_clinic_idx', 'CREATE INDEX employees_clinic_idx ON employees(clinic_id)'],
     ['employees_type_status_idx', 'CREATE INDEX employees_type_status_idx ON employees(employment_type, employment_status)'],
@@ -233,6 +336,14 @@ async function ensureHRTables(sequelize) {
     ['consultant_bills_number_uniq_idx', 'CREATE UNIQUE INDEX consultant_bills_number_uniq_idx ON consultant_bills(bill_number)'],
     ['consultant_bill_items_bill_idx', 'CREATE INDEX consultant_bill_items_bill_idx ON consultant_bill_items(consultant_bill_id)'],
     ['consultant_bill_items_uniq_idx', 'CREATE UNIQUE INDEX consultant_bill_items_uniq_idx ON consultant_bill_items(consultant_id, patient_bill_id)'],
+    ['salary_advances_clinic_idx', 'CREATE INDEX salary_advances_clinic_idx ON salary_advances(clinic_id)'],
+    ['salary_advances_employee_idx', 'CREATE INDEX salary_advances_employee_idx ON salary_advances(employee_id)'],
+    ['salary_advances_number_uniq_idx', 'CREATE UNIQUE INDEX salary_advances_number_uniq_idx ON salary_advances(advance_number)'],
+    ['salary_advance_repayments_advance_idx', 'CREATE INDEX salary_advance_repayments_advance_idx ON salary_advance_repayments(salary_advance_id)'],
+    ['leave_types_clinic_idx', 'CREATE INDEX leave_types_clinic_idx ON leave_types(clinic_id)'],
+    ['leave_requests_clinic_idx', 'CREATE INDEX leave_requests_clinic_idx ON leave_requests(clinic_id)'],
+    ['leave_requests_employee_idx', 'CREATE INDEX leave_requests_employee_idx ON leave_requests(employee_id)'],
+    ['leave_requests_type_idx', 'CREATE INDEX leave_requests_type_idx ON leave_requests(leave_type_id)'],
   ]) {
     try {
       const [[check]] = await sequelize.query(

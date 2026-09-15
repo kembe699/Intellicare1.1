@@ -128,6 +128,10 @@ const CATALOG = [
   ['hr.employees.write', 'Manage employees & consultants', 'hr', 'Create/edit employees, consultants, and salary components', ['admin']],
   ['hr.payroll.read', 'View payroll', 'hr', 'Payroll runs, payslips, and payroll history', ['admin']],
   ['hr.payroll.write', 'Run and manage payroll', 'hr', 'Create, approve, and pay payroll runs', ['admin']],
+  ['hr.salary_advances.read', 'View salary advances', 'hr', 'Employee cash advances and repayment history', ['admin']],
+  ['hr.salary_advances.write', 'Manage salary advances', 'hr', 'Request, approve, disburse, and record repayment of salary advances', ['admin']],
+  ['hr.leave.read', 'View leave', 'hr', 'Leave types, requests, and employee leave balances', ['admin']],
+  ['hr.leave.write', 'Manage leave', 'hr', 'Create, approve, and reject leave requests', ['admin']],
 
   ['setup.facilities.manage', 'Manage facilities & branches', 'setup', 'Create/edit/delete facilities and branches', ['admin']],
   ['setup.clinics.manage', 'Manage clinics', 'setup', 'Create/edit/delete clinics', ['admin']],

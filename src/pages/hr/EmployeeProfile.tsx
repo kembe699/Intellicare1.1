@@ -35,6 +35,60 @@ export default function EmployeeProfile() {
   const [savingComponent, setSavingComponent] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  const [salaryStructures, setSalaryStructures] = useState<any[]>([]);
+  const [showChangeStructure, setShowChangeStructure] = useState(false);
+  const [selectedStructureId, setSelectedStructureId] = useState('');
+  const [savingStructure, setSavingStructure] = useState(false);
+
+  const fetchSalaryStructures = async () => {
+    try {
+      const res = await authFetch('/api/hr/salary-structures');
+      if (res.ok) setSalaryStructures(await res.json());
+    } catch (e) { /* non-blocking */ }
+  };
+
+  const handleAssignStructure = async () => {
+    if (!id || !selectedStructureId || savingStructure) return;
+    setSavingStructure(true);
+    try {
+      const res = await authFetch(`/api/hr/salary-structures/${selectedStructureId}/assign`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_ids: [id] }),
+      });
+      if (res.ok) {
+        toast.success('Salary structure assigned');
+        setShowChangeStructure(false);
+        setSelectedStructureId('');
+        fetchEmployee();
+      } else {
+        toast.error('Failed to assign salary structure');
+      }
+    } catch (e) {
+      toast.error('Failed to assign salary structure');
+    } finally {
+      setSavingStructure(false);
+    }
+  };
+
+  const handleUnassignStructure = async () => {
+    if (!id || savingStructure) return;
+    if (!confirm("Remove this employee's assigned salary structure? Their current basic salary and components stay as-is — only the link to the template is cleared.")) return;
+    setSavingStructure(true);
+    try {
+      const res = await authFetch(`/api/hr/employees/${id}/unassign-salary-structure`, { method: 'POST' });
+      if (res.ok) {
+        toast.success('Salary structure removed');
+        fetchEmployee();
+      } else {
+        toast.error('Failed to remove salary structure');
+      }
+    } catch (e) {
+      toast.error('Failed to remove salary structure');
+    } finally {
+      setSavingStructure(false);
+    }
+  };
+
   const last30 = () => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().split('T')[0]; };
   const todayStr = () => new Date().toISOString().split('T')[0];
   const [consultFrom, setConsultFrom] = useState(last30);
@@ -110,7 +164,7 @@ export default function EmployeeProfile() {
     } catch (e) { /* non-blocking */ }
   };
 
-  useEffect(() => { fetchEmployee(); fetchCurrencies(); }, [id]);
+  useEffect(() => { fetchEmployee(); fetchCurrencies(); fetchSalaryStructures(); }, [id]);
 
   useEffect(() => {
     if (employee?.employment_type === 'consultant') {
@@ -404,9 +458,49 @@ export default function EmployeeProfile() {
                 </div>
               </div>
 
+              <div className="bg-card rounded-lg border shadow-sm p-5 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h3 className="font-medium flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" /> Assigned Salary Structure</h3>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setShowChangeStructure(v => !v); setSelectedStructureId(employee.salary_structure?.id || ''); }}>
+                      {employee.salary_structure ? 'Change' : 'Assign'}
+                    </Button>
+                    {employee.salary_structure && (
+                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={handleUnassignStructure} disabled={savingStructure}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {employee.salary_structure ? (
+                  <div className="flex items-center justify-between text-sm bg-muted/30 rounded-md p-3">
+                    <div>
+                      <p className="font-medium">{employee.salary_structure.name}</p>
+                      <p className="text-xs text-muted-foreground">{employee.salary_structure.pay_frequency}</p>
+                    </div>
+                    <p className="font-mono font-semibold">{formatInCurrency(employee.salary_structure.basic_salary, employee.salary_structure.currency)}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No structure assigned — this employee's pay is set individually.</p>
+                )}
+                {showChangeStructure && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Combobox
+                      options={salaryStructures.map((s: any) => ({ value: s.id, label: `${s.name} — ${formatInCurrency(s.basic_salary, s.currency)}` }))}
+                      value={selectedStructureId} onChange={setSelectedStructureId}
+                      placeholder="Select a structure..." searchPlaceholder="Search..." className="flex-1"
+                    />
+                    <Button size="sm" onClick={handleAssignStructure} disabled={!selectedStructureId || savingStructure}>
+                      {savingStructure ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setShowChangeStructure(false)}>Cancel</Button>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-medium flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" /> Salary Structure</h3>
+                  <h3 className="font-medium flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" /> Allowances &amp; Deductions</h3>
                   <Button size="sm" variant="outline" onClick={() => setShowAddComponent(v => !v)}>
                     <Plus className="w-4 h-4 mr-2" /> Add Component
                   </Button>
