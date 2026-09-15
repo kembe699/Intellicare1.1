@@ -401,6 +401,29 @@ router.post('/employees/:id/reactivate', authorize('hr.employees.write'), async 
   }
 });
 
+// No authorize() gate here, matching GET /api/users — this only returns
+// non-sensitive names for a "who saw this patient" picker (e.g. LIS
+// Registration's Doctor dropdown), not the full HR employee record. That
+// dropdown is used by front-desk/lab staff whose role has no reason to
+// carry hr.employees.read (admin-only), so gating this behind it silently
+// emptied the consultant half of that list for exactly the people who use
+// it day to day.
+router.get('/consultants/for-doctor-picker', async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [consultants] = await sequelize.query(
+      `SELECT id, user_id, first_name, last_name FROM employees
+       WHERE clinic_id = :clinicId AND employment_type = 'consultant'
+         AND employment_status = 'active' AND is_active = true AND user_id IS NOT NULL`,
+      { replacements: { clinicId } }
+    );
+    res.json(consultants);
+  } catch (error) {
+    console.error('Error fetching consultants for doctor picker:', error);
+    res.status(500).json({ error: 'Failed to fetch consultants' });
+  }
+});
+
 // ═══════════════════════════════════════════════════
 // CONSULTANT CONSULTATIONS & BILLING
 // (percentage-of-fees pay model for consultants/doctors, in place of a

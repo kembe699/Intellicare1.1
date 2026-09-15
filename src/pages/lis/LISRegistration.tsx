@@ -94,9 +94,14 @@ export default function LISRegistration() {
       // accounts — a consultant linked to any user account should still show
       // up here so a visit can be attributed to them (doctor_id is a plain
       // FK to users.id, not gated on role anywhere else in the system).
+      // Uses the unprivileged /consultants/for-doctor-picker endpoint, not
+      // /api/hr/employees (hr.employees.read, admin-only) — this page is
+      // used by front-desk/lab staff who have no reason to hold an HR
+      // privilege, and gating it there silently emptied this half of the
+      // list for exactly those users.
       let consultantDoctors: any[] = [];
       try {
-        const cRes = await authFetch('/api/hr/employees?employment_type=consultant&status=active', { credentials: 'include' });
+        const cRes = await authFetch('/api/hr/consultants/for-doctor-picker', { credentials: 'include' });
         if (cRes.ok) {
           const consultants = await cRes.json();
           const usersById = new Map(users.map((u: any) => [u.id, u]));
