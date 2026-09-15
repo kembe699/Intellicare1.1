@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
 import { exportCSV } from '@/utils/reportUtils';
-import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Search, RefreshCw, ShieldCheck, Download, DollarSign, Pencil, Trash2, Ban, FileSpreadsheet } from 'lucide-react';
+import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Search, RefreshCw, ShieldCheck, Download, DollarSign, Pencil, Trash2, Ban, FileSpreadsheet, Stethoscope } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -28,6 +28,7 @@ interface CoAAccount { id: string | number; account_code: string; account_name: 
 interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
 interface ExpApproval { id: string; expense_id: number; approval_level: number; approved_by: string; approved_by_title?: string; signature?: string | null; notes?: string; approved_at: string; }
 interface SupplierBill { id: string; po_number: string; order_date: string; total_amount: number; po_currency: string; payment_terms: string; status: string; supplier_name: string; contact_person: string; supplier_phone: string; paid_amount: number; payment_status: string; balance_due: number; }
+interface ConsultantBill { id: string; bill_number: string; first_name: string; last_name: string; employee_number: string; period_from: string; period_to: string; total_consultation_revenue: number; fee_percentage: number; bill_amount: number; currency: string; status: string; created_at: string; paid_at?: string; }
 interface BillApproval { id: string; po_id: string; approval_level: number; approved_by: string; approved_by_title?: string; signature?: string | null; notes?: string; approved_at: string; }
 interface POLineItem { line_number: number; item_name: string; description?: string; quantity: number; unit_of_measure?: string; unit_price: number; total_price: number; status?: string; }
 interface UserProfile { id: string; displayName: string; email: string; role: string; signature: string | null; }
@@ -96,12 +97,20 @@ const DailyExpenses: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [billItems, setBillItems] = useState<Record<string, POLineItem[]>>({});
   const [expApprovals, setExpApprovals] = useState<Record<number, ExpApproval[]>>({});
+  const [consultantBills, setConsultantBills] = useState<ConsultantBill[]>([]);
+  const [loadingConsultantBills, setLoadingConsultantBills] = useState(false);
+  const [searchConsultantBills, setSearchConsultantBills] = useState('');
+  const [showConsultantPayModal, setShowConsultantPayModal] = useState(false);
+  const [selectedConsultantBill, setSelectedConsultantBill] = useState<ConsultantBill | null>(null);
+  const [consultantPayForm, setConsultantPayForm] = useState({ payment_date: today(), account_id: '', account_name: '', payment_method: 'Bank Transfer', reference_number: '', notes: '' });
+  const [openConsultantPayCombo, setOpenConsultantPayCombo] = useState(false);
+  const [submittingConsultantPay, setSubmittingConsultantPay] = useState(false);
   const [showExpApproveModal, setShowExpApproveModal] = useState(false);
   const [approveExpense, setApproveExpense] = useState<DailyExpense | null>(null);
   const [expApproveForm, setExpApproveForm] = useState({ approved_by_title: '', notes: '' });
   const [submittingExpApproval, setSubmittingExpApproval] = useState(false);
 
-  useEffect(() => { fetchExpenses(); fetchBills(); fetchCoA(); fetchUserProfile(); }, []);
+  useEffect(() => { fetchExpenses(); fetchBills(); fetchCoA(); fetchUserProfile(); fetchConsultantBills(); }, []);
   // Re-read whenever the window moves; skipped on the first render, which the
   // effect above already covers.
   const firstLoad = useRef(true);
@@ -364,6 +373,61 @@ const DailyExpenses: React.FC = () => {
     return Math.round(amount * rate * 100) / 100;
   };
 
+  const fetchConsultantBills = async () => {
+    setLoadingConsultantBills(true);
+    try {
+      const r = await authFetch(`/api/daily-expenses/consultant-bills?clinic_id=${clinicId}`);
+      if (r.ok) setConsultantBills(await r.json());
+    } catch {}
+    finally { setLoadingConsultantBills(false); }
+  };
+
+  const filteredConsultantBills = useMemo(() => {
+    if (!searchConsultantBills) return consultantBills;
+    const q = searchConsultantBills.toLowerCase();
+    return consultantBills.filter(b => `${b.bill_number} ${b.first_name} ${b.last_name} ${b.employee_number}`.toLowerCase().includes(q));
+  }, [consultantBills, searchConsultantBills]);
+
+  const consultantBillTotalsByCurrency = useMemo(() => {
+    const byCurrency: Record<string, { currency: string; total_billed: number; total_paid: number; total_outstanding: number }> = {};
+    for (const b of consultantBills) {
+      const cur = b.currency || currency.code;
+      if (!byCurrency[cur]) byCurrency[cur] = { currency: cur, total_billed: 0, total_paid: 0, total_outstanding: 0 };
+      byCurrency[cur].total_billed += parseFloat(String(b.bill_amount || 0));
+      if (b.status === 'paid') byCurrency[cur].total_paid += parseFloat(String(b.bill_amount || 0));
+      else byCurrency[cur].total_outstanding += parseFloat(String(b.bill_amount || 0));
+    }
+    return Object.values(byCurrency).sort((a, b) => b.total_billed - a.total_billed);
+  }, [consultantBills, currency.code]);
+
+  const openPayConsultantBill = (bill: ConsultantBill) => {
+    setSelectedConsultantBill(bill);
+    setConsultantPayForm({ payment_date: today(), account_id: '', account_name: '', payment_method: 'Bank Transfer', reference_number: '', notes: '' });
+    setShowConsultantPayModal(true);
+  };
+
+  const handleConsultantPaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submittingConsultantPay) return;
+    if (!selectedConsultantBill || !consultantPayForm.account_id) { toast.error('Select an account'); return; }
+    setSubmittingConsultantPay(true);
+    try {
+      const r = await authFetch('/api/daily-expenses/consultant-bill-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultant_bill_id: selectedConsultantBill.id, payment_date: consultantPayForm.payment_date,
+          account_id: consultantPayForm.account_id, account_name: consultantPayForm.account_name,
+          payment_method: consultantPayForm.payment_method, reference_number: consultantPayForm.reference_number || null,
+          notes: consultantPayForm.notes || null,
+        }) });
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.error || 'Failed to record payment'); return; }
+      toast.success('Consultant bill paid');
+      setShowConsultantPayModal(false); setSelectedConsultantBill(null);
+      fetchConsultantBills();
+    } catch { toast.error('Failed to record payment'); }
+    finally { setSubmittingConsultantPay(false); }
+  };
+
   const fetchApprovals = async (poId: string) => {
     try {
       const r = await authFetch(`/api/daily-expenses/supplier-bills/${poId}/approvals`);
@@ -493,6 +557,7 @@ const DailyExpenses: React.FC = () => {
   // every bill ever raised, paid or not — meaningless as an attention count.
   // Scoped to what's actually still owed.
   const unpaidBillsCount = useMemo(() => bills.filter(b => b.payment_status !== 'paid').length, [bills]);
+  const unpaidConsultantBillsCount = useMemo(() => consultantBills.filter(b => b.status !== 'paid').length, [consultantBills]);
 
   // Broken out per currency, same as the Supplier Profile and Procurement
   // Reports fixes — a supplier billed in both USD and SSP would otherwise get
@@ -786,7 +851,7 @@ const DailyExpenses: React.FC = () => {
           title="Payments & Expenses"
           actions={
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => { fetchExpenses(); fetchBills(); }}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button>
+              <Button variant="outline" size="sm" onClick={() => { fetchExpenses(); fetchBills(); fetchConsultantBills(); }}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button>
               {tab === 'expenses' && <Button onClick={() => setShowExpModal(true)}><Plus className="w-4 h-4 mr-2" />Add Expense</Button>}
             </div>
           }
@@ -795,10 +860,14 @@ const DailyExpenses: React.FC = () => {
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
-            <TabsTrigger value="expenses" className="gap-2"><Receipt className="w-4 h-4" />Daily Expenses{pendingCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{pendingCount}</Badge>}</TabsTrigger>
+            <TabsTrigger value="expenses" className="gap-2"><Receipt className="w-4 h-4" />Expenses{pendingCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{pendingCount}</Badge>}</TabsTrigger>
             <TabsTrigger value="bills" className="gap-2">
               <Building2 className="w-4 h-4" />Supplier Bills
               {unpaidBillsCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{unpaidBillsCount}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="consultant-bills" className="gap-2">
+              <Stethoscope className="w-4 h-4" />Consultant Bills
+              {unpaidConsultantBillsCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{unpaidConsultantBillsCount}</Badge>}
             </TabsTrigger>
           </TabsList>
 
@@ -1054,6 +1123,77 @@ const DailyExpenses: React.FC = () => {
                           </div>
                         );
                       },
+                    },
+                  ]}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── CONSULTANT BILLS TAB ── */}
+          <TabsContent value="consultant-bills" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between py-3 flex-wrap gap-2">
+                <CardTitle className="text-base">
+                  Consultant Bills
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">{filteredConsultantBills.length} bill{filteredConsultantBills.length === 1 ? '' : 's'}</span>
+                </CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search consultant or bill no..." className="pl-8 h-8 w-56 text-sm" value={searchConsultantBills} onChange={e => setSearchConsultantBills(e.target.value)} /></div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Created from a consultant's profile page — a percentage of the consultation revenue collected for them over a period. Pay them here, same as a supplier bill.
+                </p>
+                {consultantBillTotalsByCurrency.length > 0 && (
+                  <div className="flex flex-wrap gap-3">
+                    {consultantBillTotalsByCurrency.map(c => (
+                      <div key={c.currency} className="flex-1 min-w-[280px] border rounded-lg p-4 bg-muted/20">
+                        <p className="text-sm font-bold text-foreground mb-2">{c.currency}</p>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Billed</p>
+                            <p className="font-mono font-bold text-xl leading-tight">{docTemplate.formatCurrency(c.total_billed, c.currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Paid</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-emerald-700">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">Outstanding</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-amber-700">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <AdvancedDataTable<ConsultantBill>
+                  data={filteredConsultantBills}
+                  keyExtractor={(b) => b.id}
+                  loading={loadingConsultantBills}
+                  emptyMessage="No consultant bills yet — create one from a consultant's profile page under Human Resources."
+                  pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+                  columns={[
+                    { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-mono font-medium text-xs">{v}</span> },
+                    { key: 'first_name', header: 'Consultant', render: (_v, b) => <span className="font-medium text-sm">{b.first_name} {b.last_name}</span> },
+                    { key: 'period_from', header: 'Period', render: (_v, b) => <span className="text-xs whitespace-nowrap">{new Date(b.period_from).toLocaleDateString()} – {new Date(b.period_to).toLocaleDateString()}</span> },
+                    { key: 'total_consultation_revenue', header: 'Revenue Collected', align: 'right', render: (v, b) => <span className="font-mono text-sm">{b.currency} {parseFloat(String(v || 0)).toFixed(2)}</span> },
+                    { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => <span className="text-sm">{v}%</span> },
+                    { key: 'bill_amount', header: 'Bill Amount', align: 'right', sortable: true, render: (v, b) => <span className="font-mono font-bold text-sm">{b.currency} {parseFloat(String(v || 0)).toFixed(2)}</span> },
+                    { key: 'status', header: 'Status', render: (v) => <Badge variant={v === 'paid' ? 'outline' : 'secondary'} className={`text-xs capitalize ${v === 'paid' ? 'text-emerald-700 border-emerald-300' : ''}`}>{v}</Badge> },
+                    {
+                      key: '__actions', header: 'Actions',
+                      render: (_v, b) => (
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant={b.status === 'unpaid' ? 'default' : 'ghost'} disabled={b.status !== 'unpaid'}
+                            className={`h-7 text-xs px-2 ${b.status !== 'unpaid' ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            onClick={() => b.status === 'unpaid' && openPayConsultantBill(b)}>
+                            Pay
+                          </Button>
+                        </div>
+                      ),
                     },
                   ]}
                 />
@@ -1511,6 +1651,50 @@ const DailyExpenses: React.FC = () => {
                     <Download className="w-3 h-3" />Download
                   </Button>
                   <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => { setShowPayModal(false); setSelectedBill(null); }}>Cancel</Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── PAY CONSULTANT BILL MODAL ── */}
+        <Dialog open={showConsultantPayModal} onOpenChange={setShowConsultantPayModal}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Pay Consultant Bill</DialogTitle>
+              <DialogDescription>
+                {selectedConsultantBill && `${selectedConsultantBill.bill_number} — ${selectedConsultantBill.first_name} ${selectedConsultantBill.last_name} · ${selectedConsultantBill.currency} ${parseFloat(String(selectedConsultantBill.bill_amount || 0)).toFixed(2)}`}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedConsultantBill && (
+              <form onSubmit={handleConsultantPaySubmit} className="space-y-3 px-6 pb-6 pt-2">
+                <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Period</span><span>{new Date(selectedConsultantBill.period_from).toLocaleDateString()} – {new Date(selectedConsultantBill.period_to).toLocaleDateString()}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Revenue Collected</span><span className="font-mono">{selectedConsultantBill.currency} {parseFloat(String(selectedConsultantBill.total_consultation_revenue || 0)).toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Fee %</span><span>{selectedConsultantBill.fee_percentage}%</span></div>
+                  <div className="flex justify-between font-semibold"><span>Bill Amount</span><span className="font-mono">{selectedConsultantBill.currency} {parseFloat(String(selectedConsultantBill.bill_amount || 0)).toFixed(2)}</span></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label className="text-xs">Payment Date *</Label><Input type="date" className="mt-1" value={consultantPayForm.payment_date} onChange={e => setConsultantPayForm(f => ({...f, payment_date: e.target.value}))} required /></div>
+                  <div>
+                    <Label className="text-xs">Payment Method *</Label>
+                    <Combobox
+                      options={PAYMENT_METHODS.map(m => ({ value: m, label: m }))}
+                      value={consultantPayForm.payment_method}
+                      onChange={v => setConsultantPayForm(f => ({...f, payment_method: v}))}
+                      searchPlaceholder="Search..." className="mt-1 h-9"
+                    />
+                  </div>
+                </div>
+                <div><Label className="text-xs">Pay From Account (CoA) *</Label><div className="mt-1"><AccountCombobox value={consultantPayForm.account_id} onSelect={(id, name) => setConsultantPayForm(f => ({...f, account_id: id, account_name: name}))} open={openConsultantPayCombo} onOpenChange={setOpenConsultantPayCombo} /></div></div>
+                <div><Label className="text-xs">Reference No.</Label><Input className="mt-1" value={consultantPayForm.reference_number} onChange={e => setConsultantPayForm(f => ({...f, reference_number: e.target.value}))} placeholder="Cheque/Transfer ref" /></div>
+                <div><Label className="text-xs">Notes</Label><Textarea className="mt-1 text-sm" rows={2} value={consultantPayForm.notes} onChange={e => setConsultantPayForm(f => ({...f, notes: e.target.value}))} /></div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => { setShowConsultantPayModal(false); setSelectedConsultantBill(null); }}>Cancel</Button>
+                  <Button size="sm" type="submit" className="h-8 px-4 text-xs" disabled={submittingConsultantPay}>
+                    {submittingConsultantPay ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1.5" />}
+                    Record Payment
+                  </Button>
                 </div>
               </form>
             )}

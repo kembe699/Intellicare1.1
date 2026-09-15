@@ -18,11 +18,11 @@ import * as docTemplate from '@/utils/documentTemplate';
 import {
   RefreshCw, TrendingUp, DollarSign, Building2,
   Truck, FileText, Download, Printer, Calendar,
-  ShoppingCart, ClipboardCheck, PackageCheck, Filter as FilterIcon,
+  ShoppingCart, ClipboardCheck, PackageCheck, Filter as FilterIcon, Stethoscope,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
-type ReportTab = 'purchase' | 'delivery' | 'orders' | 'requisitions' | 'receipts';
+type ReportTab = 'purchase' | 'delivery' | 'orders' | 'requisitions' | 'receipts' | 'consultant-bills';
 
 interface CurrencyOption { code: string; symbol: string; name: string; }
 interface UserOption { id: number; display_name: string; }
@@ -60,6 +60,7 @@ const ProcurementReports: React.FC = () => {
   const [poReport, setPoReport] = useState<any[]>([]);
   const [prReport, setPrReport] = useState<any[]>([]);
   const [grnReport, setGrnReport] = useState<any[]>([]);
+  const [consultantBillsReport, setConsultantBillsReport] = useState<any[]>([]);
 
   const fmtAmt = (amount: any, currencyCode?: string) => {
     const n = parseFloat(String(amount || 0));
@@ -140,12 +141,24 @@ const ProcurementReports: React.FC = () => {
     } finally { setLoading(false); }
   };
 
+  const fetchConsultantBillsReport = async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch(`/api/daily-expenses/consultant-bills?clinic_id=${user?.clinic || 1}`);
+      if (res.ok) setConsultantBillsReport(await res.json());
+      else toast.error('Failed to load consultant bills report');
+    } catch (error) {
+      toast.error('Failed to load consultant bills report');
+    } finally { setLoading(false); }
+  };
+
   const fetchForTab = (tab: ReportTab) => {
     if (tab === 'purchase') fetchPurchaseSummary();
     else if (tab === 'delivery') fetchDeliveryPerformance();
     else if (tab === 'orders') fetchPurchaseOrdersReport();
     else if (tab === 'requisitions') fetchPurchaseRequisitionsReport();
     else if (tab === 'receipts') fetchGoodsReceiptsReport();
+    else if (tab === 'consultant-bills') fetchConsultantBillsReport();
   };
 
   // Load currency, user, & supplier dropdown data once (not part of the "Apply" gate).
@@ -257,6 +270,19 @@ const ProcurementReports: React.FC = () => {
         { header: 'Received By', key: 'received_by_name' },
         { header: 'Inspected By', key: 'inspected_by_name', transform: (v) => v || '' },
       ], `goods-receipts-${newFilters.start_date}_to_${newFilters.end_date}.csv`);
+    } else if (activeTab === 'consultant-bills') {
+      if (!consultantBillsReport.length) { toast.error('No data to export'); return; }
+      exportCSV(consultantBillsReport, [
+        { header: 'Bill No.', key: 'bill_number' },
+        { header: 'Consultant', key: 'first_name', transform: (_v, row) => `${row.first_name} ${row.last_name}` },
+        { header: 'Period From', key: 'period_from', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Period To', key: 'period_to', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Revenue Collected', key: 'total_consultation_revenue', transform: (v) => parseFloat(v || 0).toFixed(2) },
+        { header: 'Fee %', key: 'fee_percentage' },
+        { header: 'Currency', key: 'currency' },
+        { header: 'Bill Amount', key: 'bill_amount', transform: (v) => parseFloat(v || 0).toFixed(2) },
+        { header: 'Status', key: 'status' },
+      ], `consultant-bills-${new Date().toISOString().split('T')[0]}.csv`);
     }
   };
 
@@ -440,6 +466,9 @@ const ProcurementReports: React.FC = () => {
           </Button>
           <Button variant={activeTab === 'receipts' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('receipts')}>
             <PackageCheck className="w-4 h-4 mr-1" /> Goods Receipts
+          </Button>
+          <Button variant={activeTab === 'consultant-bills' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('consultant-bills')}>
+            <Stethoscope className="w-4 h-4 mr-1" /> Consultant Bills
           </Button>
         </div>
 
@@ -859,6 +888,56 @@ const ProcurementReports: React.FC = () => {
               ]}
             />
           </div>
+        )}
+
+        {activeTab === 'consultant-bills' && (
+          <>
+            {(() => {
+              const byCurrency: Record<string, { billed: number; paid: number; outstanding: number }> = {};
+              for (const b of consultantBillsReport) {
+                const cur = b.currency || 'USD';
+                if (!byCurrency[cur]) byCurrency[cur] = { billed: 0, paid: 0, outstanding: 0 };
+                const amt = parseFloat(b.bill_amount || 0);
+                byCurrency[cur].billed += amt;
+                if (b.status === 'paid') byCurrency[cur].paid += amt; else byCurrency[cur].outstanding += amt;
+              }
+              const rows = Object.entries(byCurrency);
+              return rows.length > 0 ? (
+                <div className="flex flex-wrap gap-3">
+                  {rows.map(([cur, t]) => (
+                    <div key={cur} className="flex-1 min-w-[280px] bg-card rounded-lg border shadow-sm p-4">
+                      <p className="text-sm font-bold mb-2">{cur}</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Total Billed</p><p className="font-mono font-bold text-lg">{fmtAmt(t.billed)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Paid</p><p className="font-mono font-bold text-lg text-emerald-700">{fmtAmt(t.paid)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Outstanding</p><p className="font-mono font-bold text-lg text-amber-700">{fmtAmt(t.outstanding)}</p></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })()}
+            <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b">
+                <h3 className="font-semibold text-sm">Consultant Bills</h3>
+                <p className="text-xs text-muted-foreground">{consultantBillsReport.length} bill{consultantBillsReport.length === 1 ? '' : 's'} — a percentage of consultation revenue billed to each consultant, paid from Procurement &gt; Expenses</p>
+              </div>
+              <AdvancedDataTable<any>
+                data={consultantBillsReport}
+                keyExtractor={(row) => row.id}
+                emptyMessage="No consultant bills yet"
+                columns={[
+                  { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-medium font-mono">{v}</span> },
+                  { key: 'first_name', header: 'Consultant', render: (_v, row) => `${row.first_name} ${row.last_name}` },
+                  { key: 'period_from', header: 'Period', render: (_v, row) => `${new Date(row.period_from).toLocaleDateString()} – ${new Date(row.period_to).toLocaleDateString()}` },
+                  { key: 'total_consultation_revenue', header: 'Revenue', align: 'right', render: (v, row) => <span className="font-mono">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
+                  { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => `${v}%` },
+                  { key: 'bill_amount', header: 'Bill Amount', align: 'right', render: (v, row) => <span className="font-mono font-bold">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
+                  { key: 'status', header: 'Status', align: 'center', render: (v) => <Badge variant={v === 'paid' ? 'outline' : 'secondary'} className="text-xs capitalize">{v}</Badge> },
+                ]}
+              />
+            </div>
+          </>
         )}
       </div>
       </div>

@@ -478,6 +478,110 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
 });
 
 // Pay an approved expense — deducts from account and marks as paid
+// ─── Consultant Bills ───────────────────────────────────────────────────
+// A consultant bill (created from a consultant's HR profile — see
+// POST /api/hr/consultants/:id/bills) is a percentage-of-consultation-fees
+// payable, distinct from a supplier PO bill: there's no PO/GRN chain or
+// pre-booked Accounts Payable liability behind it, so paying one is a
+// straight debit-expense/credit-cash entry (mirrors the "no GRN on file"
+// branch of the supplier bill payment above, not the AP-settlement branch).
+
+router.get('/consultant-bills', authorize('expenses.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [bills] = await sequelize.query(`
+      SELECT cb.*, e.first_name, e.last_name, e.employee_number
+      FROM consultant_bills cb
+      JOIN employees e ON e.id = cb.consultant_id
+      WHERE cb.clinic_id = :clinicId
+      ORDER BY cb.created_at DESC
+    `, { replacements: { clinicId } });
+    res.json(bills);
+  } catch (error) {
+    console.error('Error fetching consultant bills:', error);
+    res.status(500).json({ error: 'Failed to fetch consultant bills' });
+  }
+});
+
+router.post('/consultant-bill-payment', authorize('expenses.write'), async (req, res) => {
+  try {
+    const { consultant_bill_id, payment_date, account_id, account_name, payment_method, reference_number, notes } = req.body || {};
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    if (!consultant_bill_id || !account_id) {
+      return res.status(400).json({ error: 'consultant_bill_id and account_id are required' });
+    }
+    const [[bill]] = await sequelize.query(
+      `SELECT cb.*, e.first_name, e.last_name, e.employee_number FROM consultant_bills cb
+       JOIN employees e ON e.id = cb.consultant_id
+       WHERE cb.id = :id AND cb.clinic_id = :clinicId`,
+      { replacements: { id: consultant_bill_id, clinicId } }
+    );
+    if (!bill) return res.status(404).json({ error: 'Consultant bill not found' });
+    if (bill.status !== 'unpaid') return res.status(409).json({ error: 'This bill has already been paid or cancelled' });
+
+    const payDate = payment_date || new Date().toISOString().split('T')[0];
+    const consultantLabel = `${bill.first_name} ${bill.last_name} (${bill.employee_number})`;
+
+    const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
+    const baseCurrency = baseCurrencyRow?.code || 'USD';
+    const billCurrency = bill.currency || baseCurrency;
+    let rate = 1;
+    if (billCurrency !== baseCurrency) {
+      try { rate = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrency, payDate) || 1; }
+      catch (e) { rate = 1; }
+    }
+    const baseAmount = AccountingService.convertAmount(parseFloat(bill.bill_amount) || 0, rate);
+
+    const doctorFeesAccount = await AccountingService.getAccountByCode(clinicId, '5110');
+    let glEntry = null;
+    if (doctorFeesAccount) {
+      const lineItems = [
+        { account_id: doctorFeesAccount.id, debit_amount: baseAmount, credit_amount: 0, description: `Consultant bill ${bill.bill_number} — ${consultantLabel} (${bill.period_from} to ${bill.period_to})` },
+        { account_id: String(account_id), debit_amount: 0, credit_amount: baseAmount, description: `Payment via ${account_name || payment_method || 'cash'} (${billCurrency} ${bill.bill_amount} @ ${rate})` },
+      ];
+      glEntry = await AccountingService.createGLEntry({
+        clinic_id: clinicId,
+        transaction_date: payDate,
+        transaction_type: 'consultant_bill_payment',
+        description: `Consultant bill payment — ${bill.bill_number} to ${consultantLabel}`,
+        reference_id: bill.id,
+        reference_module: 'consultant_bill',
+      }, lineItems, req.user?.id);
+      await AccountingService.postGLEntry(glEntry.id, req.user?.id);
+    } else {
+      console.warn(`Consultant bill payment ${bill.id}: skipped GL posting — Doctor Fees account (5110) not found for clinic ${clinicId}`);
+    }
+
+    await sequelize.query(`
+      UPDATE consultant_bills SET status = 'paid', payment_account_id = :accountId, exchange_rate = :rate,
+        base_currency_amount = :baseAmount, gl_entry_id = :glId, paid_by = :userId, paid_at = NOW(),
+        notes = :notes, updated_at = NOW()
+      WHERE id = :id
+    `, {
+      replacements: {
+        id: bill.id, accountId: String(account_id), rate, baseAmount,
+        glId: glEntry?.id || null, userId: req.user?.id || null, notes: notes || null,
+      }
+    });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
+        module: 'HR', action: 'CONSULTANT_BILL_PAID', entity_type: 'ConsultantBill', entity_id: bill.id,
+        description: `Consultant bill ${bill.bill_number} paid to ${consultantLabel} — ${billCurrency} ${bill.bill_amount}${glEntry ? `, GL entry ${glEntry.gl_number}` : ''}`,
+        status: 'success',
+      });
+    } catch (e) { /* non-blocking */ }
+
+    res.json({ success: true, gl_entry_id: glEntry?.id || null, gl_number: glEntry?.gl_number || null });
+  } catch (error) {
+    console.error('Error paying consultant bill:', error);
+    res.status(500).json({ error: error.message || 'Failed to pay consultant bill' });
+  }
+});
+
+
 router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
   try {
     const expenseId = parseInt(req.params.id);
@@ -848,5 +952,6 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
     res.status(500).json({ error: 'Failed to create expense' });
   }
 });
+
 
 module.exports = router;

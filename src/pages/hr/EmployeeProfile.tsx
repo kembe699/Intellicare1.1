@@ -11,7 +11,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
 import {
   Users, Edit, Phone, Mail, MapPin, Loader2, Check, Plus, Trash2,
-  ArrowLeft, Wallet, Calendar, Landmark, Stethoscope,
+  ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt,
 } from 'lucide-react';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
@@ -35,6 +35,60 @@ export default function EmployeeProfile() {
   const [savingComponent, setSavingComponent] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  const last30 = () => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().split('T')[0]; };
+  const todayStr = () => new Date().toISOString().split('T')[0];
+  const [consultFrom, setConsultFrom] = useState(last30);
+  const [consultTo, setConsultTo] = useState(todayStr);
+  const [consultTrace, setConsultTrace] = useState<any>(null);
+  const [loadingTrace, setLoadingTrace] = useState(false);
+  const [billCurrency, setBillCurrency] = useState('');
+  const [creatingBill, setCreatingBill] = useState(false);
+  const [consultantBills, setConsultantBills] = useState<any[]>([]);
+
+  const fetchConsultations = async () => {
+    if (!id) return;
+    setLoadingTrace(true);
+    try {
+      const res = await authFetch(`/api/hr/consultants/${id}/consultations?from=${consultFrom}&to=${consultTo}`);
+      if (res.ok) {
+        const data = await res.json();
+        setConsultTrace(data);
+        const currencies = Object.keys(data.billable || {});
+        if (currencies.length && !billCurrency) setBillCurrency(currencies[0]);
+      }
+    } catch (e) { /* non-blocking */ }
+    finally { setLoadingTrace(false); }
+  };
+
+  const fetchConsultantBills = async () => {
+    if (!id) return;
+    try {
+      const res = await authFetch(`/api/hr/consultants/${id}/bills`);
+      if (res.ok) setConsultantBills(await res.json());
+    } catch (e) { /* non-blocking */ }
+  };
+
+  const handleCreateBill = async () => {
+    if (!id || creatingBill || !billCurrency) return;
+    if (!confirm(`Create a consultant bill for ${billCurrency} ${consultTrace?.billable?.[billCurrency]?.collected?.toFixed(2)} × ${employee.consultation_fee_percentage}%?`)) return;
+    setCreatingBill(true);
+    try {
+      const res = await authFetch(`/api/hr/consultants/${id}/bills`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_from: consultFrom, period_to: consultTo, currency: billCurrency }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Failed to create bill'); return; }
+      toast.success(`Consultant bill ${data.bill_number} created — pay it from Expenses > Consultant Bills`);
+      fetchConsultations();
+      fetchConsultantBills();
+    } catch (e) {
+      toast.error('Failed to create bill');
+    } finally {
+      setCreatingBill(false);
+    }
+  };
+
   const fetchEmployee = async () => {
     setLoading(true);
     setError(null);
@@ -57,6 +111,14 @@ export default function EmployeeProfile() {
   };
 
   useEffect(() => { fetchEmployee(); fetchCurrencies(); }, [id]);
+
+  useEffect(() => {
+    if (employee?.employment_type === 'consultant') {
+      fetchConsultations();
+      fetchConsultantBills();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee?.employment_type, consultFrom, consultTo]);
 
   const formatInCurrency = (amount: number, code?: string) => {
     const match = currencies.find((c: any) => c.code === code);
@@ -205,6 +267,130 @@ export default function EmployeeProfile() {
             </div>
 
             <div className="space-y-4 min-w-0">
+              {employee.employment_type === 'consultant' ? (
+                <>
+                  <div className="bg-card rounded-lg border shadow-sm p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Consultation Fee</p>
+                      <p className="text-xl font-bold font-mono flex items-center gap-1">
+                        {employee.consultation_fee_percentage != null ? `${employee.consultation_fee_percentage}%` : <span className="text-sm text-muted-foreground italic font-sans">Not set — set it from the Consultants list</span>}
+                      </p>
+                    </div>
+                    <Percent className="w-8 h-8 text-primary/30" />
+                  </div>
+
+                  <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h3 className="font-medium flex items-center gap-2"><Stethoscope className="w-4 h-4 text-primary" /> Consultations &amp; Billing</h3>
+                      <div className="flex items-center gap-2">
+                        <Input type="date" className="h-8 w-[9.5rem] text-sm" value={consultFrom} max={consultTo} onChange={e => setConsultFrom(e.target.value)} />
+                        <span className="text-muted-foreground text-xs">to</span>
+                        <Input type="date" className="h-8 w-[9.5rem] text-sm" value={consultTo} min={consultFrom} onChange={e => setConsultTo(e.target.value)} />
+                        <Button size="sm" variant="outline" className="h-8" onClick={fetchConsultations} disabled={loadingTrace}>
+                          {loadingTrace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Consultations are matched from lab/visit records to patient bills by same patient + same day — the same best-effort method used in the Doctor Performance report. A visit with no matching bill, or a bill shared with another provider that day, may under- or over-count slightly.
+                    </p>
+
+                    {!employee.user_id ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">This consultant has no linked user account, so no visits can be traced yet. Link one from the Consultants list.</p>
+                    ) : loadingTrace ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
+                    ) : (consultTrace?.consultations || []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">No consultations found in this period.</p>
+                    ) : (
+                      <>
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30">
+                            <tr className="text-left text-muted-foreground text-xs">
+                              <th className="px-3 py-2 font-medium">Date</th>
+                              <th className="px-3 py-2 font-medium text-right">Billed</th>
+                              <th className="px-3 py-2 font-medium text-right">Collected</th>
+                              <th className="px-3 py-2 font-medium text-center">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {consultTrace.consultations.map((c: any, i: number) => (
+                              <tr key={i}>
+                                <td className="px-3 py-2">{new Date(c.visit_date).toLocaleDateString()}{c.shared && <span className="ml-1.5 text-[10px] text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
+                                <td className="px-3 py-2 text-right font-mono">{c.currency} {c.billed_amount.toFixed(2)}</td>
+                                <td className="px-3 py-2 text-right font-mono font-medium">{c.currency} {c.collected_amount.toFixed(2)}</td>
+                                <td className="px-3 py-2 text-center">
+                                  {c.already_billed
+                                    ? <span className="text-[11px] text-muted-foreground">already billed</span>
+                                    : <span className="text-[11px] text-emerald-700">billable</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Create Consultant Bill</p>
+                          {Object.keys(consultTrace.billable || {}).length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Nothing unbilled for this period.</p>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <Combobox
+                                  options={Object.keys(consultTrace.billable).map(cur => ({ value: cur, label: `${cur} — ${consultTrace.billable[cur].collected.toFixed(2)} collected` }))}
+                                  value={billCurrency} onChange={setBillCurrency} searchPlaceholder="Search..." className="w-64 h-9"
+                                />
+                                <span className="text-sm text-muted-foreground">
+                                  × {employee.consultation_fee_percentage ?? '—'}% ={' '}
+                                  <strong className="text-foreground font-mono">
+                                    {billCurrency && employee.consultation_fee_percentage
+                                      ? `${billCurrency} ${(consultTrace.billable[billCurrency].collected * employee.consultation_fee_percentage / 100).toFixed(2)}`
+                                      : '—'}
+                                  </strong>
+                                </span>
+                              </div>
+                              <Button size="sm" onClick={handleCreateBill} disabled={creatingBill || !employee.consultation_fee_percentage || !billCurrency}>
+                                {creatingBill ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Receipt className="w-4 h-4 mr-2" />}
+                                Create Bill
+                              </Button>
+                              {!employee.consultation_fee_percentage && <p className="text-[11px] text-amber-600">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="bg-card rounded-lg border shadow-sm p-5 space-y-3">
+                    <h3 className="font-medium flex items-center gap-2"><Receipt className="w-4 h-4 text-primary" /> Billing History</h3>
+                    {consultantBills.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">No consultant bills yet.</p>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/30">
+                          <tr className="text-left text-muted-foreground text-xs">
+                            <th className="px-3 py-2 font-medium">Bill No.</th>
+                            <th className="px-3 py-2 font-medium">Period</th>
+                            <th className="px-3 py-2 font-medium text-right">Amount</th>
+                            <th className="px-3 py-2 font-medium text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {consultantBills.map((b: any) => (
+                            <tr key={b.id}>
+                              <td className="px-3 py-2 font-mono text-primary">{b.bill_number}</td>
+                              <td className="px-3 py-2">{new Date(b.period_from).toLocaleDateString()} – {new Date(b.period_to).toLocaleDateString()}</td>
+                              <td className="px-3 py-2 text-right font-mono">{b.currency} {parseFloat(b.bill_amount).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-center capitalize">{b.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              ) : (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-card rounded-lg border shadow-sm p-4">
                   <p className="text-xs text-muted-foreground mb-1">Basic Salary</p>
@@ -340,6 +526,8 @@ export default function EmployeeProfile() {
                   </table>
                 )}
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>

@@ -107,7 +107,7 @@ const procurementDropdown: NavDropdown = {
     { label: 'Requisitions', href: '/procurement/requisitions', icon: ClipboardList, privilege: 'pages.procurement_requisitions.view' },
     { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ShoppingCart, privilege: 'procurement.purchase_orders.write' },
     { label: 'Goods Receipt', href: '/procurement/goods-receipt', icon: Truck, privilege: ['procurement.write', 'pharmacy.write'] },
-    { label: 'Daily Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write' },
+    { label: 'Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write' },
     { label: 'Reports', href: '/procurement/reports', icon: BarChart3, privilege: 'procurement.read' },
   ]
 };
@@ -190,7 +190,6 @@ const setupDropdown: NavDropdown = {
   items: [
     { label: 'Lab Tests', href: '/setup/lab-tests', icon: TestTube, privilege: 'pages.setup_lab_tests.view' },
     { label: 'Services', href: '/setup/services', icon: Wrench, privilege: 'clinical.services.manage' },
-    { label: 'Departments', href: '/setup/departments', icon: Briefcase, privilege: 'pages.setup_departments.view' },
     { label: 'Clinics', href: '/setup/clinics', icon: Stethoscope, privilege: 'pages.setup_clinics.view' },
     { label: 'Facility', href: '/setup/facility', icon: Hospital, privilege: 'pages.setup_facility.view' },
     { label: 'Wards', href: '/setup/wards', icon: Building2, privilege: 'pages.setup_wards.view' },

@@ -87,10 +87,29 @@ export default function LISRegistration() {
   const fetchDoctors = async () => {
     try {
       const res = await authFetch('/api/users?all=true', { credentials: 'include' });
-      if (res.ok) {
-        const users = await res.json();
-        setDoctors(users.filter((u: any) => u.role === 'doctor' && u.is_active));
-      }
+      const users = res.ok ? await res.json() : [];
+      const roleDoctors = users.filter((u: any) => u.role === 'doctor' && u.is_active);
+
+      // Consultants/doctors on the HR roster aren't necessarily role='doctor'
+      // accounts — a consultant linked to any user account should still show
+      // up here so a visit can be attributed to them (doctor_id is a plain
+      // FK to users.id, not gated on role anywhere else in the system).
+      let consultantDoctors: any[] = [];
+      try {
+        const cRes = await authFetch('/api/hr/employees?employment_type=consultant&status=active', { credentials: 'include' });
+        if (cRes.ok) {
+          const consultants = await cRes.json();
+          const usersById = new Map(users.map((u: any) => [u.id, u]));
+          consultantDoctors = consultants
+            .filter((c: any) => c.user_id && usersById.has(c.user_id) && !roleDoctors.some((d: any) => d.id === c.user_id))
+            .map((c: any) => {
+              const linkedUser = usersById.get(c.user_id);
+              return { ...linkedUser, display_name: `${linkedUser.display_name} (Consultant)` };
+            });
+        }
+      } catch (e) { /* non-blocking — role='doctor' accounts still work without this */ }
+
+      setDoctors([...roleDoctors, ...consultantDoctors]);
     } catch (e) {
       console.error('Failed to fetch doctors', e);
     }

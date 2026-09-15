@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
-import { Users, Search, Eye, Edit, Ban, CheckCircle, Loader2, X, Check, FileSpreadsheet, Stethoscope } from 'lucide-react';
+import { Users, Search, Eye, Edit, Ban, CheckCircle, Loader2, X, Check, FileSpreadsheet, Stethoscope, Percent } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 export interface Employee {
@@ -20,6 +21,7 @@ export interface Employee {
   employee_number: string;
   employment_type: 'staff' | 'consultant';
   user_id?: number | null;
+  consultation_fee_percentage?: number | null;
   first_name: string;
   last_name: string;
   gender?: string;
@@ -91,6 +93,9 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [formData, setFormData] = useState(emptyForm(employmentType));
+  const [feeDialogEmployee, setFeeDialogEmployee] = useState<Employee | null>(null);
+  const [feePercentInput, setFeePercentInput] = useState('');
+  const [savingFee, setSavingFee] = useState(false);
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -226,6 +231,78 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
       toast.error('Failed to update status');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const openFeeDialog = (e: Employee) => {
+    setFeeDialogEmployee(e);
+    setFeePercentInput(e.consultation_fee_percentage != null ? String(e.consultation_fee_percentage) : '');
+  };
+
+  const handleSaveFee = async () => {
+    if (!feeDialogEmployee || savingFee) return;
+    const pct = parseFloat(feePercentInput);
+    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) { toast.error('Enter a percentage between 0 and 100'); return; }
+    setSavingFee(true);
+    try {
+      const res = await authFetch(`/api/hr/employees/${feeDialogEmployee.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consultation_fee_percentage: pct }),
+      });
+      if (res.ok) {
+        toast.success('Fee percentage updated');
+        setFeeDialogEmployee(null);
+        fetchEmployees();
+      } else {
+        toast.error('Failed to update fee percentage');
+      }
+    } catch (e) {
+      toast.error('Failed to update fee percentage');
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
+  const [uploadingBulk, setUploadingBulk] = useState(false);
+  const bulkFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await authFetch('/api/hr/employees/bulk-template');
+      if (!res.ok) { toast.error('Failed to download template'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'employee_bulk_upload_template.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error('Failed to download template');
+    }
+  };
+
+  const handleBulkFileSelected = async (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const file = ev.target.files?.[0];
+    if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
+    if (!file) return;
+    setUploadingBulk(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await authFetch('/api/hr/employees/bulk-upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Failed to upload employees'); return; }
+      const skippedCount = data.skipped?.length || 0;
+      toast.success(`${data.created} employee(s) added${skippedCount ? `, ${skippedCount} row(s) skipped` : ''}`);
+      if (skippedCount > 0) {
+        console.warn('Bulk upload skipped rows:', data.skipped);
+        toast.error(`${skippedCount} row(s) skipped — see console for details`, { duration: 6000 });
+      }
+      fetchEmployees();
+    } catch (e) {
+      toast.error('Failed to upload employees');
+    } finally {
+      setUploadingBulk(false);
     }
   };
 
@@ -369,6 +446,17 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
               <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-9">
                 <FileSpreadsheet className="w-4 h-4" /> Export CSV
               </Button>
+              {employmentType === 'staff' && (
+                <>
+                  <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="gap-1.5 h-9">
+                    <FileSpreadsheet className="w-4 h-4" /> Download Template
+                  </Button>
+                  <input ref={bulkFileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleBulkFileSelected} />
+                  <Button type="button" variant="outline" onClick={() => bulkFileInputRef.current?.click()} disabled={uploadingBulk} className="gap-1.5 h-9">
+                    {uploadingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Bulk Upload
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -387,7 +475,9 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                 { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
                 { key: 'department', header: 'Department', render: (v) => v || '—' },
                 { key: 'phone', header: 'Phone', render: (v) => v || '—' },
-                { key: 'basic_salary', header: 'Salary', align: 'right', sortable: true, render: (v, e) => <span className="font-mono">{formatInCurrency(v, e.salary_currency)}</span> },
+                employmentType === 'consultant'
+                  ? { key: 'consultation_fee_percentage', header: 'Fee %', align: 'right', render: (v: number | null) => v != null ? <span className="font-mono">{v}%</span> : <span className="text-muted-foreground italic text-xs">not set</span> }
+                  : { key: 'basic_salary', header: 'Salary', align: 'right', sortable: true, render: (v, e) => <span className="font-mono">{formatInCurrency(v, e.salary_currency)}</span> },
                 {
                   key: '__status', header: 'Status', align: 'center',
                   render: (_v, e) => <StatusBadge status={e.employment_status} label={e.employment_status.replace('_', ' ')} map={STATUS_TONE} />,
@@ -398,6 +488,9 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                     <div className="flex items-center justify-center gap-1">
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
+                      {employmentType === 'consultant' && (
+                        <Button size="icon" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
+                      )}
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
                         {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Ban className="w-3.5 h-3.5 text-amber-600" />)}
                       </Button>
@@ -409,6 +502,28 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
           </div>
         </div>
       </div>
+
+      <Dialog open={!!feeDialogEmployee} onOpenChange={(o) => !o && setFeeDialogEmployee(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Consultation Fee %</DialogTitle>
+            <DialogDescription>{feeDialogEmployee && `${feeDialogEmployee.first_name} ${feeDialogEmployee.last_name} is paid this percentage of the consultation revenue collected for them.`}</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6 pt-2 space-y-3">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">Fee Percentage</Label>
+              <Input type="number" step="0.1" min="0" max="100" className="mt-1" value={feePercentInput} onChange={e => setFeePercentInput(e.target.value)} placeholder="e.g. 40" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setFeeDialogEmployee(null)}>Cancel</Button>
+              <Button size="sm" onClick={handleSaveFee} disabled={savingFee}>
+                {savingFee ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       </div>
     </AppLayout>
   );

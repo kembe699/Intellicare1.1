@@ -25,10 +25,15 @@ export const authFetch = async (url: string, options: RequestInit = {}): Promise
   }
   const token = localStorage.getItem('auth_token');
   const currentBranchId = localStorage.getItem('current_branch_id');
+  // A FormData body (file uploads) must NOT get a manual Content-Type — the
+  // browser sets its own multipart boundary, and forcing application/json
+  // here would send the body with the wrong content-type entirely, breaking
+  // multer parsing server-side.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(currentBranchId ? { 'X-Branch-ID': currentBranchId } : {}),
       ...options.headers,

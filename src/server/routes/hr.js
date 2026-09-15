@@ -6,6 +6,10 @@ const { authorize } = require('../middleware/authorize');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
+const { getConsultationsForDoctor } = require('../services/ConsultantConsultations');
+const ExcelJS = require('exceljs');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Non-admin users only see rows from their own branch; admins see everything
 // clinic-wide. Written inline with named replacements (not
@@ -46,6 +50,187 @@ router.get('/employees', authorize('hr.employees.read'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// BULK EMPLOYEE UPLOAD (staff only — consultants stay on the compact
+// single-add form; salary/user-account linking are deliberately left off
+// the template and set individually afterward). Registered before
+// GET /employees/:id so 'bulk-template' isn't swallowed as an :id value.
+// ═══════════════════════════════════════════════════
+
+const BULK_HEADERS = [
+  'First Name', 'Last Name', 'Gender', 'Date of Birth (YYYY-MM-DD)', 'National ID', 'Phone', 'Email', 'Address',
+  'Job Title', 'Department', 'Hire Date (YYYY-MM-DD)', 'Contract Type', 'Employment Status',
+  'Bank Name', 'Bank Account Name', 'Bank Account Number', 'Emergency Contact Name', 'Emergency Contact Phone', 'Notes',
+];
+const CONTRACT_TYPE_LABELS = { 'Full Time': 'full_time', 'Part Time': 'part_time', 'Contract': 'contract' };
+const EMPLOYMENT_STATUS_LABELS = { 'Active': 'active', 'On Leave': 'on_leave' };
+
+router.get('/employees/bulk-template', authorize('hr.employees.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [departments] = await sequelize.query(
+      `SELECT department_name FROM departments WHERE clinic_id = :clinicId AND is_active = true ORDER BY department_name`,
+      { replacements: { clinicId } }
+    );
+
+    const workbook = new ExcelJS.Workbook();
+
+    // Hidden reference sheet — department names can contain commas/be long,
+    // so they get a real cell range for the dropdown to point at instead of
+    // an inline comma-joined formula (which also has a ~255 char cap).
+    const listsSheet = workbook.addWorksheet('Lists');
+    listsSheet.state = 'veryHidden';
+    departments.forEach((d, i) => { listsSheet.getCell(`A${i + 1}`).value = d.department_name; });
+    const deptRange = `Lists!$A$1:$A$${Math.max(departments.length, 1)}`;
+    listsSheet.getCell('B1').value = 'Male'; listsSheet.getCell('B2').value = 'Female'; listsSheet.getCell('B3').value = 'Other';
+    listsSheet.getCell('C1').value = 'Full Time'; listsSheet.getCell('C2').value = 'Part Time'; listsSheet.getCell('C3').value = 'Contract';
+    listsSheet.getCell('D1').value = 'Active'; listsSheet.getCell('D2').value = 'On Leave';
+
+    const sheet = workbook.addWorksheet('Employees');
+    sheet.columns = BULK_HEADERS.map(h => ({ header: h, key: h, width: Math.max(16, h.length) }));
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
+
+    // One filled example row so the format is obvious, not just headers. Added
+    // BEFORE the data-validation loop below — touching cells via getCell()
+    // first makes ExcelJS treat those rows as already occupied, which pushed
+    // addRow() all the way down to row 501 instead of row 2.
+    sheet.addRow(['Jane', 'Doe', 'Female', '1990-05-14', 'ID-00123', '0912345678', 'jane.doe@example.com', 'Juba, South Sudan', 'Nurse', departments[0]?.department_name || '', '2024-01-15', 'Full Time', 'Active', '', '', '', '', '', '']);
+
+    const LAST_ROW = 500;
+    for (let r = 2; r <= LAST_ROW; r++) {
+      sheet.getCell(`C${r}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$B$1:$B$3'] };
+      sheet.getCell(`J${r}`).dataValidation = { type: 'list', allowBlank: true, formulae: [deptRange] };
+      sheet.getCell(`L${r}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$C$1:$C$3'] };
+      sheet.getCell(`M${r}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$D$1:$D$2'] };
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="employee_bulk_upload_template.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error generating bulk upload template:', error);
+    res.status(500).json({ error: 'Failed to generate template' });
+  }
+});
+
+router.post('/employees/bulk-upload', authorize('hr.employees.write'), upload.single('file'), async (req, res) => {
+  // multer's multipart parsing runs before this handler and empirically does
+  // not preserve the AsyncLocalStorage tenant context the module-level
+  // `sequelize` import relies on (see models/index.js's resolveReal) — every
+  // other route in this file is a plain JSON request and keeps that context
+  // fine, but this one silently fell back to the platform's default database
+  // (which has no `employees` table at all) until switched to req.models
+  // .sequelize, which auth.js sets directly on the request object and so
+  // survives regardless of async-context propagation.
+  const seq = req.models.sequelize;
+  const t = await seq.transaction();
+  try {
+    if (!req.file) { await t.rollback(); return res.status(400).json({ error: 'No file uploaded' }); }
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const branchId = getCreateBranchId(req);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const sheet = workbook.getWorksheet('Employees') || workbook.worksheets[0];
+    if (!sheet) { await t.rollback(); return res.status(400).json({ error: 'Could not find an Employees sheet in this file' }); }
+
+    const headerRow = sheet.getRow(1).values; // 1-indexed, [0] is empty
+    const colIndex = {};
+    BULK_HEADERS.forEach(h => {
+      const idx = headerRow.findIndex(v => String(v || '').trim() === h);
+      if (idx > 0) colIndex[h] = idx;
+    });
+    if (colIndex['First Name'] === undefined || colIndex['Last Name'] === undefined) {
+      await t.rollback();
+      return res.status(400).json({ error: 'This file is missing the First Name / Last Name columns — please use the downloaded template' });
+    }
+
+    const cellText = (row, header) => {
+      const idx = colIndex[header];
+      if (!idx) return '';
+      const cell = row.getCell(idx);
+      const v = cell.value;
+      if (v == null) return '';
+      if (v instanceof Date) return v.toISOString().split('T')[0];
+      if (typeof v === 'object' && 'result' in v) return String(v.result ?? '').trim(); // formula cell
+      return String(v).trim();
+    };
+
+    const [[numRow]] = await seq.query(
+      `SELECT COALESCE(MAX(NULLIF(regexp_replace(employee_number, '^.*-', ''), '')::int), 0) AS last
+         FROM employees WHERE employee_number ~ '^EMP-[0-9]+$'`,
+      { transaction: t }
+    );
+    let nextSeq = (parseInt(numRow?.last, 10) || 0) + 1;
+
+    const created = [];
+    const skipped = [];
+    for (let r = 2; r <= sheet.rowCount; r++) {
+      const row = sheet.getRow(r);
+      const firstName = cellText(row, 'First Name');
+      const lastName = cellText(row, 'Last Name');
+      if (!firstName && !lastName) continue; // blank row
+      if (!firstName || !lastName) { skipped.push({ row: r, reason: 'Missing first or last name' }); continue; }
+
+      const employeeNumber = `EMP-${String(nextSeq).padStart(4, '0')}`;
+      const id = uuidv4();
+      const contractLabel = cellText(row, 'Contract Type');
+      const statusLabel = cellText(row, 'Employment Status');
+      try {
+        await seq.query(`
+          INSERT INTO employees (
+            id, clinic_id, branch_id, employee_number, employment_type,
+            first_name, last_name, gender, date_of_birth, national_id, phone, email, address,
+            job_title, department, hire_date, employment_status, contract_type,
+            bank_name, bank_account_name, bank_account_number,
+            emergency_contact_name, emergency_contact_phone, notes, is_active, created_at, updated_at
+          ) VALUES (
+            :id, :clinicId, :branchId, :employeeNumber, 'staff',
+            :firstName, :lastName, :gender, :dateOfBirth, :nationalId, :phone, :email, :address,
+            :jobTitle, :department, :hireDate, :employmentStatus, :contractType,
+            :bankName, :bankAccountName, :bankAccountNumber,
+            :emergencyContactName, :emergencyContactPhone, :notes, true, NOW(), NOW()
+          )
+        `, {
+          replacements: {
+            id, clinicId, branchId, employeeNumber,
+            firstName, lastName, gender: cellText(row, 'Gender') || null,
+            dateOfBirth: cellText(row, 'Date of Birth (YYYY-MM-DD)') || null, nationalId: cellText(row, 'National ID') || null,
+            phone: cellText(row, 'Phone') || null, email: cellText(row, 'Email') || null, address: cellText(row, 'Address') || null,
+            jobTitle: cellText(row, 'Job Title') || null, department: cellText(row, 'Department') || null,
+            hireDate: cellText(row, 'Hire Date (YYYY-MM-DD)') || null,
+            employmentStatus: EMPLOYMENT_STATUS_LABELS[statusLabel] || 'active',
+            contractType: CONTRACT_TYPE_LABELS[contractLabel] || 'full_time',
+            bankName: cellText(row, 'Bank Name') || null, bankAccountName: cellText(row, 'Bank Account Name') || null,
+            bankAccountNumber: cellText(row, 'Bank Account Number') || null,
+            emergencyContactName: cellText(row, 'Emergency Contact Name') || null,
+            emergencyContactPhone: cellText(row, 'Emergency Contact Phone') || null,
+            notes: cellText(row, 'Notes') || null,
+          },
+          transaction: t,
+        });
+        created.push({ row: r, employee_number: employeeNumber, name: `${firstName} ${lastName}` });
+        nextSeq++;
+      } catch (rowError) {
+        skipped.push({ row: r, reason: rowError.message });
+      }
+    }
+
+    if (created.length === 0) {
+      await t.rollback();
+      return res.status(400).json({ error: 'No employees could be created', skipped });
+    }
+    await t.commit();
+    res.status(201).json({ created: created.length, employees: created, skipped });
+  } catch (error) {
+    await t.rollback();
+    console.error('Error bulk uploading employees:', error);
+    res.status(500).json({ error: 'Failed to process the uploaded file' });
   }
 });
 
@@ -155,6 +340,7 @@ router.put('/employees/:id', authorize('hr.employees.write'), async (req, res) =
       basic_salary: b.basic_salary !== undefined ? parseFloat(b.basic_salary) || 0 : undefined,
       salary_currency: b.salary_currency, pay_frequency: b.pay_frequency, notes: b.notes,
       is_active: b.is_active,
+      consultation_fee_percentage: b.consultation_fee_percentage !== undefined ? (b.consultation_fee_percentage === null || b.consultation_fee_percentage === '' ? null : parseFloat(b.consultation_fee_percentage)) : undefined,
     };
     const setClauses = [];
     const replacements = { id: req.params.id, clinicId };
@@ -214,6 +400,153 @@ router.post('/employees/:id/reactivate', authorize('hr.employees.write'), async 
     res.status(500).json({ error: 'Failed to reactivate employee' });
   }
 });
+
+// ═══════════════════════════════════════════════════
+// CONSULTANT CONSULTATIONS & BILLING
+// (percentage-of-fees pay model for consultants/doctors, in place of a
+// salary — see ConsultantConsultations.js for the attribution heuristic)
+// ═══════════════════════════════════════════════════
+
+router.get('/consultants/:id/consultations', authorize('hr.employees.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [[consultant]] = await sequelize.query(
+      `SELECT * FROM employees WHERE id = :id AND clinic_id = :clinicId AND employment_type = 'consultant'`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (!consultant) return res.status(404).json({ error: 'Consultant not found' });
+    if (!consultant.user_id) {
+      return res.json({ consultations: [], totalsByCurrency: {}, alreadyBilled: {}, billable: {}, note: 'This consultant has no linked user account, so no visits can be traced to them yet.' });
+    }
+
+    const dateFrom = req.query.from || new Date(Date.now() - 29 * 86400000).toISOString().split('T')[0];
+    const dateTo = req.query.to || new Date().toISOString().split('T')[0];
+
+    const { consultations, totalsByCurrency } = await getConsultationsForDoctor(sequelize, clinicId, consultant.user_id, dateFrom, dateTo);
+
+    // Exclude patient bills already consumed by a previous bill for this consultant.
+    const [alreadyBilledRows] = await sequelize.query(
+      `SELECT patient_bill_id FROM consultant_bill_items WHERE consultant_id = :id`,
+      { replacements: { id: req.params.id } }
+    );
+    const alreadyBilledIds = new Set(alreadyBilledRows.map(r => r.patient_bill_id));
+
+    const billable = {};
+    for (const c of consultations) {
+      c.already_billed = alreadyBilledIds.has(c.patient_bill_id);
+      if (!c.already_billed) {
+        const t = (billable[c.currency] ||= { collected: 0 });
+        t.collected += c.collected_amount;
+      }
+    }
+    for (const cur of Object.keys(billable)) billable[cur].collected = Math.round(billable[cur].collected * 100) / 100;
+
+    res.json({
+      consultations, totalsByCurrency, billable,
+      fee_percentage: consultant.consultation_fee_percentage,
+      period: { from: dateFrom, to: dateTo },
+    });
+  } catch (error) {
+    console.error('Error tracing consultant consultations:', error);
+    res.status(500).json({ error: 'Failed to trace consultations' });
+  }
+});
+
+router.get('/consultants/:id/bills', authorize('hr.employees.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [bills] = await sequelize.query(
+      `SELECT * FROM consultant_bills WHERE consultant_id = :id AND clinic_id = :clinicId ORDER BY period_to DESC, created_at DESC`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    res.json(bills);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch consultant bills' });
+  }
+});
+
+// Recomputes the billable total server-side (never trusts a client-sent
+// figure for money) excluding anything already claimed by a previous bill,
+// then locks those patient bills to this consultant_bill via
+// consultant_bill_items so the same revenue can never be billed twice.
+router.post('/consultants/:id/bills', authorize('hr.employees.write'), async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const { period_from, period_to, currency } = req.body || {};
+    if (!period_from || !period_to || !currency) {
+      await t.rollback();
+      return res.status(400).json({ error: 'period_from, period_to, and currency are required' });
+    }
+    const [[consultant]] = await sequelize.query(
+      `SELECT * FROM employees WHERE id = :id AND clinic_id = :clinicId AND employment_type = 'consultant'`,
+      { replacements: { id: req.params.id, clinicId }, transaction: t }
+    );
+    if (!consultant) { await t.rollback(); return res.status(404).json({ error: 'Consultant not found' }); }
+    if (!consultant.user_id) { await t.rollback(); return res.status(400).json({ error: 'This consultant has no linked user account' }); }
+    const pct = parseFloat(consultant.consultation_fee_percentage);
+    if (!pct || pct <= 0) { await t.rollback(); return res.status(400).json({ error: 'Set this consultant\'s fee percentage before creating a bill' }); }
+
+    const { consultations } = await getConsultationsForDoctor(sequelize, clinicId, consultant.user_id, period_from, period_to);
+    const [alreadyBilledRows] = await sequelize.query(
+      `SELECT patient_bill_id FROM consultant_bill_items WHERE consultant_id = :id`,
+      { replacements: { id: req.params.id }, transaction: t }
+    );
+    const alreadyBilledIds = new Set(alreadyBilledRows.map(r => r.patient_bill_id));
+    const billableItems = consultations.filter(c => c.currency === currency && !alreadyBilledIds.has(c.patient_bill_id) && c.collected_amount > 0);
+    const totalRevenue = Math.round(billableItems.reduce((s, c) => s + c.collected_amount, 0) * 100) / 100;
+    if (totalRevenue <= 0) {
+      await t.rollback();
+      return res.status(400).json({ error: `No unbilled ${currency} consultation revenue found for this period` });
+    }
+    const billAmount = Math.round(totalRevenue * pct) / 100;
+
+    const [[seqRow]] = await sequelize.query(
+      `SELECT COALESCE(MAX(NULLIF(regexp_replace(bill_number, '^.*-', ''), '')::int), 0) AS last
+         FROM consultant_bills WHERE bill_number ~ '^CB-[0-9]+$'`,
+      { transaction: t }
+    );
+    const billNumber = `CB-${String((parseInt(seqRow?.last, 10) || 0) + 1).padStart(4, '0')}`;
+    const billId = uuidv4();
+
+    await sequelize.query(`
+      INSERT INTO consultant_bills (id, clinic_id, branch_id, consultant_id, bill_number, period_from, period_to,
+        total_consultation_revenue, fee_percentage, bill_amount, currency, status, created_by, created_at, updated_at)
+      VALUES (:id, :clinicId, :branchId, :consultantId, :billNumber, :periodFrom, :periodTo,
+        :totalRevenue, :pct, :billAmount, :currency, 'unpaid', :createdBy, NOW(), NOW())
+    `, {
+      replacements: {
+        id: billId, clinicId, branchId: getCreateBranchId(req), consultantId: req.params.id, billNumber,
+        periodFrom: period_from, periodTo: period_to, totalRevenue, pct, billAmount, currency,
+        createdBy: req.user?.id || null,
+      },
+      transaction: t,
+    });
+
+    for (const item of billableItems) {
+      await sequelize.query(`
+        INSERT INTO consultant_bill_items (id, consultant_bill_id, consultant_id, patient_bill_id, patient_id, visit_date, currency, amount, created_at)
+        VALUES (:id, :billId, :consultantId, :patientBillId, :patientId, :visitDate, :currency, :amount, NOW())
+      `, {
+        replacements: {
+          id: uuidv4(), billId, consultantId: req.params.id, patientBillId: item.patient_bill_id,
+          patientId: item.patient_id, visitDate: item.visit_date, currency: item.currency, amount: item.collected_amount,
+        },
+        transaction: t,
+      });
+    }
+
+    await t.commit();
+    const [[created]] = await sequelize.query(`SELECT * FROM consultant_bills WHERE id = :id`, { replacements: { id: billId } });
+    res.status(201).json(created);
+  } catch (error) {
+    await t.rollback();
+    console.error('Error creating consultant bill:', error);
+    res.status(500).json({ error: 'Failed to create consultant bill' });
+  }
+});
+
+
 
 // ═══════════════════════════════════════════════════
 // SALARY COMPONENTS (allowances / deductions)
@@ -562,10 +895,13 @@ router.post('/payroll/runs', authorize('hr.payroll.write'), async (req, res) => 
       return res.status(409).json({ error: `A payroll run for ${period_month}/${period_year} already exists` });
     }
 
+    // Consultants are excluded here unconditionally — they're paid a
+    // percentage of consultation revenue (see the Consultant Bills feature)
+    // rather than a salary, so they never belong in a payroll run.
     const employeeCondition = Array.isArray(employee_ids) && employee_ids.length > 0
       ? 'AND id IN (:employeeIds)' : '';
     const [employees] = await sequelize.query(
-      `SELECT * FROM employees WHERE clinic_id = :clinicId AND employment_status = 'active' AND is_active = true ${employeeCondition}`,
+      `SELECT * FROM employees WHERE clinic_id = :clinicId AND employment_type = 'staff' AND employment_status = 'active' AND is_active = true ${employeeCondition}`,
       { replacements: { clinicId, employeeIds: employee_ids || [] }, transaction: t }
     );
     if (employees.length === 0) {
