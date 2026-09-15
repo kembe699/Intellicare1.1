@@ -293,7 +293,7 @@ export default function PayrollRunDetail() {
     ])
     + docTemplate.buildSignatures([
       { label: 'Prepared By', name: '' },
-      { label: 'Employee', name: `${line.first_name} ${line.last_name}` },
+      { label: 'Employee', name: `${line.first_name} ${line.last_name}`, signature: line.signature_data || undefined },
     ]);
 
     return docTemplate.buildDocument({
