@@ -17,7 +17,30 @@ const CurrencyService = require('../services/CurrencyService');
 const { initializeChartOfAccounts } = require('../scripts/initializeChartOfAccounts');
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
+const { userHasApprovalPermission } = require('../middleware/requireApprovalPermission');
 const router = express.Router();
+
+// Approving/rejecting a journal entry already worked for admin + finance_manager
+// via the accounting.journal_entries.approve privilege — that keeps working
+// unchanged. This only ADDS a second path: Setup > Approvals can now grant this
+// specific authority to someone who isn't a finance_manager, same as every other
+// per-user approval grant in the app (procurement, expenses, deposits).
+async function canApproveJournalEntry(req) {
+  if (req.user?.role === 'admin') return true;
+  const roles = [req.user?.role, ...(req.user?.additionalRoles || [])];
+  if (roles.includes('finance_manager')) return true;
+  return userHasApprovalPermission(req, 'journal_entry_approve');
+}
+
+function journalEntryApprovalGate(req, res, next) {
+  canApproveJournalEntry(req).then(allowed => {
+    if (allowed) return next();
+    return res.status(403).json({ error: 'You are not authorized to approve or reject journal entries.' });
+  }).catch(error => {
+    console.error('Error checking journal entry approval permission:', error);
+    res.status(500).json({ error: 'Failed to verify approval permission' });
+  });
+}
 
 // Chart of accounts / journal entries / exchange rates only carry clinic_id (no
 // branch_id, unlike patient billing — see BranchQueryFilter), so their by-ID routes
@@ -625,7 +648,7 @@ router.post('/journal-entries/:id/submit', authorize('accounting.write'), async 
 });
 
 // Approve journal entry
-router.post('/journal-entries/:id/approve', authorize('accounting.journal_entries.approve'), async (req, res) => {
+router.post('/journal-entries/:id/approve', journalEntryApprovalGate, async (req, res) => {
   try {
     const journalEntry = await JournalEntries.findByPk(req.params.id);
     
@@ -714,7 +737,7 @@ router.post('/journal-entries/:id/post', authorize('accounting.write'), async (r
 });
 
 // Reject journal entry
-router.post('/journal-entries/:id/reject', authorize('accounting.journal_entries.approve'), async (req, res) => {
+router.post('/journal-entries/:id/reject', journalEntryApprovalGate, async (req, res) => {
   try {
     const journalEntry = await JournalEntries.findByPk(req.params.id);
 

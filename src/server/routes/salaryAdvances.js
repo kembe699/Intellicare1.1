@@ -3,6 +3,7 @@ const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
+const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
@@ -117,7 +118,7 @@ router.post('/', authorize('hr.salary_advances.write'), async (req, res) => {
   }
 });
 
-router.post('/:id/approve', authorize('hr.salary_advances.write'), async (req, res) => {
+router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(

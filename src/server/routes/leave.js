@@ -3,6 +3,7 @@ const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
+const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 
@@ -168,7 +169,7 @@ router.post('/requests', authorize('hr.leave.write'), async (req, res) => {
   }
 });
 
-router.post('/requests/:id/approve', authorize('hr.leave.write'), async (req, res) => {
+router.post('/requests/:id/approve', requireApprovalPermission('leave_request_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(
@@ -183,7 +184,7 @@ router.post('/requests/:id/approve', authorize('hr.leave.write'), async (req, re
   }
 });
 
-router.post('/requests/:id/reject', authorize('hr.leave.write'), async (req, res) => {
+router.post('/requests/:id/reject', requireApprovalPermission('leave_request_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { reason } = req.body || {};

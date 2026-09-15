@@ -62,6 +62,26 @@ const APPROVAL_TYPES = {
     module: 'Billing',
     description: 'Refund an unused patient deposit balance back to the patient.',
   },
+  journal_entry_approve: {
+    label: 'Journal Entry Approval',
+    module: 'Financial',
+    description: 'Approve or reject a submitted journal entry before it can be posted.',
+  },
+  payroll_run_approve: {
+    label: 'Payroll Run Approval',
+    module: 'Payroll',
+    description: 'Approve a draft payroll run before it can be paid.',
+  },
+  leave_request_approve: {
+    label: 'Leave Request Approval',
+    module: 'HR',
+    description: 'Approve or reject a submitted leave request.',
+  },
+  salary_advance_approve: {
+    label: 'Salary Advance Approval',
+    module: 'HR',
+    description: 'Approve a requested salary advance before it can be disbursed.',
+  },
 };
 
 function resolveClinicId(req) {

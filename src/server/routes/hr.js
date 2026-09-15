@@ -6,6 +6,7 @@ const { authorize } = require('../middleware/authorize');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
+const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { getConsultationsForDoctor } = require('../services/ConsultantConsultations');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
@@ -1072,7 +1073,7 @@ router.put('/payroll/runs/:id', authorize('hr.payroll.write'), async (req, res) 
   }
 });
 
-router.post('/payroll/runs/:id/approve', authorize('hr.payroll.write'), async (req, res) => {
+router.post('/payroll/runs/:id/approve', requireApprovalPermission('payroll_run_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(
