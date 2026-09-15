@@ -332,8 +332,18 @@ router.put('/employees/:id', authorize('hr.employees.write'), async (req, res) =
       user_id: b.user_id !== undefined ? (b.user_id ? parseInt(b.user_id, 10) : null) : undefined,
       employment_type: b.employment_type,
       first_name: b.first_name, last_name: b.last_name, gender: b.gender,
-      date_of_birth: b.date_of_birth, national_id: b.national_id, phone: b.phone, email: b.email, address: b.address,
-      job_title: b.job_title, department: b.department, hire_date: b.hire_date, termination_date: b.termination_date,
+      // DATE columns reject '' outright ("invalid input syntax for type
+      // date") — the edit form sends an empty string for an unset date
+      // rather than omitting the key, which this the naive `b.field`
+      // pass-through turned into a 500 on every save of a record with no
+      // date_of_birth/hire_date/termination_date set (e.g. the compact
+      // consultant form, where DOB is the only date field and is easy to
+      // leave blank).
+      date_of_birth: b.date_of_birth !== undefined ? (b.date_of_birth || null) : undefined,
+      national_id: b.national_id, phone: b.phone, email: b.email, address: b.address,
+      job_title: b.job_title, department: b.department,
+      hire_date: b.hire_date !== undefined ? (b.hire_date || null) : undefined,
+      termination_date: b.termination_date !== undefined ? (b.termination_date || null) : undefined,
       employment_status: b.employment_status, contract_type: b.contract_type,
       bank_name: b.bank_name, bank_account_name: b.bank_account_name, bank_account_number: b.bank_account_number,
       emergency_contact_name: b.emergency_contact_name, emergency_contact_phone: b.emergency_contact_phone,
