@@ -141,7 +141,7 @@ async function findByPhone(phone, replacementsFn = db.query) {
 
 router.post('/participants', authorize('lis.participants.create'), async (req, res) => {
   const { sequelize: db } = req.models;
-  const { first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics, doctor_id, room_number, clinic_id, clinic_name } = req.body;
+  const { first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics, doctor_id, consultant_id, room_number, clinic_id, clinic_name } = req.body;
   const id = uuidv4();
   const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
@@ -222,11 +222,11 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
     // Only create a queue entry if the user actually chose to queue at registration time
     // (selected a clinic or doctor) — otherwise every fresh registration would show as "Queued".
     let queuedVisitId = null;
-    if (clinic_id || doctor_id) {
+    if (clinic_id || doctor_id || consultant_id) {
       queuedVisitId = uuidv4();
       await db.query(
-        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, 'waiting')`,
-        { replacements: [queuedVisitId, id, doctor_id || null, room_number || null, clinic_id || null, clinic_name || null], transaction: t }
+        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting')`,
+        { replacements: [queuedVisitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null], transaction: t }
       );
     }
 
@@ -355,9 +355,11 @@ router.get('/participants', authorize('lis.participants.read'), async (req, res)
         av.created_at AS active_visit_since
       FROM lis_participants p
       LEFT JOIN LATERAL (
-        SELECT o.status, o.room_number, o.created_at, u.display_name AS doctor_name
+        SELECT o.status, o.room_number, o.created_at,
+          COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) AS doctor_name
         FROM lis_test_orders o
         LEFT JOIN users u ON u.id = o.doctor_id
+        LEFT JOIN employees ce ON ce.id = o.consultant_id
         WHERE o.participant_id = p.id AND o.status != 'closed'
         ORDER BY o.created_at DESC
         LIMIT 1
@@ -396,12 +398,12 @@ router.put('/participants/:id', authorize('lis.registration.write'), async (req,
 router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
-  const { doctor_id, room_number, clinic_id, clinic_name } = req.body;
+  const { doctor_id, consultant_id, room_number, clinic_id, clinic_name } = req.body;
   try {
     const visitId = uuidv4();
     await db.query(
-      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, 'waiting')`,
-      { replacements: [visitId, id, doctor_id || null, room_number || null, clinic_id || null, clinic_name || null] }
+      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting')`,
+      { replacements: [visitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null] }
     );
 
     // This is the actual "queue a patient to a doctor" path this app uses today
@@ -455,13 +457,14 @@ router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const [queue] = await db.query(`
-      SELECT o.id as order_id, o.doctor_id, o.room_number, o.clinic_id, o.clinic_name, o.status, o.created_at, o.updated_at,
+      SELECT o.id as order_id, o.doctor_id, o.consultant_id, o.room_number, o.clinic_id, o.clinic_name, o.status, o.created_at, o.updated_at,
              o.vitals, o.triaged_by, o.triaged_at,
              p.id as participant_id, p.participant_number, p.first_name, p.last_name, p.gender,
-             u.display_name as doctor_name, tu.display_name as triaged_by_name
+             COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as doctor_name, tu.display_name as triaged_by_name
       FROM lis_test_orders o
       JOIN lis_participants p ON o.participant_id = p.id
       LEFT JOIN users u ON o.doctor_id = u.id
+      LEFT JOIN employees ce ON ce.id = o.consultant_id
       LEFT JOIN users tu ON o.triaged_by = tu.id
       WHERE o.status IN ('waiting', 'called')
       ORDER BY o.created_at ASC
@@ -777,13 +780,14 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
     }
 
     const [orders] = await db.query(`
-      SELECT o.id as order_id, o.participant_id, o.doctor_id, o.clinical_notes, o.vitals,
+      SELECT o.id as order_id, o.participant_id, o.doctor_id, o.consultant_id, o.clinical_notes, o.vitals,
              o.status, o.room_number, o.clinic_id, o.clinic_name, o.created_at, o.updated_at,
              p.participant_number, p.first_name, p.last_name, p.gender, p.date_of_birth, p.phone,
-             u.display_name as doctor_name
+             COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as doctor_name
       FROM lis_test_orders o
       JOIN lis_participants p ON o.participant_id = p.id
       LEFT JOIN users u ON o.doctor_id = u.id
+      LEFT JOIN employees ce ON ce.id = o.consultant_id
       WHERE 1=1 ${filter}
       ORDER BY o.created_at DESC
       LIMIT 1000
@@ -910,7 +914,8 @@ router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, re
   const { sequelize: db } = req.models;
   try {
     const [specimens] = await db.query(`
-      SELECT s.*, p.id AS participant_id, p.first_name, p.last_name, p.participant_number, o.created_at as order_time, u.display_name as requested_by_name,
+      SELECT s.*, p.id AS participant_id, p.first_name, p.last_name, p.participant_number, o.created_at as order_time,
+        COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as requested_by_name,
         COALESCE((
           SELECT SUM(pb.balance_amount) FROM patient_bills pb
           WHERE pb.patient_id = p.id AND pb.status != 'cancelled' AND pb.scheme_id IS NULL
@@ -923,6 +928,7 @@ router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, re
       JOIN lis_test_orders o ON s.order_id = o.id
       JOIN lis_participants p ON o.participant_id = p.id
       LEFT JOIN users u ON u.id = o.doctor_id
+      LEFT JOIN employees ce ON ce.id = o.consultant_id
       WHERE s.status IN ('pending_collection', 'recollection_required', 'collected', 'in_transit', 'accepted', 'routed')
       ORDER BY o.created_at ASC, s.created_at ASC, s.id ASC
     `);
@@ -949,11 +955,13 @@ router.get('/specimens/history', authorize('lis.results.read'), async (req, res)
   try {
     const { dateFrom, dateTo } = req.query;
     let sql = `
-      SELECT s.*, p.first_name, p.last_name, p.participant_number, o.created_at as order_time, u.display_name as requested_by_name
+      SELECT s.*, p.first_name, p.last_name, p.participant_number, o.created_at as order_time,
+        COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as requested_by_name
       FROM lis_specimens s
       JOIN lis_test_orders o ON s.order_id = o.id
       JOIN lis_participants p ON o.participant_id = p.id
       LEFT JOIN users u ON u.id = o.doctor_id
+      LEFT JOIN employees ce ON ce.id = o.consultant_id
       WHERE s.status IN ('analyzed', 'pending_manager_review', 'approved')
     `;
     // COALESCE to created_at: MySQL stamped updated_at automatically via
@@ -1185,7 +1193,7 @@ router.get('/results/pending-review', authorize('lis.results.review'), async (re
     const [results] = await db.query(`
       SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, p.first_name, p.last_name, p.participant_number,
         o.id as order_id, o.created_at as order_time,
-        req_u.display_name as requested_by_name, rec_u.display_name as recorded_by_name
+        COALESCE(req_u.display_name, req_ce.first_name || ' ' || req_ce.last_name) as requested_by_name, rec_u.display_name as recorded_by_name
       FROM lis_results r
       JOIN lis_specimens s ON r.specimen_id = s.id
       JOIN lis_test_orders o ON s.order_id = o.id
@@ -1193,6 +1201,7 @@ router.get('/results/pending-review', authorize('lis.results.review'), async (re
       LEFT JOIN lab_tests t ON r.test_code = t.test_code
       LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
       LEFT JOIN users req_u ON req_u.id = o.doctor_id
+      LEFT JOIN employees req_ce ON req_ce.id = o.consultant_id
       LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
       WHERE r.status = 'pending_manager_review'
       ORDER BY r.created_at DESC
@@ -1210,7 +1219,7 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
     let sql = `
       SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, p.first_name, p.last_name, p.participant_number,
         o.id as order_id, o.created_at as order_time,
-        req_u.display_name as requested_by_name, rec_u.display_name as recorded_by_name,
+        COALESCE(req_u.display_name, req_ce.first_name || ' ' || req_ce.last_name) as requested_by_name, rec_u.display_name as recorded_by_name,
         mgr_u.display_name as manager_review_by_name
       FROM lis_results r
       JOIN lis_specimens s ON r.specimen_id = s.id
@@ -1219,6 +1228,7 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
       LEFT JOIN lab_tests t ON r.test_code = t.test_code
       LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
       LEFT JOIN users req_u ON req_u.id = o.doctor_id
+      LEFT JOIN employees req_ce ON req_ce.id = o.consultant_id
       LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
       LEFT JOIN users mgr_u ON mgr_u.id = r.manager_review_by
       WHERE r.status != 'pending_manager_review'

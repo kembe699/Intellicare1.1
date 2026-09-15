@@ -1,19 +1,20 @@
 /**
- * Attributes patient-bill consultation revenue to a specific doctor/consultant
- * user, for the HR module's Consultant Bill feature.
+ * Attributes patient-bill consultation revenue to a specific consultant, for
+ * the HR module's Consultant Bill feature.
  *
  * There is no hard FK from a patient bill to the visit/doctor that generated
  * it (patient_bills has no visit_id or doctor_id column) — this adapts the
  * same documented, disclosed heuristic already used in
  * src/server/routes/reportDoctorPerformance.js: a bill's Consultation-category
- * line items are attributed to whichever doctor(s) saw that same patient on
+ * line items are attributed to whichever provider(s) saw that same patient on
  * that same calendar day (via lis_test_orders), splitting evenly when more
- * than one doctor did. That report only credits doctor_id values matching a
- * role='doctor' user; this version does not apply that filter, since a
- * consultant's linked account can have any role — but it still needs every
- * doctor_id in range (not just the target consultant's) to compute correct
- * per-bill shares when a patient was seen by more than one provider the same
- * day.
+ * than one did. That report only credits doctor_id values matching a
+ * role='doctor' user; this version does not apply that filter (a consultant's
+ * linked account can have any role) and also matches visits recorded via
+ * consultant_id (employees.id) for a consultant with no linked account at all
+ * — linking one is optional, see hr.js. It still needs every visit in range,
+ * not just the target's own, to compute correct per-bill shares when a
+ * patient was seen by more than one provider the same day.
  */
 const { QueryTypes } = require('sequelize');
 const AccountingService = require('./AccountingService');
@@ -53,33 +54,42 @@ function resolveItemAmount(item, bill) {
 }
 
 /**
- * Returns { consultations, totalsByCurrency } for one doctor/consultant
- * (identified by their users.id) over [dateFrom, dateTo] (YYYY-MM-DD,
- * inclusive). `consultations` is one row per attributed patient bill —
- * the granularity a "trace" UI and a bill-creation step both need.
+ * Returns { consultations, totalsByCurrency } for one consultant over
+ * [dateFrom, dateTo] (YYYY-MM-DD, inclusive). `consultations` is one row per
+ * attributed patient bill — the granularity a "trace" UI and a bill-creation
+ * step both need.
+ *
+ * A consultant is identified by `{ userId, employeeId }` — linking a user
+ * account is optional (see hr.js), so a visit may record either a real
+ * doctor_id (users.id) or a consultant_id (employees.id) when no account is
+ * linked. Every visit in range is keyed onto one shared identity space
+ * ("u:<id>" or "c:<id>") so the same-patient/same-day sharing logic below
+ * treats a linked and unlinked provider identically when computing shares.
  */
-async function getConsultationsForDoctor(sequelize, clinicId, doctorUserId, dateFrom, dateTo) {
+async function getConsultationsForDoctor(sequelize, clinicId, { userId, employeeId }, dateFrom, dateTo) {
   const fromTs = `${dateFrom} 00:00:00`;
   const toTs = `${dateTo} 23:59:59`;
   const repl = { clinicId, fromTs, toTs };
+  const targetKey = userId ? `u:${userId}` : `c:${employeeId}`;
 
-  // All visits in range (any doctor_id), to build correct per-patient/day
-  // provider sets — not just this doctor's own visits.
+  // All visits in range (any provider), to build correct per-patient/day
+  // provider sets — not just this consultant's own visits.
   const visitRows = await sequelize.query(
-    `SELECT o.id AS "visitId", o.doctor_id AS "doctorId", o.participant_id AS "patientId",
-            DATE(o.created_at) AS "visitDay"
+    `SELECT o.id AS "visitId", o.doctor_id AS "doctorId", o.consultant_id AS "consultantId",
+            o.participant_id AS "patientId", DATE(o.created_at) AS "visitDay"
      FROM lis_test_orders o
-     WHERE o.doctor_id IS NOT NULL AND o.created_at BETWEEN :fromTs AND :toTs`,
+     WHERE (o.doctor_id IS NOT NULL OR o.consultant_id IS NOT NULL) AND o.created_at BETWEEN :fromTs AND :toTs`,
     { replacements: repl, type: QueryTypes.SELECT }
   );
 
-  const dayLookup = new Map(); // `${patientId}|${visitDay}` -> Set(doctorId)
+  const dayLookup = new Map(); // `${patientId}|${visitDay}` -> Set(providerKey)
   for (const v of visitRows) {
+    const providerKey = v.doctorId != null ? `u:${v.doctorId}` : `c:${v.consultantId}`;
     const key = `${v.patientId}|${v.visitDay}`;
     if (!dayLookup.has(key)) dayLookup.set(key, new Set());
-    dayLookup.get(key).add(v.doctorId);
+    dayLookup.get(key).add(providerKey);
   }
-  const targetHasVisit = visitRows.some(v => v.doctorId === doctorUserId);
+  const targetHasVisit = visitRows.some(v => (v.doctorId != null ? `u:${v.doctorId}` : `c:${v.consultantId}`) === targetKey);
   if (!targetHasVisit) return { consultations: [], totalsByCurrency: {} };
 
   const consultationServices = await sequelize.query(
@@ -104,7 +114,7 @@ async function getConsultationsForDoctor(sequelize, clinicId, doctorUserId, date
   for (const bill of bills) {
     const key = `${bill.patientId}|${bill.billDay}`;
     const doctorSet = dayLookup.get(key);
-    if (!doctorSet || !doctorSet.has(doctorUserId)) continue; // not this doctor's patient/day
+    if (!doctorSet || !doctorSet.has(targetKey)) continue; // not this consultant's patient/day
 
     let items = [];
     try {

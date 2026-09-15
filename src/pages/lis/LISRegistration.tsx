@@ -65,7 +65,7 @@ export default function LISRegistration() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [regForm, setRegForm] = useState({
     first_name: '', last_name: '', gender: 'Male', study_ref: '',
-    date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: ''
+    date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: ''
   });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -90,10 +90,14 @@ export default function LISRegistration() {
       const users = res.ok ? await res.json() : [];
       const roleDoctors = users.filter((u: any) => u.role === 'doctor' && u.is_active);
 
-      // Consultants/doctors on the HR roster aren't necessarily role='doctor'
-      // accounts — a consultant linked to any user account should still show
-      // up here so a visit can be attributed to them (doctor_id is a plain
-      // FK to users.id, not gated on role anywhere else in the system).
+      // Consultants on the HR roster show up here whether or not they have a
+      // linked user account — linking one is optional (see hr.js). A linked
+      // consultant is represented by their real user (doctor_id, same as a
+      // role='doctor' account); an unlinked one gets a synthetic id
+      // ("c:<employeeId>") since there's no users.id to use, and the visit
+      // records employees.id as consultant_id instead (see lisModule.js) —
+      // isConsultantOnly/employeeId below is how the Doctor picker's onChange
+      // tells the two apart.
       // Uses the unprivileged /consultants/for-doctor-picker endpoint, not
       // /api/hr/employees (hr.employees.read, admin-only) — this page is
       // used by front-desk/lab staff who have no reason to hold an HR
@@ -105,12 +109,17 @@ export default function LISRegistration() {
         if (cRes.ok) {
           const consultants = await cRes.json();
           const usersById = new Map(users.map((u: any) => [u.id, u]));
-          consultantDoctors = consultants
-            .filter((c: any) => c.user_id && usersById.has(c.user_id) && !roleDoctors.some((d: any) => d.id === c.user_id))
-            .map((c: any) => {
-              const linkedUser = usersById.get(c.user_id);
+          consultantDoctors = consultants.map((c: any) => {
+            const linkedUser = c.user_id ? usersById.get(c.user_id) : null;
+            if (linkedUser && !roleDoctors.some((d: any) => d.id === c.user_id)) {
               return { ...linkedUser, display_name: `${linkedUser.display_name} (Consultant)` };
-            });
+            }
+            if (linkedUser) return null; // already listed as a role='doctor' account
+            return {
+              id: `c:${c.id}`, display_name: `${c.first_name} ${c.last_name} (Consultant)`,
+              current_room_id: null, isConsultantOnly: true, employeeId: c.id,
+            };
+          }).filter(Boolean);
         }
       } catch (e) { /* non-blocking — role='doctor' accounts still work without this */ }
 
@@ -200,13 +209,13 @@ export default function LISRegistration() {
       gender: p.gender || 'Male', date_of_birth: dob, age: calculateAgeFromDob(dob),
       phone: p.phone || '', residence: p.residence || '',
       study_ref: p.study_ref || '', scheme_id: schemeId, member_number: memberNumber,
-      doctor_id: '', clinic_id: '', room_id: '',
+      doctor_id: '', consultant_id: '', clinic_id: '', room_id: '',
     });
   };
 
   const cancelEdit = () => {
     setEditingParticipant(null);
-    setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
+    setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
   };
 
   const handleUpdateParticipant = async () => {
@@ -219,7 +228,7 @@ export default function LISRegistration() {
     try {
       const defaultScheme = schemes.find((s: any) => s.is_default) || schemes[0];
       const effectiveScheme = schemes.find((s: any) => s.id === regForm.scheme_id) || defaultScheme;
-      const { scheme_id, clinic_id, doctor_id, room_id, ...formRest } = regForm;
+      const { scheme_id, clinic_id, doctor_id, consultant_id, room_id, ...formRest } = regForm;
       const res = await authFetch(`/api/lis/participants/${editingParticipant.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -248,6 +257,7 @@ export default function LISRegistration() {
             credentials: 'include',
             body: JSON.stringify({
               doctor_id: doctor_id || null,
+              consultant_id: consultant_id || null,
               room_number: room?.room_number || '',
               clinic_id,
               clinic_name: clinic.name,
@@ -310,7 +320,7 @@ export default function LISRegistration() {
         if (clinic) {
           billId = await createBillForClinic(clinic, data.id, `${regForm.first_name} ${regForm.last_name}`, scheme_id || undefined);
         }
-        setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
+        setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
         if (billId) {
           navigate(`/patients-bill/${billId}`);
           return;
@@ -335,7 +345,7 @@ export default function LISRegistration() {
   // whatever doctor/room/clinic the user had already picked in the registration form.
   const handleQueueDuplicate = async () => {
     if (!duplicatePatient) return;
-    const { clinic_id, doctor_id, room_id } = regForm;
+    const { clinic_id, doctor_id, consultant_id, room_id } = regForm;
     if (!clinic_id) { toast.error('Please select a clinic'); return; }
 
     const clinic = clinics.find((c: any) => c.id === clinic_id);
@@ -349,6 +359,7 @@ export default function LISRegistration() {
         credentials: 'include',
         body: JSON.stringify({
           doctor_id: doctor_id || null,
+          consultant_id: consultant_id || null,
           room_number: room?.room_number || '',
           clinic_id,
           clinic_name: clinic?.name || '',
@@ -361,7 +372,7 @@ export default function LISRegistration() {
         const billId = await createBillForClinic(clinic, duplicatePatient.id, `${duplicatePatient.first_name} ${duplicatePatient.last_name}`, regForm.scheme_id || undefined);
         toast.success(`${duplicatePatient.first_name} ${duplicatePatient.last_name} added to queue`);
         setDuplicatePatient(null);
-        setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
+        setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
         if (billId) {
           navigate(`/patients-bill/${billId}`);
           return;
@@ -623,10 +634,9 @@ export default function LISRegistration() {
                           <div>
                             <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Stethoscope className="w-3 h-3"/> Doctor</label>
                             <Combobox
-                              options={[{ value: '', label: 'No doctor yet' }, ...doctors.map((d: any) => ({ value: d.id, label: `Dr. ${d.display_name}` }))]}
-                              value={regForm.doctor_id}
+                              options={[{ value: '', label: 'No doctor yet' }, ...doctors.map((d: any) => ({ value: String(d.id), label: `Dr. ${d.display_name}` }))]}
+                              value={regForm.doctor_id || (regForm.consultant_id ? `c:${regForm.consultant_id}` : '')}
                               onChange={v => {
-                                const doctorId = v;
                                 // doctors[].id comes straight from the users API as a number
                                 // (users.id is a real int column), but Combobox's declared
                                 // option type is string — so despite the String() on the left
@@ -634,12 +644,16 @@ export default function LISRegistration() {
                                 // this comparison silently never matched, meaning the auto-fill
                                 // below never fired: doctor was always undefined regardless of
                                 // which doctor was picked.
-                                const doctor = doctors.find((d: any) => String(d.id) === String(doctorId));
-                                setRegForm({
-                                  ...regForm,
-                                  doctor_id: doctorId,
-                                  room_id: doctor?.current_room_id || '',
-                                });
+                                const doctor = doctors.find((d: any) => String(d.id) === String(v));
+                                if (doctor?.isConsultantOnly) {
+                                  // No user account linked — nothing to store in doctor_id,
+                                  // so the visit records employees.id as consultant_id instead
+                                  // (see lisModule.js). No room auto-fill either: current_room_id
+                                  // only exists on a real user's own record.
+                                  setRegForm({ ...regForm, doctor_id: '', consultant_id: doctor.employeeId, room_id: '' });
+                                } else {
+                                  setRegForm({ ...regForm, doctor_id: v, consultant_id: '', room_id: doctor?.current_room_id || '' });
+                                }
                               }}
                               placeholder="No doctor yet"
                               searchPlaceholder="Search doctors..."

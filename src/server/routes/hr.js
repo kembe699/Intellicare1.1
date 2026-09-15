@@ -421,10 +421,14 @@ router.post('/employees/:id/reactivate', authorize('hr.employees.write'), async 
 router.get('/consultants/for-doctor-picker', async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    // Linking a user account is optional (see PUT /employees/:id) — every
+    // active consultant is returned regardless, so the frontend can offer an
+    // unlinked one too (recorded via lis_test_orders.consultant_id instead
+    // of doctor_id, see lisModule.js).
     const [consultants] = await sequelize.query(
       `SELECT id, user_id, first_name, last_name FROM employees
        WHERE clinic_id = :clinicId AND employment_type = 'consultant'
-         AND employment_status = 'active' AND is_active = true AND user_id IS NOT NULL`,
+         AND employment_status = 'active' AND is_active = true`,
       { replacements: { clinicId } }
     );
     res.json(consultants);
@@ -448,14 +452,13 @@ router.get('/consultants/:id/consultations', authorize('hr.employees.read'), asy
       { replacements: { id: req.params.id, clinicId } }
     );
     if (!consultant) return res.status(404).json({ error: 'Consultant not found' });
-    if (!consultant.user_id) {
-      return res.json({ consultations: [], totalsByCurrency: {}, alreadyBilled: {}, billable: {}, note: 'This consultant has no linked user account, so no visits can be traced to them yet.' });
-    }
 
     const dateFrom = req.query.from || new Date(Date.now() - 29 * 86400000).toISOString().split('T')[0];
     const dateTo = req.query.to || new Date().toISOString().split('T')[0];
 
-    const { consultations, totalsByCurrency } = await getConsultationsForDoctor(sequelize, clinicId, consultant.user_id, dateFrom, dateTo);
+    const { consultations, totalsByCurrency } = await getConsultationsForDoctor(
+      sequelize, clinicId, { userId: consultant.user_id, employeeId: consultant.id }, dateFrom, dateTo
+    );
 
     // Exclude patient bills already consumed by a previous bill for this consultant.
     const [alreadyBilledRows] = await sequelize.query(
@@ -516,11 +519,12 @@ router.post('/consultants/:id/bills', authorize('hr.employees.write'), async (re
       { replacements: { id: req.params.id, clinicId }, transaction: t }
     );
     if (!consultant) { await t.rollback(); return res.status(404).json({ error: 'Consultant not found' }); }
-    if (!consultant.user_id) { await t.rollback(); return res.status(400).json({ error: 'This consultant has no linked user account' }); }
     const pct = parseFloat(consultant.consultation_fee_percentage);
     if (!pct || pct <= 0) { await t.rollback(); return res.status(400).json({ error: 'Set this consultant\'s fee percentage before creating a bill' }); }
 
-    const { consultations } = await getConsultationsForDoctor(sequelize, clinicId, consultant.user_id, period_from, period_to);
+    const { consultations } = await getConsultationsForDoctor(
+      sequelize, clinicId, { userId: consultant.user_id, employeeId: consultant.id }, period_from, period_to
+    );
     const [alreadyBilledRows] = await sequelize.query(
       `SELECT patient_bill_id FROM consultant_bill_items WHERE consultant_id = :id`,
       { replacements: { id: req.params.id }, transaction: t }

@@ -296,9 +296,7 @@ export default function EmployeeProfile() {
                       Consultations are matched from lab/visit records to patient bills by same patient + same day — the same best-effort method used in the Doctor Performance report. A visit with no matching bill, or a bill shared with another provider that day, may under- or over-count slightly.
                     </p>
 
-                    {!employee.user_id ? (
-                      <p className="text-sm text-muted-foreground py-6 text-center">This consultant has no linked user account, so no visits can be traced yet. Link one from the Consultants list.</p>
-                    ) : loadingTrace ? (
+                    {loadingTrace ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
                     ) : (consultTrace?.consultations || []).length === 0 ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">No consultations found in this period.</p>
