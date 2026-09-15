@@ -167,22 +167,50 @@ export default function PayrollRunDetail() {
 
   // While the dialog is open, poll for the employee having signed — this
   // page's own state doesn't otherwise change until an explicit refresh.
+  // A plain setInterval alone can feel like it "hangs" for a long time: once
+  // this tab is backgrounded (admin switches away while waiting on the
+  // employee), Chrome throttles background timers hard — after ~5 minutes
+  // hidden, a 4s interval only actually fires about once a minute — so the
+  // update can sit unnoticed well past when it actually happened. Firing an
+  // immediate check on visibilitychange (tab regains focus) closes that gap,
+  // and checkingNow/manual "Check now" lets the admin force an immediate
+  // check on demand instead of waiting on the timer at all.
+  const [lastChecked, setLastChecked] = useState<number | null>(null);
+  const [checkingNow, setCheckingNow] = useState(false);
+
+  const checkSigningStatus = async (line: any, runId: string) => {
+    try {
+      const res = await authFetch(`/api/hr/payroll/runs/${runId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setLastChecked(Date.now());
+      const updatedLine = (data.lines || []).find((l: any) => l.id === line.id);
+      if (updatedLine?.status === 'paid') {
+        toast.success(`${line.first_name} ${line.last_name} signed and was paid`);
+        setQrLine(null); setQrData(null);
+        setRun(data);
+      }
+    } catch (e) {
+      console.error('Payroll signing status check failed:', e);
+    }
+  };
+
+  const handleCheckNow = async () => {
+    if (!qrLine || !run || checkingNow) return;
+    setCheckingNow(true);
+    try { await checkSigningStatus(qrLine, run.id); } finally { setCheckingNow(false); }
+  };
+
   useEffect(() => {
     if (!qrLine || !run) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await authFetch(`/api/hr/payroll/runs/${run.id}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const updatedLine = (data.lines || []).find((l: any) => l.id === qrLine.id);
-        if (updatedLine?.status === 'paid') {
-          toast.success(`${qrLine.first_name} ${qrLine.last_name} signed and was paid`);
-          setQrLine(null); setQrData(null);
-          setRun(data);
-        }
-      } catch (e) { /* keep polling */ }
-    }, 4000);
-    return () => clearInterval(interval);
+    checkSigningStatus(qrLine, run.id);
+    const interval = setInterval(() => checkSigningStatus(qrLine, run.id), 2000);
+    const onVisible = () => { if (document.visibilityState === 'visible') checkSigningStatus(qrLine, run.id); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [qrLine, run?.id]);
 
   const [downloadingSheet, setDownloadingSheet] = useState(false);
@@ -432,9 +460,16 @@ export default function PayrollRunDetail() {
                 <p className="text-xs text-muted-foreground text-center">
                   Have {qrLine?.first_name} scan this with their phone. They'll enter their employee number, review their pay, and sign on-screen — this line is marked paid automatically once they submit.
                 </p>
-                <div className="flex items-center gap-2 text-xs">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                  <span className="text-muted-foreground">Waiting for signature…</span>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Waiting for signature{lastChecked ? ` — checked ${Math.max(0, Math.round((Date.now() - lastChecked) / 1000))}s ago` : '…'}
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs shrink-0" onClick={handleCheckNow} disabled={checkingNow}>
+                    {checkingNow ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Check now'}
+                  </Button>
                 </div>
                 <Button variant="outline" size="sm" className="w-full" onClick={copySigningLink}>
                   <Copy className="w-3.5 h-3.5 mr-2" /> Copy Link
