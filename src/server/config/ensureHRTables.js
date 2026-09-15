@@ -101,10 +101,36 @@ async function ensureHRTables(sequelize) {
       exchange_rate NUMERIC(15,6) NOT NULL DEFAULT 1,
       base_currency_net NUMERIC(15,2) NOT NULL DEFAULT 0,
       gl_entry_id VARCHAR(36),
+      status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+      paid_by INTEGER,
+      paid_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // payroll_run_lines predates per-employee payment — status/paid_by/paid_at
+  // let a run be paid one employee at a time (each with their own GL entry)
+  // instead of only ever all-at-once, so "who's been paid" is a real,
+  // trackable state rather than implied by the whole run's status.
+  for (const col of ['status', 'paid_by', 'paid_at']) {
+    try {
+      const [[check]] = await sequelize.query(
+        `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'payroll_run_lines' AND column_name = :col`,
+        { replacements: { col } }
+      );
+      if (parseInt(check.cnt, 10) === 0) {
+        const def = col === 'status' ? "VARCHAR(20) NOT NULL DEFAULT 'unpaid'" : col === 'paid_by' ? 'INTEGER' : 'TIMESTAMPTZ';
+        await sequelize.query(`ALTER TABLE payroll_run_lines ADD COLUMN ${col} ${def}`);
+      }
+    } catch (e) { /* best-effort column add */ }
+  }
+  // Existing rows already carrying a gl_entry_id were paid under the old
+  // whole-run-at-once flow — backfill them to 'paid' so history doesn't
+  // regress to looking unpaid the moment this column appears.
+  try {
+    await sequelize.query(`UPDATE payroll_run_lines SET status = 'paid' WHERE gl_entry_id IS NOT NULL AND status = 'unpaid'`);
+  } catch (e) { /* best-effort backfill */ }
 
   await sequelize.query(`
     CREATE TABLE IF NOT EXISTS payroll_run_line_components (

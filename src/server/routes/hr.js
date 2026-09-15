@@ -1110,6 +1110,146 @@ router.post('/payroll/runs/:id/cancel', authorize('hr.payroll.write'), async (re
 // (default 2200 Payroll Liabilities); credit the run's payment account for
 // net pay. Mirrors POST /supplier-bill-payment in daily-expenses.js — the
 // established "pay something real, post it to the GL" pattern in this app.
+// Resolves the three fixed payroll GL accounts once per request — shared by
+// both the single-employee and pay-all-remaining routes below.
+async function resolvePayrollAccounts(clinicId) {
+  const [salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount] = await Promise.all([
+    AccountingService.getAccountByCode(clinicId, '5100'),
+    AccountingService.getAccountByCode(clinicId, '5110'),
+    AccountingService.getAccountByCode(clinicId, '2200'),
+  ]);
+  return { salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount };
+}
+
+// Pays exactly one employee's line: one balanced GL entry (debit gross to
+// Salaries & Wages/Doctor Fees, credit each deduction to its mapped account,
+// credit the payment account for net), then marks that line paid. Each
+// employee gets their own GL entry — deliberately not combined into one
+// run-wide entry — so paying can happen one person at a time and "who's
+// been paid" is the line's own real status, not implied by the run's.
+async function payOnePayrollLine(clinicId, run, line, accounts, baseCurrency, paymentAccountId, userId) {
+  const { salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount } = accounts;
+  const cur = line.currency || baseCurrency;
+  let rate = 1;
+  if (cur !== baseCurrency) {
+    try { rate = await AccountingService.getExchangeRate(clinicId, cur, baseCurrency, run.run_date) || 1; }
+    catch (e) { rate = 1; }
+  }
+  const conv = (amt) => AccountingService.convertAmount(parseFloat(amt) || 0, rate);
+  const baseGross = conv(line.gross_pay);
+  const baseNet = conv(line.net_pay);
+  const employeeLabel = `${line.first_name} ${line.last_name} (${line.employee_number})`;
+
+  const lineItems = [];
+  const expenseAccount = line.employment_type === 'consultant' ? doctorFeesAccount : salariesAccount;
+  lineItems.push({ account_id: expenseAccount.id, debit_amount: baseGross, credit_amount: 0, description: `Payroll ${run.run_number} — ${employeeLabel} gross pay` });
+
+  const [components] = await sequelize.query(
+    `SELECT * FROM payroll_run_line_components WHERE payroll_run_line_id = :id AND component_type = 'deduction'`,
+    { replacements: { id: line.id } }
+  );
+  for (const d of components) {
+    const baseDeduction = conv(d.amount);
+    if (baseDeduction <= 0) continue;
+    let deductionAccount = payrollLiabilitiesAccount;
+    if (d.account_code) {
+      const mapped = await AccountingService.getAccountByCode(clinicId, d.account_code);
+      if (mapped) deductionAccount = mapped;
+    }
+    lineItems.push({ account_id: deductionAccount.id, debit_amount: 0, credit_amount: baseDeduction, description: `Payroll ${run.run_number} — ${employeeLabel} ${d.name}` });
+  }
+
+  lineItems.push({ account_id: paymentAccountId, debit_amount: 0, credit_amount: baseNet, description: `Payroll ${run.run_number} — ${employeeLabel} net pay` });
+
+  const glEntry = await AccountingService.createGLEntry({
+    clinic_id: clinicId,
+    transaction_date: run.run_date,
+    transaction_type: 'payroll_payment',
+    description: `Payroll ${run.run_number} — ${employeeLabel}`,
+    reference_id: line.id,
+    reference_module: 'payroll_run_line',
+  }, lineItems, userId);
+  await AccountingService.postGLEntry(glEntry.id, userId);
+
+  await sequelize.query(
+    `UPDATE payroll_run_lines SET gl_entry_id = :glId, exchange_rate = :rate, base_currency_net = :baseNet, status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
+    { replacements: { id: line.id, glId: glEntry.id, rate, baseNet, userId: userId || null } }
+  );
+
+  return glEntry;
+}
+
+// Once every line in a run is individually paid, the run itself is "paid" —
+// this just reflects that, it never pays anything by itself.
+async function finalizeRunIfFullyPaid(runId, userId) {
+  const [[counts]] = await sequelize.query(
+    `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'paid') AS paid FROM payroll_run_lines WHERE payroll_run_id = :runId`,
+    { replacements: { runId } }
+  );
+  const total = parseInt(counts.total, 10) || 0;
+  const paid = parseInt(counts.paid, 10) || 0;
+  if (total > 0 && total === paid) {
+    await sequelize.query(
+      `UPDATE payroll_runs SET status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: runId, userId: userId || null } }
+    );
+    return true;
+  }
+  return false;
+}
+
+router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [[run]] = await sequelize.query(
+      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    if (run.status !== 'approved') return res.status(409).json({ error: 'Only an approved run can be paid' });
+
+    const paymentAccountId = req.body?.payment_account_id || run.payment_account_id;
+    if (!paymentAccountId) return res.status(400).json({ error: 'This run has no payment account set' });
+
+    const [[line]] = await sequelize.query(`
+      SELECT prl.*, e.employment_type, e.first_name, e.last_name, e.employee_number
+      FROM payroll_run_lines prl JOIN employees e ON e.id = prl.employee_id
+      WHERE prl.id = :lineId AND prl.payroll_run_id = :runId
+    `, { replacements: { lineId: req.params.lineId, runId: req.params.id } });
+    if (!line) return res.status(404).json({ error: 'Payroll line not found' });
+    if (line.status === 'paid') return res.status(409).json({ error: 'This employee has already been paid' });
+
+    const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`);
+    const baseCurrency = baseCurrencyRow?.code || 'USD';
+    const accounts = await resolvePayrollAccounts(clinicId);
+    if (!accounts.salariesAccount || !accounts.doctorFeesAccount || !accounts.payrollLiabilitiesAccount) {
+      return res.status(500).json({ error: 'Payroll accounts (5100/5110/2200) are missing from the Chart of Accounts' });
+    }
+
+    const glEntry = await payOnePayrollLine(clinicId, run, line, accounts, baseCurrency, paymentAccountId, req.user?.id);
+    const runFullyPaid = await finalizeRunIfFullyPaid(run.id, req.user?.id);
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'HR', action: 'PAYROLL_LINE_PAID', entity_type: 'PayrollRunLine', entity_id: line.id,
+        description: `Payroll ${run.run_number} — ${line.first_name} ${line.last_name} paid, GL entry ${glEntry.gl_number}`,
+        status: 'success',
+      });
+    } catch (e) { /* non-blocking */ }
+
+    res.json({ success: true, gl_entry_id: glEntry.id, gl_number: glEntry.gl_number, run_fully_paid: runFullyPaid });
+  } catch (error) {
+    console.error('Error paying payroll line:', error);
+    res.status(500).json({ error: error.message || 'Failed to pay this employee' });
+  }
+});
+
+// "Pay All Remaining" — the same per-employee GL posting as the single
+// -employee route above, just looped over everyone not yet paid, so a run
+// can still be cleared in one action when there's no reason to pay people
+// one at a time.
 router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1119,97 +1259,42 @@ router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, 
     );
     if (!run) return res.status(404).json({ error: 'Payroll run not found' });
     if (run.status !== 'approved') return res.status(409).json({ error: 'Only an approved run can be paid' });
-    if (!run.payment_account_id) return res.status(400).json({ error: 'This run has no payment account set' });
+
+    const paymentAccountId = req.body?.payment_account_id || run.payment_account_id;
+    if (!paymentAccountId) return res.status(400).json({ error: 'This run has no payment account set' });
 
     const [lines] = await sequelize.query(`
       SELECT prl.*, e.employment_type, e.first_name, e.last_name, e.employee_number
       FROM payroll_run_lines prl JOIN employees e ON e.id = prl.employee_id
-      WHERE prl.payroll_run_id = :id
+      WHERE prl.payroll_run_id = :id AND prl.status != 'paid'
     `, { replacements: { id: req.params.id } });
-    if (lines.length === 0) return res.status(400).json({ error: 'This run has no lines to pay' });
+    if (lines.length === 0) return res.status(400).json({ error: 'Everyone on this run has already been paid' });
 
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'USD';
-
-    const [salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount] = await Promise.all([
-      AccountingService.getAccountByCode(clinicId, '5100'),
-      AccountingService.getAccountByCode(clinicId, '5110'),
-      AccountingService.getAccountByCode(clinicId, '2200'),
-    ]);
-    if (!salariesAccount || !doctorFeesAccount || !payrollLiabilitiesAccount) {
+    const accounts = await resolvePayrollAccounts(clinicId);
+    if (!accounts.salariesAccount || !accounts.doctorFeesAccount || !accounts.payrollLiabilitiesAccount) {
       return res.status(500).json({ error: 'Payroll accounts (5100/5110/2200) are missing from the Chart of Accounts' });
     }
 
-    const lineItems = [];
-    const lineUpdates = [];
+    let paidCount = 0;
     for (const line of lines) {
-      const cur = line.currency || baseCurrency;
-      let rate = 1;
-      if (cur !== baseCurrency) {
-        try { rate = await AccountingService.getExchangeRate(clinicId, cur, baseCurrency, run.run_date) || 1; }
-        catch (e) { rate = 1; }
-      }
-      const conv = (amt) => AccountingService.convertAmount(parseFloat(amt) || 0, rate);
-      const baseGross = conv(line.gross_pay);
-      const baseNet = conv(line.net_pay);
-      const employeeLabel = `${line.first_name} ${line.last_name} (${line.employee_number})`;
-
-      const expenseAccount = line.employment_type === 'consultant' ? doctorFeesAccount : salariesAccount;
-      lineItems.push({ account_id: expenseAccount.id, debit_amount: baseGross, credit_amount: 0, description: `Payroll ${run.run_number} — ${employeeLabel} gross pay` });
-
-      const [components] = await sequelize.query(
-        `SELECT * FROM payroll_run_line_components WHERE payroll_run_line_id = :id AND component_type = 'deduction'`,
-        { replacements: { id: line.id } }
-      );
-      for (const d of components) {
-        const baseDeduction = conv(d.amount);
-        if (baseDeduction <= 0) continue;
-        let deductionAccount = payrollLiabilitiesAccount;
-        if (d.account_code) {
-          const mapped = await AccountingService.getAccountByCode(clinicId, d.account_code);
-          if (mapped) deductionAccount = mapped;
-        }
-        lineItems.push({ account_id: deductionAccount.id, debit_amount: 0, credit_amount: baseDeduction, description: `Payroll ${run.run_number} — ${employeeLabel} ${d.name}` });
-      }
-
-      lineItems.push({ account_id: run.payment_account_id, debit_amount: 0, credit_amount: baseNet, description: `Payroll ${run.run_number} — ${employeeLabel} net pay` });
-
-      lineUpdates.push({ id: line.id, exchange_rate: rate, base_currency_net: baseNet });
+      await payOnePayrollLine(clinicId, run, line, accounts, baseCurrency, paymentAccountId, req.user?.id);
+      paidCount++;
     }
-
-    const glEntry = await AccountingService.createGLEntry({
-      clinic_id: clinicId,
-      transaction_date: run.run_date,
-      transaction_type: 'payroll_payment',
-      description: `Payroll run ${run.run_number} — ${run.period_month}/${run.period_year}`,
-      reference_id: run.id,
-      reference_module: 'payroll_run',
-    }, lineItems, req.user?.id);
-    await AccountingService.postGLEntry(glEntry.id, req.user?.id);
-
-    for (const u of lineUpdates) {
-      await sequelize.query(
-        `UPDATE payroll_run_lines SET gl_entry_id = :glId, exchange_rate = :rate, base_currency_net = :baseNet, updated_at = NOW() WHERE id = :id`,
-        { replacements: { id: u.id, glId: glEntry.id, rate: u.exchange_rate, baseNet: u.base_currency_net } }
-      );
-    }
-
-    await sequelize.query(
-      `UPDATE payroll_runs SET status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
-      { replacements: { id: run.id, userId: req.user?.id || null } }
-    );
+    await finalizeRunIfFullyPaid(run.id, req.user?.id);
 
     try {
       const rr = require('./reports');
       await rr.logAudit({
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'HR', action: 'PAYROLL_PAID', entity_type: 'PayrollRun', entity_id: run.id,
-        description: `Payroll run ${run.run_number} paid — ${lines.length} employee(s), GL entry ${glEntry.gl_number}`,
+        description: `Payroll run ${run.run_number} — ${paidCount} employee(s) paid`,
         status: 'success',
       });
     } catch (e) { /* non-blocking */ }
 
-    res.json({ success: true, gl_entry_id: glEntry.id, gl_number: glEntry.gl_number });
+    res.json({ success: true, paid_count: paidCount });
   } catch (error) {
     console.error('Error paying payroll run:', error);
     res.status(500).json({ error: error.message || 'Failed to pay payroll run' });

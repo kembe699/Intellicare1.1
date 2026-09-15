@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import * as docTemplate from '@/utils/documentTemplate';
-import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download } from 'lucide-react';
+import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
@@ -36,6 +36,7 @@ export default function PayrollRunDetail() {
   const [error, setError] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [payingLineId, setPayingLineId] = useState<string | null>(null);
 
   const fetchRun = async () => {
     setLoading(true);
@@ -78,6 +79,9 @@ export default function PayrollRunDetail() {
     return Object.values(byCurrency).sort((a, b) => b.gross - a.gross);
   }, [run]);
 
+  const unpaidCount = useMemo(() => (run?.lines || []).filter((l: any) => l.status !== 'paid').length, [run]);
+  const paidCount = useMemo(() => (run?.lines || []).filter((l: any) => l.status === 'paid').length, [run]);
+
   const handleApprove = async () => {
     if (busy || !run) return;
     setBusy(true);
@@ -88,21 +92,37 @@ export default function PayrollRunDetail() {
     } catch (e) { toast.error('Network error'); } finally { setBusy(false); }
   };
 
-  const handlePay = async () => {
+  const handlePayAll = async () => {
     if (busy || !run) return;
-    if (!confirm(`Pay ${run.run_number}? This posts a General Ledger entry and cannot be undone.`)) return;
+    if (!confirm(`Pay all ${unpaidCount} remaining employee(s) on ${run.run_number}? Each gets their own General Ledger entry and this cannot be undone.`)) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/hr/payroll/runs/${run.id}/pay`, { method: 'POST' });
       if (res.ok) {
         const result = await res.json();
-        toast.success(`Paid — GL entry ${result.gl_number} posted`);
+        toast.success(`${result.paid_count} employee(s) paid`);
         fetchRun();
       } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to pay payroll run');
       }
     } catch (e) { toast.error('Network error'); } finally { setBusy(false); }
+  };
+
+  const handlePayLine = async (line: any) => {
+    if (payingLineId || !run) return;
+    if (!confirm(`Pay ${line.first_name} ${line.last_name} — ${line.currency} ${parseFloat(line.net_pay).toFixed(2)} from ${run.payment_account_name}?`)) return;
+    setPayingLineId(line.id);
+    try {
+      const res = await authFetch(`/api/hr/payroll/runs/${run.id}/lines/${line.id}/pay`, { method: 'POST' });
+      if (res.ok) {
+        toast.success(`${line.first_name} ${line.last_name} paid`);
+        fetchRun();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to pay this employee');
+      }
+    } catch (e) { toast.error('Network error'); } finally { setPayingLineId(null); }
   };
 
   const handleCancel = async () => {
@@ -144,7 +164,7 @@ export default function PayrollRunDetail() {
       { title: 'Pay Period', rows: [
         { label: 'Period', value: `${MONTHS[run.period_month - 1]} ${run.period_year}`, bold: true },
         { label: 'Payroll Run', value: run.run_number },
-        { label: 'Status', value: run.status.toUpperCase() },
+        { label: 'Status', value: line.status === 'paid' ? 'PAID' : run.status.toUpperCase() },
       ]},
       { title: 'Employee', rows: [
         { label: 'Name', value: `${line.first_name} ${line.last_name}`, bold: true },
@@ -169,7 +189,7 @@ export default function PayrollRunDetail() {
 
     return docTemplate.buildDocument({
       docType: 'PAYSLIP', docNumber: `${run.run_number}-${line.employee_number}`, date: run.run_date,
-      status: run.status === 'paid' ? 'PAID' : run.status.toUpperCase(),
+      status: line.status === 'paid' ? 'PAID' : run.status.toUpperCase(),
       bodyHTML: body, facilityInfo: fi(), branchInfo: bi(),
     });
   };
@@ -219,9 +239,9 @@ export default function PayrollRunDetail() {
                     </Button>
                   </>
                 )}
-                {run.status === 'approved' && (
-                  <Button size="sm" onClick={handlePay} disabled={busy}>
-                    {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Banknote className="w-4 h-4 mr-2" />} Pay Now
+                {run.status === 'approved' && unpaidCount > 0 && (
+                  <Button size="sm" onClick={handlePayAll} disabled={busy || !!payingLineId}>
+                    {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Banknote className="w-4 h-4 mr-2" />} Pay All Remaining ({unpaidCount})
                   </Button>
                 )}
               </div>
@@ -230,7 +250,14 @@ export default function PayrollRunDetail() {
 
           <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <StatusBadge status={run.status} label={run.status} map={STATUS_TONE} />
+              <div className="flex items-center gap-3">
+                <StatusBadge status={run.status} label={run.status} map={STATUS_TONE} />
+                {(run.status === 'approved' || run.status === 'paid') && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{paidCount}</span> of <span className="font-medium text-foreground">{run.lines?.length || 0}</span> employees paid
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Payment Account:</span>
                 {run.status === 'draft' ? (
@@ -277,11 +304,20 @@ export default function PayrollRunDetail() {
                 { key: 'deductions_total', header: 'Deductions', align: 'right', render: (v, l) => <span className="font-mono text-amber-700">{docTemplate.formatCurrency(v, l.currency)}</span> },
                 { key: 'net_pay', header: 'Net Pay', align: 'right', render: (v, l) => <span className="font-mono font-bold text-emerald-700">{docTemplate.formatCurrency(v, l.currency)}</span> },
                 {
-                  key: '__actions', header: 'Payslip', align: 'center',
+                  key: 'status', header: 'Paid', align: 'center',
+                  render: (v) => <StatusBadge status={v || 'unpaid'} label={v === 'paid' ? 'Paid' : 'Unpaid'} map={{ paid: 'success', unpaid: 'warning' }} />,
+                },
+                {
+                  key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, l) => (
                     <div className="flex items-center justify-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download"><Download className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => printPayslip(l)} title="Print"><Printer className="w-3.5 h-3.5" /></Button>
+                      {run.status === 'approved' && l.status !== 'paid' && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handlePayLine(l)} disabled={payingLineId === l.id || busy}>
+                          {payingLineId === l.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" /> Pay</>}
+                        </Button>
+                      )}
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download Payslip"><Download className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => printPayslip(l)} title="Print Payslip"><Printer className="w-3.5 h-3.5" /></Button>
                     </div>
                   ),
                 },
