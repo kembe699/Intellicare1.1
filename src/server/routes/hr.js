@@ -6,11 +6,14 @@ const { authorize } = require('../middleware/authorize');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
+const { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid } = require('../services/PayrollPayment');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { getConsultationsForDoctor } = require('../services/ConsultantConsultations');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const crypto = require('crypto');
+const QRCode = require('qrcode');
 
 // Non-admin users only see rows from their own branch; admins see everything
 // clinic-wide. Written inline with named replacements (not
@@ -1004,6 +1007,7 @@ router.get('/payroll/runs/:id/sheet', authorize('hr.payroll.read'), async (req, 
     headerRow.eachCell(c => { c.border = { bottom: { style: 'thin' } }; });
 
     const totalsByCurrency = {};
+    let embeddedSignatureCount = 0;
     lines.forEach((l, i) => {
       const row = sheet.addRow({
         num: i + 1,
@@ -1016,12 +1020,26 @@ router.get('/payroll/runs/:id/sheet', authorize('hr.payroll.read'), async (req, 
         net: parseFloat(l.net_pay) || 0,
         status: l.status === 'paid' ? 'PAID' : 'UNPAID',
         signature: '',
-        dateSigned: '',
+        dateSigned: l.signed_at ? new Date(l.signed_at).toLocaleDateString() : '',
       });
       ['gross', 'deductions', 'net'].forEach(k => { row.getCell(k).numFmt = '#,##0.00'; });
       row.getCell('signature').border = { bottom: { style: 'thin' } };
       row.getCell('dateSigned').border = { bottom: { style: 'thin' } };
-      row.height = 22;
+      row.height = 32;
+
+      // An employee who signed electronically via the QR flow (routes/
+      // publicPayroll.js) already has their signature captured — embed it
+      // right into the sheet instead of leaving the cell blank for a
+      // physical signature that was never going to happen for them.
+      if (l.signature_data) {
+        try {
+          const match = /^data:image\/(png|jpe?g);base64,/i.exec(l.signature_data);
+          const ext = match ? (match[1].toLowerCase().startsWith('jpe') ? 'jpeg' : 'png') : 'png';
+          const imageId = workbook.addImage({ base64: l.signature_data, extension: ext });
+          sheet.addImage(imageId, { tl: { col: 9, row: row.number - 1 }, ext: { width: 130, height: 40 } });
+          embeddedSignatureCount++;
+        } catch (e) { /* malformed signature data — leave the cell blank rather than fail the whole sheet */ }
+      }
 
       const t = (totalsByCurrency[l.currency] ||= { gross: 0, deductions: 0, net: 0, count: 0 });
       t.gross += parseFloat(l.gross_pay) || 0;
@@ -1040,7 +1058,10 @@ router.get('/payroll/runs/:id/sheet', authorize('hr.payroll.read'), async (req, 
     }
 
     sheet.addRow([]);
-    const noteRow = sheet.addRow(['Each employee signs above to confirm they personally received the cash amount shown. Mark paid in the system only after a signature is collected.']);
+    const noteText = embeddedSignatureCount > 0
+      ? `Each employee signs above to confirm they personally received the cash amount shown. ${embeddedSignatureCount} signature(s) shown were captured electronically via the QR self-service link. Mark paid in the system only after a signature is collected.`
+      : 'Each employee signs above to confirm they personally received the cash amount shown. Mark paid in the system only after a signature is collected.';
+    const noteRow = sheet.addRow([noteText]);
     noteRow.getCell(1).font = { size: 9, italic: true, color: { argb: 'FF6B7280' } };
     sheet.mergeCells(`A${noteRow.number}:K${noteRow.number}`);
 
@@ -1219,99 +1240,62 @@ router.post('/payroll/runs/:id/cancel', authorize('hr.payroll.write'), async (re
   }
 });
 
-// The accounting integration: posts one balanced GL entry for the whole run.
-// Per employee — debit gross pay to Salaries & Wages (5100, staff) or Doctor
-// Fees (5110, consultant); credit each deduction to its mapped account
-// (default 2200 Payroll Liabilities); credit the run's payment account for
-// net pay. Mirrors POST /supplier-bill-payment in daily-expenses.js — the
-// established "pay something real, post it to the GL" pattern in this app.
-// Resolves the three fixed payroll GL accounts once per request — shared by
-// both the single-employee and pay-all-remaining routes below.
-async function resolvePayrollAccounts(clinicId) {
-  const [salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount] = await Promise.all([
-    AccountingService.getAccountByCode(clinicId, '5100'),
-    AccountingService.getAccountByCode(clinicId, '5110'),
-    AccountingService.getAccountByCode(clinicId, '2200'),
-  ]);
-  return { salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount };
-}
+// The accounting integration: posts one balanced GL entry per employee.
+// Shared with the public QR-code employee-signing flow — see
+// services/PayrollPayment.js.
 
-// Pays exactly one employee's line: one balanced GL entry (debit gross to
-// Salaries & Wages/Doctor Fees, credit each deduction to its mapped account,
-// credit the payment account for net), then marks that line paid. Each
-// employee gets their own GL entry — deliberately not combined into one
-// run-wide entry — so paying can happen one person at a time and "who's
-// been paid" is the line's own real status, not implied by the run's.
-async function payOnePayrollLine(clinicId, run, line, accounts, baseCurrency, paymentAccountId, userId) {
-  const { salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount } = accounts;
-  const cur = line.currency || baseCurrency;
-  let rate = 1;
-  if (cur !== baseCurrency) {
-    try { rate = await AccountingService.getExchangeRate(clinicId, cur, baseCurrency, run.run_date) || 1; }
-    catch (e) { rate = 1; }
-  }
-  const conv = (amt) => AccountingService.convertAmount(parseFloat(amt) || 0, rate);
-  const baseGross = conv(line.gross_pay);
-  const baseNet = conv(line.net_pay);
-  const employeeLabel = `${line.first_name} ${line.last_name} (${line.employee_number})`;
-
-  const lineItems = [];
-  const expenseAccount = line.employment_type === 'consultant' ? doctorFeesAccount : salariesAccount;
-  lineItems.push({ account_id: expenseAccount.id, debit_amount: baseGross, credit_amount: 0, description: `Payroll ${run.run_number} — ${employeeLabel} gross pay` });
-
-  const [components] = await sequelize.query(
-    `SELECT * FROM payroll_run_line_components WHERE payroll_run_line_id = :id AND component_type = 'deduction'`,
-    { replacements: { id: line.id } }
-  );
-  for (const d of components) {
-    const baseDeduction = conv(d.amount);
-    if (baseDeduction <= 0) continue;
-    let deductionAccount = payrollLiabilitiesAccount;
-    if (d.account_code) {
-      const mapped = await AccountingService.getAccountByCode(clinicId, d.account_code);
-      if (mapped) deductionAccount = mapped;
-    }
-    lineItems.push({ account_id: deductionAccount.id, debit_amount: 0, credit_amount: baseDeduction, description: `Payroll ${run.run_number} — ${employeeLabel} ${d.name}` });
-  }
-
-  lineItems.push({ account_id: paymentAccountId, debit_amount: 0, credit_amount: baseNet, description: `Payroll ${run.run_number} — ${employeeLabel} net pay` });
-
-  const glEntry = await AccountingService.createGLEntry({
-    clinic_id: clinicId,
-    transaction_date: run.run_date,
-    transaction_type: 'payroll_payment',
-    description: `Payroll ${run.run_number} — ${employeeLabel}`,
-    reference_id: line.id,
-    reference_module: 'payroll_run_line',
-  }, lineItems, userId);
-  await AccountingService.postGLEntry(glEntry.id, userId);
-
-  await sequelize.query(
-    `UPDATE payroll_run_lines SET gl_entry_id = :glId, exchange_rate = :rate, base_currency_net = :baseNet, status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
-    { replacements: { id: line.id, glId: glEntry.id, rate, baseNet, userId: userId || null } }
-  );
-
-  return glEntry;
-}
-
-// Once every line in a run is individually paid, the run itself is "paid" —
-// this just reflects that, it never pays anything by itself.
-async function finalizeRunIfFullyPaid(runId, userId) {
-  const [[counts]] = await sequelize.query(
-    `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'paid') AS paid FROM payroll_run_lines WHERE payroll_run_id = :runId`,
-    { replacements: { runId } }
-  );
-  const total = parseInt(counts.total, 10) || 0;
-  const paid = parseInt(counts.paid, 10) || 0;
-  if (total > 0 && total === paid) {
-    await sequelize.query(
-      `UPDATE payroll_runs SET status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
-      { replacements: { id: runId, userId: userId || null } }
+// Generates (or re-generates, if not yet signed) a unique token for this one
+// employee's line and a QR code image pointing at the public signing page —
+// see routes/publicPayroll.js. The employee scans it on their own phone,
+// confirms their employee number, reviews their pay, and signs; that
+// submission is what actually pays the line (same GL posting as the
+// admin-driven /pay routes) and stores the signature for the payroll sheet.
+router.post('/payroll/runs/:id/lines/:lineId/signing-link', authorize('hr.payroll.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [[run]] = await sequelize.query(
+      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
     );
-    return true;
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    if (run.status !== 'approved') return res.status(409).json({ error: 'Only an approved run can be paid' });
+    if (!run.payment_account_id) return res.status(400).json({ error: 'This run has no payment account set' });
+
+    const [[line]] = await sequelize.query(
+      `SELECT * FROM payroll_run_lines WHERE id = :lineId AND payroll_run_id = :runId`,
+      { replacements: { lineId: req.params.lineId, runId: req.params.id } }
+    );
+    if (!line) return res.status(404).json({ error: 'Payroll line not found' });
+    if (line.status === 'paid') return res.status(409).json({ error: 'This employee has already been paid' });
+    if (line.signed_at) return res.status(409).json({ error: 'This employee has already signed for payment' });
+
+    const { Client } = require('../models/platform');
+    const client = await Client.findOne({ where: { schema_name: req.tenantSchema } });
+    if (!client) return res.status(500).json({ error: 'Could not resolve this instance\'s public code' });
+
+    const token = crypto.randomBytes(24).toString('hex');
+    await sequelize.query(
+      `UPDATE payroll_run_lines SET signing_token = :token, signing_token_created_at = NOW(), signature_verify_attempts = 0, updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: line.id, token } }
+    );
+
+    const path = `/payroll-sign/${client.code}/${token}`;
+    // The frontend and API are the same origin in production (one Express
+    // service serves both), but not in local dev (vite on its own port) —
+    // the browser is the only reliable source of "where the public page
+    // actually loads from", so it sends its own origin rather than this
+    // being inferred from the API request's host.
+    const origin = typeof req.body?.origin === 'string' && /^https?:\/\//.test(req.body.origin)
+      ? req.body.origin.replace(/\/$/, '')
+      : `${req.protocol}://${req.get('host')}`;
+    const qrDataUrl = await QRCode.toDataURL(`${origin}${path}`, { width: 320, margin: 2 });
+
+    res.json({ token, path, qr_data_url: qrDataUrl });
+  } catch (error) {
+    console.error('Error generating payroll signing link:', error);
+    res.status(500).json({ error: 'Failed to generate signing link' });
   }
-  return false;
-}
+});
 
 router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write'), async (req, res) => {
   try {
@@ -1341,8 +1325,8 @@ router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write')
       return res.status(500).json({ error: 'Payroll accounts (5100/5110/2200) are missing from the Chart of Accounts' });
     }
 
-    const glEntry = await payOnePayrollLine(clinicId, run, line, accounts, baseCurrency, paymentAccountId, req.user?.id);
-    const runFullyPaid = await finalizeRunIfFullyPaid(run.id, req.user?.id);
+    const glEntry = await payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseCurrency, paymentAccountId, req.user?.id);
+    const runFullyPaid = await finalizeRunIfFullyPaid(sequelize, run.id, req.user?.id);
 
     try {
       const rr = require('./reports');
@@ -1394,10 +1378,10 @@ router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, 
 
     let paidCount = 0;
     for (const line of lines) {
-      await payOnePayrollLine(clinicId, run, line, accounts, baseCurrency, paymentAccountId, req.user?.id);
+      await payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseCurrency, paymentAccountId, req.user?.id);
       paidCount++;
     }
-    await finalizeRunIfFullyPaid(run.id, req.user?.id);
+    await finalizeRunIfFullyPaid(sequelize, run.id, req.user?.id);
 
     try {
       const rr = require('./reports');

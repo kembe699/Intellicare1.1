@@ -56,4 +56,25 @@ const passwordResetLimiter = rateLimit({
   message: { error: 'Too many requests. Please try again in a few minutes.' },
 });
 
-module.exports = { authLimiter, authSourceLimiter, passwordResetLimiter };
+// Public, unauthenticated payroll-signing surface (routes/publicPayroll.js)
+// — an employee's own phone hitting it a handful of times while they read
+// their payslip and sign is normal; scripted probing of tokens or employee
+// numbers is not. Keyed on the token in the URL (the actual "account" this
+// surface protects, since each token is scoped to exactly one payroll
+// line) with a source-IP fallback for the initial GET where no token has
+// been resolved from a body.
+function payrollSignKey(req) {
+  const token = String(req.params?.token || '').trim();
+  return token ? `token:${token}` : `ip:${req.ip}`;
+}
+
+const payrollSignLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: payrollSignKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again in a few minutes or contact HR.' },
+});
+
+module.exports = { authLimiter, authSourceLimiter, passwordResetLimiter, payrollSignLimiter };

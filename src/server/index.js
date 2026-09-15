@@ -134,6 +134,15 @@ const facilitiesRouter = require('./routes/facilities');
 // caller (FacilitySetup, Security, useFacilityInfo) is behind auth. They are
 // now served by facilitiesRouter, mounted after authenticateToken.
 
+// Public payroll-signing flow (QR code an employee scans on their own
+// phone, no login) — mounted here, ahead of authenticateToken, same as
+// verify-branch-access below. Unlike that pattern this one is NOT the
+// ambient-tenant-proxy anti-pattern described above: every handler in
+// publicPayroll.js resolves its own explicit tenant connection from a
+// :code segment in the URL (mirrors POST /api/auth/login), so it never
+// touches the ambient proxy or depends on any tenant context existing.
+app.use('/api/public/payroll-sign', require('./routes/publicPayroll'));
+
 // Branch verification endpoint must be public for login page
 const bcrypt = require('bcrypt');
 const { User } = require('./models');

@@ -22,6 +22,7 @@ const PlatformUsers = lazyWithRetry(() => import('./pages/platform/PlatformUsers
 
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
+const PayrollSign = lazyWithRetry(() => import('./pages/public/PayrollSign'));
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const PatientVisitsHistory = lazyWithRetry(() => import('./pages/PatientVisitsHistory'));
 const PatientsBill = lazyWithRetry(() => import('./pages/PatientsBill'));
@@ -242,6 +243,13 @@ const AppRoutes = () => {
           <ResetPassword />
         </PublicRoute>
       } />
+      {/* Not wrapped in PublicRoute — that redirects away when a user IS
+          logged in, which is wrong here: the admin who just generated this
+          QR code, testing it or having an employee borrow their already
+          -logged-in phone, must still see the actual signing page, not get
+          bounced to the dashboard. No ProtectedRoute either — the whole
+          point is an employee with no account can open this. */}
+      <Route path="/payroll-sign/:code/:token" element={<PayrollSign />} />
       {/* No /setup-password route: SetupPassword needs an email and a completion
           callback, and the real first-time-login flow renders it from Login.tsx
           with both (Login.tsx:167). Routed standalone it received neither, so

@@ -4,12 +4,13 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge, LoadingState, type StatusBadgeTone } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import * as docTemplate from '@/utils/documentTemplate';
-import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check, FileSpreadsheet } from 'lucide-react';
+import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check, FileSpreadsheet, QrCode, Copy, Clock } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
@@ -37,6 +38,9 @@ export default function PayrollRunDetail() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [payingLineId, setPayingLineId] = useState<string | null>(null);
+  const [qrLine, setQrLine] = useState<any>(null);
+  const [qrData, setQrData] = useState<{ token: string; path: string; qr_data_url: string } | null>(null);
+  const [generatingQr, setGeneratingQr] = useState(false);
 
   const fetchRun = async () => {
     setLoading(true);
@@ -109,7 +113,10 @@ export default function PayrollRunDetail() {
     } catch (e) { toast.error('Network error'); } finally { setBusy(false); }
   };
 
-  const handlePayLine = async (line: any) => {
+  // The admin's own fallback for when handing someone a QR code isn't
+  // practical (no phone on hand, etc.) — still available from inside the
+  // QR dialog. This is the same immediate pay-and-post action as before.
+  const handleManualPayLine = async (line: any) => {
     if (payingLineId || !run) return;
     if (!confirm(`Pay ${line.first_name} ${line.last_name} — ${line.currency} ${parseFloat(line.net_pay).toFixed(2)} from ${run.payment_account_name}?`)) return;
     setPayingLineId(line.id);
@@ -117,6 +124,7 @@ export default function PayrollRunDetail() {
       const res = await authFetch(`/api/hr/payroll/runs/${run.id}/lines/${line.id}/pay`, { method: 'POST' });
       if (res.ok) {
         toast.success(`${line.first_name} ${line.last_name} paid`);
+        setQrLine(null); setQrData(null);
         fetchRun();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -124,6 +132,58 @@ export default function PayrollRunDetail() {
       }
     } catch (e) { toast.error('Network error'); } finally { setPayingLineId(null); }
   };
+
+  // Clicking "Pay" on an employee generates a one-time QR code instead of
+  // paying immediately — the employee scans it on their own phone, confirms
+  // their employee number, reviews their pay, and signs on-screen. That
+  // submission (routes/publicPayroll.js) is what actually pays the line.
+  const handleOpenQrPay = async (line: any) => {
+    if (!run || generatingQr) return;
+    setQrLine(line);
+    setQrData(null);
+    setGeneratingQr(true);
+    try {
+      const res = await authFetch(`/api/hr/payroll/runs/${run.id}/lines/${line.id}/signing-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin: window.location.origin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Failed to generate signing link'); setQrLine(null); return; }
+      setQrData(data);
+    } catch (e) {
+      toast.error('Network error');
+      setQrLine(null);
+    } finally {
+      setGeneratingQr(false);
+    }
+  };
+
+  const copySigningLink = () => {
+    if (!qrData) return;
+    navigator.clipboard.writeText(`${window.location.origin}${qrData.path}`)
+      .then(() => toast.success('Link copied'))
+      .catch(() => toast.error('Could not copy link'));
+  };
+
+  // While the dialog is open, poll for the employee having signed — this
+  // page's own state doesn't otherwise change until an explicit refresh.
+  useEffect(() => {
+    if (!qrLine || !run) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await authFetch(`/api/hr/payroll/runs/${run.id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const updatedLine = (data.lines || []).find((l: any) => l.id === qrLine.id);
+        if (updatedLine?.status === 'paid') {
+          toast.success(`${qrLine.first_name} ${qrLine.last_name} signed and was paid`);
+          setQrLine(null); setQrData(null);
+          setRun(data);
+        }
+      } catch (e) { /* keep polling */ }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [qrLine, run?.id]);
 
   const [downloadingSheet, setDownloadingSheet] = useState(false);
   const handleDownloadSheet = async () => {
@@ -338,8 +398,8 @@ export default function PayrollRunDetail() {
                   render: (_v, l) => (
                     <div className="flex items-center justify-center gap-1">
                       {run.status === 'approved' && l.status !== 'paid' && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handlePayLine(l)} disabled={payingLineId === l.id || busy}>
-                          {payingLineId === l.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" /> Pay</>}
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handleOpenQrPay(l)} disabled={payingLineId === l.id || busy || (!!qrLine && qrLine.id !== l.id)}>
+                          <QrCode className="w-3.5 h-3.5 mr-1" /> Pay
                         </Button>
                       )}
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download Payslip"><Download className="w-3.5 h-3.5" /></Button>
@@ -352,6 +412,46 @@ export default function PayrollRunDetail() {
           </div>
         </div>
       </div>
+
+      <Dialog open={!!qrLine} onOpenChange={(o) => { if (!o) { setQrLine(null); setQrData(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><QrCode className="w-4 h-4" /> Scan to Sign &amp; Pay</DialogTitle>
+            <DialogDescription>
+              {qrLine && `${qrLine.first_name} ${qrLine.last_name} — ${qrLine.currency} ${parseFloat(qrLine.net_pay).toFixed(2)}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6 pt-2 space-y-4">
+            {generatingQr ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+            ) : qrData ? (
+              <>
+                <div className="flex justify-center">
+                  <img src={qrData.qr_data_url} alt="Scan to sign" className="w-56 h-56 border rounded-lg" />
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Have {qrLine?.first_name} scan this with their phone. They'll enter their employee number, review their pay, and sign on-screen — this line is marked paid automatically once they submit.
+                </p>
+                <div className="flex items-center gap-2 text-xs">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                  <span className="text-muted-foreground">Waiting for signature…</span>
+                </div>
+                <Button variant="outline" size="sm" className="w-full" onClick={copySigningLink}>
+                  <Copy className="w-3.5 h-3.5 mr-2" /> Copy Link
+                </Button>
+                <div className="pt-2 border-t">
+                  <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => qrLine && handleManualPayLine(qrLine)} disabled={payingLineId === qrLine?.id}>
+                    {payingLineId === qrLine?.id ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Clock className="w-3.5 h-3.5 mr-2" />}
+                    Or mark as paid manually (no QR)
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Could not generate a signing link.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

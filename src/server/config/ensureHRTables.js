@@ -113,14 +113,31 @@ async function ensureHRTables(sequelize) {
   // let a run be paid one employee at a time (each with their own GL entry)
   // instead of only ever all-at-once, so "who's been paid" is a real,
   // trackable state rather than implied by the whole run's status.
-  for (const col of ['status', 'paid_by', 'paid_at']) {
+  //
+  // signing_token/_created_at/signature_data/signed_at/_verify_attempts back
+  // the QR-code employee-signing flow (routes/publicPayroll.js): a token
+  // generated for one line, embedded in a QR code, scanned on the
+  // employee's own phone — no login, they confirm their identity with just
+  // their employee number, review their pay, then sign on-screen. The
+  // signature is stored as a base64 PNG and later embedded directly into
+  // the downloadable payroll sheet.
+  const payrollRunLineColumns = {
+    status: "VARCHAR(20) NOT NULL DEFAULT 'unpaid'",
+    paid_by: 'INTEGER',
+    paid_at: 'TIMESTAMPTZ',
+    signing_token: 'VARCHAR(64)',
+    signing_token_created_at: 'TIMESTAMPTZ',
+    signature_data: 'TEXT',
+    signed_at: 'TIMESTAMPTZ',
+    signature_verify_attempts: 'INTEGER NOT NULL DEFAULT 0',
+  };
+  for (const [col, def] of Object.entries(payrollRunLineColumns)) {
     try {
       const [[check]] = await sequelize.query(
         `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'payroll_run_lines' AND column_name = :col`,
         { replacements: { col } }
       );
       if (parseInt(check.cnt, 10) === 0) {
-        const def = col === 'status' ? "VARCHAR(20) NOT NULL DEFAULT 'unpaid'" : col === 'paid_by' ? 'INTEGER' : 'TIMESTAMPTZ';
         await sequelize.query(`ALTER TABLE payroll_run_lines ADD COLUMN ${col} ${def}`);
       }
     } catch (e) { /* best-effort column add */ }
@@ -354,6 +371,7 @@ async function ensureHRTables(sequelize) {
     ['payroll_runs_number_uniq_idx', 'CREATE UNIQUE INDEX payroll_runs_number_uniq_idx ON payroll_runs(run_number)'],
     ['payroll_run_lines_run_idx', 'CREATE INDEX payroll_run_lines_run_idx ON payroll_run_lines(payroll_run_id)'],
     ['payroll_run_lines_employee_idx', 'CREATE INDEX payroll_run_lines_employee_idx ON payroll_run_lines(employee_id)'],
+    ['payroll_run_lines_signing_token_uniq_idx', 'CREATE UNIQUE INDEX payroll_run_lines_signing_token_uniq_idx ON payroll_run_lines(signing_token)'],
     ['payroll_run_line_components_line_idx', 'CREATE INDEX payroll_run_line_components_line_idx ON payroll_run_line_components(payroll_run_line_id)'],
     ['salary_structures_clinic_idx', 'CREATE INDEX salary_structures_clinic_idx ON salary_structures(clinic_id)'],
     ['salary_structure_components_structure_idx', 'CREATE INDEX salary_structure_components_structure_idx ON salary_structure_components(salary_structure_id)'],

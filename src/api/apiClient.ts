@@ -50,6 +50,25 @@ export const authFetch = async (url: string, options: RequestInit = {}): Promise
   return response;
 };
 
+// Plain fetch for genuinely public, unauthenticated endpoints (e.g. the
+// employee payroll-signing flow). Reuses authFetch's base-URL resolution but
+// deliberately skips the auto-redirect-on-401: on a public endpoint a 401 is
+// an intentional "that value didn't match" business response (e.g. a wrong
+// employee number), not an expired admin session, and must never bounce a
+// logged-out employee to the internal /login page.
+export const publicFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  if (url.startsWith('/api') || url.startsWith('/health')) {
+    url = `${getProductionBase()}${url}`;
+  }
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+};
+
 // ── Base class ───────────────────────────────────────────────────────────────
 class BaseApiClient<T> {
   protected readonly endpoint: string;
