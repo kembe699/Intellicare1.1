@@ -405,14 +405,16 @@ export default function PayrollRunDetail() {
 
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <AdvancedDataTable<any>
-              data={run.lines || []}
+              data={(run.lines || []).map((l: any) => ({ ...l, employee_name: `${l.first_name} ${l.last_name}` }))}
               keyExtractor={(l) => l.id}
               loading={false}
               emptyMessage="No employees in this run"
+              searchable
+              searchPlaceholder="Search by employee name or ID..."
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
                 { key: 'employee_number', header: 'ID', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v}</span> },
-                { key: 'first_name', header: 'Employee', render: (_v, l) => `${l.first_name} ${l.last_name}` },
+                { key: 'employee_name', header: 'Employee', render: (v) => v },
                 { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
                 { key: 'gross_pay', header: 'Gross', align: 'right', render: (v, l) => <span className="font-mono">{docTemplate.formatCurrency(v, l.currency)}</span> },
                 { key: 'deductions_total', header: 'Deductions', align: 'right', render: (v, l) => <span className="font-mono text-amber-700">{docTemplate.formatCurrency(v, l.currency)}</span> },
