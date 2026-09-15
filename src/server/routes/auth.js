@@ -334,53 +334,6 @@ router.get('/verify', async (req, res) => {
 // were also dead here for the same reason as /verify-branch-access above —
 // index.js registers its own copies first. Removed.
 
-// Setup password endpoint for first-time users
-router.post('/setup-password', authLimiter, async (req, res) => {
-  try {
-    const { code, email, password } = req.body;
-
-    if (!code || !email || !password) {
-      return res.status(400).json({ error: 'Code, email, and password are required' });
-    }
-
-    const client = await Client.findOne({ where: { code: String(code).trim().toLowerCase() } });
-    if (!client) return res.status(404).json({ error: 'Unknown instance code' });
-    const { models } = await getTenantConnection(client.schema_name);
-
-    // Find user by email
-    const user = await models.User.findOne({
-      where: { email: email.toLowerCase() }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Security check: Only allow password setup if user doesn't have a password yet
-    if (user.password_hash) {
-      return res.status(403).json({
-        error: 'Password already set. Please use the "Forgot Password" option to reset your password.'
-      });
-    }
-
-    // Hash new password
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
-
-    // Update password and status
-    await user.update({
-      password_hash: passwordHash,
-      status: 'active',
-      password_set_at: new Date()
-    });
-
-    res.json({ message: 'Password set successfully' });
-  } catch (error) {
-    console.error('Setup password error:', error.message);
-    res.status(500).json({ error: 'Failed to setup password' });
-  }
-});
-
 // Change password endpoint
 router.post('/change-password', authLimiter, async (req, res) => {
   try {

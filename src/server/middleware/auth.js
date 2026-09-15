@@ -17,7 +17,6 @@ if (!JWT_SECRET) {
 // schemaName/tenant context at all and must never be checked against tenant data.
 const publicPaths = [
   '/auth/login',
-  '/auth/setup-password',
   '/auth/logout',
   '/status',
   '/lab-integration/receive',

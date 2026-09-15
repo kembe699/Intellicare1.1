@@ -250,10 +250,6 @@ const AppRoutes = () => {
           bounced to the dashboard. No ProtectedRoute either — the whole
           point is an employee with no account can open this. */}
       <Route path="/payroll-sign/:code/:token" element={<PayrollSign />} />
-      {/* No /setup-password route: SetupPassword needs an email and a completion
-          callback, and the real first-time-login flow renders it from Login.tsx
-          with both (Login.tsx:167). Routed standalone it received neither, so
-          visiting the URL directly threw on email.toLowerCase(). */}
       <Route path="/dashboard" element={
         <ProtectedRoute requiredPrivilege="pages.dashboard.view">
           <Dashboard />

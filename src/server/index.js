@@ -192,31 +192,6 @@ app.post('/api/auth/verify-branch-access', authLimiter, async (req, res) => {
   }
 });
 
-// Check if user has password endpoint (public - for first-time setup validation)
-app.post('/api/auth/check-user-password', authLimiter, async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    const user = await User.findOne({ where: { email: email.toLowerCase() } });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ 
-      success: true, 
-      hasPassword: !!user.password_hash 
-    });
-  } catch (error) {
-    console.error('Check user password error:', error);
-    res.status(500).json({ error: 'Failed to check user password' });
-  }
-});
-
 // Password reset endpoints must be public (before auth middleware) — which also means
 // there's no JWT yet to say which tenant this is for, so (like /login) they take the
 // instance `code` directly and resolve that tenant's own connection via getTenantConnection,

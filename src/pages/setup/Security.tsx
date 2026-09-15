@@ -604,7 +604,7 @@ const Security: React.FC = () => {
 
                 <div className="bg-card p-3 rounded-md">
                   <p className="text-xs text-muted-foreground">
-                    <strong>Note:</strong> The user will set their password when they first log in. Default password is <code>password123</code>.
+                    <strong>Note:</strong> A random temporary password is generated for this account. You'll see it once, right after creating the user — hand it over to them then, since it can't be shown again.
                   </p>
                 </div>
 

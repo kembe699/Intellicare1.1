@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import SetupPassword from './SetupPassword';
 import { Loader2, Eye, EyeOff, Shield, Lock, CheckCircle2, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,9 +14,6 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
-  const [showFirstTimeLogin, setShowFirstTimeLogin] = useState(false);
-  const [pendingUserEmail, setPendingUserEmail] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordCode, setForgotPasswordCode] = useState('');
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
@@ -99,73 +95,6 @@ const Login: React.FC = () => {
     }
   };
 
-  const handlePasswordSetupComplete = () => {
-    setShowPasswordSetup(false);
-    setShowFirstTimeLogin(false);
-    setPendingUserEmail('');
-    setEmail('');
-    setPassword('');
-    toast.success('Account setup complete! Please sign in with your new password.');
-  };
-
-  const handleFirstTimeLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
-    setError('');
-    setLoading(true);
-
-    try {
-      // Validate email by checking if user already has a password
-      const response = await fetch('/api/auth/check-user-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.toLowerCase() }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('Email not found. Please contact your administrator.');
-          toast.error('Email not found. Please contact your administrator.');
-        } else {
-          setError(data.error || 'Failed to verify email');
-          toast.error(data.error || 'Failed to verify email');
-        }
-        setLoading(false);
-        return;
-      }
-
-      // Check if user already has a password
-      if (data.hasPassword) {
-        setError('User already setup. Please login with your existing password.');
-        toast.error('User already setup. Please login with your existing password.');
-        setTimeout(() => {
-          setShowFirstTimeLogin(false);
-          setEmail('');
-        }, 2000);
-        setLoading(false);
-        return;
-      }
-
-      // User doesn't have a password, proceed to password setup
-      setPendingUserEmail(email);
-      setShowPasswordSetup(true);
-      setShowFirstTimeLogin(false);
-      setLoading(false);
-    } catch (err: any) {
-      console.error('Error in first time login:', err);
-      setError('Failed to proceed. Please try again.');
-      toast.error('Network error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (showPasswordSetup) {
-    return <SetupPassword email={pendingUserEmail} onComplete={handlePasswordSetupComplete} />;
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary/5 to-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -214,82 +143,7 @@ const Login: React.FC = () => {
             </div>
           )}
 
-          {showFirstTimeLogin ? (
-            <form onSubmit={handleFirstTimeLogin} className="space-y-5">
-              <div className="bg-gradient-to-r from-primary/5 to-indigo-50 p-5 rounded-xl border border-primary/30">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground mb-1">First Time Setup</p>
-                    <p className="text-xs text-primary leading-relaxed">
-                      Enter the email address provided by your administrator to create your secure password.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
-                  Email Address
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@hospital.com"
-                  required
-                  autoFocus
-                  className="h-12 pl-4 pr-4 text-base border-slate-300 rounded-lg"
-                  style={{ 
-                    '--focus-border-color': '#3D8A97',
-                    '--focus-ring-color': 'rgba(61, 138, 151, 0.2)'
-                  } as React.CSSProperties}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#3D8A97';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '';
-                    e.currentTarget.style.boxShadow = '';
-                  }}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-12 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 bg-primary"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="w-5 h-5 mr-2" />
-                    Continue Setup
-                  </>
-                )}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-12 border-2 border-slate-300 hover:bg-slate-50 font-medium rounded-lg"
-                onClick={() => {
-                  setShowFirstTimeLogin(false);
-                  setEmail('');
-                  setError('');
-                }}
-                disabled={loading}
-              >
-                Back to Login
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleSignIn} className="space-y-5">
+          <form onSubmit={handleSignIn} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="code" className="text-sm font-semibold text-slate-700">
                   Instance Code
@@ -397,46 +251,8 @@ const Login: React.FC = () => {
                 )}
               </Button>
             </form>
-          )}
 
           <div className="mt-8 space-y-4">
-            <div className="text-center">
-              {showFirstTimeLogin ? (
-                <p className="text-sm text-slate-600">
-                  Already have a password?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowFirstTimeLogin(false);
-                      setEmail('');
-                      setError('');
-                    }}
-                    className="font-semibold hover:underline text-primary"
-                    disabled={loading}
-                  >
-                    Sign in here
-                  </button>
-                </p>
-              ) : (
-                <p className="text-sm text-slate-600">
-                  First time user?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowFirstTimeLogin(true);
-                      setEmail('');
-                      setPassword('');
-                      setError('');
-                    }}
-                    className="font-semibold hover:underline text-primary"
-                    disabled={loading}
-                  >
-                    Setup Account
-                  </button>
-                </p>
-              )}
-            </div>
-
             <div className="pt-6 border-t border-slate-200">
               <div className="flex items-center justify-center gap-6 text-xs text-slate-500">
                 <div className="flex items-center gap-1.5">
