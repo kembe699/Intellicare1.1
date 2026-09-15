@@ -43,10 +43,15 @@ async function buildTenantConnection(schemaName) {
   // roles/privileges/role_privileges tables, ensured per-tenant. The old
   // boot-time IIFE in routes/roles.js only ever ran against the single
   // default connection, never a real tenant schema — this is the actual
-  // per-tenant equivalent. Table-existence only, no seeding (that's
-  // reconcileRolePrivileges.js's job) — non-blocking for the same reason.
+  // per-tenant equivalent. Non-blocking for the same reason — but chained
+  // (not fired in parallel) into the catalog seed below, which queries
+  // these same tables and would fail outright on a brand new tenant where
+  // they don't exist until this create step actually finishes.
   const { ensureRolesTables } = require('./config/ensureRolesTables');
-  ensureRolesTables(sequelize).catch(() => {});
+  const { ensurePrivilegesCatalog } = require('./config/ensurePrivilegesCatalog');
+  ensureRolesTables(sequelize)
+    .then(() => ensurePrivilegesCatalog(sequelize))
+    .catch(() => {});
 
   // In-app notifications table, ensured per-tenant the same way.
   const { ensureNotificationsTable } = require('./config/ensureNotificationsTable');
