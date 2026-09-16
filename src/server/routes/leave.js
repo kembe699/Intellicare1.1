@@ -149,7 +149,38 @@ router.post('/requests', authorize('hr.leave.write'), async (req, res) => {
     );
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
+    const [[leaveType]] = await sequelize.query(
+      `SELECT id, name, default_annual_days FROM leave_types WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: b.leave_type_id, clinicId } }
+    );
+    if (!leaveType) return res.status(404).json({ error: 'Leave type not found' });
+
     const days = calcDays(b.start_date, b.end_date);
+
+    // A 0-day entitlement (e.g. the default "Unpaid Leave" type) means
+    // "no fixed annual allowance", not "always over the limit" — that check
+    // only makes sense for a type that actually carries a cap. Matched to
+    // the request's own start year, same as the balance shown on the
+    // employee's leave summary, so what the requester sees lines up with
+    // what this enforces.
+    const entitled = parseFloat(leaveType.default_annual_days) || 0;
+    if (entitled > 0) {
+      const year = new Date(`${b.start_date}T00:00:00Z`).getUTCFullYear();
+      const [[takenRow]] = await sequelize.query(`
+        SELECT COALESCE(SUM(days), 0) AS taken_days
+        FROM leave_requests
+        WHERE employee_id = :employeeId AND leave_type_id = :leaveTypeId AND status = 'approved'
+          AND EXTRACT(YEAR FROM start_date) = :year
+      `, { replacements: { employeeId: b.employee_id, leaveTypeId: b.leave_type_id, year } });
+      const taken = parseFloat(takenRow.taken_days) || 0;
+      const remaining = Math.max(entitled - taken, 0);
+      if (days > remaining) {
+        return res.status(400).json({
+          error: `This request is for ${days} day(s) of ${leaveType.name}, but only ${remaining} day(s) remain of the ${entitled}-day annual entitlement for ${year}.`,
+        });
+      }
+    }
+
     const id = uuidv4();
     await sequelize.query(`
       INSERT INTO leave_requests (id, clinic_id, branch_id, employee_id, leave_type_id, start_date, end_date, days, reason, status, requested_by, notes, created_at, updated_at)
