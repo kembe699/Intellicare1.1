@@ -1544,6 +1544,11 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         unitPrice: splitPaidEntryForReceipt.unitPrice,
         totalPrice: splitPaidEntryForReceipt.totalPrice,
         department: splitPaidEntryForReceipt.department || 'General',
+        // Set on the line item at add-time (BillDetails.tsx's Add Item discount
+        // control) and stored verbatim in bill.services — was never carried
+        // through to the receipt, so a discounted line printed with no sign a
+        // discount had been applied at all, just a lower price.
+        discountLabel: splitPaidEntryForReceipt.discountLabel || null,
       }];
     } else if (paymentData.paidServiceIndexes && paymentData.paidServiceIndexes.length > 0) {
       try {
@@ -1558,7 +1563,8 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
             quantity: service.quantity || 1,
             unitPrice: service.unitPrice || service.unit_price || service.price || 0,
             totalPrice: service.totalPrice || service.total_price || service.price || 0,
-            department: service.department || 'General'
+            department: service.department || 'General',
+            discountLabel: service.discountLabel || null,
           } : null;
         }).filter(Boolean);
       } catch (error) {

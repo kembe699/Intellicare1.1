@@ -36,6 +36,7 @@ interface Receipt {
     unitPrice: number;
     totalPrice: number;
     department: string;
+    discountLabel?: string | null;
   }>;
   notes?: string;
   from_lease: boolean;
@@ -426,7 +427,7 @@ export default function Receipts() {
                     billDate: selectedReceipt.payment_date,
                     services: displayServices.map(s => ({
                       id: String(s.index), serviceName: s.serviceName, quantity: s.quantity,
-                      unitPrice: s.unitPrice, totalPrice: s.totalPrice,
+                      unitPrice: s.unitPrice, totalPrice: s.totalPrice, discountLabel: s.discountLabel,
                     })),
                   }}
                   payment={{

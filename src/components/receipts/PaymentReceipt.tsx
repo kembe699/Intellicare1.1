@@ -23,6 +23,7 @@ interface PaymentReceiptProps {
       totalPrice?: number;
       total_price?: number;
       price?: number;
+      discountLabel?: string | null;
     }>;
   };
   payment: {
@@ -133,6 +134,9 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
               <span style={{ fontSize: '10px', color: '#555' }}>{qty} x {fmt(unitPrice)}</span>
               <span style={{ fontSize: '11px', fontWeight: 700 }}>{fmt(total)}</span>
             </div>
+            {svc.discountLabel && (
+              <div style={{ fontSize: '10px', color: '#555' }}>Discount applied: {svc.discountLabel}</div>
+            )}
           </div>
         );
       }) : (

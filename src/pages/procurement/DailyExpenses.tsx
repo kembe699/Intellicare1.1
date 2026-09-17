@@ -1101,6 +1101,10 @@ const DailyExpenses: React.FC = () => {
                       render: (_v, bill) => {
                         const approvalCount = (billApprovals[bill.id] || []).length;
                         const fullyApproved = approvalCount >= 3;
+                        // payment_status is the authoritative field, but a stale/missing
+                        // value shouldn't leave Pay clickable on a bill with nothing left
+                        // owed — balance_due backs it up.
+                        const isFullyPaid = bill.payment_status === 'paid' || parseFloat(String(bill.balance_due ?? 0)) <= 0.01;
                         return (
                           <div className="flex items-center gap-1">
                             {!fullyApproved && (
@@ -1108,12 +1112,14 @@ const DailyExpenses: React.FC = () => {
                                 Approve
                               </Button>
                             )}
-                            <Button size="sm" variant={fullyApproved ? 'default' : 'ghost'} disabled={!fullyApproved}
-                              className={`h-7 text-xs px-2 ${!fullyApproved ? 'opacity-40 cursor-not-allowed' : ''}`}
-                              onClick={() => fullyApproved && openPayBill(bill)}
-                              title={fullyApproved ? 'Pay this bill' : 'Requires 3 approvals before payment'}>
-                              Pay
-                            </Button>
+                            {!isFullyPaid && (
+                              <Button size="sm" variant={fullyApproved ? 'default' : 'ghost'} disabled={!fullyApproved}
+                                className={`h-7 text-xs px-2 ${!fullyApproved ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                onClick={() => fullyApproved && openPayBill(bill)}
+                                title={fullyApproved ? 'Pay this bill' : 'Requires 3 approvals before payment'}>
+                                Pay
+                              </Button>
+                            )}
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Download Voucher" onClick={() => downloadBillVoucher(bill)}>
                               <Download className="w-3.5 h-3.5" />
                             </Button>
