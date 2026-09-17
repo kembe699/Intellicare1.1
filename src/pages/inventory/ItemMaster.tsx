@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -264,14 +265,17 @@ export default function ItemMaster() {
       }
       const created = await res.json();
 
-      if (formData.initial_quantity > 0) {
+      // Opening stock only — an edit can no longer add a batch receipt from
+      // this form (see the Stock section above); that goes through
+      // Transactions now, which formData.initial_quantity always stays 0 for
+      // in the edit view anyway, but gating on !editingItem here too means
+      // that stays true regardless of what this form's state happens to be.
+      if (!editingItem && formData.initial_quantity > 0) {
         const today = new Date().toISOString().split('T')[0];
-        const itemId = editingItem ? editingItem.id : created.id;
-        const prefix = editingItem ? 'RECV' : 'OPEN';
         await authFetch('/api/inventory/batches', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
           body: JSON.stringify({
-            clinic_id: clinicId, item_id: itemId, batch_number: `${prefix}-${formData.item_code}-${today}`,
+            clinic_id: clinicId, item_id: created.id, batch_number: `OPEN-${formData.item_code}-${today}`,
             quantity_received: formData.initial_quantity, unit_cost: formData.current_unit_cost || 0,
             cost_currency: formData.cost_currency, location_id: formData.location_id || null,
             expiry_date: formData.expiry_date || null, receipt_date: today, notes: 'Opening stock',
@@ -511,33 +515,58 @@ export default function ItemMaster() {
                     <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
                       <p className={`text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 ${editingItem ? 'text-emerald-700' : 'text-primary'}`}>
                         <Layers className="w-3.5 h-3.5" />
-                        {editingItem ? `Add Stock Receipt${formData.initial_quantity > 0 ? ` — +${formData.initial_quantity} units` : ' (optional)'}` : 'Opening Stock'}
+                        {editingItem ? 'Stock' : 'Opening Stock'}
                       </p>
-                      {editingItem && (
-                        <p className="text-[11px] text-muted-foreground">Current on hand: <span className="font-semibold text-foreground">{editingItem.quantity_on_hand ?? 0} {editingItem.unit_of_measure}</span>. Enter a quantity to add a new batch receipt.</p>
+                      {editingItem ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <p className="text-[11px] font-medium text-muted-foreground">Current Quantity</p>
+                              <p className="mt-0.5 text-sm font-semibold text-foreground">{editingItem.quantity_on_hand ?? 0} {editingItem.unit_of_measure}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Nearest Expiry</p>
+                              <p className="mt-0.5 text-sm font-semibold text-foreground">{editingItem.nearest_expiry ? new Date(editingItem.nearest_expiry).toLocaleDateString() : '—'}</p>
+                            </div>
+                          </div>
+                          {/* Stock quantity is no longer editable from here — it used to let a
+                              quantity typed into this form silently create a batch receipt,
+                              bypassing the Transactions page (and its own record of who
+                              received what, when). Editing an item now only edits the item's
+                              own fields; stock changes go through Transactions instead. */}
+                          <p className="text-[11px] text-muted-foreground pt-1.5 mt-1 border-t">
+                            To update stock, go to{' '}
+                            <Link to="/inventory/transactions" className="font-medium text-primary hover:underline">
+                              Inventory Transactions
+                            </Link>.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-medium text-muted-foreground">Quantity on Hand</label>
+                              <Input type="number" min="0" value={formData.initial_quantity} onChange={e => setFormData({ ...formData, initial_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Expiry Date</label>
+                              <Input type="date" value={formData.expiry_date} onChange={e => setFormData({ ...formData, expiry_date: e.target.value })} className="mt-0.5 h-8 text-xs" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> Storage Location</label>
+                            <Combobox
+                              options={[{ value: '', label: 'No specific location' }, ...locations.map((l: any) => ({ value: String(l.id), label: `${l.location_name}${l.location_code ? ` (${l.location_code})` : ''}` }))]}
+                              value={formData.location_id}
+                              onChange={v => setFormData({ ...formData, location_id: v })}
+                              placeholder="No specific location"
+                              searchPlaceholder="Search locations..."
+                              className="mt-0.5 h-8 text-xs"
+                            />
+                            {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-0.5">No locations set up yet — add one in Stock Locations.</p>}
+                          </div>
+                        </>
                       )}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[11px] font-medium text-muted-foreground">{editingItem ? 'Quantity to Add' : 'Quantity on Hand'}</label>
-                          <Input type="number" min="0" value={formData.initial_quantity} onChange={e => setFormData({ ...formData, initial_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Expiry Date</label>
-                          <Input type="date" value={formData.expiry_date} onChange={e => setFormData({ ...formData, expiry_date: e.target.value })} className="mt-0.5 h-8 text-xs" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> Storage Location</label>
-                        <Combobox
-                          options={[{ value: '', label: 'No specific location' }, ...locations.map((l: any) => ({ value: String(l.id), label: `${l.location_name}${l.location_code ? ` (${l.location_code})` : ''}` }))]}
-                          value={formData.location_id}
-                          onChange={v => setFormData({ ...formData, location_id: v })}
-                          placeholder="No specific location"
-                          searchPlaceholder="Search locations..."
-                          className="mt-0.5 h-8 text-xs"
-                        />
-                        {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-0.5">No locations set up yet — add one in Stock Locations.</p>}
-                      </div>
                     </div>
                   </div>
                 </div>

@@ -142,7 +142,13 @@ router.get('/items/:id', authorize('inventory.read'), async (req, res) => {
         SELECT * FROM inventory_batches WHERE item_id = :id AND status IN ('active','partial_use') ORDER BY expiry_date ASC
       `, { replacements: { id: req.params.id } });
       item.batches = batches;
-    } catch (e) { item.batches = []; }
+      // Same definition the /items list endpoint uses (status = 'active' only,
+      // batches already sorted by expiry_date ASC above) — this endpoint was
+      // missing the field entirely, so a page that opened an item via its
+      // detail view (which re-fetches from here) rather than straight off a
+      // list row silently lost the item's nearest expiry.
+      item.nearest_expiry = batches.find(b => b.status === 'active' && b.expiry_date)?.expiry_date || null;
+    } catch (e) { item.batches = []; item.nearest_expiry = null; }
 
     // Get recent transactions
     try {
