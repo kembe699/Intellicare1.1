@@ -1,5 +1,5 @@
 const express = require('express');
-const { Customer, Quotation, QuotationInvoice, sequelize } = require('../../models/platform');
+const { Customer, Quotation, QuotationInvoice, QuotationInvoicePayment, sequelize } = require('../../models/platform');
 const { authenticatePlatformAdmin } = require('../../middleware/platformAuth');
 
 const router = express.Router();
@@ -89,7 +89,9 @@ router.get('/:id', async (req, res) => {
       include: [
         { model: Customer, as: 'customer' },
         { model: Quotation, as: 'quotation', attributes: ['id', 'quote_number', 'deployment_model'] },
+        { model: QuotationInvoicePayment, as: 'payments' },
       ],
+      order: [[{ model: QuotationInvoicePayment, as: 'payments' }, 'paid_at', 'DESC']],
     });
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     res.json(invoice);
@@ -101,26 +103,40 @@ router.get('/:id', async (req, res) => {
 
 // Records a payment against the invoice's outstanding balance — the only
 // way amount_paid/status change, so they can never be set to something
-// inconsistent with each other (e.g. "paid" with money still owed).
+// inconsistent with each other (e.g. "paid" with money still owed). Also
+// writes a QuotationInvoicePayment row so the invoice detail page has an
+// actual history (date, amount, who recorded it), not just a running total.
 router.post('/:id/payments', async (req, res) => {
+  const t = await sequelize.transaction();
   try {
-    const invoice = await QuotationInvoice.findByPk(req.params.id);
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const invoice = await QuotationInvoice.findByPk(req.params.id, { transaction: t });
+    if (!invoice) { await t.rollback(); return res.status(404).json({ error: 'Invoice not found' }); }
 
     const amount = Number(req.body.amount);
-    if (!amount || amount <= 0) return res.status(400).json({ error: 'Enter a payment amount greater than zero' });
+    if (!amount || amount <= 0) { await t.rollback(); return res.status(400).json({ error: 'Enter a payment amount greater than zero' }); }
 
     const currentPaid = Number(invoice.amount_paid);
     const total = Number(invoice.total_amount);
     const balance = total - currentPaid;
     if (amount > balance + 0.005) { // small epsilon for decimal rounding
+      await t.rollback();
       return res.status(400).json({ error: `Amount exceeds the balance due (${balance.toFixed(2)})` });
     }
 
     const newPaid = Math.min(total, currentPaid + amount);
-    await invoice.update({ amount_paid: newPaid, status: deriveStatus(newPaid, total) });
+    await invoice.update({ amount_paid: newPaid, status: deriveStatus(newPaid, total) }, { transaction: t });
+    await QuotationInvoicePayment.create({
+      invoice_id: invoice.id,
+      amount,
+      paid_at: new Date(),
+      recorded_by_admin_id: req.platformAdmin?.id || null,
+      recorded_by_name: req.platformAdmin?.name || null,
+      notes: req.body.notes || null,
+    }, { transaction: t });
+    await t.commit();
     res.json(invoice);
   } catch (error) {
+    await t.rollback();
     console.error('Record invoice payment error:', error);
     res.status(500).json({ error: 'Failed to record payment' });
   }

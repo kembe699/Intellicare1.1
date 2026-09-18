@@ -448,7 +448,7 @@ const PlatformQuotationDetail: React.FC = () => {
               <div className="pt-4 border-t border-border space-y-2">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Invoice</p>
                 {quotation.invoice ? (
-                  <Link to="/platform-admin/invoices">
+                  <Link to={`/platform-admin/invoices/${quotation.invoice.id}`}>
                     <Button variant="outline" className="w-full gap-1.5">
                       <CreditCard className="w-3.5 h-3.5" /> View Invoice ({quotation.invoice.invoice_number})
                     </Button>

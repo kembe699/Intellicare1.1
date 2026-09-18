@@ -24,6 +24,7 @@ const PlatformQuotations = lazyWithRetry(() => import('./pages/platform/Platform
 const PlatformQuotationDetail = lazyWithRetry(() => import('./pages/platform/PlatformQuotationDetail'));
 const PlatformCompanyProfile = lazyWithRetry(() => import('./pages/platform/PlatformCompanyProfile'));
 const PlatformInvoices = lazyWithRetry(() => import('./pages/platform/PlatformInvoices'));
+const PlatformInvoiceDetail = lazyWithRetry(() => import('./pages/platform/PlatformInvoiceDetail'));
 
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
@@ -253,6 +254,9 @@ const AppRoutes = () => {
       } />
       <Route path="/platform-admin/invoices" element={
         <ProtectedPlatformRoute><PlatformInvoices /></ProtectedPlatformRoute>
+      } />
+      <Route path="/platform-admin/invoices/:id" element={
+        <ProtectedPlatformRoute><PlatformInvoiceDetail /></ProtectedPlatformRoute>
       } />
       <Route path="/login" element={
         <PublicRoute>

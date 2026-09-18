@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { platformFetch } from '@/api/platformApiClient';
 import { PlatformAppLayout } from '@/components/layout/PlatformAppLayout';
 import { PageHeader } from '@/components/common/PageHeader/PageHeader';
@@ -13,8 +14,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { CreditCard, FileText, Loader2, Search } from 'lucide-react';
+import { CreditCard, Download, Eye, FileText, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildInvoiceHTML } from '@/utils/invoiceTemplate';
+import { downloadDocumentAsPdf } from '@/utils/documentTemplate';
 
 interface InvoiceRow {
   id: number;
@@ -51,6 +54,7 @@ const PlatformInvoices: React.FC = () => {
   const [payTarget, setPayTarget] = useState<InvoiceRow | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [paying, setPaying] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -85,6 +89,26 @@ const PlatformInvoices: React.FC = () => {
   };
 
   const balanceOf = (inv: InvoiceRow) => Number(inv.total_amount) - Number(inv.amount_paid);
+
+  const handleDownload = async (inv: InvoiceRow) => {
+    setDownloadingId(inv.id);
+    try {
+      const [detailRes, companyRes] = await Promise.all([
+        platformFetch(`/quotation-invoices/${inv.id}`),
+        platformFetch('/company-profile'),
+      ]);
+      const detail = await detailRes.json();
+      const company = await companyRes.json();
+      if (!detailRes.ok) throw new Error(detail.error || 'Failed to load invoice');
+      if (!companyRes.ok) throw new Error(company.error || 'Failed to load company profile');
+      const html = buildInvoiceHTML(detail, detail.customer, detail.payments, company);
+      await downloadDocumentAsPdf(html, `${detail.invoice_number}-${detail.customer.name}`);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +190,13 @@ const PlatformInvoices: React.FC = () => {
                   <TableCell className={balance > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}>{money(balance, inv.currency)}</TableCell>
                   <TableCell><Badge variant={STATUS_VARIANT[inv.status]}>{STATUS_LABEL[inv.status]}</Badge></TableCell>
                   <TableCell className="text-muted-foreground text-sm">{new Date(inv.issue_date).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right space-x-1.5 whitespace-nowrap">
+                    <Link to={`/platform-admin/invoices/${inv.id}`}>
+                      <Button variant="outline" size="sm" title="View invoice"><Eye className="w-3.5 h-3.5" /></Button>
+                    </Link>
+                    <Button variant="outline" size="sm" title="Download PDF" onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id}>
+                      {downloadingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    </Button>
                     {inv.status !== 'paid' && (
                       <Button size="sm" onClick={() => openPay(inv)} className="gap-1.5">
                         <CreditCard className="w-3.5 h-3.5" /> Record Payment

@@ -9,6 +9,7 @@ const Customer = require('./Customer')(platformSequelize);
 const Quotation = require('./Quotation')(platformSequelize);
 const CompanyProfile = require('./CompanyProfile')(platformSequelize);
 const QuotationInvoice = require('./QuotationInvoice')(platformSequelize);
+const QuotationInvoicePayment = require('./QuotationInvoicePayment')(platformSequelize);
 
 Client.hasMany(Invoice, { foreignKey: 'client_id', as: 'invoices' });
 Invoice.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
@@ -22,6 +23,8 @@ Quotation.hasOne(QuotationInvoice, { foreignKey: 'quotation_id', as: 'invoice' }
 QuotationInvoice.belongsTo(Quotation, { foreignKey: 'quotation_id', as: 'quotation' });
 Customer.hasMany(QuotationInvoice, { foreignKey: 'customer_id', as: 'quotationInvoices' });
 QuotationInvoice.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
+QuotationInvoice.hasMany(QuotationInvoicePayment, { foreignKey: 'invoice_id', as: 'payments' });
+QuotationInvoicePayment.belongsTo(QuotationInvoice, { foreignKey: 'invoice_id', as: 'invoice' });
 
 async function initializePlatformDatabase() {
   await platformSequelize.authenticate();
@@ -82,5 +85,6 @@ module.exports = {
   Quotation,
   CompanyProfile,
   QuotationInvoice,
+  QuotationInvoicePayment,
   initializePlatformDatabase,
 };
