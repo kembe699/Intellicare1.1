@@ -84,18 +84,18 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
     .qt-info-box h3 { margin: 0 0 6px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #1A7A75; }
     .qt-info-row { font-size: 11px; line-height: 1.6; }
     .qt-info-label { color: #64748B; }
-    .qt-features { list-style: none; margin: 0; padding: 0; }
-    .qt-features li { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
-    .qt-features li::before { content: '✓'; color: #1A7A75; font-weight: 700; flex-shrink: 0; }
+    .qt-features { list-style: none; margin: 0; padding: 0; counter-reset: feat; }
+    .qt-features li { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 11px; counter-increment: feat; }
+    .qt-features li::before { content: counter(feat) '.'; color: #1A7A75; font-weight: 700; flex-shrink: 0; min-width: 16px; }
     .qt-feature-name { font-weight: 600; color: #0F172A; }
     .qt-feature-desc { color: #64748B; }
     .qt-scope-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px; }
     .qt-scope-item { background: #F1F5F9; border-radius: 6px; padding: 10px 12px; text-align: center; }
     .qt-scope-item .label { font-size: 9px; text-transform: uppercase; color: #64748B; letter-spacing: 0.5px; }
     .qt-scope-item .value { font-size: 13px; font-weight: 700; color: #0F172A; margin-top: 3px; }
-    .qt-total { margin-top: 22px; padding: 16px 20px; background: #1A7A75; border-radius: 8px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
-    .qt-total .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
-    .qt-total .value { font-size: 22px; font-weight: 700; }
+    .qt-total { margin-top: 24px; padding-top: 14px; border-top: 2px solid #1A7A75; display: flex; justify-content: flex-end; align-items: baseline; gap: 16px; }
+    .qt-total .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #64748B; font-weight: 600; }
+    .qt-total .value { font-size: 24px; font-weight: 700; color: #1A7A75; }
     .qt-notes-box { margin-top: 16px; padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 11px; }
     .qt-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; }
     .qt-col h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: #0F172A; }
@@ -103,8 +103,6 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
     .qt-col p, .qt-col li { font-size: 10.5px; line-height: 1.55; color: #334155; }
     .qt-col ul, .qt-col ol { margin: 4px 0; padding-left: 18px; }
     .qt-footer { position: absolute; bottom: 10mm; left: 16mm; right: 16mm; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; }
-    .qt-notes-page ol { padding-left: 20px; }
-    .qt-notes-page li { font-size: 11px; line-height: 1.7; color: #334155; margin-bottom: 8px; }
     .qt-closing { margin-top: 24px; font-size: 10px; color: #94a3b8; font-style: italic; }
   `;
 
@@ -207,6 +205,14 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
           <p>i) Upon expiry of the first year of deployment, the client is required to subscribe for the service annually at <strong>30% of the Total Amount Payable</strong>. The ASF is renewable and payable annually.</p>
           <p>ii) The Annual Subscription Fee covers the following:</p>
           <ol>${asfCoverage.map((c) => `<li>${c}</li>`).join('')}</ol>
+
+          <h4>Notes</h4>
+          <ol>
+            <li>For cloud deployment, the application requires a stable and reliable internet connection.</li>
+            <li>The hardware required for the queuing system is charged separately (optional).</li>
+            <li>Data migration is charged separately.</li>
+            <li>Value quoted here only applies to the standard application. Any customization required by the end-user shall be charged separately.</li>
+          </ol>
         </div>
 
         <div class="qt-col">
@@ -232,22 +238,7 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
           <p><strong>${quotation.training_hours} Hours</strong></p>
         </div>
       </div>
-      ${footer(2)}
-    </div>
-  `;
 
-  const page3 = `
-    <div class="qt-page qt-notes-page">
-      <div class="qt-section-title">Notes</div>
-      <ol>
-        <li>'No. of Concurrent Users' means the total number of users using the application at the same time (concurrently). This means you can still register more users on the application, but those accessing the system all at the same time may not exceed the concurrent users quoted here.</li>
-        <li>For cloud deployment, the application requires a stable and reliable internet connection.</li>
-        <li>The hardware required for the queuing system is charged separately (optional).</li>
-        <li>Prices may change from time to time.</li>
-        <li>Data migration is charged separately.</li>
-        <li>Value quoted here only applies to the standard application. Any customization required by the end-user shall be charged separately.</li>
-        <li>Customer is advised to have a comprehensive pre-purchase demo of the software to understand the scope of all the modules, functions, and features offered, including any limitations. ${company.company_name} does not guarantee the implementation of any customization or change request made by the customer unless it has been explicitly communicated in writing before any commitment by the customer.</li>
-      </ol>
       ${company.bank_name || company.bank_account_number ? `
         <div class="qt-section-title">Payment Details</div>
         <div class="qt-info-box" style="max-width: 360px;">
@@ -258,7 +249,7 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
         </div>
       ` : ''}
       <p class="qt-closing">This quotation is automatically generated by ${company.company_name}${company.website ? ` — ${company.website}` : ''}.</p>
-      ${footer(3)}
+      ${footer(2)}
     </div>
   `;
 
@@ -272,7 +263,6 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
 <body>
   ${page1}
   ${page2}
-  ${page3}
 </body>
 </html>`;
 }
