@@ -71,6 +71,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureInpatientConsultantSupport } = require('./config/ensureInpatientConsultantSupport');
   ensureInpatientConsultantSupport(sequelize).catch(() => {});
 
+  // inpatient_admissions.discharge_outcome (alive/dead/absconded), ensured
+  // per-tenant the same way.
+  const { ensureInpatientDischargeOutcome } = require('./config/ensureInpatientDischargeOutcome');
+  ensureInpatientDischargeOutcome(sequelize).catch(() => {});
+
   // Database-level backstop against double-booking a bed — see
   // ensureInpatientBedUniqueness.js and the bed-claim comment in
   // routes/inpatient.js for why this didn't actually exist before.

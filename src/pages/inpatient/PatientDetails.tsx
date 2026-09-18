@@ -54,6 +54,9 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info' |
 };
 const statusVariant = (status?: string) => STATUS_VARIANT[status || ''] || 'neutral';
 
+const OUTCOME_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = { alive: 'success', absconded: 'warning', dead: 'danger' };
+const OUTCOME_LABEL: Record<string, string> = { alive: 'Alive', dead: 'Deceased', absconded: 'Absconded' };
+
 export default function PatientDetails() {
   const { id: admissionId } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -64,7 +67,7 @@ export default function PatientDetails() {
   const [activeTab, setActiveTab] = useState('notes');
   const [dischargeOpen, setDischargeOpen] = useState(false);
   const [loadingBill, setLoadingBill] = useState(false);
-  const [dischargeData, setDischargeData] = useState({ discharge_reason: '', discharge_summary: '' });
+  const [dischargeData, setDischargeData] = useState({ discharge_reason: '', discharge_summary: '', discharge_outcome: '' });
 
   // ── Forms State ──
   const [noteForm, setNoteForm] = useState({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' });
@@ -254,6 +257,7 @@ export default function PatientDetails() {
         { label: 'Admitted', value: new Date(admission.admission_date).toLocaleString() },
         { label: 'Discharged', value: admission.discharge_date ? new Date(admission.discharge_date).toLocaleString() : '-' },
         { label: 'Length of Stay', value: `${days} day${days > 1 ? 's' : ''}` },
+        { label: 'Outcome', value: OUTCOME_LABEL[admission.discharge_outcome] || admission.discharge_outcome || '-', bold: true },
       ],
     };
 
@@ -415,6 +419,9 @@ export default function PatientDetails() {
                     <h1 className="text-lg font-bold tracking-tight text-foreground truncate">{admission.patient_name}</h1>
                     <Badge variant={admission.admission_type === 'emergency' ? 'danger' : 'info'} className="capitalize">{admission.admission_type}</Badge>
                     <Badge variant={admission.status === 'active' ? 'success' : 'neutral'} className="capitalize">{admission.status}</Badge>
+                    {admission.discharge_outcome && (
+                      <Badge variant={OUTCOME_VARIANT[admission.discharge_outcome] || 'neutral'}>{OUTCOME_LABEL[admission.discharge_outcome] || admission.discharge_outcome}</Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{admission.patient_number} • {admission.gender || 'N/A'}</p>
                 </div>
@@ -461,9 +468,10 @@ export default function PatientDetails() {
               </div>
             )}
 
-            {admission.status !== 'active' && (admission.discharge_reason || admission.discharge_summary) && (
+            {admission.status !== 'active' && (admission.discharge_reason || admission.discharge_summary || admission.discharge_outcome) && (
               <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Discharged On" value={admission.discharge_date ? new Date(admission.discharge_date).toLocaleString() : '—'} />
+                {admission.discharge_outcome && <Field label="Outcome" value={OUTCOME_LABEL[admission.discharge_outcome] || admission.discharge_outcome} />}
                 {admission.discharge_reason && <Field label="Discharge Reason" value={admission.discharge_reason} />}
                 {admission.discharge_summary && <Field label="Discharge Summary" value={admission.discharge_summary} />}
               </div>
@@ -900,6 +908,20 @@ export default function PatientDetails() {
               </div>
             )}
             <div className="space-y-1.5">
+              <Label>Outcome *</Label>
+              <Combobox
+                options={[
+                  { value: 'alive', label: 'Alive' },
+                  { value: 'dead', label: 'Deceased' },
+                  { value: 'absconded', label: 'Absconded' },
+                ]}
+                value={dischargeData.discharge_outcome}
+                onChange={v => setDischargeData({ ...dischargeData, discharge_outcome: v })}
+                placeholder="Select outcome *"
+                searchPlaceholder="Search..."
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label>Discharge reason *</Label>
               <Textarea value={dischargeData.discharge_reason} onChange={e => setDischargeData({ ...dischargeData, discharge_reason: e.target.value })} rows={2} />
             </div>
@@ -913,6 +935,7 @@ export default function PatientDetails() {
                 disabled={dischargeMut.isPending}
                 className="gap-1.5"
                 onClick={() => {
+                  if (!dischargeData.discharge_outcome) { toast.error('Outcome is required'); return; }
                   if (!dischargeData.discharge_reason.trim()) { toast.error('Discharge reason is required'); return; }
                   if (!dischargeData.discharge_summary.trim()) { toast.error('Discharge summary is required'); return; }
                   if (!window.confirm('Discharge this patient? This ends the admission and cannot be undone.')) return;

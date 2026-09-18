@@ -12,6 +12,22 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { exportCSV } from '@/utils/reportUtils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { Combobox } from '@/components/ui/combobox';
+
+const OUTCOME_LABEL: Record<string, string> = { alive: 'Alive', dead: 'Deceased', absconded: 'Absconded' };
+const OUTCOME_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = { alive: 'success', absconded: 'warning', dead: 'danger' };
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'active', label: 'In Bed' },
+  { value: 'discharged', label: 'Discharged' },
+  { value: '', label: 'All' },
+];
+const OUTCOME_FILTER_OPTIONS = [
+  { value: '', label: 'All Outcomes' },
+  { value: 'alive', label: 'Alive' },
+  { value: 'dead', label: 'Deceased' },
+  { value: 'absconded', label: 'Absconded' },
+];
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -27,11 +43,15 @@ export default function AdmittedPatients() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [outcomeFilter, setOutcomeFilter] = useState('');
 
   const { data: admissions = [], isLoading } = useQuery({
-    queryKey: ['admitted-patients', clinicId, searchTerm],
+    queryKey: ['admitted-patients', clinicId, searchTerm, statusFilter, outcomeFilter],
     queryFn: async () => {
-      const params = new URLSearchParams({ clinic_id: String(clinicId), status: 'active' });
+      const params = new URLSearchParams({ clinic_id: String(clinicId) });
+      if (statusFilter) params.append('status', statusFilter);
+      if (outcomeFilter) params.append('discharge_outcome', outcomeFilter);
       if (searchTerm) params.append('search', searchTerm);
       const r = await authFetch(`/api/inpatient/admissions?${params}`);
       return r.ok ? r.json() : [];
@@ -47,8 +67,12 @@ export default function AdmittedPatients() {
     return true;
   });
 
-  const getDaysAdmitted = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime();
+  // For a discharged patient, "days admitted" is the length of the actual
+  // stay (admission to discharge) — counting up to now instead would make
+  // the figure keep growing forever for a patient who left months ago.
+  const getDaysAdmitted = (admissionDate: string, dischargeDate?: string | null) => {
+    const end = dischargeDate ? new Date(dischargeDate).getTime() : Date.now();
+    const diff = end - new Date(admissionDate).getTime();
     return Math.max(1, Math.floor(diff / (1000 * 60 * 60 * 24)));
   };
 
@@ -63,7 +87,9 @@ export default function AdmittedPatients() {
       { header: 'Type', key: 'admission_type' },
       { header: 'Doctor', key: 'doctor_name', transform: (v: string) => v ? `Dr. ${v}` : '' },
       { header: 'Diagnosis', key: 'diagnosis' },
-      { header: 'Days Admitted', key: 'admission_date', transform: (v: string) => v ? String(getDaysAdmitted(v)) : '' },
+      { header: 'Days Admitted', key: 'admission_date', transform: (v: string, row: any) => v ? String(getDaysAdmitted(v, row.discharge_date)) : '' },
+      { header: 'Status', key: 'status', transform: (v: string) => v === 'active' ? 'In Bed' : 'Discharged' },
+      { header: 'Outcome', key: 'discharge_outcome', transform: (v: string) => v ? (OUTCOME_LABEL[v] || v) : '' },
     ], 'admitted-patients.csv');
   };
 
@@ -74,7 +100,7 @@ export default function AdmittedPatients() {
         <PageHeader
           icon={<BedDouble />}
           title="Admitted Patients"
-          actions={<Badge className="bg-primary/10 text-primary text-base px-3 py-1">{admissions.length} Active</Badge>}
+          actions={<Badge className="bg-primary/10 text-primary text-base px-3 py-1">{filteredAdmissions.length} {STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label || 'All'}</Badge>}
         />
 
         <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
@@ -83,6 +109,20 @@ export default function AdmittedPatients() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search by patient name, ID, or ward..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
             </div>
+            <Combobox
+              options={STATUS_FILTER_OPTIONS}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              searchPlaceholder="Search..."
+              className="h-9 w-[140px]"
+            />
+            <Combobox
+              options={OUTCOME_FILTER_OPTIONS}
+              value={outcomeFilter}
+              onChange={setOutcomeFilter}
+              searchPlaceholder="Search..."
+              className="h-9 w-[150px]"
+            />
             <div className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-muted-foreground" />
               <Input type="date" className="h-9 w-[150px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
@@ -118,7 +158,15 @@ export default function AdmittedPatients() {
                 },
                 { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
                 { key: 'diagnosis', header: 'Diagnosis', render: (v) => <span className="text-muted-foreground truncate max-w-[220px] block">{v || '—'}</span> },
-                { key: 'admission_date', header: 'Duration', sortable: true, render: (v) => <span className="text-muted-foreground">Day {getDaysAdmitted(v)}</span> },
+                {
+                  key: 'status', header: 'Status', sortable: true,
+                  render: (v) => <Badge variant={v === 'active' ? 'success' : 'neutral'}>{v === 'active' ? 'In Bed' : 'Discharged'}</Badge>,
+                },
+                {
+                  key: 'discharge_outcome', header: 'Outcome',
+                  render: (v) => v ? <Badge variant={OUTCOME_VARIANT[v] || 'neutral'}>{OUTCOME_LABEL[v] || v}</Badge> : <span className="text-muted-foreground">—</span>,
+                },
+                { key: 'admission_date', header: 'Duration', sortable: true, render: (v, a) => <span className="text-muted-foreground">{a.status === 'active' ? 'Day' : ''} {getDaysAdmitted(v, a.discharge_date)}{a.status !== 'active' ? ' days' : ''}</span> },
                 {
                   key: '__actions', header: 'Actions',
                   render: (_v, a) => (

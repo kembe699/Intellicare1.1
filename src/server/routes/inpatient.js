@@ -453,6 +453,7 @@ router.get('/admissions', authorize('inpatient.admissions.write'), async (req, r
       WHERE a.clinic_id = :clinicId`;
     const replacements = { clinicId };
     if (status) { sql += ' AND a.status = :status'; replacements.status = status; }
+    if (req.query.discharge_outcome) { sql += ' AND a.discharge_outcome = :dischargeOutcome'; replacements.dischargeOutcome = req.query.discharge_outcome; }
     if (search) {
       sql += ` AND ((COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')) LIKE :search OR p.patient_id LIKE :search OR lp.participant_number LIKE :search OR w.name LIKE :search)`;
       replacements.search = `%${search}%`;
@@ -854,9 +855,14 @@ async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, de
 router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { discharge_reason, discharge_summary } = req.body;
+    const { discharge_reason, discharge_summary, discharge_outcome } = req.body;
     const userId = req.user?.id;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+
+    if (!['alive', 'dead', 'absconded'].includes(discharge_outcome)) {
+      await t.rollback();
+      return res.status(400).json({ error: 'discharge_outcome must be one of: alive, dead, absconded' });
+    }
 
     // Get admission to find bed
     const [admission] = await sequelize.query(
@@ -867,8 +873,8 @@ router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'),
 
     // Update admission
     await sequelize.query(
-      `UPDATE inpatient_admissions SET status = 'discharged', discharge_date = NOW(), discharge_reason = :reason, discharge_summary = :summary, discharged_by_user_id = :userId WHERE id = :id`,
-      { replacements: { id: req.params.id, reason: discharge_reason || null, summary: discharge_summary || null, userId }, transaction: t }
+      `UPDATE inpatient_admissions SET status = 'discharged', discharge_date = NOW(), discharge_reason = :reason, discharge_summary = :summary, discharge_outcome = :outcome, discharged_by_user_id = :userId WHERE id = :id`,
+      { replacements: { id: req.params.id, reason: discharge_reason || null, summary: discharge_summary || null, outcome: discharge_outcome, userId }, transaction: t }
     );
 
     // Free the bed
@@ -888,8 +894,8 @@ router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'),
       await rr.logAudit({
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Inpatient', action: 'PATIENT_DISCHARGED', entity_type: 'Admission', entity_id: req.params.id,
-        description: `Patient discharged${discharge_reason ? ` — ${discharge_reason}` : ''}`,
-        new_values: { discharge_reason: discharge_reason || null }, ip_address: req.ip, status: 'success',
+        description: `Patient discharged (${discharge_outcome})${discharge_reason ? ` — ${discharge_reason}` : ''}`,
+        new_values: { discharge_reason: discharge_reason || null, discharge_outcome }, ip_address: req.ip, status: 'success',
       });
     } catch (e) {}
 
