@@ -44,7 +44,7 @@ export default function HowTo() {
 
   return (
     <AppLayout>
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="mx-auto w-full max-w-3xl">
         <PageHeader
           icon={<HelpCircle />}
           title="How To / Help Guide"
