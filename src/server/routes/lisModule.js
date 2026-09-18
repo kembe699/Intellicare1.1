@@ -871,6 +871,15 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
 // individually insurance-priced even on an otherwise-cash bill (schemePrice stashed,
 // unitPrice 0). One matching bill line is consumed per specimen so, e.g., 2 of 3 "Complete
 // Blood Count" specimens paid for only unlocks 2 of them, not all 3.
+//
+// An inpatient lab request (routes/inpatient.js's POST /lab-requests) bills under
+// "Lab Test — <name>", not the bare test name outpatient orders use — so a paid inpatient
+// lab charge never matched anything here and stayed stuck showing as unpaid/uncollectible
+// forever, no matter how long ago it was actually paid. Stripping that one known prefix
+// before keying the pool fixes every inpatient lab bill already on file the moment this
+// deploys (this pool is recomputed live on every request, nothing to migrate) as well as
+// every one billed from now on.
+const INPATIENT_LAB_BILL_PREFIX = /^lab test\s*[—-]\s*/;
 async function getCollectiblePool(db, patientId) {
   const [bills] = await db.query(
     `SELECT id, scheme_id, services FROM patient_bills WHERE patient_id = ? AND status != 'cancelled'`,
@@ -884,7 +893,7 @@ async function getCollectiblePool(db, patientId) {
     const billIsScheme = !!bill.scheme_id;
     for (const s of services) {
       if (s.isVoided) continue;
-      const name = String(s.serviceName || '').toLowerCase().trim();
+      const name = String(s.serviceName || '').toLowerCase().trim().replace(INPATIENT_LAB_BILL_PREFIX, '');
       if (!name) continue;
       const isIndividuallyInsured = s.schemePrice != null && (parseFloat(s.unitPrice) || 0) === 0;
       if (!(billIsScheme || s.paid || isIndividuallyInsured)) continue;
