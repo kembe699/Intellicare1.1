@@ -50,7 +50,8 @@ import {
   WifiOff,
   Bell,
   HandCoins,
-  CalendarDays
+  CalendarDays,
+  HelpCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -1080,6 +1081,9 @@ export const TopBar: React.FC = () => {
         </span>
       </div>
       <div className="flex items-center gap-3">
+        <Link to="/help" className="p-1.5 rounded-md hover:bg-accent transition-colors" title="How To / Help Guide">
+          <HelpCircle className="w-6 h-6 text-muted-foreground" strokeWidth={2.25} />
+        </Link>
         <NotificationBell />
         <NetworkStatus />
         {user.accessibleBranches && user.accessibleBranches.length > 1 && (

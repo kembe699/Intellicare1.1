@@ -66,6 +66,7 @@ const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/Pur
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
 const Profile = lazyWithRetry(() => import('./pages/Profile'));
+const HowTo = lazyWithRetry(() => import('./pages/HowTo'));
 const ChartOfAccounts = lazyWithRetry(() => import('./pages/accounting/ChartOfAccounts'));
 const GeneralLedger = lazyWithRetry(() => import('./pages/accounting/GeneralLedger'));
 const JournalEntriesPage = lazyWithRetry(() => import('./pages/accounting/JournalEntries'));
@@ -617,6 +618,11 @@ const AppRoutes = () => {
       <Route path="/profile" element={
         <ProtectedRoute>
           <Profile />
+        </ProtectedRoute>
+      } />
+      <Route path="/help" element={
+        <ProtectedRoute>
+          <HowTo />
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />
