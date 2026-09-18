@@ -338,7 +338,7 @@ router.put('/suppliers/:id', authorize('procurement.write'), async (req, res) =>
       `UPDATE suppliers SET ${fields.join(', ')}, updated_at = NOW() WHERE id = :id AND clinic_id = :clinicId`,
       { replacements }
     );
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Supplier not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Supplier not found' });
 
     const [updated] = await sequelize.query('SELECT * FROM suppliers WHERE id = :id', { replacements: { id: req.params.id } });
     res.json(updated[0]);
@@ -353,11 +353,16 @@ router.put('/suppliers/:id/hold', authorize('procurement.write'), async (req, re
   try {
     const { on_hold, hold_reason } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    // suppliers.on_hold is a real Postgres boolean column, not MySQL's lenient
+    // tinyint — sending 1/0 threw "column is of type boolean but expression is
+    // of type integer" outright, on every single call regardless of whether
+    // the supplier existed (confirmed live: even a nonexistent id 500'd here
+    // instead of ever reaching the 404 check below).
     const [, holdMeta] = await sequelize.query(
       'UPDATE suppliers SET on_hold = :on_hold, hold_reason = :hold_reason, updated_at = NOW() WHERE id = :id AND clinic_id = :clinicId',
-      { replacements: { id: req.params.id, clinicId, on_hold: on_hold ? 1 : 0, hold_reason: hold_reason || null } }
+      { replacements: { id: req.params.id, clinicId, on_hold: !!on_hold, hold_reason: hold_reason || null } }
     );
-    if (holdMeta.affectedRows === 0) return res.status(404).json({ error: 'Supplier not found' });
+    if (holdMeta.rowCount === 0) return res.status(404).json({ error: 'Supplier not found' });
     res.json({ message: on_hold ? 'Supplier placed on hold' : 'Supplier hold released' });
   } catch (error) {
     console.error('Error toggling supplier hold:', error);
@@ -1644,7 +1649,7 @@ router.post('/goods-receipt-notes/:id/inspect', requireApprovalPermission('grn_i
         inspected_by: inspected_by || null, inspection_notes: inspection_notes || null
       }
     });
-    if (inspectMeta.affectedRows === 0) return res.status(404).json({ error: 'GRN not found' });
+    if (inspectMeta.rowCount === 0) return res.status(404).json({ error: 'GRN not found' });
 
     // Update individual line inspection statuses
     if (line_updates && line_updates.length > 0) {

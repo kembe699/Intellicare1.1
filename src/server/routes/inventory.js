@@ -584,7 +584,7 @@ router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
     const [, itemMeta] = await sequelize.query(`UPDATE inventory_items SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
-    if (itemMeta.affectedRows === 0) return res.status(404).json({ error: 'Item not found' });
+    if (itemMeta.rowCount === 0) return res.status(404).json({ error: 'Item not found' });
 
     if (req.body.location_id) {
       const [existing] = await sequelize.query(
@@ -624,7 +624,7 @@ router.delete('/items/clear-all', authorize(['admin']), async (req, res) => {
       { replacements: { clinic_id: parseInt(clinic_id) } }
     );
 
-    const [result] = await sequelize.query(
+    await sequelize.query(
       'DELETE FROM inventory_items WHERE clinic_id = :clinic_id',
       { replacements: { clinic_id: parseInt(clinic_id) } }
     );
@@ -643,7 +643,13 @@ router.delete('/items/clear-all', authorize(['admin']), async (req, res) => {
     bustInventoryCache(req);
     res.json({
       message: 'All inventory items cleared successfully',
-      rowsDeleted: result.affectedRows || 0
+      // Read off the pre-delete SELECT above rather than the DELETE's own result:
+      // `const [result] = await sequelize.query('DELETE ...')` destructures the
+      // *rows* Sequelize returns (empty for a DELETE with no RETURNING), not the
+      // metadata object that actually carries the row count — result.affectedRows
+      // was reading a MySQL-only property off the wrong element entirely, so this
+      // was always undefined and always reported 0 regardless of what was deleted.
+      rowsDeleted: itemsBeingDeleted.length
     });
   } catch (error) {
     console.error('Error clearing inventory items:', error);
@@ -759,11 +765,15 @@ router.put('/locations/:id', authorize('inventory.write'), async (req, res) => {
     const replacements = { id: req.params.id, clinicId };
     const allowed = ['location_name', 'location_type', 'address', 'manager_user_id', 'is_active', 'capacity_description'];
     for (const key of allowed) {
-      if (req.body[key] !== undefined) { fields.push(`\`${key}\` = :${key}`); replacements[key] = req.body[key]; }
+      // No backticks — this is Postgres, not MySQL. Backtick-quoted identifiers
+      // aren't valid syntax here at all, so this UPDATE threw a syntax error and
+      // 500'd on every single call that actually had a field to update (the
+      // affectedRows check just below never even had a chance to matter).
+      if (req.body[key] !== undefined) { fields.push(`${key} = :${key}`); replacements[key] = req.body[key]; }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     const [, locMeta] = await sequelize.query(`UPDATE stock_locations SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
-    if (locMeta.affectedRows === 0) return res.status(404).json({ error: 'Location not found' });
+    if (locMeta.rowCount === 0) return res.status(404).json({ error: 'Location not found' });
     res.json({ message: 'Location updated' });
   } catch (error) {
     console.error('Error updating location:', error);
@@ -1329,7 +1339,7 @@ router.post('/adjustments/:id/reject', authorize('inventory.adjustments.approve'
       'UPDATE inventory_adjustments SET approval_status = :status, reviewed_by = :by, review_date = NOW(), notes = (COALESCE(notes, \'\') || :notes) WHERE id = :id AND clinic_id = :clinicId',
       { replacements: { status: 'rejected', by: reviewed_by || null, notes: notes ? `\nRejection: ${notes}` : '', id: req.params.id, clinicId } }
     );
-    if (rejectMeta.affectedRows === 0) return res.status(404).json({ error: 'Adjustment not found' });
+    if (rejectMeta.rowCount === 0) return res.status(404).json({ error: 'Adjustment not found' });
     res.json({ message: 'Adjustment rejected' });
   } catch (error) {
     console.error('Error rejecting adjustment:', error);
@@ -1464,7 +1474,7 @@ router.put('/physical-counts/:id/complete', authorize('inventory.write'), async 
       'UPDATE physical_inventory_counts SET status = :status, completed_by = :by, completed_date = CURRENT_DATE WHERE id = :id AND clinic_id = :clinicId',
       { replacements: { status: 'completed', by: completed_by || null, id: req.params.id, clinicId } }
     );
-    if (completeMeta.affectedRows === 0) return res.status(404).json({ error: 'Physical count not found' });
+    if (completeMeta.rowCount === 0) return res.status(404).json({ error: 'Physical count not found' });
     res.json({ message: 'Physical count completed' });
   } catch (error) {
     console.error('Error completing count:', error);
@@ -1871,7 +1881,10 @@ router.put('/settings/:clinicId', authorize('inventory.write'), async (req, res)
         'track_by_location', 'allow_negative_stock', 'require_approval_for_adjustments_above',
         'default_location_id', 'inventory_account_id', 'cogs_account_id', 'usage_account_id', 'adjustment_account_id'];
       for (const key of allowed) {
-        if (req.body[key] !== undefined) { fields.push(`\`${key}\` = :${key}`); replacements[key] = req.body[key]; }
+        // No backticks — see the same fix in PUT /locations/:id above. This UPDATE
+        // threw a Postgres syntax error on every save that touched a real field,
+        // so inventory settings could never actually be changed once created.
+        if (req.body[key] !== undefined) { fields.push(`${key} = :${key}`); replacements[key] = req.body[key]; }
       }
       if (fields.length > 0) {
         await sequelize.query(`UPDATE inventory_settings SET ${fields.join(', ')} WHERE clinic_id = :cid`, { replacements });
