@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
 router.put('/', async (req, res) => {
   try {
     const profile = await getOrCreateProfile();
-    const { company_name, address, city, phone, email, website, logo, bank_name, bank_account_name, bank_account_number, bank_swift } = req.body;
+    const { company_name, address, city, phone, email, website, logo, stamp, bank_name, bank_account_name, bank_account_number, bank_swift } = req.body;
     await profile.update({
       ...(company_name !== undefined ? { company_name: company_name.trim() || profile.company_name } : {}),
       ...(address !== undefined ? { address } : {}),
@@ -35,6 +35,7 @@ router.put('/', async (req, res) => {
       ...(email !== undefined ? { email } : {}),
       ...(website !== undefined ? { website } : {}),
       ...(logo !== undefined ? { logo } : {}),
+      ...(stamp !== undefined ? { stamp } : {}),
       ...(bank_name !== undefined ? { bank_name } : {}),
       ...(bank_account_name !== undefined ? { bank_account_name } : {}),
       ...(bank_account_number !== undefined ? { bank_account_number } : {}),

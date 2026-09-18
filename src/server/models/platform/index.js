@@ -30,20 +30,23 @@ async function initializePlatformDatabase() {
   // plain syntax error (not caught by an ER_DUP_FIELDNAME check) on stock
   // MySQL, which would silently skip adding the column on every engine that
   // doesn't support it, including local dev.
-  for (const [col, def] of [
-    ['db_user', 'VARCHAR(64) NULL'],
-    ['db_password', 'VARCHAR(255) NULL'],
+  for (const [table, col, def] of [
+    ['clients', 'db_user', 'VARCHAR(64) NULL'],
+    ['clients', 'db_password', 'VARCHAR(255) NULL'],
+    // Added after platform_company_profile first shipped — an
+    // already-deployed row won't get this column from sync({alter:false}).
+    ['platform_company_profile', 'stamp', 'TEXT NULL'],
   ]) {
     try {
       const [existing] = await platformSequelize.query(
-        `SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'clients' AND column_name = ?`,
-        { replacements: [col] }
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
+        { replacements: [table, col] }
       );
       if (existing.length === 0) {
-        await platformSequelize.query(`ALTER TABLE clients ADD COLUMN ${col} ${def}`);
+        await platformSequelize.query(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
       }
     } catch (err) {
-      console.log(`Note: could not add clients.${col}:`, err.message);
+      console.log(`Note: could not add ${table}.${col}:`, err.message);
     }
   }
 

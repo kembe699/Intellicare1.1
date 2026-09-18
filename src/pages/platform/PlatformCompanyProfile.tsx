@@ -7,16 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Building2, Loader2, Save, Upload, X } from 'lucide-react';
+import { Building2, Loader2, Save, Stamp, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface CompanyProfileForm {
-  company_name: string; address: string; city: string; phone: string; email: string; website: string; logo: string;
+  company_name: string; address: string; city: string; phone: string; email: string; website: string; logo: string; stamp: string;
   bank_name: string; bank_account_name: string; bank_account_number: string; bank_swift: string;
 }
 
 const empty: CompanyProfileForm = {
-  company_name: '', address: '', city: '', phone: '', email: '', website: '', logo: '',
+  company_name: '', address: '', city: '', phone: '', email: '', website: '', logo: '', stamp: '',
   bank_name: '', bank_account_name: '', bank_account_number: '', bank_swift: '',
 };
 
@@ -24,7 +24,8 @@ const PlatformCompanyProfile: React.FC = () => {
   const [form, setForm] = useState<CompanyProfileForm>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const stampInputRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     setLoading(true);
@@ -34,7 +35,7 @@ const PlatformCompanyProfile: React.FC = () => {
       if (!res.ok) throw new Error(data.error || 'Failed to load company profile');
       setForm({
         company_name: data.company_name || '', address: data.address || '', city: data.city || '',
-        phone: data.phone || '', email: data.email || '', website: data.website || '', logo: data.logo || '',
+        phone: data.phone || '', email: data.email || '', website: data.website || '', logo: data.logo || '', stamp: data.stamp || '',
         bank_name: data.bank_name || '', bank_account_name: data.bank_account_name || '',
         bank_account_number: data.bank_account_number || '', bank_swift: data.bank_swift || '',
       });
@@ -49,18 +50,20 @@ const PlatformCompanyProfile: React.FC = () => {
 
   // Same shrink-to-fit-under-a-size-ceiling conversion as the tenant side's
   // Facility logo upload (src/pages/setup/FacilitySetup.tsx) — a print
-  // window carries no auth, so the logo has to be embedded as a data URI
-  // rather than served from a protected endpoint.
-  const LOGO_MAX_PX = 512;
-  const LOGO_MAX_BYTES = 5 * 1024 * 1024;
-  const LOGO_TARGET_BYTES = 250 * 1024;
+  // window carries no auth, so an image has to be embedded as a data URI
+  // rather than served from a protected endpoint. Shared by both the logo
+  // and the electronic stamp, which only differ in which form field they
+  // land in and what the success toast calls them.
+  const IMG_MAX_PX = 512;
+  const IMG_MAX_BYTES = 5 * 1024 * 1024;
+  const IMG_TARGET_BYTES = 250 * 1024;
 
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (field: 'logo' | 'stamp', label: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please choose an image file'); return; }
-    if (file.size > LOGO_MAX_BYTES) { toast.error('Image is too large — please use one under 5MB'); return; }
+    if (file.size > IMG_MAX_BYTES) { toast.error('Image is too large — please use one under 5MB'); return; }
 
     const reader = new FileReader();
     reader.onerror = () => toast.error('Could not read that file');
@@ -80,19 +83,22 @@ const PlatformCompanyProfile: React.FC = () => {
           return canvas.toDataURL('image/png');
         };
         let out: string | null = null;
-        for (const px of [LOGO_MAX_PX, 384, 256, 192, 128]) {
+        for (const px of [IMG_MAX_PX, 384, 256, 192, 128]) {
           out = render(px);
           if (!out) { toast.error('Could not process the image'); return; }
-          if (out.length <= LOGO_TARGET_BYTES) break;
+          if (out.length <= IMG_TARGET_BYTES) break;
         }
-        if (!out || out.length > LOGO_TARGET_BYTES) { toast.error('That image is too detailed to use as a logo — try a simpler or smaller one'); return; }
-        setForm((f) => ({ ...f, logo: out as string }));
-        toast.success(`Logo ready (${Math.round(out.length / 1024)}KB) — save to apply it`);
+        if (!out || out.length > IMG_TARGET_BYTES) { toast.error(`That image is too detailed to use as a ${label.toLowerCase()} — try a simpler or smaller one`); return; }
+        setForm((f) => ({ ...f, [field]: out as string }));
+        toast.success(`${label} ready (${Math.round(out.length / 1024)}KB) — save to apply it`);
       };
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
+
+  const handleLogoUpload = handleImageUpload('logo', 'Logo');
+  const handleStampUpload = handleImageUpload('stamp', 'Stamp');
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,8 +133,8 @@ const PlatformCompanyProfile: React.FC = () => {
                 {form.logo ? <img src={form.logo} alt="Company logo" className="h-full w-full object-contain" /> : <Building2 className="h-6 w-6 text-muted-foreground" />}
               </div>
               <div className="flex gap-2">
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-1.5">
+                <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} className="gap-1.5">
                   <Upload className="h-3.5 w-3.5" /> {form.logo ? 'Replace logo' : 'Upload logo'}
                 </Button>
                 {form.logo && (
@@ -136,6 +142,26 @@ const PlatformCompanyProfile: React.FC = () => {
                     <X className="h-3.5 w-3.5" /> Remove
                   </Button>
                 )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 rounded-lg border border-border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
+                {form.stamp ? <img src={form.stamp} alt="Company stamp" className="h-full w-full object-contain" /> : <Stamp className="h-6 w-6 text-muted-foreground" />}
+              </div>
+              <div>
+                <input ref={stampInputRef} type="file" accept="image/*" onChange={handleStampUpload} className="hidden" />
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => stampInputRef.current?.click()} className="gap-1.5">
+                    <Upload className="h-3.5 w-3.5" /> {form.stamp ? 'Replace stamp' : 'Upload electronic stamp'}
+                  </Button>
+                  {form.stamp && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, stamp: '' })} className="gap-1.5 text-muted-foreground">
+                      <X className="h-3.5 w-3.5" /> Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">A transparent PNG of your company seal — stamped onto every generated quotation.</p>
               </div>
             </div>
 

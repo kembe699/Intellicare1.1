@@ -24,6 +24,9 @@ module.exports = (sequelize) => {
     // window carries no auth, so a logo served from a protected endpoint
     // would silently fail to load there.
     logo: { type: DataTypes.TEXT, allowNull: true },
+    // Same data-URI convention as logo — an electronic company seal/stamp
+    // stamped onto every generated quotation.
+    stamp: { type: DataTypes.TEXT, allowNull: true },
     bank_name: { type: DataTypes.STRING, allowNull: true },
     bank_account_name: { type: DataTypes.STRING, allowNull: true },
     bank_account_number: { type: DataTypes.STRING, allowNull: true },
