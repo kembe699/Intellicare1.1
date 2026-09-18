@@ -43,6 +43,41 @@ async function getCurrentOpenVisitId(patientId, clinicId, { transaction } = {}) 
   }
 }
 
+// The billing-specific version of "current open visit": an active inpatient stay takes
+// priority over any lis_test_orders lookup, so a bed charge, prescription or lab request
+// billed today lands on the SAME bill as one billed a week into the stay, no matter what
+// an unrelated lab order's own open/closed status happens to be at that moment. Before
+// this, "the current visit" for billing purposes was defined purely by lis_test_orders —
+// if a lab order placed during the stay happened to get marked 'closed' (its own,
+// separate workflow, nothing to do with the admission), the very next inpatient charge
+// would find no open visit, see this patient's (now-closed) visit history, and start a
+// whole new bill mid-stay, quietly splitting one hospitalization's charges across bills.
+// Only once the patient is actually discharged does this fall through to
+// getCurrentOpenVisitId's own lis_test_orders check.
+//
+// Deliberately a separate function from getCurrentOpenVisitId rather than changing that
+// one directly: inpatient.js's mirrorLabRequestToLis and patientBills.js's own LIS-
+// mirroring call it too, for a genuinely different question — "is there a real
+// lis_test_orders row to attach a new specimen to, or do I need to create one?" — where
+// an admission id is not a usable answer at all (lis_specimens.order_id must point at an
+// actual lis_test_orders row). Only the billing call sites (resolveActiveBill below, and
+// patientBills.js's bill-creation visit_id stamp and GET /active/:patientId lookup) use
+// this one.
+async function getCurrentOpenVisitIdForBilling(patientId, clinicId, { transaction } = {}) {
+  if (!patientId) return null;
+  try {
+    const { sequelize } = require('../models');
+    const [[admission]] = await sequelize.query(
+      `SELECT id FROM inpatient_admissions WHERE patient_id = :pid AND status = 'active' ORDER BY admission_date DESC LIMIT 1`,
+      { replacements: { pid: patientId }, transaction }
+    );
+    if (admission?.id) return admission.id;
+  } catch (e) {
+    if (isInfrastructureError(e)) throw e;
+  }
+  return getCurrentOpenVisitId(patientId, clinicId, { transaction });
+}
+
 // Distinguishes "never had a clinical encounter at all" (pure pharmacy/walk-in patient —
 // falls back to the pre-existing patient-wide bill lookup) from "has visit history but
 // every visit is closed right now" (must NOT fall back, or a bill from an already-closed
@@ -51,8 +86,16 @@ async function hasAnyVisitHistory(patientId, { transaction } = {}) {
   if (!patientId) return false;
   try {
     const { sequelize } = require('../models');
+    // Counts inpatient admissions too, not just lis_test_orders — a discharged stay is
+    // "visit history" exactly the same way a closed lab order is: getCurrentOpenVisitId
+    // no longer finds it (the admission is no longer 'active'), and this function is
+    // what stops that from being mistaken for "never had a visit at all", which would
+    // otherwise fall through to the patient-wide bill lookup and could resurrect a bill
+    // from a completely unrelated, much older stay.
     const [[row]] = await sequelize.query(
-      `SELECT COUNT(*) AS cnt FROM lis_test_orders WHERE participant_id = :pid`,
+      `SELECT
+        (SELECT COUNT(*) FROM lis_test_orders WHERE participant_id = :pid) +
+        (SELECT COUNT(*) FROM inpatient_admissions WHERE patient_id = :pid) AS cnt`,
       { replacements: { pid: patientId }, transaction }
     );
     return (parseInt(row?.cnt, 10) || 0) > 0;
@@ -71,7 +114,7 @@ async function resolveActiveBill(patientId, clinicId, { transaction, lock, visit
   const { PatientBill } = require('../models');
   const { Op } = require('sequelize');
 
-  const resolvedVisitId = visitId !== undefined ? visitId : await getCurrentOpenVisitId(patientId, clinicId, { transaction });
+  const resolvedVisitId = visitId !== undefined ? visitId : await getCurrentOpenVisitIdForBilling(patientId, clinicId, { transaction });
   const statusFilter = { [Op.in]: ['pending', 'partial', 'paid', 'active'] };
 
   if (resolvedVisitId) {
@@ -310,4 +353,4 @@ async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId,
   }
 }
 
-module.exports = { getCurrentOpenVisitId, hasAnyVisitHistory, resolveActiveBill, addLineItemsToBill, updateOrAddLineItem };
+module.exports = { getCurrentOpenVisitId, getCurrentOpenVisitIdForBilling, hasAnyVisitHistory, resolveActiveBill, addLineItemsToBill, updateOrAddLineItem };

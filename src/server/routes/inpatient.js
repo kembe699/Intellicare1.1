@@ -606,11 +606,20 @@ router.post('/admissions', authorize('inpatient.admissions.write'), async (req, 
 // GET /api/patient-bills/active/:patientId/:clinicId does, and locks the row for the
 // duration of the read-modify-write so two charges landing close together (e.g. the
 // admission charge and a same-second pharmacy charge) can't overwrite each other's total.
-async function addBillLineItem(patientId, patientName, clinicId, branchId, lineItem, autoNote) {
+async function addBillLineItem(patientId, patientName, clinicId, branchId, lineItem, autoNote, admissionId) {
   try {
     const { addLineItemsToBill } = require('../utils/billingResolver');
     await addLineItemsToBill({
       patientId, patientName, clinicId, branchId, lineItems: [lineItem], notes: autoNote, createdBy: 'System',
+      // Every inpatient charge already knows exactly which admission it belongs to —
+      // pass it straight through instead of asking resolveActiveBill to re-derive "the
+      // current visit" from ambient state. That resolution briefly disagrees with
+      // reality right at discharge (see reconcileBedCharge's own call, a few lines
+      // down, for the case that actually surfaced this): the admission's status has
+      // already flipped to 'discharged' by the time the final charge lands, so a
+      // lookup would find no active admission and start a brand new bill instead of
+      // finishing the one this stay has been accumulating on all along.
+      visitId: admissionId,
     });
   } catch (e) {
     console.error('Error adding bill line item:', e);
@@ -642,7 +651,7 @@ async function chargeBedAdmission(admissionId, branchId) {
     const rate = parseFloat(admission.daily_rate);
     const patientName = `${admission.first_name} ${admission.last_name}`.trim() || 'Patient';
     const lineItem = { revenueCategory: 'inpatient', serviceName: `Bed Charge — ${admission.ward_name || 'Ward'}`, quantity: 1, unitPrice: rate, totalPrice: rate };
-    await addBillLineItem(admission.patient_id, patientName, parseInt(admission.clinic_id) || 1, branchId, lineItem, 'Auto-generated inpatient bed charge on admission');
+    await addBillLineItem(admission.patient_id, patientName, parseInt(admission.clinic_id) || 1, branchId, lineItem, 'Auto-generated inpatient bed charge on admission', admissionId);
   } catch (e) {
     console.error('Error charging bed on admission:', e);
   }
@@ -676,6 +685,14 @@ async function reconcileBedCharge(admissionId, branchId, asOfDate) {
       notes: 'Auto-generated inpatient bed charge',
       createdBy: 'System',
       revenueCategory: 'inpatient',
+      // This admission is known exactly, not derived — matters specifically at
+      // discharge, the one time this runs after the admission's own status has
+      // already flipped away from 'active' (see PUT /admissions/:id/discharge,
+      // called right after the status UPDATE commits). Without this, the final
+      // day-count reconciliation would find no "currently open" admission and
+      // create a brand new bill for the last day's charge instead of finishing
+      // the one the whole stay has been on.
+      visitId: admissionId,
     });
   } catch (e) {
     console.error('Error reconciling bed charge:', e);
@@ -691,7 +708,7 @@ async function billInpatientRequest(admissionId, branchId, lineItem, autoNote) {
     const admission = await getAdmissionBillingContext(admissionId);
     if (!admission) return;
     const patientName = `${admission.first_name} ${admission.last_name}`.trim() || 'Patient';
-    await addBillLineItem(admission.patient_id, patientName, parseInt(admission.clinic_id) || 1, branchId, lineItem, autoNote);
+    await addBillLineItem(admission.patient_id, patientName, parseInt(admission.clinic_id) || 1, branchId, lineItem, autoNote, admissionId);
   } catch (e) {
     console.error('Error billing inpatient request:', e);
   }

@@ -114,7 +114,7 @@ const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } 
 // This used to be defined locally here AND reimplemented (differently, and without visit
 // scoping at all) in inpatient.js — moved to a shared module so every writer resolves
 // "the active bill" identically instead of drifting apart again. See billingResolver.js.
-const { getCurrentOpenVisitId, hasAnyVisitHistory, resolveActiveBill, addLineItemsToBill } = require('../utils/billingResolver');
+const { getCurrentOpenVisitId, getCurrentOpenVisitIdForBilling, hasAnyVisitHistory, resolveActiveBill, addLineItemsToBill } = require('../utils/billingResolver');
 
 // One-time repair for rows already corrupted by the double-encoding bug (see
 // src/server/utils/normalizeServices.js) — re-saves every
@@ -606,9 +606,10 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     billData.branch_id = billData.branch_id || getCreateBranchId(req);
 
     // Stamp the patient's current open visit, if any, so this bill is scoped to this
-    // encounter — see getCurrentOpenVisitId() for why this matters.
+    // encounter — see getCurrentOpenVisitIdForBilling() for why this matters (in
+    // particular, why it's not plain getCurrentOpenVisitId).
     if (!billData.visit_id) {
-      billData.visit_id = await getCurrentOpenVisitId(billData.patient_id, billData.clinic_id);
+      billData.visit_id = await getCurrentOpenVisitIdForBilling(billData.patient_id, billData.clinic_id);
     }
 
     // due_date drives the whole Receivables/Aging tab (current vs 1-30/31-60/61-90/90+
@@ -805,8 +806,11 @@ router.get('/active/:patientId/:clinicId', authorize('bills.read'), async (req, 
     // THAT visit — not just whatever unpaid bill happens to exist, which used to let a
     // bill from weeks ago keep absorbing charges from a brand-new visit forever. Once
     // a visit is closed, its bill stops being reachable here, so the next time this
-    // patient is queued and gets a new visit, billing starts a fresh bill.
-    const openVisitId = await getCurrentOpenVisitId(patientId, clinicId);
+    // patient is queued and gets a new visit, billing starts a fresh bill. An active
+    // inpatient admission counts as "open" here too (getCurrentOpenVisitIdForBilling),
+    // so "View Bills" during a stay always finds the one bill accumulating charges for
+    // it, and it stops being found here the moment the patient is discharged.
+    const openVisitId = await getCurrentOpenVisitIdForBilling(patientId, clinicId);
 
     if (openVisitId) {
       const visitBill = await PatientBill.findOne({
