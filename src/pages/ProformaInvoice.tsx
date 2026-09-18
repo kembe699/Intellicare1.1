@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Combobox } from '@/components/ui/combobox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { authFetch } from '@/api/apiClient';
@@ -78,6 +79,15 @@ export default function ProformaInvoicePage() {
   const [catalogQty, setCatalogQty] = useState('1');
   const [catalogPopoverOpen, setCatalogPopoverOpen] = useState(false);
 
+  // Currency the quote is priced in — lets staff quote a walk-in customer in
+  // USD, say, even though the tenant's own books run in SSP. Purely a label:
+  // catalog prices and any manual edits (see updatePrice) are entered as-is
+  // in whatever currency is selected, there's no FX conversion happening.
+  const [availableCurrencies, setAvailableCurrencies] = useState<any[]>([]);
+  const [quoteCurrency, setQuoteCurrency] = useState('');
+  const quoteCurrencyMeta = availableCurrencies.find(c => c.code === quoteCurrency);
+  const quoteCurrencySymbol = quoteCurrencyMeta?.symbol || quoteCurrency || baseCurrency.symbol;
+
   // Cart
   const [cart, setCart] = useState<CartLine[]>([]);
   const [notes, setNotes] = useState('');
@@ -95,11 +105,40 @@ export default function ProformaInvoicePage() {
   useEffect(() => {
     fetchCatalog();
     fetchPeople();
+    fetchCurrencies();
   }, []);
 
   useEffect(() => {
     if (view === 'history') fetchHistory();
   }, [view]);
+
+  // Default the picker to the tenant's base currency once it's loaded, but
+  // only before anything's been chosen — a later base-currency refresh (or
+  // switching branches) shouldn't yank the quote out of a currency staff
+  // already picked.
+  useEffect(() => {
+    if (!quoteCurrency && baseCurrency.code) setQuoteCurrency(baseCurrency.code);
+  }, [baseCurrency.code]);
+
+  const fetchCurrencies = async () => {
+    try {
+      const res = await authFetch('/api/currencies', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableCurrencies(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      // Non-fatal — the picker falls back to just the base currency.
+    }
+  };
+
+  // Re-tags every line already in the cart to the newly chosen currency —
+  // this is a label change only (see updatePrice for the actual amount),
+  // so switching currency mid-quote keeps whatever prices were entered.
+  const handleQuoteCurrencyChange = (code: string) => {
+    setQuoteCurrency(code);
+    setCart(prev => prev.map(l => ({ ...l, currency: code })));
+  };
 
   // Proforma invoices should be available for any patient, whether they were
   // registered as an outpatient (/api/patients) or through the LIS module
@@ -229,7 +268,7 @@ export default function ProformaInvoicePage() {
       if (existing) {
         return prev.map(l => l === existing ? { ...l, quantity: l.quantity + quantity } : l);
       }
-      return [...prev, { type, refId, name, quantity, unitPrice, currency: item.currency || baseCurrency.code || 'SSP' }];
+      return [...prev, { type, refId, name, quantity, unitPrice, currency: quoteCurrency || item.currency || baseCurrency.code || 'SSP' }];
     });
   };
 
@@ -302,7 +341,7 @@ export default function ProformaInvoicePage() {
         body: JSON.stringify({
           patient_id: selectedPatient.id,
           patient_name: selectedPatient.label,
-          items, notes, currency: baseCurrency.code || 'SSP', clinic_id: clinicId,
+          items, notes, currency: quoteCurrency || baseCurrency.code || 'SSP', clinic_id: clinicId,
         }),
       });
       if (res.ok) {
@@ -568,7 +607,7 @@ export default function ProformaInvoicePage() {
                                 {(catalogTab === 'services' ? services : products).map((item: any) => {
                                   const label = catalogTab === 'services' ? item.service_name : item.item_name;
                                   const meta = catalogTab === 'services' ? item.category : item.unit_of_measure;
-                                  const priceLabel = docTemplate.formatCurrency(catalogTab === 'services' ? item.price : item.selling_price, baseCurrency.symbol);
+                                  const priceLabel = docTemplate.formatCurrency(catalogTab === 'services' ? item.price : item.selling_price, quoteCurrencySymbol);
                                   return (
                                     <CommandItem
                                       key={item.id}
@@ -608,7 +647,7 @@ export default function ProformaInvoicePage() {
                       {cart.map(l => (
                         <div key={`${l.type}-${l.refId}`} className="text-xs flex items-center justify-between text-muted-foreground">
                           <span className="truncate">{l.name} × {l.quantity}</span>
-                          <span className="font-mono shrink-0 ml-2">{docTemplate.formatCurrency(l.unitPrice * l.quantity, baseCurrency.symbol)}</span>
+                          <span className="font-mono shrink-0 ml-2">{docTemplate.formatCurrency(l.unitPrice * l.quantity, quoteCurrencySymbol)}</span>
                         </div>
                       ))}
                     </div>
@@ -619,8 +658,25 @@ export default function ProformaInvoicePage() {
 
             {/* RIGHT: Cart */}
             <div className="bg-card rounded-lg border shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 border-b bg-muted/30">
+              <div className="p-4 border-b bg-muted/30 flex items-center justify-between gap-2">
                 <h3 className="font-medium text-sm flex items-center gap-2"><Receipt className="w-4 h-4 text-primary" /> Quote Items ({cart.length})</h3>
+                {!savedProforma && (
+                  <Combobox
+                    options={
+                      availableCurrencies.length > 0
+                        ? availableCurrencies.map(c => ({
+                            value: c.code,
+                            label: `${c.code}${c.is_base_currency ? ' (Base)' : ''}`,
+                          }))
+                        : (baseCurrency.code ? [{ value: baseCurrency.code, label: baseCurrency.code }] : [])
+                    }
+                    value={quoteCurrency}
+                    onChange={handleQuoteCurrencyChange}
+                    placeholder="Currency..."
+                    searchPlaceholder="Search..."
+                    className="h-8 w-28 text-xs shrink-0"
+                  />
+                )}
               </div>
 
               {savedProforma ? (
@@ -682,7 +738,7 @@ export default function ProformaInvoicePage() {
                               </Button>
                             </div>
                             <div className="flex items-center gap-1 min-w-0">
-                              <span className="text-xs text-muted-foreground shrink-0">{baseCurrency.symbol}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{quoteCurrencySymbol}</span>
                               <Input
                                 type="number"
                                 min="0"
@@ -693,7 +749,7 @@ export default function ProformaInvoicePage() {
                                 title="Edit quoted unit price"
                               />
                             </div>
-                            <div className="text-sm font-mono font-semibold shrink-0">{docTemplate.formatCurrency(l.unitPrice * l.quantity, baseCurrency.symbol)}</div>
+                            <div className="text-sm font-mono font-semibold shrink-0">{docTemplate.formatCurrency(l.unitPrice * l.quantity, quoteCurrencySymbol)}</div>
                           </div>
                         </div>
                       ))
@@ -702,7 +758,7 @@ export default function ProformaInvoicePage() {
                   <div className="p-4 border-t bg-muted/30 space-y-3">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Estimated Total</span>
-                      <span className="font-mono font-bold text-lg text-primary">{docTemplate.formatCurrency(cartTotal, baseCurrency.symbol)}</span>
+                      <span className="font-mono font-bold text-lg text-primary">{docTemplate.formatCurrency(cartTotal, quoteCurrencySymbol)}</span>
                     </div>
                     <Button className="w-full" onClick={handleSave} disabled={saving || !selectedPatient || cart.length === 0}>
                       {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileSignature className="w-4 h-4 mr-2" />}
