@@ -239,6 +239,17 @@ export default function ProformaInvoicePage() {
     );
   };
 
+  // Lets staff quote a different price than the catalog default — the same
+  // unitPrice/totalPrice saved here is what convert() later copies verbatim
+  // into the patient's bill, so editing it here is what makes the bill price
+  // flexible too, with no separate override step needed at conversion time.
+  const updatePrice = (refId: string, type: string, value: string) => {
+    const price = parseFloat(value);
+    setCart(prev => prev
+      .map(l => (l.refId === refId && l.type === type) ? { ...l, unitPrice: Number.isNaN(price) || price < 0 ? 0 : price } : l)
+    );
+  };
+
   const removeFromCart = (refId: string, type: string) => {
     setCart(prev => prev.filter(l => !(l.refId === refId && l.type === type)));
   };
@@ -660,8 +671,8 @@ export default function ProformaInvoicePage() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <div className="flex items-center gap-1.5">
+                          <div className="flex items-center justify-between mt-1.5 gap-2">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, -1)}>
                                 <Minus className="w-3 h-3" />
                               </Button>
@@ -670,7 +681,19 @@ export default function ProformaInvoicePage() {
                                 <Plus className="w-3 h-3" />
                               </Button>
                             </div>
-                            <div className="text-sm font-mono font-semibold">{docTemplate.formatCurrency(l.unitPrice * l.quantity, baseCurrency.symbol)}</div>
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="text-xs text-muted-foreground shrink-0">{baseCurrency.symbol}</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={l.unitPrice}
+                                onChange={e => updatePrice(l.refId, l.type, e.target.value)}
+                                className="h-6 w-20 text-xs font-mono text-right px-1.5"
+                                title="Edit quoted unit price"
+                              />
+                            </div>
+                            <div className="text-sm font-mono font-semibold shrink-0">{docTemplate.formatCurrency(l.unitPrice * l.quantity, baseCurrency.symbol)}</div>
                           </div>
                         </div>
                       ))
