@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Stethoscope, Pill, Syringe, ClipboardList, FlaskConical, Radio, LogOut, Loader2, X, Check, AlertTriangle, Receipt, Clock, BedDouble, User2 } from 'lucide-react';
+import { Stethoscope, Pill, Syringe, ClipboardList, FlaskConical, Radio, LogOut, Loader2, X, Check, AlertTriangle, Receipt, Clock, BedDouble, User2, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,8 +17,10 @@ import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency } from '@/lib/presc
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoadingState } from '@/components/common';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import * as docTemplate from '@/utils/documentTemplate';
 
 function Field({ label, value, capitalize }: { label: string; value: React.ReactNode; capitalize?: boolean }) {
   return (
@@ -56,6 +58,7 @@ export default function PatientDetails() {
   const { id: admissionId } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { fmt } = useCurrency();
+  const facilityInfo = useFacilityInfo();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('notes');
@@ -230,6 +233,162 @@ export default function PatientDetails() {
       return Array.from({ length: remaining }, (_, doseIndex) => ({ ...p, doseIndex }));
     });
 
+  // Discharge summary — pulls together every clinical record already loaded for
+  // this admission (doctor notes, prescriptions cross-referenced against what was
+  // actually administered, nursing notes, lab/radiology requests with results)
+  // into the same printable document template used across the rest of the app.
+  const buildDischargeSummary = () => {
+    const patientBox = {
+      title: 'Patient Information',
+      rows: [
+        { label: 'Name', value: admission.patient_name, bold: true },
+        { label: 'Patient No', value: admission.patient_number },
+        { label: 'Gender', value: admission.gender || 'N/A' },
+        { label: 'Ward / Bed', value: `${admission.ward_name} • Rm ${admission.room_number}/${admission.bed_number}` },
+      ],
+    };
+    const admissionBox = {
+      title: 'Admission Details',
+      rows: [
+        { label: 'Attending Doctor', value: admission.doctor_name ? `Dr. ${admission.doctor_name}` : '-' },
+        { label: 'Admitted', value: new Date(admission.admission_date).toLocaleString() },
+        { label: 'Discharged', value: admission.discharge_date ? new Date(admission.discharge_date).toLocaleString() : '-' },
+        { label: 'Length of Stay', value: `${days} day${days > 1 ? 's' : ''}` },
+      ],
+    };
+
+    let body = docTemplate.buildInfoGrid(patientBox, admissionBox);
+
+    if (admission.diagnosis) {
+      body += `<div class="ic-section-title">Diagnosis</div><p style="font-size:11px;margin:0 0 12px;">${admission.diagnosis}</p>`;
+    }
+    if (admission.discharge_reason) {
+      body += `<div class="ic-section-title">Discharge Reason</div><p style="font-size:11px;margin:0 0 12px;">${admission.discharge_reason}</p>`;
+    }
+    if (admission.discharge_summary) {
+      body += `<div class="ic-section-title">Discharge Summary</div>` + docTemplate.buildNotes(admission.discharge_summary);
+    }
+
+    const emptyMsg = (msg: string) => `<p style="font-size:11px;color:#64748B;margin:0 0 12px;">${msg}</p>`;
+
+    body += `<div class="ic-section-title">Doctor's Notes <span>${doctorNotes.length} entr${doctorNotes.length === 1 ? 'y' : 'ies'}</span></div>`;
+    body += doctorNotes.length === 0 ? emptyMsg('No doctor notes recorded.') : docTemplate.buildTable(
+      [{ label: 'Date' }, { label: 'Doctor' }, { label: 'Vitals' }, { label: 'Assessment / Diagnosis / Plan' }, { label: 'Status' }],
+      doctorNotes.map((n: any) => ({
+        cells: [
+          new Date(n.note_date).toLocaleString(),
+          n.doctor_name ? `Dr. ${n.doctor_name}` : '-',
+          n.vital_signs ? `T ${n.vital_signs.temperature || '-'}°C, BP ${n.vital_signs.blood_pressure || '-'}, P ${n.vital_signs.pulse || '-'}, RR ${n.vital_signs.respiratory_rate || '-'}` : '-',
+          [
+            n.clinical_assessment ? `<strong>Assessment:</strong> ${n.clinical_assessment}` : '',
+            n.diagnosis ? `<strong>Dx:</strong> ${n.diagnosis}` : '',
+            n.treatment_plan ? `<strong>Plan:</strong> ${n.treatment_plan}` : '',
+          ].filter(Boolean).join('<br/>'),
+          n.progress_status || '-',
+        ],
+      })),
+    );
+
+    body += `<div class="ic-section-title">Medications Prescribed <span>${prescriptions.length}</span></div>`;
+    body += prescriptions.length === 0 ? emptyMsg('No medications prescribed.') : docTemplate.buildTable(
+      [{ label: 'Medication' }, { label: 'Dosage' }, { label: 'Frequency' }, { label: 'Route' }, { label: 'Duration' }, { label: 'Qty' }, { label: 'Given / Total' }, { label: 'Status' }],
+      prescriptions.map((p: any) => {
+        const totalUnits = parseInt(p.quantity, 10) > 0 ? parseInt(p.quantity, 10) : 1;
+        const givenCount = drugAdmins.filter((a: any) => a.prescription_id === p.id && a.status === 'given').length;
+        return {
+          cells: [
+            `${p.medication_name}${p.is_external ? ' (buy outside)' : ''}`,
+            p.dosage || '-', p.frequency || '-', p.route?.toUpperCase() || '-', p.duration || '-', p.quantity ?? '-',
+            `${givenCount} / ${totalUnits}`,
+            p.status || '-',
+          ],
+        };
+      }),
+    );
+
+    body += `<div class="ic-section-title">Medication Administration Record <span>${drugAdmins.length}</span></div>`;
+    body += drugAdmins.length === 0 ? emptyMsg('No administrations recorded.') : docTemplate.buildTable(
+      [{ label: 'Date/Time' }, { label: 'Medication' }, { label: 'Dosage Given' }, { label: 'Route' }, { label: 'Status' }, { label: 'Nurse' }, { label: 'Notes' }],
+      drugAdmins.map((a: any) => ({
+        cells: [
+          new Date(a.administered_at).toLocaleString(),
+          a.medication_name, a.dosage_given || '-', a.route?.toUpperCase() || '-', a.status || '-', a.nurse_name || '-', a.notes || '-',
+        ],
+      })),
+    );
+
+    body += `<div class="ic-section-title">Nursing Notes <span>${nursingNotes.length}</span></div>`;
+    body += nursingNotes.length === 0 ? emptyMsg('No nursing notes recorded.') : docTemplate.buildTable(
+      [{ label: 'Date' }, { label: 'Shift' }, { label: 'Nurse' }, { label: 'Condition' }, { label: 'Pain' }, { label: 'I/O (ml)' }, { label: 'Activities / Notes' }],
+      nursingNotes.map((n: any) => ({
+        cells: [
+          new Date(n.note_date).toLocaleString(),
+          n.shift || '-', n.nurse_name || '-', n.patient_condition || '-', n.pain_level ?? '-',
+          `${n.fluid_intake || 0} / ${n.fluid_output || 0}`,
+          [n.care_activities, n.notes].filter(Boolean).join('<br/>'),
+        ],
+      })),
+    );
+
+    body += `<div class="ic-section-title">Laboratory Tests & Results <span>${labRequests.length}</span></div>`;
+    body += labRequests.length === 0 ? emptyMsg('No laboratory tests requested.') : docTemplate.buildTable(
+      [{ label: 'Date' }, { label: 'Test' }, { label: 'Sample' }, { label: 'Status' }, { label: 'Results' }],
+      labRequests.map((l: any) => {
+        // results comes back from the raw SQL query as a JSON string, not a
+        // pre-parsed object, so it has to be parsed here before being turned
+        // into readable "key: value" pairs — otherwise it prints as raw braces.
+        let parsedResults: any = l.results;
+        if (typeof parsedResults === 'string') { try { parsedResults = JSON.parse(parsedResults); } catch { /* not JSON — leave as plain text */ } }
+        const resultText = parsedResults && typeof parsedResults === 'object'
+          ? Object.entries(parsedResults).map(([k, v]) => `${k}: ${v}`).join(', ')
+          : (parsedResults || '');
+        return {
+          cells: [
+            new Date(l.request_date).toLocaleDateString(),
+            `${l.test_type}${l.urgent ? ' (Urgent)' : ''}`,
+            l.sample_type || '-', l.status || '-',
+            [resultText, l.result_notes].filter(Boolean).join('<br/>') || '-',
+          ],
+        };
+      }),
+    );
+
+    body += `<div class="ic-section-title">Radiology / Imaging <span>${radRequests.length}</span></div>`;
+    body += radRequests.length === 0 ? emptyMsg('No imaging requested.') : docTemplate.buildTable(
+      [{ label: 'Date' }, { label: 'Imaging' }, { label: 'Body Part' }, { label: 'Status' }, { label: 'Findings / Impression' }],
+      radRequests.map((r: any) => ({
+        cells: [
+          new Date(r.request_date).toLocaleDateString(),
+          `${r.imaging_type}${r.urgent ? ' (Urgent)' : ''}`,
+          r.body_part || '-', r.status || '-',
+          [r.findings ? `<strong>Findings:</strong> ${r.findings}` : '', r.impression ? `<strong>Impression:</strong> ${r.impression}` : ''].filter(Boolean).join('<br/>') || '-',
+        ],
+      })),
+    );
+
+    body += docTemplate.buildSignatures([
+      { label: 'Attending Doctor', name: admission.doctor_name ? `Dr. ${admission.doctor_name}` : '' },
+      { label: 'Nurse in Charge' },
+      { label: 'Patient / Guardian' },
+    ]);
+
+    return docTemplate.buildDocument({
+      title: `Discharge Summary - ${admission.patient_name}`,
+      docType: 'DISCHARGE SUMMARY',
+      docNumber: admission.patient_number,
+      status: admission.status,
+      date: admission.discharge_date || new Date(),
+      bodyHTML: body,
+      facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
+      branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
+    });
+  };
+
+  const handleDownloadDischargeSummary = () => {
+    const pw = docTemplate.openPrintWindow(buildDischargeSummary());
+    if (!pw) toast.error('Please allow popups to generate the discharge summary');
+  };
+
   const TABS = [
     { value: 'notes', label: 'Doctor Notes', icon: Stethoscope, count: doctorNotes.length },
     { value: 'prescriptions', label: 'Prescriptions', icon: Pill, count: prescriptions.length },
@@ -264,9 +423,13 @@ export default function PatientDetails() {
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={handleViewBills} disabled={loadingBill}>
                   {loadingBill ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Receipt className="h-3.5 w-3.5" />} View Bills
                 </Button>
-                {admission.status === 'active' && (
+                {admission.status === 'active' ? (
                   <Button size="sm" className="gap-1.5" onClick={() => setDischargeOpen(true)}>
                     <LogOut className="h-3.5 w-3.5" /> Discharge
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownloadDischargeSummary}>
+                    <FileDown className="h-3.5 w-3.5" /> Discharge Summary
                   </Button>
                 )}
               </div>
