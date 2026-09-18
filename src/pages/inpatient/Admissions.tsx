@@ -24,7 +24,7 @@ export default function Admissions() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [patientSearch, setPatientSearch] = useState('');
-  const [formData, setFormData] = useState({ patient_id: '', patient_name: '', ward_id: '', room_id: '', bed_id: '', admission_reason: '', diagnosis: '', admission_type: 'planned', attending_doctor_id: '', request_id: '' });
+  const [formData, setFormData] = useState({ patient_id: '', patient_name: '', ward_id: '', room_id: '', bed_id: '', admission_reason: '', diagnosis: '', admission_type: 'planned', attending_doctor_id: '', consultant_id: '', request_id: '' });
   const [resolvingBillFor, setResolvingBillFor] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
 
@@ -81,9 +81,39 @@ export default function Admissions() {
     enabled: !!formData.room_id,
   });
 
+  // Merges role='doctor' user accounts with the HR consultant roster — a
+  // consultant with a linked login is already covered by the first half (and
+  // skipped from the second to avoid listing them twice), one with no
+  // account gets a synthetic "c:<employeeId>" value since there's no
+  // users.id to use. Same merge LISRegistration.tsx uses for its own
+  // doctor-or-consultant picker.
   const { data: doctors = [] } = useQuery({
-    queryKey: ['doctors'],
-    queryFn: async () => { const r = await authFetch('/api/users?role=doctor'); return r.ok ? r.json() : []; },
+    queryKey: ['doctors-and-consultants'],
+    queryFn: async () => {
+      const r = await authFetch('/api/users?all=true');
+      const allUsers = r.ok ? await r.json() : [];
+      const roleDoctors = allUsers.filter((u: any) => u.role === 'doctor' && u.is_active);
+      let consultantDoctors: any[] = [];
+      try {
+        const cRes = await authFetch('/api/hr/consultants/for-doctor-picker');
+        if (cRes.ok) {
+          const consultants = await cRes.json();
+          const usersById = new Map(allUsers.map((u: any) => [u.id, u]));
+          consultantDoctors = consultants.map((c: any) => {
+            const linkedUser = c.user_id ? usersById.get(c.user_id) : null;
+            if (linkedUser && !roleDoctors.some((d: any) => d.id === c.user_id)) {
+              return { ...linkedUser, display_name: `${linkedUser.display_name} (Consultant)` };
+            }
+            if (linkedUser) return null; // already listed as a role='doctor' account
+            return {
+              id: `c:${c.id}`, display_name: `${c.first_name} ${c.last_name} (Consultant)`,
+              isConsultantOnly: true, employeeId: c.id,
+            };
+          }).filter(Boolean);
+        }
+      } catch (e) { /* non-blocking — role='doctor' accounts still work without this */ }
+      return [...roleDoctors, ...consultantDoctors];
+    },
   });
 
   // Recent admissions
@@ -130,7 +160,7 @@ export default function Admissions() {
 
   const resetForm = () => {
     setPatientSearch('');
-    setFormData({ patient_id: '', patient_name: '', ward_id: '', room_id: '', bed_id: '', admission_reason: '', diagnosis: '', admission_type: 'planned', attending_doctor_id: '', request_id: '' });
+    setFormData({ patient_id: '', patient_name: '', ward_id: '', room_id: '', bed_id: '', admission_reason: '', diagnosis: '', admission_type: 'planned', attending_doctor_id: '', consultant_id: '', request_id: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -142,7 +172,7 @@ export default function Admissions() {
   const processRequest = (req: any) => {
     setFormData({
       patient_id: req.patient_id, patient_name: req.patient_name, ward_id: '', room_id: '', bed_id: '',
-      admission_reason: req.reason || '', diagnosis: req.diagnosis || '', admission_type: 'planned', attending_doctor_id: req.requested_by || '',
+      admission_reason: req.reason || '', diagnosis: req.diagnosis || '', admission_type: 'planned', attending_doctor_id: req.requested_by || '', consultant_id: '',
       request_id: req.id,
     });
   };
@@ -363,9 +393,20 @@ export default function Admissions() {
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Attending Doctor</Label>
                   <Combobox
-                    options={doctorsArr.map((d: any) => ({ value: d.id, label: d.display_name || d.email }))}
-                    value={formData.attending_doctor_id}
-                    onChange={v => setFormData({ ...formData, attending_doctor_id: v })}
+                    options={doctorsArr.map((d: any) => ({ value: String(d.id), label: d.display_name || d.email }))}
+                    value={formData.attending_doctor_id || (formData.consultant_id ? `c:${formData.consultant_id}` : '')}
+                    onChange={v => {
+                      const doctor = doctorsArr.find((d: any) => String(d.id) === String(v));
+                      if (doctor?.isConsultantOnly) {
+                        // No user account linked — nothing to store in
+                        // attending_doctor_id, so the admission records
+                        // employees.id as consultant_id instead (see
+                        // inpatient.js).
+                        setFormData({ ...formData, attending_doctor_id: '', consultant_id: doctor.employeeId });
+                      } else {
+                        setFormData({ ...formData, attending_doctor_id: v, consultant_id: '' });
+                      }
+                    }}
                     placeholder="Select doctor"
                     searchPlaceholder="Search doctors..."
                     className="mt-1"

@@ -66,6 +66,17 @@ async function buildTenantConnection(schemaName) {
   const { ensureLisConsultantSupport } = require('./config/ensureLisConsultantSupport');
   ensureLisConsultantSupport(sequelize).catch(() => {});
 
+  // Same for inpatient_admissions.consultant_id — lets an admission's
+  // attending doctor be a consultant with no linked user account.
+  const { ensureInpatientConsultantSupport } = require('./config/ensureInpatientConsultantSupport');
+  ensureInpatientConsultantSupport(sequelize).catch(() => {});
+
+  // Database-level backstop against double-booking a bed — see
+  // ensureInpatientBedUniqueness.js and the bed-claim comment in
+  // routes/inpatient.js for why this didn't actually exist before.
+  const { ensureInpatientBedUniqueness } = require('./config/ensureInpatientBedUniqueness');
+  ensureInpatientBedUniqueness(sequelize).catch(() => {});
+
   return { sequelize, models };
 }
 

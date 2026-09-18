@@ -182,7 +182,7 @@ router.put('/wards/:id', authorize('inpatient.facility.write'), async (req, res)
       `UPDATE wards SET name = :name, code = :code, description = :description, ward_type = :wardType, capacity = :capacity, daily_rate = :dailyRate, service_id = :serviceId WHERE id = :id AND clinic_id = :clinicId`,
       { replacements: { id: req.params.id, clinicId, name, code, description: description || null, wardType: ward_type || 'general', capacity: parseInt(capacity) || 0, dailyRate, serviceId: service_id || null } }
     );
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Ward not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Ward not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating ward:', error);
@@ -203,7 +203,7 @@ router.delete('/wards/:id', authorize('inpatient.facility.write'), async (req, r
       return res.status(400).json({ error: 'Cannot delete ward with active admissions' });
     }
     const [, meta] = await sequelize.query(`UPDATE wards SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Ward not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Ward not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting ward:', error);
@@ -265,7 +265,7 @@ router.put('/rooms/:id', authorize('inpatient.facility.write'), async (req, res)
       `UPDATE rooms SET room_number = :roomNumber, room_type = :roomType, description = :description, capacity = :capacity WHERE id = :id AND clinic_id = :clinicId`,
       { replacements: { id: req.params.id, clinicId, roomNumber: room_number, roomType: room_type || 'standard', description: description || null, capacity: parseInt(capacity) || 0 } }
     );
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Room not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Room not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating room:', error);
@@ -278,7 +278,7 @@ router.delete('/rooms/:id', authorize('inpatient.facility.write'), async (req, r
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(`UPDATE rooms SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Room not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Room not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting room:', error);
@@ -344,7 +344,7 @@ router.put('/beds/:id', authorize('inpatient.facility.write'), async (req, res) 
     if (bed_type) { fields.push('bed_type = :bedType'); replacements.bedType = bed_type; }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     const [, meta] = await sequelize.query(`UPDATE beds SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Bed not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Bed not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating bed:', error);
@@ -364,7 +364,7 @@ router.delete('/beds/:id', authorize('inpatient.facility.write'), async (req, re
       return res.status(400).json({ error: 'Cannot delete bed with active admission' });
     }
     const [, meta] = await sequelize.query(`UPDATE beds SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Bed not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Bed not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting bed:', error);
@@ -415,7 +415,7 @@ router.put('/admission-requests/:id/cancel', authorize('inpatient.admissions.wri
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(`UPDATE admission_requests SET status = 'cancelled' WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Admission request not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Admission request not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error cancelling admission request:', error);
@@ -440,7 +440,7 @@ router.get('/admissions', authorize('inpatient.admissions.write'), async (req, r
       (COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')) as patient_name,
       w.name as ward_name, w.daily_rate as ward_daily_rate, r.room_number, be.bed_number,
       u.display_name as admitted_by_name,
-      d.display_name as doctor_name
+      COALESCE(d.display_name, c.first_name || ' ' || c.last_name) as doctor_name
       FROM inpatient_admissions a
       LEFT JOIN patients p ON p.id = a.patient_id
       LEFT JOIN lis_participants lp ON lp.id = a.patient_id
@@ -449,6 +449,7 @@ router.get('/admissions', authorize('inpatient.admissions.write'), async (req, r
       LEFT JOIN beds be ON a.bed_id = be.id
       LEFT JOIN users u ON u.id = a.admitted_by_user_id
       LEFT JOIN users d ON d.id = a.attending_doctor_id
+      LEFT JOIN employees c ON c.id = a.consultant_id
       WHERE a.clinic_id = :clinicId`;
     const replacements = { clinicId };
     if (status) { sql += ' AND a.status = :status'; replacements.status = status; }
@@ -478,7 +479,7 @@ router.get('/admissions/:id', authorize('inpatient.admissions.write'), async (re
         COALESCE(p.phone_number, lp.phone) as phone_number,
         w.name as ward_name, w.daily_rate as ward_daily_rate, r.room_number, be.bed_number,
         u.display_name as admitted_by_name,
-        d.display_name as doctor_name
+        COALESCE(d.display_name, c.first_name || ' ' || c.last_name) as doctor_name
         FROM inpatient_admissions a
         LEFT JOIN patients p ON p.id = a.patient_id
         LEFT JOIN lis_participants lp ON lp.id = a.patient_id
@@ -487,6 +488,7 @@ router.get('/admissions/:id', authorize('inpatient.admissions.write'), async (re
         LEFT JOIN beds be ON a.bed_id = be.id
         LEFT JOIN users u ON u.id = a.admitted_by_user_id
         LEFT JOIN users d ON d.id = a.attending_doctor_id
+        LEFT JOIN employees c ON c.id = a.consultant_id
         WHERE a.id = :id AND a.clinic_id = :clinicId`,
       { replacements: { id: req.params.id, clinicId } }
     );
@@ -510,37 +512,51 @@ router.get('/admissions/:id', authorize('inpatient.admissions.write'), async (re
 router.post('/admissions', authorize('inpatient.admissions.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { patient_id, ward_id, room_id, bed_id, admission_reason, diagnosis, diagnosis_code, admission_type, attending_doctor_id, request_id } = req.body;
+    const { patient_id, ward_id, room_id, bed_id, admission_reason, diagnosis, diagnosis_code, admission_type, attending_doctor_id, consultant_id, request_id } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const userId = req.user?.id;
     const id = uuidv4();
 
     // Claim the bed atomically: the UPDATE's own WHERE clause is the check, so there's no
     // gap between "read status" and "write status" for a concurrent request to land in.
-    // Previously this was a separate unlocked SELECT followed by a later UPDATE — two
-    // concurrent admissions for the same bed could both pass the SELECT before either
-    // committed, and both would proceed to admit into the same physical bed. A single
-    // conditional UPDATE is atomic at the row level in InnoDB regardless of isolation
-    // level: only one concurrent statement can match `status = 'available'` and flip it,
-    // the other sees 0 affected rows.
+    // Postgres row-locks the matched row for the statement's duration, so a second
+    // concurrent UPDATE against the same bed_id blocks until the first transaction
+    // resolves, then re-evaluates `status = 'available'` against the now-committed row —
+    // it correctly matches nothing and rowCount comes back 0.
+    //
+    // That check used to test claimMeta.affectedRows, a MySQL-era name this app's Postgres
+    // driver never populates (pg's query result carries rowCount instead) — so it was
+    // always `undefined === 0`, i.e. always false. The 409 branch below could never run: a
+    // losing concurrent request still got a 201 and believed it had claimed the bed. There
+    // is no unique constraint on beds/admissions backing this up either (checked directly —
+    // only the ordinary, non-unique bed_id index exists), so this UPDATE's own atomicity was
+    // the only thing standing between two admissions and the same physical bed.
     const [, claimMeta] = await sequelize.query(
       `UPDATE beds SET status = 'occupied' WHERE id = :bedId AND status = 'available'`,
       { replacements: { bedId: bed_id }, transaction: t }
     );
-    if (claimMeta.affectedRows === 0) {
+    if (claimMeta.rowCount === 0) {
       await t.rollback();
       const [bedCheck] = await sequelize.query(`SELECT id FROM beds WHERE id = :bedId`, { replacements: { bedId: bed_id } });
       if (bedCheck.length === 0) return res.status(404).json({ error: 'Bed not found' });
       return res.status(409).json({ error: 'Bed is not available — it was just taken by another admission' });
     }
 
-    // Create admission. The unique index on active_bed_id (see migration above) is the
-    // second line of defense: even if this INSERT somehow raced past the bed claim above,
-    // MySQL would reject a second 'active' row for the same bed_id outright.
+    // Create admission. inpatient_admissions_active_bed_uniq (see
+    // ensureInpatientBedUniqueness.js) is the second line of defense: even if this INSERT
+    // somehow raced past the bed claim above, Postgres rejects a second 'active' row for
+    // the same bed_id outright.
+    // A consultant with no linked user account has no valid users.id to put in
+    // attending_doctor_id (see ensureInpatientConsultantSupport.js) — goes in
+    // consultant_id instead, and attending_doctor_id must stay null rather
+    // than falling back to the admitting user, which would otherwise silently
+    // credit them as the attending doctor instead of the chosen consultant.
+    const doctorId = consultant_id ? null : (attending_doctor_id || userId);
+
     await sequelize.query(
-      `INSERT INTO inpatient_admissions (id, clinic_id, patient_id, admission_date, bed_id, room_id, ward_id, admission_reason, diagnosis, diagnosis_code, admission_type, admitted_by_user_id, attending_doctor_id)
-       VALUES (:id, :clinicId, :patientId, NOW(), :bedId, :roomId, :wardId, :reason, :diagnosis, :diagnosisCode, :type, :userId, :doctorId)`,
-      { replacements: { id, clinicId, patientId: patient_id, bedId: bed_id, roomId: room_id, wardId: ward_id, reason: admission_reason, diagnosis: diagnosis || null, diagnosisCode: diagnosis_code || null, type: admission_type || 'planned', userId, doctorId: attending_doctor_id || userId }, transaction: t }
+      `INSERT INTO inpatient_admissions (id, clinic_id, patient_id, admission_date, bed_id, room_id, ward_id, admission_reason, diagnosis, diagnosis_code, admission_type, admitted_by_user_id, attending_doctor_id, consultant_id)
+       VALUES (:id, :clinicId, :patientId, NOW(), :bedId, :roomId, :wardId, :reason, :diagnosis, :diagnosisCode, :type, :userId, :doctorId, :consultantId)`,
+      { replacements: { id, clinicId, patientId: patient_id, bedId: bed_id, roomId: room_id, wardId: ward_id, reason: admission_reason, diagnosis: diagnosis || null, diagnosisCode: diagnosis_code || null, type: admission_type || 'planned', userId, doctorId, consultantId: consultant_id || null }, transaction: t }
     );
 
     // If this admission fulfills a pending request, close it out
@@ -753,7 +769,38 @@ async function mirrorPrescriptionToPharmacy(clinicId, patientId, doctorId, docto
 async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, department) {
   try {
     const [participants] = await sequelize.query(`SELECT id FROM lis_participants WHERE id = :pid LIMIT 1`, { replacements: { pid: patientId } });
-    if (participants.length === 0) return;
+    if (participants.length === 0) {
+      // Every real check here found ZERO overlap between patients and
+      // lis_participants — an inpatient admitted the normal way (through the
+      // main Patient Registry, not the LIS module's own separate
+      // registration form) has no lis_participants row at all, so this used
+      // to just silently return: the request stayed visible on the
+      // inpatient page and got billed correctly, but no lab technician ever
+      // saw it, because nothing was ever created for them to see. Mirroring
+      // one in on demand, keyed to the same id as the source patients row
+      // (which is exactly what every COALESCE(p.x, lp.x) join elsewhere in
+      // this file already assumes is possible), closes that gap instead of
+      // requiring every inpatient to separately exist in the LIS module.
+      const [[patient]] = await sequelize.query(
+        `SELECT first_name, last_name, gender, date_of_birth, phone_number, address FROM patients WHERE id = :pid LIMIT 1`,
+        { replacements: { pid: patientId } }
+      );
+      if (!patient) return; // truly unknown id — nothing to mirror against
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      await sequelize.query(
+        `INSERT INTO lis_participants (id, participant_number, first_name, last_name, gender, date_of_birth, phone, residence)
+         VALUES (:id, :participantNumber, :firstName, :lastName, :gender, :dob, :phone, :residence)`,
+        {
+          replacements: {
+            id: patientId, participantNumber: `PTN-${dateStr}-${randomSuffix}`,
+            firstName: patient.first_name || 'Unknown', lastName: patient.last_name || 'Patient',
+            gender: patient.gender || null, dob: patient.date_of_birth || null,
+            phone: patient.phone_number || null, residence: patient.address || null,
+          },
+        }
+      );
+    }
 
     const [[dup]] = await sequelize.query(
       `SELECT sp.id FROM lis_specimens sp JOIN lis_test_orders o ON o.id = sp.order_id
@@ -962,7 +1009,7 @@ router.put('/prescriptions/:id', authorize('inpatient.medications.manage'), asyn
     const { status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [, meta] = await sequelize.query(`UPDATE inpatient_prescriptions SET status = :status WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, status, clinicId } });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Prescription not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Prescription not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating prescription:', error);
@@ -1115,7 +1162,7 @@ router.put('/lab-requests/:id', authorize('inpatient.ancillary.write'), async (r
     if (result_notes) { fields.push('result_notes = :resultNotes'); replacements.resultNotes = result_notes; }
     if (status === 'completed') { fields.push('completed_date = NOW()'); fields.push('completed_by = :completedBy'); replacements.completedBy = completedBy; }
     const [, meta] = await sequelize.query(`UPDATE inpatient_lab_requests SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Lab request not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Lab request not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating lab request:', error);
@@ -1185,7 +1232,7 @@ router.put('/radiology-requests/:id', authorize('inpatient.ancillary.write'), as
     if (impression) { fields.push('impression = :impression'); replacements.impression = impression; }
     if (status === 'completed') { fields.push('completed_date = NOW()'); fields.push('completed_by = :completedBy'); replacements.completedBy = completedBy; }
     const [, meta] = await sequelize.query(`UPDATE inpatient_radiology_requests SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
-    if (meta.affectedRows === 0) return res.status(404).json({ error: 'Radiology request not found' });
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Radiology request not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating radiology request:', error);
