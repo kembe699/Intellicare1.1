@@ -3,19 +3,38 @@ const router = express.Router();
 const { sequelize } = require('../models');
 const PDFGenerator = require('../services/PDFGenerator');
 
-// Helper: get company info from clinic
-async function getCompanyInfo(clinicId) {
+// Helper: get the tenant's real facility info (tenant-wide single row —
+// the `clinics` table this used to query doesn't exist in any tenant schema,
+// which is why this always fell through to a hardcoded "IntelliCare" name).
+async function getCompanyInfo() {
   try {
-    const [rows] = await sequelize.query(`SELECT * FROM clinics WHERE id=? LIMIT 1`, { replacements: [clinicId || 1] });
+    const [rows] = await sequelize.query(`SELECT * FROM facilities ORDER BY created_at ASC LIMIT 1`);
     const c = rows[0] || {};
     return {
-      name: c.name || 'IntelliCare Medical Center',
+      name: c.name || '',
       address: c.address || '',
       city: c.city || '',
       phone: c.phone || '',
       email: c.email || '',
+      logo: c.logo || null,
     };
-  } catch { return { name: 'IntelliCare Medical Center' }; }
+  } catch { return { name: '' }; }
+}
+
+// Helper: resolve the display name of whoever created a record, given a raw
+// `created_by` value that may be a numeric user id (invoices) or already a
+// display name (patient_bills, receipts.cashier_name).
+async function resolveCreatedByName(createdBy) {
+  if (!createdBy) return null;
+  const raw = String(createdBy).trim();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) {
+    try {
+      const [rows] = await sequelize.query(`SELECT display_name FROM users WHERE id=? LIMIT 1`, { replacements: [raw] });
+      return rows[0]?.display_name || null;
+    } catch { return null; }
+  }
+  return raw;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -30,11 +49,13 @@ router.get('/invoice/:id/pdf', async (req, res) => {
     const [items] = await sequelize.query(`SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY created_at`, { replacements: [req.params.id] });
     const [payments] = await sequelize.query(`SELECT * FROM invoice_payments WHERE invoice_id=? ORDER BY payment_date`, { replacements: [req.params.id] });
 
-    const company = await getCompanyInfo(invoice.clinic_id);
+    const company = await getCompanyInfo();
+    const createdByName = await resolveCreatedByName(invoice.created_by);
     const subtotal = parseFloat(invoice.amount) || 0;
 
     const pdfData = {
       company,
+      createdByName,
       documentNumber: invoice.invoice_number,
       date: invoice.created_at,
       dueDate: invoice.due_date,
@@ -83,11 +104,13 @@ router.get('/bill/:id/pdf', async (req, res) => {
       services = typeof bill.services === 'string' ? JSON.parse(bill.services) : (bill.services || []);
     } catch { services = []; }
 
-    const company = await getCompanyInfo(bill.clinic_id);
+    const company = await getCompanyInfo();
+    const createdByName = await resolveCreatedByName(bill.created_by);
     const currency = services.find(s => s.currency && s.currency !== 'SSP')?.currency || 'SSP';
 
     const pdfData = {
       company,
+      createdByName,
       documentNumber: bill.bill_number || `BILL-${bill.id?.substring(0, 8)}`,
       date: bill.created_at || bill.bill_date,
       customerName: bill.patient_name || bill.patient_id,
@@ -138,11 +161,13 @@ router.get('/receipt/:id/pdf', async (req, res) => {
       services = typeof svcData === 'string' ? JSON.parse(svcData) : (svcData || []);
     } catch { services = []; }
 
-    const company = await getCompanyInfo(receipt.clinic_id);
+    const company = await getCompanyInfo();
+    const createdByName = await resolveCreatedByName(receipt.cashier_name);
     const amount = parseFloat(receipt.amount) || 0;
 
     const pdfData = {
       company,
+      createdByName,
       documentNumber: receipt.receipt_number || `RCP-${receipt.id?.substring(0, 8)}`,
       date: receipt.payment_date || receipt.created_at,
       customerName: receipt.patient_name || receipt.bill_patient_name || 'Patient',

@@ -165,7 +165,7 @@ function buildDocument(opts) {
 <div class="ic-page">
   <div class="ic-header">
     <div>
-      <div class="ic-logo">${(facilityInfo && facilityInfo.name) || 'IntelliCare'}</div>
+      <div class="ic-logo">${(facilityInfo && facilityInfo.name) || ''}</div>
       ${(facilityInfo && facilityInfo.type) ? `<div class="ic-logo-sub">${facilityInfo.type}</div>` : `<div class="ic-logo-sub">${docType}</div>`}
       ${(facilityInfo && facilityInfo.address) ? `<div style="font-size:10px;color:#64748b;margin-top:3px">${facilityInfo.address}${facilityInfo.city ? ', ' + facilityInfo.city : ''}</div>` : ''}
       ${(facilityInfo && facilityInfo.phone) ? `<div style="font-size:10px;color:#64748b">Tel: ${facilityInfo.phone}${facilityInfo.email ? '  |  ' + facilityInfo.email : ''}</div>` : ''}

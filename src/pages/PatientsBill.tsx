@@ -12,6 +12,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { DepositReceipt } from '@/components/receipts/DepositReceipt';
@@ -67,6 +68,7 @@ const isPayableLine = (s: any) => !s.paid && !s.isVoided && !isUnbilledInsurance
 
 export default function PatientsBill() {
   const { user } = useAuth();
+  const { facilityName, branchName } = useFacilityInfo();
   const navigate = useNavigate();
   const clinicId = user?.clinic || 1;
 
@@ -1161,7 +1163,7 @@ export default function PatientsBill() {
       {receiptData && (
         <div className="fixed -left-[9999px] top-0">
           <div ref={receiptRef}>
-            <PaymentReceipt bill={receiptData.bill} payment={receiptData.payment} />
+            <PaymentReceipt bill={receiptData.bill} payment={receiptData.payment} facilityName={facilityName} branchName={branchName} />
           </div>
         </div>
       )}
@@ -1180,6 +1182,8 @@ export default function PatientsBill() {
               date={depositReceiptData.date}
               notes={depositReceiptData.notes}
               receiptNumber={depositReceiptData.receiptNumber}
+              facilityName={facilityName}
+              branchName={branchName}
             />
           </div>
         </div>

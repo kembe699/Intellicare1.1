@@ -595,6 +595,16 @@ router.get('/:id/pdf', async (req, res) => {
 
     const currency = claim.currency || claim.scheme_currency || items[0]?.currency || 'SSP';
 
+    const [facilityRows] = await sequelize.query(`SELECT * FROM facilities ORDER BY created_at ASC LIMIT 1`);
+    const facility = facilityRows[0] || {};
+    const facilityInfo = {
+      name: facility.name || '',
+      address: facility.address || '',
+      city: facility.city || '',
+      phone: facility.phone || '',
+      email: facility.email || '',
+    };
+
     // Build table rows with sub-rows for services
     const tableRows = [];
     items.forEach((it, idx) => {
@@ -663,6 +673,7 @@ router.get('/:id/pdf', async (req, res) => {
       status: claim.status,
       date: claim.created_at,
       bodyHTML,
+      facilityInfo,
     });
 
     res.setHeader('Content-Type', 'text/html');

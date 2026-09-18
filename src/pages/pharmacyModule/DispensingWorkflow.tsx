@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
@@ -65,6 +66,7 @@ const toLocalDateStr = (d: Date) => {
 
 export default function DispensingWorkflow() {
   const { user } = useAuth();
+  const { facilityName, branchName } = useFacilityInfo();
   const { fmt, currency } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
@@ -2059,7 +2061,7 @@ export default function DispensingWorkflow() {
       {receiptData && (
         <div className="fixed -left-[9999px] top-0">
           <div ref={receiptRef}>
-            <PaymentReceipt bill={receiptData.bill} payment={receiptData.payment} />
+            <PaymentReceipt bill={receiptData.bill} payment={receiptData.payment} facilityName={facilityName} branchName={branchName} />
           </div>
         </div>
       )}

@@ -52,10 +52,10 @@ router.get('/name', async (req, res) => {
     const [facilities] = await sequelize.query(
       `SELECT name FROM facilities ORDER BY id LIMIT 1`
     );
-    res.json({ success: true, name: facilities[0]?.name || 'IntelliCare' });
+    res.json({ success: true, name: facilities[0]?.name || '' });
   } catch (error) {
     console.error('Error fetching facility name:', error);
-    res.json({ success: true, name: 'IntelliCare' });
+    res.json({ success: true, name: '' });
   }
 });
 
