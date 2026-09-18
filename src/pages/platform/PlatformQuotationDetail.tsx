@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { platformFetch } from '@/api/platformApiClient';
 import { PlatformAppLayout } from '@/components/layout/PlatformAppLayout';
 import { PageHeader } from '@/components/common/PageHeader/PageHeader';
@@ -12,8 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { Download, FileText, Loader2, Save, Send, CheckCircle2, Clock, Trash2 } from 'lucide-react';
+import { Building2, CheckCircle2, Clock, Copy, Download, FileText, Loader2, Save, Send, ServerCog, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
@@ -30,7 +33,28 @@ interface QuotationDetail {
   training_hours: number;
   scope_notes: string | null;
   status: 'draft' | 'sent' | 'accepted' | 'expired';
-  customer: { id: number; name: string; contact_person: string | null; email: string | null; phone: string | null; address: string | null };
+  customer: {
+    id: number; name: string; contact_person: string | null; email: string | null; phone: string | null; address: string | null;
+    status: 'prospect' | 'converted'; client_id: number | null;
+  };
+}
+
+interface Plan { id: number; name: string; amount: string; billing_period: string; }
+
+interface NewInstanceResult {
+  code: string;
+  email: string;
+  tempPassword: string;
+  invoice: { amount: string; billing_period: string; period_end: string } | null;
+}
+
+// Derives a starting point for the "Code" field from the customer's own
+// name, matching the [a-z][a-z0-9]{2,29} slug POST /clients requires — the
+// admin can still edit it before submitting, this just saves typing for the
+// common case where the customer's name already makes a sensible slug.
+function slugify(name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
+  return /^[a-z]/.test(slug) ? slug : `c${slug}`.slice(0, 30);
 }
 
 const STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'success' | 'warning'> = {
@@ -56,6 +80,101 @@ const PlatformQuotationDetail: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // ── Create Instance (turns an accepted quotation's customer into a real,
+  // provisioned Client) — same request this panel's Clients page already
+  // makes, just pre-filled from the customer/quotation instead of the admin
+  // re-typing everything they already told the customer about. ──
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [schemaPrefix, setSchemaPrefix] = useState('');
+  const [createInstanceOpen, setCreateInstanceOpen] = useState(false);
+  const [instanceForm, setInstanceForm] = useState({ name: '', code: '', adminName: '', adminEmail: '', planId: '' });
+  const [creatingInstance, setCreatingInstance] = useState(false);
+  const [instanceResult, setInstanceResult] = useState<NewInstanceResult | null>(null);
+
+  const loadPlans = async () => {
+    try {
+      const res = await platformFetch('/plans');
+      const data = await res.json();
+      if (res.ok) setPlans(data.filter((p: Plan & { is_active: boolean }) => p.is_active));
+    } catch {
+      // Plan selection is optional — a failed fetch just leaves the picker empty.
+    }
+  };
+
+  const loadSchemaPrefix = async () => {
+    try {
+      const res = await platformFetch('/clients/db-name-prefix');
+      const data = await res.json();
+      if (res.ok) setSchemaPrefix(data.prefix);
+    } catch {
+      // Purely a UX hint — the create flow still works without it.
+    }
+  };
+
+  useEffect(() => { loadPlans(); loadSchemaPrefix(); }, []);
+
+  const openCreateInstance = () => {
+    if (!quotation) return;
+    setInstanceResult(null);
+    setInstanceForm({
+      name: quotation.customer.name,
+      code: slugify(quotation.customer.name),
+      adminName: quotation.customer.contact_person || '',
+      adminEmail: quotation.customer.email || '',
+      planId: '',
+    });
+    setCreateInstanceOpen(true);
+  };
+
+  const handleCreateInstance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quotation) return;
+    setCreatingInstance(true);
+    try {
+      const res = await platformFetch('/clients', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: instanceForm.name,
+          code: instanceForm.code,
+          adminName: instanceForm.adminName,
+          adminEmail: instanceForm.adminEmail,
+          plan_id: instanceForm.planId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create instance');
+
+      // Link the prospect record to the client it just became, so this
+      // button turns into "View Client Instance" on every future visit
+      // instead of offering to provision a second instance for the same
+      // customer.
+      try {
+        await platformFetch(`/customers/${quotation.customer.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ client_id: data.client.id, status: 'converted' }),
+        });
+      } catch {
+        // The instance itself was created successfully — a failure here
+        // just means the prospect record's own status stays stale until
+        // the next edit; not worth failing the whole action over.
+      }
+
+      setInstanceResult({ ...data.credentials, invoice: data.invoice });
+      await load();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setCreatingInstance(false);
+    }
+  };
+
+  const copyInstanceCredentials = () => {
+    if (!instanceResult) return;
+    const text = `Code: ${instanceResult.code}\nEmail: ${instanceResult.email}\nPassword: ${instanceResult.tempPassword}`;
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
 
   const load = async () => {
     setLoading(true);
@@ -286,9 +405,141 @@ const PlatformQuotationDetail: React.FC = () => {
                 </Button>
               )}
             </div>
+
+            {quotation.status === 'accepted' && (
+              <div className="pt-4 border-t border-border space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Instance</p>
+                {quotation.customer.status === 'converted' && quotation.customer.client_id ? (
+                  <Link to={`/platform-admin/clients/${quotation.customer.client_id}`}>
+                    <Button variant="outline" className="w-full gap-1.5">
+                      <Building2 className="w-3.5 h-3.5" /> View Client Instance
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button className="w-full gap-1.5" onClick={openCreateInstance}>
+                    <ServerCog className="w-3.5 h-3.5" /> Create Instance
+                  </Button>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Create Instance — provisions a real tenant for this quotation's
+          customer, the same POST /clients this panel's Clients page uses,
+          just pre-filled so nothing already known has to be retyped. */}
+      <Dialog open={createInstanceOpen} onOpenChange={setCreateInstanceOpen}>
+        <DialogContent className="sm:max-w-md">
+          {instanceResult ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Instance created
+                </DialogTitle>
+              </DialogHeader>
+              <div className="px-5 py-4 space-y-3 text-sm">
+                <p className="text-muted-foreground">
+                  Share these with the client now — the password won't be shown again.
+                </p>
+                <div className="bg-muted/50 border border-border rounded-lg p-3 font-mono space-y-1 text-foreground">
+                  <div>Code: {instanceResult.code}</div>
+                  <div>Email: {instanceResult.email}</div>
+                  <div>Password: {instanceResult.tempPassword}</div>
+                </div>
+                {instanceResult.invoice && (
+                  <p className="text-muted-foreground">
+                    First invoice created: <span className="text-primary font-semibold">${Number(instanceResult.invoice.amount).toFixed(2)}</span>{' '}
+                    ({instanceResult.invoice.billing_period}), due by {new Date(instanceResult.invoice.period_end).toLocaleDateString()}.
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={copyInstanceCredentials}>
+                  <Copy className="w-4 h-4 mr-1.5" /> Copy
+                </Button>
+                <Button onClick={() => setCreateInstanceOpen(false)}>Done</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Create Instance</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateInstance}>
+                <div className="px-5 py-4 space-y-4">
+                  <div className="space-y-1.5">
+                    <Label>Company Name</Label>
+                    <Input
+                      value={instanceForm.name}
+                      onChange={(e) => setInstanceForm({ ...instanceForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Code (used to log in — e.g. nationmc)</Label>
+                    <Input
+                      value={instanceForm.code}
+                      onChange={(e) => setInstanceForm({ ...instanceForm, code: e.target.value.toLowerCase() })}
+                      required
+                      pattern="[a-z][a-z0-9]{2,29}"
+                      className="font-mono"
+                    />
+                    {schemaPrefix && instanceForm.code && (
+                      <p className="text-xs text-muted-foreground">
+                        Gets its own isolated schema:{' '}
+                        <span className="font-mono text-foreground">{schemaPrefix}{instanceForm.code}</span>
+                        {' '}— created automatically.
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Admin Name</Label>
+                    <Input
+                      value={instanceForm.adminName}
+                      onChange={(e) => setInstanceForm({ ...instanceForm, adminName: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Admin Email</Label>
+                    <Input
+                      type="email"
+                      value={instanceForm.adminEmail}
+                      onChange={(e) => setInstanceForm({ ...instanceForm, adminEmail: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Subscription Plan</Label>
+                    <Select value={instanceForm.planId} onValueChange={(v) => setInstanceForm({ ...instanceForm, planId: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No plan (bill manually later)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plans.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.name} — ${p.amount} / {p.billing_period}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Creates the first invoice immediately. The client is suspended automatically if it lapses unpaid.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setCreateInstanceOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={creatingInstance}>
+                    {creatingInstance ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </PlatformAppLayout>
   );
 };

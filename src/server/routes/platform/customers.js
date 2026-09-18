@@ -69,8 +69,11 @@ router.put('/:id', async (req, res) => {
   try {
     const customer = await Customer.findByPk(req.params.id);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
-    const { name, contact_person, email, phone, address, notes } = req.body;
+    const { name, contact_person, email, phone, address, notes, client_id, status } = req.body;
     if (name !== undefined && !name.trim()) return res.status(400).json({ error: 'Customer name is required' });
+    if (status !== undefined && !['prospect', 'converted'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
     await customer.update({
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(contact_person !== undefined ? { contact_person } : {}),
@@ -78,6 +81,11 @@ router.put('/:id', async (req, res) => {
       ...(phone !== undefined ? { phone } : {}),
       ...(address !== undefined ? { address } : {}),
       ...(notes !== undefined ? { notes } : {}),
+      // Set once a prospect's tenant instance has actually been provisioned
+      // (see PlatformQuotationDetail.tsx's "Create Instance" action) — links
+      // this lightweight prospect record to the real Client row it became.
+      ...(client_id !== undefined ? { client_id } : {}),
+      ...(status !== undefined ? { status } : {}),
     });
     res.json(customer);
   } catch (error) {
