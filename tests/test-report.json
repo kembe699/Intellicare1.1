@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-09-18T08:53:52.740Z",
+  "timestamp": "2026-09-18T09:01:20.159Z",
   "totalTests": 270,
   "passed": 270,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 7688,
+  "duration": 7733,
   "success": false,
   "modules": [
     {
@@ -15,16 +15,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1264
-    },
-    {
-      "name": "currencies.test.js",
-      "tests": 25,
-      "passed": 25,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 592
+      "duration": 1219
     },
     {
       "name": "rolePrivileges.test.js",
@@ -33,16 +24,16 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 675
+      "duration": 670
     },
     {
-      "name": "insuranceClaims.test.js",
-      "tests": 16,
-      "passed": 16,
+      "name": "currencies.test.js",
+      "tests": 25,
+      "passed": 25,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 498
+      "duration": 576
     },
     {
       "name": "dataIntegrity.test.js",
@@ -51,7 +42,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 543
+      "duration": 575
     },
     {
       "name": "completeWorkflow.test.js",
@@ -60,7 +51,16 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 518
+      "duration": 438
+    },
+    {
+      "name": "insuranceClaims.test.js",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 494
     },
     {
       "name": "ledgerIntegration.test.js",
@@ -69,25 +69,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 468
-    },
-    {
-      "name": "multiCurrency.test.js",
-      "tests": 15,
-      "passed": 15,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 409
-    },
-    {
-      "name": "billing.test.js",
-      "tests": 10,
-      "passed": 10,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 399
+      "duration": 515
     },
     {
       "name": "invoices.test.js",
@@ -96,7 +78,25 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 413
+      "duration": 381
+    },
+    {
+      "name": "multiCurrency.test.js",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 390
+    },
+    {
+      "name": "billing.test.js",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 418
     },
     {
       "name": "shiftRefunds.test.js",
@@ -105,7 +105,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 386
+      "duration": 366
     },
     {
       "name": "accountingInvariants.test.js",
@@ -114,7 +114,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 321
+      "duration": 319
     },
     {
       "name": "roleAccess.test.js",
@@ -123,7 +123,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 117
+      "duration": 124
     },
     {
       "name": "authHeaders.test.js",
@@ -132,7 +132,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 106
+      "duration": 112
     },
     {
       "name": "selfHealing.test.js",
@@ -141,16 +141,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 81
-    },
-    {
-      "name": "permissionsCatalog.test.js",
-      "tests": 6,
-      "passed": 6,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 71
+      "duration": 106
     },
     {
       "name": "transactionLeaks.test.js",
@@ -159,16 +150,25 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 80
+      "duration": 100
     },
     {
-      "name": "proformaPatientFields.test.js",
-      "tests": 3,
-      "passed": 3,
+      "name": "incomeStatementRounding.test.js",
+      "tests": 6,
+      "passed": 6,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 58
+      "duration": 155
+    },
+    {
+      "name": "creditNoteRevenueAccount.test.js",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 81
     },
     {
       "name": "cashRevenueAllocation.test.js",
@@ -180,40 +180,13 @@
       "duration": 74
     },
     {
-      "name": "creditNoteRevenueAccount.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 76
-    },
-    {
       "name": "patientDirectoryReach.test.js",
       "tests": 4,
       "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 72
-    },
-    {
-      "name": "prescriptionDispenseStatus.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 55
-    },
-    {
-      "name": "incomeStatementRounding.test.js",
-      "tests": 6,
-      "passed": 6,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 76
+      "duration": 69
     },
     {
       "name": "cashAccountPreference.test.js",
@@ -222,7 +195,16 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 72
+      "duration": 76
+    },
+    {
+      "name": "permissionsCatalog.test.js",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 74
     },
     {
       "name": "frontendPrivileges.test.js",
@@ -231,7 +213,25 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 68
+      "duration": 58
+    },
+    {
+      "name": "proformaPatientFields.test.js",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 80
+    },
+    {
+      "name": "prescriptionDispenseStatus.test.js",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 60
     }
   ],
   "errors": [],

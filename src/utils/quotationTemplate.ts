@@ -99,7 +99,7 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
     .qt-total .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: #64748B; font-weight: 600; }
     .qt-total .value { font-size: 16px; font-weight: 700; color: #0F172A; }
     .qt-closing-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; gap: 16px; }
-    .qt-stamp { max-height: 90px; max-width: 90px; object-fit: contain; flex-shrink: 0; }
+    .qt-stamp { max-height: 115px; max-width: 115px; object-fit: contain; flex-shrink: 0; transform: rotate(-12deg); }
     .qt-notes-box { margin-top: 16px; padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 11px; }
     .qt-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; }
     .qt-col h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: #0F172A; }
