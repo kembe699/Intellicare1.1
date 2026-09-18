@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { Building2, CheckCircle2, Clock, Copy, Download, FileText, Loader2, Save, Send, ServerCog, Trash2 } from 'lucide-react';
+import { Building2, CheckCircle2, Clock, Copy, CreditCard, Download, FileText, Loader2, Receipt, Save, Send, ServerCog, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
@@ -37,6 +37,7 @@ interface QuotationDetail {
     id: number; name: string; contact_person: string | null; email: string | null; phone: string | null; address: string | null;
     status: 'prospect' | 'converted'; client_id: number | null;
   };
+  invoice: { id: number; invoice_number: string; status: 'unpaid' | 'partial' | 'paid' } | null;
 }
 
 interface Plan { id: number; name: string; amount: string; billing_period: string; }
@@ -174,6 +175,26 @@ const PlatformQuotationDetail: React.FC = () => {
     const text = `Code: ${instanceResult.code}\nEmail: ${instanceResult.email}\nPassword: ${instanceResult.tempPassword}`;
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
+  };
+
+  const [convertingInvoice, setConvertingInvoice] = useState(false);
+  const handleConvertToInvoice = async () => {
+    if (!quotation) return;
+    setConvertingInvoice(true);
+    try {
+      const res = await platformFetch('/quotation-invoices', {
+        method: 'POST',
+        body: JSON.stringify({ quotation_id: quotation.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to convert to invoice');
+      toast.success(`Invoice ${data.invoice_number} created`);
+      await load();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setConvertingInvoice(false);
+    }
   };
 
   const load = async () => {
@@ -418,6 +439,23 @@ const PlatformQuotationDetail: React.FC = () => {
                 ) : (
                   <Button className="w-full gap-1.5" onClick={openCreateInstance}>
                     <ServerCog className="w-3.5 h-3.5" /> Create Instance
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {quotation.status === 'accepted' && (
+              <div className="pt-4 border-t border-border space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Invoice</p>
+                {quotation.invoice ? (
+                  <Link to="/platform-admin/invoices">
+                    <Button variant="outline" className="w-full gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5" /> View Invoice ({quotation.invoice.invoice_number})
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button variant="outline" className="w-full gap-1.5" onClick={handleConvertToInvoice} disabled={convertingInvoice}>
+                    {convertingInvoice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Receipt className="w-3.5 h-3.5" /> Convert to Invoice</>}
                   </Button>
                 )}
               </div>

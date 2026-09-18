@@ -571,6 +571,7 @@ const platformAdminsRouter = require('./routes/platform/admins');
 const platformCustomersRouter = require('./routes/platform/customers');
 const platformQuotationsRouter = require('./routes/platform/quotations');
 const platformCompanyProfileRouter = require('./routes/platform/company-profile');
+const platformQuotationInvoicesRouter = require('./routes/platform/quotation-invoices');
 
 // API Routes
 app.use('/api/platform/auth', platformAuthRouter);
@@ -582,6 +583,7 @@ app.use('/api/platform/admins', platformAdminsRouter);
 app.use('/api/platform/customers', platformCustomersRouter);
 app.use('/api/platform/quotations', platformQuotationsRouter);
 app.use('/api/platform/company-profile', platformCompanyProfileRouter);
+app.use('/api/platform/quotation-invoices', platformQuotationInvoicesRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/notifications', notificationsRouter);

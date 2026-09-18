@@ -8,6 +8,7 @@ const DbUsageSnapshot = require('./DbUsageSnapshot')(platformSequelize);
 const Customer = require('./Customer')(platformSequelize);
 const Quotation = require('./Quotation')(platformSequelize);
 const CompanyProfile = require('./CompanyProfile')(platformSequelize);
+const QuotationInvoice = require('./QuotationInvoice')(platformSequelize);
 
 Client.hasMany(Invoice, { foreignKey: 'client_id', as: 'invoices' });
 Invoice.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
@@ -17,6 +18,10 @@ Client.hasMany(DbUsageSnapshot, { foreignKey: 'client_id', as: 'dbUsageSnapshots
 DbUsageSnapshot.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
 Customer.hasMany(Quotation, { foreignKey: 'customer_id', as: 'quotations' });
 Quotation.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
+Quotation.hasOne(QuotationInvoice, { foreignKey: 'quotation_id', as: 'invoice' });
+QuotationInvoice.belongsTo(Quotation, { foreignKey: 'quotation_id', as: 'quotation' });
+Customer.hasMany(QuotationInvoice, { foreignKey: 'customer_id', as: 'quotationInvoices' });
+QuotationInvoice.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
 
 async function initializePlatformDatabase() {
   await platformSequelize.authenticate();
@@ -76,5 +81,6 @@ module.exports = {
   Customer,
   Quotation,
   CompanyProfile,
+  QuotationInvoice,
   initializePlatformDatabase,
 };

@@ -1,5 +1,5 @@
 const express = require('express');
-const { Customer, Quotation, sequelize } = require('../../models/platform');
+const { Customer, Quotation, QuotationInvoice, sequelize } = require('../../models/platform');
 const { authenticatePlatformAdmin } = require('../../middleware/platformAuth');
 
 const router = express.Router();
@@ -73,7 +73,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const quotation = await Quotation.findByPk(req.params.id, {
-      include: [{ model: Customer, as: 'customer' }],
+      include: [{ model: Customer, as: 'customer' }, { model: QuotationInvoice, as: 'invoice' }],
     });
     if (!quotation) return res.status(404).json({ error: 'Quotation not found' });
     res.json(quotation);
