@@ -44,14 +44,14 @@ export default function HowTo() {
 
   return (
     <AppLayout>
-      <div className="mx-auto w-full max-w-screen-2xl">
+      <div className="mx-auto w-full max-w-2xl">
         <PageHeader
           icon={<HelpCircle />}
           title="How To / Help Guide"
           subtitle="Step-by-step instructions for everything in the system — search or browse below."
         />
 
-        <div className="relative mb-2 max-w-2xl mx-auto">
+        <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder='Search the guide… e.g. "discharge a patient", "purchase order", "payroll"'
@@ -72,7 +72,7 @@ export default function HowTo() {
           )}
         </div>
 
-        <p className="text-xs text-muted-foreground mb-4 text-center">
+        <p className="text-xs text-muted-foreground mb-6 text-center">
           {query
             ? filteredEntries.length === 0
               ? `No guides match "${query}".`
@@ -87,17 +87,17 @@ export default function HowTo() {
             <p className="text-xs mt-1">Try a different word, e.g. the name of a page or an action like "add", "pay", or "approve".</p>
           </div>
         ) : (
-          <Accordion type="multiple" className="space-y-2 pb-8">
+          <Accordion type="multiple" className="space-y-4 pb-8">
             {filteredEntries.map((entry) => (
-              <AccordionItem key={entry.title} value={entry.title} className="border border-border rounded-xl bg-card px-4 overflow-hidden">
-                <AccordionTrigger className="hover:no-underline py-3.5">
+              <AccordionItem key={entry.title} value={entry.title} className="border border-border rounded-xl bg-card px-5 overflow-hidden">
+                <AccordionTrigger className="hover:no-underline py-4">
                   <span className="flex items-center gap-2.5 text-left">
                     <span className="font-semibold text-sm text-foreground">{highlight(entry.title, query)}</span>
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="flex items-start justify-between gap-3 pb-2">
-                    <ol className="space-y-1.5 list-decimal list-inside flex-1">
+                  <div className="flex items-start justify-between gap-3 pb-3 pt-1">
+                    <ol className="space-y-2 list-decimal list-inside flex-1">
                       {entry.steps.map((step, i) => (
                         <li key={i} className="text-[13px] leading-relaxed text-muted-foreground">
                           {highlight(step, query)}
