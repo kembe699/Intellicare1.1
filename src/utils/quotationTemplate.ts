@@ -223,20 +223,18 @@ export function buildQuotationHTML(quotation: QuotationData, customer: Quotation
           <h2>Project Plan</h2>
           <h4>Training / Learning</h4>
           <p>
-            The training will be delivered virtually through our online Learning Management System (LMS), which offers a
-            flexible and rich learning experience. Learners can access the LMS through any internet-enabled device,
-            including mobile phones, ensuring that training is convenient and adaptable to their schedules. The LMS
-            features comprehensive learning paths and modules designed specifically for different roles within the
-            hospital, ensuring that each learner focuses on what is relevant to their department.
+            Training is delivered on-site — live, in-person sessions conducted physically at the client's premises. Our
+            team works directly with hospital staff, ensuring each learner is trained hands-on on the workflows relevant
+            to their department and role.
           </p>
           <p>
-            Upon completion of the course, the LMS will automatically assess the user's understanding before issuing a
-            certification as a qualified ${productName} user.
+            The system also includes a built-in, step-by-step How To guide covering every workflow in ${productName}, giving
+            every user an ongoing reference they can return to at any time after training is complete.
           </p>
           <p>
-            The ${productName} system will be deployed for use and go-live upon completion of the learning exercise. The
-            client's representative will work closely with our Customer Success Team to coordinate onboarding of
-            learners onto the LMS and ensure a seamless deployment.
+            The ${productName} system will be deployed for use and go-live upon completion of the on-site training. The
+            client's representative will work closely with our Customer Success Team to coordinate the training
+            schedule and ensure a seamless deployment.
           </p>
           <h4>Training / Learning Duration</h4>
           <p><strong>${quotation.training_hours} Hours</strong></p>
