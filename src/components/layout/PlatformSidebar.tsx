@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePlatformAuth } from '@/contexts/PlatformAuthContext';
-import { LayoutDashboard, Building2, Tag, Users, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, Tag, Users, LogOut, Menu, X, UserPlus, FileText, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Sibling to Sidebar.tsx, not a reuse of it — that component is tightly
@@ -17,8 +17,11 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/platform-admin', icon: LayoutDashboard },
   { label: 'Clients', href: '/platform-admin/clients', icon: Building2 },
+  { label: 'Customers', href: '/platform-admin/customers', icon: UserPlus },
+  { label: 'Quotations', href: '/platform-admin/quotations', icon: FileText },
   { label: 'Plans', href: '/platform-admin/plans', icon: Tag },
   { label: 'Users', href: '/platform-admin/users', icon: Users },
+  { label: 'Company Profile', href: '/platform-admin/company-profile', icon: Briefcase },
 ];
 
 interface PlatformSidebarProps {

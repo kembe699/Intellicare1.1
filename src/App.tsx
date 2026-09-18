@@ -19,6 +19,10 @@ const PlatformClients = lazyWithRetry(() => import('./pages/platform/PlatformCli
 const PlatformClientDetail = lazyWithRetry(() => import('./pages/platform/PlatformClientDetail'));
 const PlatformPlans = lazyWithRetry(() => import('./pages/platform/PlatformPlans'));
 const PlatformUsers = lazyWithRetry(() => import('./pages/platform/PlatformUsers'));
+const PlatformCustomers = lazyWithRetry(() => import('./pages/platform/PlatformCustomers'));
+const PlatformQuotations = lazyWithRetry(() => import('./pages/platform/PlatformQuotations'));
+const PlatformQuotationDetail = lazyWithRetry(() => import('./pages/platform/PlatformQuotationDetail'));
+const PlatformCompanyProfile = lazyWithRetry(() => import('./pages/platform/PlatformCompanyProfile'));
 
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
@@ -233,6 +237,18 @@ const AppRoutes = () => {
       } />
       <Route path="/platform-admin/users" element={
         <ProtectedPlatformRoute><PlatformUsers /></ProtectedPlatformRoute>
+      } />
+      <Route path="/platform-admin/customers" element={
+        <ProtectedPlatformRoute><PlatformCustomers /></ProtectedPlatformRoute>
+      } />
+      <Route path="/platform-admin/quotations" element={
+        <ProtectedPlatformRoute><PlatformQuotations /></ProtectedPlatformRoute>
+      } />
+      <Route path="/platform-admin/quotations/:id" element={
+        <ProtectedPlatformRoute><PlatformQuotationDetail /></ProtectedPlatformRoute>
+      } />
+      <Route path="/platform-admin/company-profile" element={
+        <ProtectedPlatformRoute><PlatformCompanyProfile /></ProtectedPlatformRoute>
       } />
       <Route path="/login" element={
         <PublicRoute>

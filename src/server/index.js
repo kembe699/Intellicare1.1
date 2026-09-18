@@ -568,6 +568,9 @@ const platformPlansRouter = require('./routes/platform/plans');
 const platformBillingRouter = require('./routes/platform/billing');
 const platformDashboardRouter = require('./routes/platform/dashboard');
 const platformAdminsRouter = require('./routes/platform/admins');
+const platformCustomersRouter = require('./routes/platform/customers');
+const platformQuotationsRouter = require('./routes/platform/quotations');
+const platformCompanyProfileRouter = require('./routes/platform/company-profile');
 
 // API Routes
 app.use('/api/platform/auth', platformAuthRouter);
@@ -576,6 +579,9 @@ app.use('/api/platform/plans', platformPlansRouter);
 app.use('/api/platform/billing', platformBillingRouter);
 app.use('/api/platform/dashboard', platformDashboardRouter);
 app.use('/api/platform/admins', platformAdminsRouter);
+app.use('/api/platform/customers', platformCustomersRouter);
+app.use('/api/platform/quotations', platformQuotationsRouter);
+app.use('/api/platform/company-profile', platformCompanyProfileRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/notifications', notificationsRouter);
