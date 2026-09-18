@@ -505,6 +505,63 @@ export function openPrintWindow(html: string): Window | null {
   return win;
 }
 
+// ── Download document as a real PDF file ──────────────────────────
+// downloadDocument() above saves an .html file, not an actual PDF — this
+// renders the same document into a hidden iframe, screenshots each printed
+// page (.ic-page / .qt-page) with html2canvas, and assembles those images
+// into a genuine binary PDF with jsPDF. jspdf/html2canvas are already
+// dependencies (html2canvas ships as jsPDF's own dependency) but were never
+// actually wired up anywhere before this — every "PDF" in the app was really
+// the browser's own print-to-PDF dialog until now.
+export async function downloadDocumentAsPdf(html: string, filename: string): Promise<void> {
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-10000px';
+  iframe.style.top = '0';
+  iframe.style.width = '210mm';
+  iframe.style.height = '297mm';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+
+  try {
+    const doc = iframe.contentDocument;
+    if (!doc) throw new Error('Could not prepare the document for PDF export');
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    // Let images (logo, stamp, signatures) and web fonts finish loading
+    // before screenshotting — otherwise a slow-loading image renders blank
+    // in the captured canvas with no error to catch.
+    const images = Array.from(doc.images);
+    await Promise.all(images.map((img) =>
+      img.complete ? Promise.resolve() : new Promise<void>((res) => { img.onload = () => res(); img.onerror = () => res(); })
+    ));
+    const fonts = (doc as unknown as { fonts?: { ready: Promise<unknown> } }).fonts;
+    if (fonts?.ready) await fonts.ready;
+    await new Promise((res) => setTimeout(res, 150));
+
+    const pageEls = Array.from(doc.querySelectorAll<HTMLElement>('.ic-page, .qt-page'));
+    const targets = pageEls.length > 0 ? pageEls : [doc.body];
+
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    for (let i = 0; i < targets.length; i++) {
+      const canvas = await html2canvas(targets[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    }
+    pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+  } finally {
+    document.body.removeChild(iframe);
+  }
+}
+
 // ── Electronic signature lookup ────────────────────────────────────
 // Every document that records a user taking an action (entering results,
 // approving, dispensing, etc.) should stamp that user's saved signature

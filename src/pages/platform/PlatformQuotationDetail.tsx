@@ -16,7 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Download, FileText, Loader2, Save, Send, CheckCircle2, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
-import { openPrintWindow, downloadDocument } from '@/utils/documentTemplate';
+import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
 
 interface QuotationDetail {
   id: number;
@@ -131,7 +131,7 @@ const PlatformQuotationDetail: React.FC = () => {
     }
   };
 
-  const generateDocument = async (mode: 'print' | 'download') => {
+  const generateDocument = async (mode: 'print' | 'pdf') => {
     if (!quotation) return;
     setDownloading(true);
     try {
@@ -143,7 +143,7 @@ const PlatformQuotationDetail: React.FC = () => {
         const pw = openPrintWindow(html);
         if (!pw) toast.error('Please allow popups to generate the quotation');
       } else {
-        downloadDocument(html, `${quotation.quote_number}-${quotation.customer.name}`);
+        await downloadDocumentAsPdf(html, `${quotation.quote_number}-${quotation.customer.name}`);
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -164,11 +164,11 @@ const PlatformQuotationDetail: React.FC = () => {
         actions={
           <>
             <Badge variant={STATUS_VARIANT[quotation.status]} className="capitalize text-sm px-3 py-1">{quotation.status}</Badge>
-            <Button variant="outline" onClick={() => generateDocument('download')} disabled={downloading}>
-              <Download className="w-4 h-4 mr-1.5" /> Download
+            <Button variant="outline" onClick={() => generateDocument('print')} disabled={downloading}>
+              <FileText className="w-4 h-4 mr-1.5" /> Print
             </Button>
-            <Button onClick={() => generateDocument('print')} disabled={downloading}>
-              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><FileText className="w-4 h-4 mr-1.5" /> Print / Download PDF</>}
+            <Button onClick={() => generateDocument('pdf')} disabled={downloading}>
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4 mr-1.5" /> Download PDF</>}
             </Button>
           </>
         }
