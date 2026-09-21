@@ -117,6 +117,23 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// This report is deliberately cross-CLINIC (see header note above), but branch
+// isolation is a separate, orthogonal concept (branchAccessControl/
+// branchFilter.js) that still applies — a branch-assigned user should not see
+// another branch's visits/revenue/bills just because the report spans clinics.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements) {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  return ' AND branch_id = :branchId';
+}
+
 const UNCATEGORIZED = 'Uncategorized';
 
 // A bill line item's REAL price is not always what its own unitPrice/totalPrice
@@ -180,6 +197,7 @@ router.get('/', async (req, res) => {
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
     const repl = { fromTs, toTs };
+    const branchSql = branchScope(req, repl);
 
     // ── 1. Clinics master list ──────────────────────────────────────────
     const clinics = await sequelize.query(
@@ -191,7 +209,7 @@ router.get('/', async (req, res) => {
     const visitRows = await sequelize.query(
       `SELECT clinic_id AS "clinicId", COUNT(*) AS "visitCount"
        FROM visits
-       WHERE visit_date BETWEEN :fromTs AND :toTs
+       WHERE visit_date BETWEEN :fromTs AND :toTs ${branchSql}
        GROUP BY clinic_id`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
@@ -200,7 +218,7 @@ router.get('/', async (req, res) => {
     const revenueRows = await sequelize.query(
       `SELECT clinic_id AS "clinicId", SUM(payment_amount) AS revenue
        FROM receipts
-       WHERE payment_date BETWEEN :fromTs AND :toTs AND status = 'active'
+       WHERE payment_date BETWEEN :fromTs AND :toTs AND status = 'active' ${branchSql}
        GROUP BY clinic_id`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
@@ -246,7 +264,7 @@ router.get('/', async (req, res) => {
       `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services,
               scheme_id AS "schemeId", bill_currency AS "billCurrency"
        FROM patient_bills
-       WHERE bill_date BETWEEN :fromTs AND :toTs`,
+       WHERE bill_date BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 

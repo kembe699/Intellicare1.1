@@ -7,6 +7,7 @@ const { authorize } = require('../middleware/authorize');
 const router = express.Router();
 const { Op } = require('sequelize');
 const { LedgerAccount } = require('../models');
+const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 
 // Note: this file previously also defined a `postToChartOfAccounts` helper
 // that duplicated the POST / route's own inline posting logic below, with the
@@ -19,6 +20,7 @@ router.get('/', async (req, res) => {
   try {
     const { CashTransfer } = require('../models');
     const transfers = await CashTransfer.findAll({
+      where: { ...getBranchCondition(req) },
       order: [['created_at', 'DESC']],
       limit: 100
     });
@@ -107,10 +109,12 @@ router.post('/', authorize('cash_transfers.write'), async (req, res) => {
         to_account_name: toAccount.account_name,
         amount: amt,
         notes: notes || 'Cash transfer',
-        created_by: req.user?.id || null
+        created_by: req.user?.id || null,
+        branch_id: getCreateBranchId(req)
       }, { transaction: t });
 
       // Create posted journal entry
+      const glBranchId = getCreateBranchId(req);
       const je = await JournalEntries.create({
         clinic_id,
         je_number: jeNumber,
@@ -128,19 +132,20 @@ router.post('/', authorize('cash_transfers.write'), async (req, res) => {
         status: 'posted',
         created_by: 'system',
         posted_by: 'system',
-        posted_date: new Date()
+        posted_date: new Date(),
+        branch_id: glBranchId
       }, { transaction: t });
 
       // DEBIT destination, CREDIT source
       await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: toAccount.id,   debit_amount: amt, credit_amount: 0,   base_debit_amount: amt, base_credit_amount: 0,   description: `Transfer from ${fromAccount.account_name}` },
-        { je_id: je.id, account_id: fromAccount.id, debit_amount: 0,   credit_amount: amt, base_debit_amount: 0,   base_credit_amount: amt, description: `Transfer to ${toAccount.account_name}` }
+        { je_id: je.id, account_id: toAccount.id,   debit_amount: amt, credit_amount: 0,   base_debit_amount: amt, base_credit_amount: 0,   description: `Transfer from ${fromAccount.account_name}`, branch_id: glBranchId },
+        { je_id: je.id, account_id: fromAccount.id, debit_amount: 0,   credit_amount: amt, base_debit_amount: 0,   base_credit_amount: amt, description: `Transfer to ${toAccount.account_name}`,   branch_id: glBranchId }
       ], { transaction: t });
 
       // AccountLedger entries drive current_balance on Chart of Accounts page
       await AccountLedger.bulkCreate([
-        { clinic_id, account_id: toAccount.id,   transaction_date: today, debit_amount: amt, credit_amount: 0,   reference_number: jeNumber, description: `Cash Transfer from ${fromAccount.account_name}`, is_posted: true, posted_date: new Date(), source_module: 'cash_transfer' },
-        { clinic_id, account_id: fromAccount.id, transaction_date: today, debit_amount: 0,   credit_amount: amt, reference_number: jeNumber, description: `Cash Transfer to ${toAccount.account_name}`,   is_posted: true, posted_date: new Date(), source_module: 'cash_transfer' }
+        { clinic_id, account_id: toAccount.id,   transaction_date: today, debit_amount: amt, credit_amount: 0,   reference_number: jeNumber, description: `Cash Transfer from ${fromAccount.account_name}`, is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId },
+        { clinic_id, account_id: fromAccount.id, transaction_date: today, debit_amount: 0,   credit_amount: amt, reference_number: jeNumber, description: `Cash Transfer to ${toAccount.account_name}`,   is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId }
       ], { transaction: t });
 
       await t.commit();

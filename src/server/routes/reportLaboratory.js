@@ -125,6 +125,20 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 // ── GET / ────────────────────────────────────────────────────────────────
 // Query params:
 //   dateFrom, dateTo  — YYYY-MM-DD, default to the last 30 days
@@ -138,15 +152,16 @@ router.get('/', async (req, res) => {
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
     const repl = { clinicId, fromTs, toTs };
+    const branchSqlSp = branchScope(req, repl, 'sp');
 
     // ── 1. By-test volume from the LIS side (lis_specimens.created_at =
     //      when the test was ordered/registered). Not clinic-filtered —
-    //      see header note.
+    //      see header note. Branch-filtered via lis_specimens.branch_id.
     const volumeRows = await sequelize.query(
       `SELECT sp.test_code AS "testCode", MIN(sp.test_name) AS "testName", COUNT(*) AS volume
        FROM lis_specimens sp
        INNER JOIN lis_test_orders o ON o.id = sp.order_id
-       WHERE sp.created_at BETWEEN :fromTs AND :toTs
+       WHERE sp.created_at BETWEEN :fromTs AND :toTs ${branchSqlSp}
        GROUP BY sp.test_code
        ORDER BY volume DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -157,7 +172,7 @@ router.get('/', async (req, res) => {
       `SELECT COUNT(DISTINCT o.participant_id) AS "distinctPatients", COUNT(*) AS "totalTests"
        FROM lis_specimens sp
        INNER JOIN lis_test_orders o ON o.id = sp.order_id
-       WHERE sp.created_at BETWEEN :fromTs AND :toTs`,
+       WHERE sp.created_at BETWEEN :fromTs AND :toTs ${branchSqlSp}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -166,7 +181,7 @@ router.get('/', async (req, res) => {
       `SELECT sp.status AS status, COUNT(*) AS count
        FROM lis_specimens sp
        INNER JOIN lis_test_orders o ON o.id = sp.order_id
-       WHERE sp.created_at BETWEEN :fromTs AND :toTs
+       WHERE sp.created_at BETWEEN :fromTs AND :toTs ${branchSqlSp}
        GROUP BY sp.status
        ORDER BY count DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -213,10 +228,11 @@ router.get('/', async (req, res) => {
     //      `services` line-item array in JS (mysql2/Sequelize returns JSON
     //      columns as raw strings via raw sequelize.query, not pre-parsed —
     //      verified against this connection).
+    const branchSqlNoAlias = repl.branchId ? ' AND branch_id = :branchId' : '';
     const bills = await sequelize.query(
       `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs`,
+       WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 

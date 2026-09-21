@@ -10,6 +10,18 @@ const router = express.Router();
 const { sequelize, PatientBill, Receipt, CashierShift } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
+const { getCreateBranchId } = require('../middleware/branchFilter');
+
+// Named-replacement raw-SQL branch filter for credit_notes (has branch_id, part of the
+// branch-data-isolation initiative) — same convention as accounting.js's branchScope.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
 
 // Ensure billing-related tables exist
 (async () => {
@@ -535,16 +547,17 @@ router.post('/credit-notes', authorize('billing.write'), async (req, res) => {
     await sequelize.query(`
       INSERT INTO credit_notes (id, clinic_id, credit_note_number, original_bill_id,
         patient_id, patient_name, credit_date, credit_amount, credit_currency,
-        reason, reason_details, status, created_by)
+        reason, reason_details, status, created_by, branch_id)
       VALUES (:id, :clinicId, :cn, :billId, :patientId, :patientName, CURRENT_DATE,
-        :amount, :currency, :reason, :details, 'created', :createdBy)
+        :amount, :currency, :reason, :details, 'created', :createdBy, :branchId)
     `, {
       replacements: {
         id, clinicId: bill.clinic_id, cn: creditNoteNumber,
         billId: original_bill_id, patientId: bill.patient_id,
         patientName: bill.patient_name, amount: credit_amount,
         currency: credit_currency || 'SSP', reason: reason || 'adjustment',
-        details: reason_details || '', createdBy: req.user?.id || null
+        details: reason_details || '', createdBy: req.user?.id || null,
+        branchId: getCreateBranchId(req)
       },
       transaction: t
     });
@@ -562,11 +575,13 @@ router.post('/credit-notes', authorize('billing.write'), async (req, res) => {
 router.put('/credit-notes/:id/approve', authorize('billing.write'), async (req, res) => {
   try {
     const { id } = req.params;
+    const approveReplacements = { id, userId: req.user?.id || null };
+    const approveBranchScope = branchScope(req, approveReplacements);
     await sequelize.query(`
       UPDATE credit_notes SET status = 'approved', approved_by = :userId, approval_date = NOW()
-      WHERE id = :id AND status = 'created'
-    `, { replacements: { id, userId: req.user?.id || null } });
-    const [note] = await sequelize.query('SELECT * FROM credit_notes WHERE id = :id', { replacements: { id } });
+      WHERE id = :id AND status = 'created' ${approveBranchScope}
+    `, { replacements: approveReplacements });
+    const [note] = await sequelize.query(`SELECT * FROM credit_notes WHERE id = :id ${approveBranchScope}`, { replacements: approveReplacements });
     res.json(note[0]);
   } catch (error) {
     console.error('Error approving credit note:', error);
@@ -581,9 +596,11 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
     const { id } = req.params;
     const { applied_to_bill_id } = req.body;
 
+    const applyReplacements = { id, status: 'approved' };
+    const applyBranchScope = branchScope(req, applyReplacements);
     const [notes] = await sequelize.query(
-      'SELECT * FROM credit_notes WHERE id = :id AND status = :status',
-      { replacements: { id, status: 'approved' }, transaction: t }
+      `SELECT * FROM credit_notes WHERE id = :id AND status = :status ${applyBranchScope}`,
+      { replacements: applyReplacements, transaction: t }
     );
     if (notes.length === 0) {
       await t.rollback();
@@ -707,6 +724,7 @@ router.get('/credit-notes', async (req, res) => {
     if (clinic_id) { where += ' AND cn.clinic_id = :clinicId'; replacements.clinicId = parseInt(clinic_id); }
     if (patient_id) { where += ' AND cn.patient_id = :patientId'; replacements.patientId = patient_id; }
     if (status) { where += ' AND cn.status = :status'; replacements.status = status; }
+    where += branchScope(req, replacements, 'cn');
 
     const [notes] = await sequelize.query(`
       SELECT cn.*, pb.bill_number AS original_bill_number
@@ -725,12 +743,14 @@ router.get('/credit-notes', async (req, res) => {
 // Get single credit note
 router.get('/credit-notes/:id', async (req, res) => {
   try {
+    const singleReplacements = { id: req.params.id };
+    const singleBranchScope = branchScope(req, singleReplacements, 'cn');
     const [notes] = await sequelize.query(`
       SELECT cn.*, pb.bill_number AS original_bill_number
       FROM credit_notes cn
       LEFT JOIN patient_bills pb ON cn.original_bill_id = pb.id
-      WHERE cn.id = :id
-    `, { replacements: { id: req.params.id } });
+      WHERE cn.id = :id ${singleBranchScope}
+    `, { replacements: singleReplacements });
     if (notes.length === 0) return res.status(404).json({ error: 'Credit note not found' });
     res.json(notes[0]);
   } catch (error) {

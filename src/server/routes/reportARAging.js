@@ -57,6 +57,19 @@ function asDateStr(v) {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything
+// clinic-wide. Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements) {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  return ' AND branch_id = :branchId';
+}
+
 router.get('/', async (req, res) => {
   try {
     const clinicId = parseInt(req.query.clinic_id, 10) || req.user?.clinicId || 1;
@@ -67,6 +80,7 @@ router.get('/', async (req, res) => {
     const repl = { clinicId };
     if (dateFrom) { dateClause += ' AND bill_date >= :fromTs'; repl.fromTs = `${dateFrom} 00:00:00`; }
     if (dateTo) { dateClause += ' AND bill_date <= :toTs'; repl.toTs = `${dateTo} 23:59:59`; }
+    dateClause += branchScope(req, repl);
 
     // Every outstanding bill for the clinic, oldest/most-overdue first.
     // ((CURRENT_DATE)::date - (bill_date)::date) — plain SQL date math only.

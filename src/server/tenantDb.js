@@ -37,8 +37,18 @@ async function buildTenantConnection(schemaName) {
   // first time each tenant's connection is actually built, so every tenant gets
   // the same cleanup the original default database always got.
   // Non-blocking: a repair failure must never prevent a tenant from logging in.
-  const { backfillInventoryBranchIds } = require('./utils/inventoryMaintenance');
+  const { backfillInventoryBranchIds, backfillBranchIds } = require('./utils/inventoryMaintenance');
   backfillInventoryBranchIds(sequelize, schema).catch(() => {});
+
+  // Adds branch_id to LIS/Inpatient/Accounting/Procurement tables that don't
+  // have it yet, then backfills any resulting NULLs the same safe way as
+  // above (single-branch tenants only — see ensureBranchIsolationColumns.js
+  // and backfillBranchIds for why). Chained, not parallel, since the backfill
+  // needs the column to already exist.
+  const { ensureBranchIsolationColumns, TABLES_NEEDING_BRANCH_ID } = require('./config/ensureBranchIsolationColumns');
+  ensureBranchIsolationColumns(sequelize, schema)
+    .then(() => backfillBranchIds(sequelize, schema, TABLES_NEEDING_BRANCH_ID))
+    .catch(() => {});
 
   // roles/privileges/role_privileges tables, ensured per-tenant. The old
   // boot-time IIFE in routes/roles.js only ever ran against the single

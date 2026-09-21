@@ -7,6 +7,7 @@ const { authorize } = require('../middleware/authorize');
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 
 function getClinicId(req) {
   return parseInt(req.query.clinic_id || req.body.clinic_id) || req.user?.clinicId || 1;
@@ -64,6 +65,10 @@ router.get('/', async (req, res) => {
       conditions.push('(patient_name LIKE :search OR proforma_number LIKE :search)');
       replacements.search = `%${search}%`;
     }
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId;
+      if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
+    }
     const [rows] = await sequelize.query(
       `SELECT * FROM proforma_invoices WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT 200`,
       { replacements }
@@ -79,6 +84,7 @@ router.get('/:id', async (req, res) => {
   try {
     const [[row]] = await sequelize.query(`SELECT * FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id } });
     if (!row) return res.status(404).json({ error: 'Proforma invoice not found' });
+    if (!BranchQueryFilter.canAccessRecord(row, req.branchContext)) return res.status(404).json({ error: 'Proforma invoice not found' });
     res.json({ ...row, items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch proforma invoice' });

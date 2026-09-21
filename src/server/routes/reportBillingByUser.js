@@ -17,6 +17,7 @@
 const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
+const { getBranchConditionSQL } = require('../middleware/branchFilter');
 
 /** Returns today's date as YYYY-MM-DD in server-local time (SQL DATE format). */
 function todayISO() {
@@ -43,6 +44,7 @@ router.get('/', async (req, res) => {
 
     const clinicSQL = clinicId ? ' AND r.clinic_id = ?' : '';
     const clinicParams = clinicId ? [clinicId] : [];
+    const branch = getBranchConditionSQL(req, 'r');
 
     // ── Per-cashier totals ──────────────────────────────────────────────────
     // Group key: canonical cashier_id when present, otherwise fall back to the
@@ -60,10 +62,10 @@ router.get('/', async (req, res) => {
        LEFT JOIN users u ON u.id = r.cashier_id
        WHERE r.status = 'active'
          AND DATE(r.payment_date) BETWEEN ? AND ?
-         ${clinicSQL}
+         ${clinicSQL} ${branch.sql}
        GROUP BY group_key
        ORDER BY total_collected DESC`,
-      { replacements: [dateFrom, dateTo, ...clinicParams] }
+      { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params] }
     );
 
     // ── Per-cashier, per-payment-method breakdown ───────────────────────────
@@ -76,9 +78,9 @@ router.get('/', async (req, res) => {
        FROM receipts r
        WHERE r.status = 'active'
          AND DATE(r.payment_date) BETWEEN ? AND ?
-         ${clinicSQL}
+         ${clinicSQL} ${branch.sql}
        GROUP BY group_key, r.payment_method`,
-      { replacements: [dateFrom, dateTo, ...clinicParams] }
+      { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params] }
     );
 
     const methodsByGroup = {};

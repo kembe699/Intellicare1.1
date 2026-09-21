@@ -89,6 +89,13 @@ module.exports = (sequelize) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // Guaranteed by the branch-isolation migration (ensureBranchIsolationColumns.js) —
+    // declared here so create() actually writes it instead of silently dropping it
+    // (Sequelize ignores any key passed to create() that isn't a declared attribute).
+    branch_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   }, {
     tableName: 'journal_entries',
     timestamps: true,

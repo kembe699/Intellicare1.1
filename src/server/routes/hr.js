@@ -241,9 +241,10 @@ router.post('/employees/bulk-upload', authorize('hr.employees.write'), upload.si
 router.get('/employees/:id', authorize('hr.employees.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
     const [[employee]] = await sequelize.query(
-      `SELECT * FROM employees WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM employees WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`,
+      { replacements }
     );
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
@@ -438,11 +439,12 @@ router.get('/consultants/for-doctor-picker', async (req, res) => {
     // active consultant is returned regardless, so the frontend can offer an
     // unlinked one too (recorded via lis_test_orders.consultant_id instead
     // of doctor_id, see lisModule.js).
+    const replacements = { clinicId };
     const [consultants] = await sequelize.query(
       `SELECT id, user_id, first_name, last_name FROM employees
        WHERE clinic_id = :clinicId AND employment_type = 'consultant'
-         AND employment_status = 'active' AND is_active = true`,
-      { replacements: { clinicId } }
+         AND employment_status = 'active' AND is_active = true${branchScope(req, replacements)}`,
+      { replacements }
     );
     res.json(consultants);
   } catch (error) {
@@ -460,9 +462,10 @@ router.get('/consultants/for-doctor-picker', async (req, res) => {
 router.get('/consultants/:id/consultations', authorize('hr.employees.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const consultantReplacements = { id: req.params.id, clinicId };
     const [[consultant]] = await sequelize.query(
-      `SELECT * FROM employees WHERE id = :id AND clinic_id = :clinicId AND employment_type = 'consultant'`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM employees WHERE id = :id AND clinic_id = :clinicId AND employment_type = 'consultant'${branchScope(req, consultantReplacements)}`,
+      { replacements: consultantReplacements }
     );
     if (!consultant) return res.status(404).json({ error: 'Consultant not found' });
 
@@ -504,9 +507,10 @@ router.get('/consultants/:id/consultations', authorize('hr.employees.read'), asy
 router.get('/consultants/:id/bills', authorize('hr.employees.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
     const [bills] = await sequelize.query(
-      `SELECT * FROM consultant_bills WHERE consultant_id = :id AND clinic_id = :clinicId ORDER BY period_to DESC, created_at DESC`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM consultant_bills WHERE consultant_id = :id AND clinic_id = :clinicId${branchScope(req, replacements)} ORDER BY period_to DESC, created_at DESC`,
+      { replacements }
     );
     res.json(bills);
   } catch (error) {
@@ -661,11 +665,12 @@ router.delete('/salary-components/:id', authorize('hr.employees.write'), async (
 router.get('/salary-structures', authorize('hr.employees.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { clinicId };
     const [structures] = await sequelize.query(`
       SELECT s.*, (SELECT COUNT(*) FROM salary_structure_components c WHERE c.salary_structure_id = s.id) AS component_count
-      FROM salary_structures s WHERE s.clinic_id = :clinicId AND s.is_active = true
+      FROM salary_structures s WHERE s.clinic_id = :clinicId AND s.is_active = true${branchScope(req, replacements)}
       ORDER BY s.name ASC
-    `, { replacements: { clinicId } });
+    `, { replacements });
     res.json(structures);
   } catch (error) {
     console.error('Error fetching salary structures:', error);
@@ -676,9 +681,10 @@ router.get('/salary-structures', authorize('hr.employees.read'), async (req, res
 router.get('/salary-structures/:id', authorize('hr.employees.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
     const [[structure]] = await sequelize.query(
-      `SELECT * FROM salary_structures WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM salary_structures WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`,
+      { replacements }
     );
     if (!structure) return res.status(404).json({ error: 'Salary structure not found' });
     const [components] = await sequelize.query(
@@ -886,14 +892,15 @@ router.post('/employees/:id/unassign-salary-structure', authorize('hr.employees.
 router.get('/payroll/runs', authorize('hr.payroll.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { clinicId };
     const [runs] = await sequelize.query(`
       SELECT pr.*, coa.account_name AS payment_account_name,
         (SELECT COUNT(*) FROM payroll_run_lines l WHERE l.payroll_run_id = pr.id) AS employee_count
       FROM payroll_runs pr
       LEFT JOIN chart_of_accounts coa ON coa.id = pr.payment_account_id
-      WHERE pr.clinic_id = :clinicId
+      WHERE pr.clinic_id = :clinicId${branchScope(req, replacements)}
       ORDER BY pr.period_year DESC, pr.period_month DESC, pr.created_at DESC
-    `, { replacements: { clinicId } });
+    `, { replacements });
     res.json(runs);
   } catch (error) {
     console.error('Error fetching payroll runs:', error);
@@ -904,11 +911,12 @@ router.get('/payroll/runs', authorize('hr.payroll.read'), async (req, res) => {
 router.get('/payroll/runs/:id', authorize('hr.payroll.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const runReplacements = { id: req.params.id, clinicId };
     const [[run]] = await sequelize.query(
       `SELECT pr.*, coa.account_name AS payment_account_name FROM payroll_runs pr
        LEFT JOIN chart_of_accounts coa ON coa.id = pr.payment_account_id
-       WHERE pr.id = :id AND pr.clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+       WHERE pr.id = :id AND pr.clinic_id = :clinicId${branchScope(req, runReplacements)}`,
+      { replacements: runReplacements }
     );
     if (!run) return res.status(404).json({ error: 'Payroll run not found' });
 
@@ -956,11 +964,12 @@ const PAYROLL_SHEET_MONTHS = [
 router.get('/payroll/runs/:id/sheet', authorize('hr.payroll.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const runReplacements = { id: req.params.id, clinicId };
     const [[run]] = await sequelize.query(
       `SELECT pr.*, coa.account_name AS payment_account_name FROM payroll_runs pr
        LEFT JOIN chart_of_accounts coa ON coa.id = pr.payment_account_id
-       WHERE pr.id = :id AND pr.clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+       WHERE pr.id = :id AND pr.clinic_id = :clinicId${branchScope(req, runReplacements)}`,
+      { replacements: runReplacements }
     );
     if (!run) return res.status(404).json({ error: 'Payroll run not found' });
 

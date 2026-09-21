@@ -45,6 +45,19 @@ function asDateStr(v) {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements) {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  return ' AND branch_id = :branchId';
+}
+
 // ── GET / ────────────────────────────────────────────────────────────────
 // Query params:
 //   dateFrom, dateTo  — YYYY-MM-DD, default to the last 30 days
@@ -58,6 +71,7 @@ router.get('/', async (req, res) => {
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
     const repl = { clinicId, fromTs, toTs };
+    const branchSql = branchScope(req, repl);
 
     // 1. Visit volume in the period (clinic-scoped). The `visits` table is a legacy,
     //    barely-used table (3 rows total, all months stale) — the live clinical workflow's
@@ -76,7 +90,7 @@ router.get('/', async (req, res) => {
     const [visitsRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM lis_test_orders
-       WHERE created_at BETWEEN :fromTs AND :toTs`,
+       WHERE created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -84,13 +98,13 @@ router.get('/', async (req, res) => {
     const [patientsRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM patients
-       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs`,
+       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const [lisRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM lis_participants
-       WHERE created_at BETWEEN :fromTs AND :toTs`,
+       WHERE created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const fromPatients = parseInt(patientsRow.total, 10) || 0;
@@ -103,7 +117,7 @@ router.get('/', async (req, res) => {
               COALESCE(SUM(paid_amount), 0) AS "paidAmount"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND status = 'paid'
-         AND created_at BETWEEN :fromTs AND :toTs`,
+         AND created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -113,14 +127,14 @@ router.get('/', async (req, res) => {
     const [outstandingAllRow] = await sequelize.query(
       `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS "totalOutstanding"
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND status IN ('pending', 'partial')`,
+       WHERE clinic_id = :clinicId AND status IN ('pending', 'partial') ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const [outstandingInPeriodRow] = await sequelize.query(
       `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS "totalOutstanding"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND status IN ('pending', 'partial')
-         AND created_at BETWEEN :fromTs AND :toTs`,
+         AND created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -130,7 +144,7 @@ router.get('/', async (req, res) => {
               total_amount AS "totalAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
               status, bill_date AS "billDate", created_at AS "createdAt"
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs
+       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs ${branchSql}
        ORDER BY created_at DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );

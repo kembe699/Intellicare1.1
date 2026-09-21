@@ -119,6 +119,10 @@ router.get('/requests', authorize('hr.leave.read'), async (req, res) => {
     const replacements = { clinicId };
     if (status) { conditions.push('lr.status = :status'); replacements.status = status; }
     if (employee_id) { conditions.push('lr.employee_id = :employeeId'); replacements.employeeId = employee_id; }
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId;
+      if (branchId) { conditions.push('lr.branch_id = :branchId'); replacements.branchId = branchId; }
+    }
 
     const [requests] = await sequelize.query(`
       SELECT lr.*, e.first_name, e.last_name, e.employee_number, lt.name AS leave_type_name
@@ -254,9 +258,15 @@ router.get('/employees/:id/summary', authorize('hr.leave.read'), async (req, res
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const employeeReplacements = { id: req.params.id, clinicId };
+    let employeeBranchSQL = '';
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId;
+      if (branchId) { employeeBranchSQL = ' AND branch_id = :branchId'; employeeReplacements.branchId = branchId; }
+    }
     const [[employee]] = await sequelize.query(
-      `SELECT id, first_name, last_name, employee_number FROM employees WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT id, first_name, last_name, employee_number FROM employees WHERE id = :id AND clinic_id = :clinicId${employeeBranchSQL}`,
+      { replacements: employeeReplacements }
     );
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 

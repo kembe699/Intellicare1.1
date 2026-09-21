@@ -10,8 +10,33 @@ const { v4: uuidv4 } = require('uuid');
 const AccountingService = require('../services/AccountingService');
 const { requireApprovalPermission, userHasApprovalPermission, getUserAllowedActions, APPROVAL_TYPES } = require('../middleware/requireApprovalPermission');
 const { authorize } = require('../middleware/authorize');
-const { getCreateBranchId } = require('../middleware/branchFilter');
+const { getCreateBranchId, getBranchCondition } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+
+// Named-replacement raw-SQL branch filter — this file uses named `:params` throughout
+// (never positional `?`), same convention as accounting.js's branchScope. Applied
+// alongside the existing BranchQueryFilter.resolveClinicId(req) clinic filtering, never
+// replacing it — admins still see every branch within their clinic scope.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
+// Branch-level access check for a fetch-by-ID record, same fetch-then-check pattern as
+// accounting.js's assertBranchAccess — used where a route loads a row via raw SQL (so
+// there's no Sequelize `where` clause to fold the filter into) rather than listing rows.
+function assertBranchAccess(record, req, res, label) {
+  const branchContext = req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' };
+  if (!BranchQueryFilter.canAccessRecord(record, branchContext)) {
+    res.status(403).json({ error: `Access denied to this ${label}` });
+    return false;
+  }
+  return true;
+}
 
 // Quotation/invoice attachments (PO + GRN) — stored on local disk, one file per row in
 // procurement_attachments (see self-migration below). Optional everywhere they're used:
@@ -236,20 +261,22 @@ router.get('/suppliers/:id', authorize('procurement.read'), async (req, res) => 
     // currencies together as though they were the same money. Broken out by
     // po_currency instead — the frontend renders one line per currency actually
     // used, same fix already applied to Procurement Reports' Total Spend tile.
+    const supplierStatsReplacements = { id: req.params.id };
+    const supplierStatsBranchScope = branchScope(req, supplierStatsReplacements);
     const [poCounts] = await sequelize.query(`
       SELECT
         COUNT(*) as total_pos,
         SUM(CASE WHEN status = 'received' THEN 1 ELSE 0 END) as completed_pos,
         SUM(CASE WHEN status IN ('draft','check','approved','authorized') THEN 1 ELSE 0 END) as open_pos
-      FROM purchase_orders WHERE supplier_id = :id
-    `, { replacements: { id: req.params.id } });
+      FROM purchase_orders WHERE supplier_id = :id ${supplierStatsBranchScope}
+    `, { replacements: supplierStatsReplacements });
 
     const [spendByCurrency] = await sequelize.query(`
       SELECT po_currency AS currency, COALESCE(SUM(total_amount), 0) as total_amount
-      FROM purchase_orders WHERE supplier_id = :id
+      FROM purchase_orders WHERE supplier_id = :id ${supplierStatsBranchScope}
       GROUP BY po_currency
       ORDER BY total_amount DESC
-    `, { replacements: { id: req.params.id } });
+    `, { replacements: supplierStatsReplacements });
 
     // Get performance ratings
     const [ratings] = await sequelize.query(`
@@ -439,7 +466,7 @@ router.get('/purchase-requisitions', authorize('procurement.read'), async (req, 
     if (status) { conditions.push('pr.status = :status'); replacements.status = status; }
     if (requested_by) { conditions.push('pr.requested_by = :requested_by'); replacements.requested_by = requested_by; }
 
-    const where = 'WHERE ' + conditions.join(' AND ');
+    const where = 'WHERE ' + conditions.join(' AND ') + branchScope(req, replacements, 'pr');
 
     const [prs] = await sequelize.query(`
       SELECT pr.*, u.display_name as requester_name, a.display_name as approver_name,
@@ -462,13 +489,15 @@ router.get('/purchase-requisitions', authorize('procurement.read'), async (req, 
 router.get('/purchase-requisitions/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const prByIdReplacements = { id: req.params.id, clinicId };
+    const prByIdBranchScope = branchScope(req, prByIdReplacements, 'pr');
     const [prs] = await sequelize.query(`
       SELECT pr.*, u.display_name as requester_name, a.display_name as approver_name
       FROM purchase_requisitions pr
       LEFT JOIN users u ON u.id = pr.requested_by
       LEFT JOIN users a ON a.id = pr.approved_by
-      WHERE pr.id = :id AND pr.clinic_id = :clinicId
-    `, { replacements: { id: req.params.id, clinicId } });
+      WHERE pr.id = :id AND pr.clinic_id = :clinicId ${prByIdBranchScope}
+    `, { replacements: prByIdReplacements });
 
     if (prs.length === 0) return res.status(404).json({ error: 'PR not found' });
 
@@ -504,14 +533,15 @@ router.post('/purchase-requisitions', authorize('procurement.write'), async (req
 
     const prId = uuidv4();
     let totalAmount = 0;
+    const prBranchId = getCreateBranchId(req);
 
     // Insert PR
     await sequelize.query(`
       INSERT INTO purchase_requisitions (id, clinic_id, pr_number, requisition_date, requested_by,
         department, cost_center_id, requisition_type, delivery_date_required, total_amount, currency,
-        status, notes, created_by, created_at, updated_at)
+        status, notes, created_by, created_at, updated_at, branch_id)
       VALUES (:id, :clinic_id, :pr_number, CURRENT_DATE, :requested_by, :department, :cost_center_id,
-        :requisition_type, :delivery_date_required, 0, :currency, 'draft', :notes, :created_by, NOW(), NOW())
+        :requisition_type, :delivery_date_required, 0, :currency, 'draft', :notes, :created_by, NOW(), NOW(), :branch_id)
     `, {
       replacements: {
         id: prId, clinic_id: parseInt(clinic_id), pr_number: prNumber,
@@ -520,7 +550,8 @@ router.post('/purchase-requisitions', authorize('procurement.write'), async (req
         requisition_type: requisition_type || 'routine',
         delivery_date_required: delivery_date_required || null,
         currency: currency || 'SSP', notes: notes || null,
-        created_by: requested_by || null
+        created_by: requested_by || null,
+        branch_id: prBranchId
       }
     });
 
@@ -535,9 +566,9 @@ router.post('/purchase-requisitions', authorize('procurement.write'), async (req
         await sequelize.query(`
           INSERT INTO pr_line_items (id, pr_id, line_number, item_code, item_description,
             item_specification, quantity_required, unit_of_measure, estimated_unit_price,
-            estimated_line_total, notes, created_at, updated_at)
+            estimated_line_total, notes, created_at, updated_at, branch_id)
           VALUES (:id, :pr_id, :line_number, :item_code, :item_description, :item_specification,
-            :quantity_required, :unit_of_measure, :estimated_unit_price, :estimated_line_total, :notes, NOW(), NOW())
+            :quantity_required, :unit_of_measure, :estimated_unit_price, :estimated_line_total, :notes, NOW(), NOW(), :branch_id)
         `, {
           replacements: {
             id: lineId, pr_id: prId, line_number: i + 1,
@@ -546,7 +577,8 @@ router.post('/purchase-requisitions', authorize('procurement.write'), async (req
             quantity_required: line.quantity_required || 1,
             unit_of_measure: line.unit_of_measure || 'pcs',
             estimated_unit_price: line.estimated_unit_price || 0,
-            estimated_line_total: lineTotal, notes: line.notes || null
+            estimated_line_total: lineTotal, notes: line.notes || null,
+            branch_id: prBranchId
           }
         });
       }
@@ -570,7 +602,9 @@ router.post('/purchase-requisitions', authorize('procurement.write'), async (req
 router.put('/purchase-requisitions/:id', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [pr] = await sequelize.query('SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
+    const updatePrReplacements = { id: req.params.id, clinicId };
+    const updatePrBranchScope = branchScope(req, updatePrReplacements);
+    const [pr] = await sequelize.query(`SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId ${updatePrBranchScope}`, { replacements: updatePrReplacements });
     if (pr.length === 0) return res.status(404).json({ error: 'PR not found' });
     if (pr[0].status !== 'draft') return res.status(400).json({ error: 'Only draft PRs can be edited' });
 
@@ -602,14 +636,15 @@ router.put('/purchase-requisitions/:id', authorize('procurement.write'), async (
         await sequelize.query(`
           INSERT INTO pr_line_items (id, pr_id, line_number, item_code, item_description,
             item_specification, quantity_required, unit_of_measure, estimated_unit_price,
-            estimated_line_total, notes, created_at, updated_at)
-          VALUES (:id, :pr_id, :ln, :ic, :desc, :spec, :qty, :uom, :up, :lt, :notes, NOW(), NOW())
+            estimated_line_total, notes, created_at, updated_at, branch_id)
+          VALUES (:id, :pr_id, :ln, :ic, :desc, :spec, :qty, :uom, :up, :lt, :notes, NOW(), NOW(), :branch_id)
         `, {
           replacements: {
             id: uuidv4(), pr_id: req.params.id, ln: i + 1, ic: line.item_code || null,
             desc: line.item_description, spec: line.item_specification || null,
             qty: line.quantity_required || 1, uom: line.unit_of_measure || 'pcs',
-            up: line.estimated_unit_price || 0, lt: lineTotal, notes: line.notes || null
+            up: line.estimated_unit_price || 0, lt: lineTotal, notes: line.notes || null,
+            branch_id: pr[0].branch_id ?? getCreateBranchId(req)
           }
         });
       }
@@ -629,7 +664,9 @@ router.put('/purchase-requisitions/:id', authorize('procurement.write'), async (
 router.post('/purchase-requisitions/:id/submit', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [pr] = await sequelize.query('SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
+    const submitPrReplacements = { id: req.params.id, clinicId };
+    const submitPrBranchScope = branchScope(req, submitPrReplacements);
+    const [pr] = await sequelize.query(`SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId ${submitPrBranchScope}`, { replacements: submitPrReplacements });
     if (pr.length === 0) return res.status(404).json({ error: 'PR not found' });
     if (pr[0].status !== 'draft') return res.status(400).json({ error: 'Only draft PRs can be submitted' });
 
@@ -653,7 +690,9 @@ router.post('/purchase-requisitions/:id/approve', requireApprovalPermission('pr_
   try {
     const { approved_by } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [pr] = await sequelize.query('SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
+    const approvePrReplacements = { id: req.params.id, clinicId };
+    const approvePrBranchScope = branchScope(req, approvePrReplacements);
+    const [pr] = await sequelize.query(`SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId ${approvePrBranchScope}`, { replacements: approvePrReplacements });
     if (pr.length === 0) return res.status(404).json({ error: 'PR not found' });
     if (pr[0].status !== 'submitted') return res.status(400).json({ error: 'Only submitted PRs can be approved' });
 
@@ -676,7 +715,9 @@ router.post('/purchase-requisitions/:id/reject', requireApprovalPermission('pr_a
   try {
     const { approved_by, rejection_reason } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [pr] = await sequelize.query('SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
+    const rejectPrReplacements = { id: req.params.id, clinicId };
+    const rejectPrBranchScope = branchScope(req, rejectPrReplacements);
+    const [pr] = await sequelize.query(`SELECT * FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId ${rejectPrBranchScope}`, { replacements: rejectPrReplacements });
     if (pr.length === 0) return res.status(404).json({ error: 'PR not found' });
     if (pr[0].status !== 'submitted') return res.status(400).json({ error: 'Only submitted PRs can be rejected' });
 
@@ -698,7 +739,9 @@ router.post('/purchase-requisitions/:id/reject', requireApprovalPermission('pr_a
 router.post('/purchase-requisitions/:id/cancel', authorize('procurement.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [pr] = await sequelize.query('SELECT status, requested_by FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
+    const cancelPrReplacements = { id: req.params.id, clinicId };
+    const cancelPrBranchScope = branchScope(req, cancelPrReplacements);
+    const [pr] = await sequelize.query(`SELECT status, requested_by, branch_id FROM purchase_requisitions WHERE id = :id AND clinic_id = :clinicId ${cancelPrBranchScope}`, { replacements: cancelPrReplacements });
     if (pr.length === 0) return res.status(404).json({ error: 'PR not found' });
 
     const isOwner = pr[0].requested_by && pr[0].requested_by === String(req.user?.id);
@@ -813,7 +856,7 @@ router.get('/purchase-orders', authorize('procurement.read'), async (req, res) =
     if (status && status !== 'undefined' && status !== 'null') { conditions.push('po.status = :status'); replacements.status = status; }
     if (supplier_id && supplier_id !== 'undefined' && supplier_id !== 'null' && !isNaN(parseInt(supplier_id))) { conditions.push('po.supplier_id = :supplier_id'); replacements.supplier_id = parseInt(supplier_id); }
 
-    const where = 'WHERE ' + conditions.join(' AND ');
+    const where = 'WHERE ' + conditions.join(' AND ') + branchScope(req, replacements, 'po');
 
     const [pos] = await sequelize.query(`
       SELECT po.*, s.name as supplier_name, s.supplier_code,
@@ -835,14 +878,16 @@ router.get('/purchase-orders', authorize('procurement.read'), async (req, res) =
 router.get('/purchase-orders/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const poByIdReplacements = { id: req.params.id, clinicId };
+    const poByIdBranchScope = branchScope(req, poByIdReplacements, 'po');
     const [pos] = await sequelize.query(`
       SELECT po.*, s.name as supplier_name, s.supplier_code, s.payment_terms as supplier_payment_terms,
         u.display_name as created_by_name
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id
       LEFT JOIN users u ON u.id = po.created_by
-      WHERE po.id = :id AND po.clinic_id = :clinicId
-    `, { replacements: { id: req.params.id, clinicId } });
+      WHERE po.id = :id AND po.clinic_id = :clinicId ${poByIdBranchScope}
+    `, { replacements: poByIdReplacements });
 
     if (pos.length === 0) return res.status(404).json({ error: 'PO not found' });
 
@@ -928,16 +973,17 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
       }
     }
     const baseCurrencyTotal = Math.round(totalAmount * xRate * 100) / 100;
+    const poBranchId = getCreateBranchId(req);
 
     const [result] = await sequelize.query(`
       INSERT INTO purchase_orders (po_number, supplier_id, order_date, total_amount, status, notes,
         clinic_id, pr_id, po_type, delivery_address, requested_delivery_date,
         subtotal, tax_amount, tax_rate, shipping_cost, po_currency, exchange_rate,
-        base_currency_total, payment_terms, terms_conditions, created_by, created_at, updated_at)
+        base_currency_total, payment_terms, terms_conditions, created_by, created_at, updated_at, branch_id)
       VALUES (:po_number, :supplier_id, :order_date, :total_amount, 'draft', :notes,
         :clinic_id, :pr_id, :po_type, :delivery_address, :requested_delivery_date,
         :subtotal, :tax_amount, :tax_rate, :shipping_cost, :po_currency, :exchange_rate,
-        :base_currency_total, :payment_terms, :terms_conditions, :created_by, NOW(), NOW())
+        :base_currency_total, :payment_terms, :terms_conditions, :created_by, NOW(), NOW(), :branch_id)
     `, {
       replacements: {
         po_number: poNumber, supplier_id: parseInt(supplier_id),
@@ -950,7 +996,7 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
         shipping_cost: shippingCost, po_currency: resolvedCurrency,
         exchange_rate: xRate, base_currency_total: baseCurrencyTotal,
         payment_terms: payment_terms || 'Net30', terms_conditions: terms_conditions || null,
-        created_by: created_by || null
+        created_by: created_by || null, branch_id: poBranchId
       }
     });
 
@@ -970,15 +1016,16 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
         const lineTotal = (item.quantity || 1) * (item.unit_price || 0);
         await sequelize.query(`
           INSERT INTO purchase_order_items (purchase_order_id, item_name, description, quantity,
-            unit_price, total_price, unit_of_measure, created_at, updated_at)
+            unit_price, total_price, unit_of_measure, created_at, updated_at, branch_id)
           VALUES (:po_id, :item_name, :description, :quantity, :unit_price, :total_price,
-            :unit_of_measure, NOW(), NOW())
+            :unit_of_measure, NOW(), NOW(), :branch_id)
         `, {
           replacements: {
             po_id: poId, item_name: item.item_name || item.item_description,
             description: item.description || item.item_specification || null,
             quantity: item.quantity || 1, unit_price: item.unit_price || 0,
-            total_price: lineTotal, unit_of_measure: item.unit_of_measure || 'Each'
+            total_price: lineTotal, unit_of_measure: item.unit_of_measure || 'Each',
+            branch_id: poBranchId
           }
         });
       }
@@ -1056,16 +1103,16 @@ router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_order
     await sequelize.query(`
       INSERT INTO purchase_orders (po_number, supplier_id, order_date, total_amount, status, notes,
         clinic_id, po_type, subtotal, tax_amount, tax_rate, shipping_cost, po_currency, exchange_rate,
-        base_currency_total, payment_terms, created_by, created_at, updated_at)
+        base_currency_total, payment_terms, created_by, created_at, updated_at, branch_id)
       VALUES (:po_number, :supplier_id, NOW(), :amount, 'authorized', :notes,
         :clinic_id, 'standard', :amount, 0, 0, 0, :po_currency, :exchange_rate,
-        :base_currency_total, :payment_terms, :created_by, NOW(), NOW())
+        :base_currency_total, :payment_terms, :created_by, NOW(), NOW(), :branch_id)
     `, {
       replacements: {
         po_number: poNumber, supplier_id: parseInt(supplier_id), amount: amt, notes: description.trim(),
         clinic_id: clinic_id || null, po_currency: poCurrency, exchange_rate: xRate,
         base_currency_total: baseCurrencyTotal, payment_terms: supplierRow.payment_terms || 'Net30',
-        created_by: req.user?.id || null,
+        created_by: req.user?.id || null, branch_id: getCreateBranchId(req),
       }
     });
 
@@ -1084,15 +1131,17 @@ router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_order
 // visible, and lets the frontend decide what counts as "outstanding".
 router.get('/suppliers/:id/purchase-orders', authorize('procurement.read'), async (req, res) => {
   try {
+    const supplierPOReplacements = { id: req.params.id };
+    const supplierPOBranchScope = branchScope(req, supplierPOReplacements);
     const [pos] = await sequelize.query(`
       SELECT id, po_number, order_date, status, total_amount, po_currency, notes,
         COALESCE(paid_amount, 0) AS paid_amount,
         COALESCE(payment_status, 'unpaid') AS payment_status,
         (total_amount - COALESCE(paid_amount, 0)) AS balance_due
       FROM purchase_orders
-      WHERE supplier_id = :id
+      WHERE supplier_id = :id ${supplierPOBranchScope}
       ORDER BY order_date DESC, id DESC
-    `, { replacements: { id: req.params.id } });
+    `, { replacements: supplierPOReplacements });
 
     // Broken out per currency — summing a USD bill and an SSP bill into one
     // "outstanding" figure would blend two different currencies together as
@@ -1184,9 +1233,11 @@ async function recomputePOTotals(poId, po) {
  */
 async function loadEditableP0(req) {
   const clinicId = BranchQueryFilter.resolveClinicId(req);
+  const editablePOReplacements = { id: req.params.id, clinicId };
+  const editablePOBranchScope = branchScope(req, editablePOReplacements);
   const [pos] = await sequelize.query(
-    'SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId',
-    { replacements: { id: req.params.id, clinicId } }
+    `SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId ${editablePOBranchScope}`,
+    { replacements: editablePOReplacements }
   );
   if (pos.length === 0) return { error: { code: 404, body: { error: 'PO not found' } } };
   if (pos[0].status !== 'draft') {
@@ -1203,7 +1254,9 @@ router.post('/purchase-orders/:id/items', authorize('procurement.purchase_orders
     }
 
     const clinicIdForItems = BranchQueryFilter.resolveClinicId(req);
-    const [pos] = await sequelize.query('SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId: clinicIdForItems } });
+    const itemsPOReplacements = { id: req.params.id, clinicId: clinicIdForItems };
+    const itemsPOBranchScope = branchScope(req, itemsPOReplacements);
+    const [pos] = await sequelize.query(`SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId ${itemsPOBranchScope}`, { replacements: itemsPOReplacements });
     if (pos.length === 0) return res.status(404).json({ error: 'PO not found' });
     const po = pos[0];
     if (po.status !== 'draft') {
@@ -1213,13 +1266,14 @@ router.post('/purchase-orders/:id/items', authorize('procurement.purchase_orders
     const totalPrice = (parseFloat(quantity) || 0) * (parseFloat(unit_price) || 0);
     await sequelize.query(`
       INSERT INTO purchase_order_items (purchase_order_id, item_name, description, quantity,
-        unit_price, total_price, unit_of_measure, created_at, updated_at)
-      VALUES (:po_id, :item_name, :description, :quantity, :unit_price, :total_price, :unit_of_measure, NOW(), NOW())
+        unit_price, total_price, unit_of_measure, created_at, updated_at, branch_id)
+      VALUES (:po_id, :item_name, :description, :quantity, :unit_price, :total_price, :unit_of_measure, NOW(), NOW(), :branch_id)
     `, {
       replacements: {
         po_id: req.params.id, item_name, description: description || null,
         quantity: parseInt(quantity) || 1, unit_price: parseFloat(unit_price) || 0,
-        total_price: totalPrice, unit_of_measure: unit_of_measure || 'Each'
+        total_price: totalPrice, unit_of_measure: unit_of_measure || 'Each',
+        branch_id: po.branch_id ?? getCreateBranchId(req)
       }
     });
 
@@ -1400,7 +1454,9 @@ router.post('/purchase-orders/:id/status', authorize('procurement.purchase_order
     }
 
     const clinicIdForStatus = BranchQueryFilter.resolveClinicId(req);
-    const [po] = await sequelize.query('SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId: clinicIdForStatus } });
+    const statusPOReplacements = { id: req.params.id, clinicId: clinicIdForStatus };
+    const statusPOBranchScope = branchScope(req, statusPOReplacements);
+    const [po] = await sequelize.query(`SELECT * FROM purchase_orders WHERE id = :id AND clinic_id = :clinicId ${statusPOBranchScope}`, { replacements: statusPOReplacements });
     if (po.length === 0) return res.status(404).json({ error: 'PO not found' });
 
     const currentStatus = po[0].status;
@@ -1477,7 +1533,7 @@ router.get('/goods-receipt-notes', authorize('procurement.read'), async (req, re
     if (status) { conditions.push('grn.status = :status'); replacements.status = status; }
     if (po_id) { conditions.push('grn.po_id = :po_id'); replacements.po_id = po_id; }
 
-    const where = 'WHERE ' + conditions.join(' AND ');
+    const where = 'WHERE ' + conditions.join(' AND ') + branchScope(req, replacements, 'grn');
 
     const [grns] = await sequelize.query(`
       SELECT grn.*, po.po_number, s.name as supplier_name,
@@ -1502,6 +1558,8 @@ router.get('/goods-receipt-notes', authorize('procurement.read'), async (req, re
 router.get('/goods-receipt-notes/:id', authorize('procurement.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const grnByIdReplacements = { id: req.params.id, clinicId };
+    const grnByIdBranchScope = branchScope(req, grnByIdReplacements, 'grn');
     const [grns] = await sequelize.query(`
       SELECT grn.*, po.po_number, s.name as supplier_name,
         u.display_name as received_by_name, ins.display_name as inspected_by_name
@@ -1510,8 +1568,8 @@ router.get('/goods-receipt-notes/:id', authorize('procurement.read'), async (req
       LEFT JOIN suppliers s ON grn.supplier_id = s.id
       LEFT JOIN users u ON u.id = grn.received_by
       LEFT JOIN users ins ON ins.id = grn.inspected_by
-      WHERE grn.id = :id AND grn.clinic_id = :clinicId
-    `, { replacements: { id: req.params.id, clinicId } });
+      WHERE grn.id = :id AND grn.clinic_id = :clinicId ${grnByIdBranchScope}
+    `, { replacements: grnByIdReplacements });
 
     if (grns.length === 0) return res.status(404).json({ error: 'GRN not found' });
 
@@ -1534,9 +1592,11 @@ router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, 
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
 
     // Get the PO details — scoped so a GRN can't be created against another clinic's PO.
+    const poLookupReplacements = { po_id, clinic_id };
+    const poLookupBranchScope = branchScope(req, poLookupReplacements);
     const [po] = await sequelize.query(
-      'SELECT * FROM purchase_orders WHERE id = :po_id AND clinic_id = :clinic_id',
-      { replacements: { po_id, clinic_id } }
+      `SELECT * FROM purchase_orders WHERE id = :po_id AND clinic_id = :clinic_id ${poLookupBranchScope}`,
+      { replacements: poLookupReplacements }
     );
     if (po.length === 0) return res.status(404).json({ error: 'Purchase order not found' });
 
@@ -1546,19 +1606,20 @@ router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, 
 
     const grnId = uuidv4();
     let totalItemsReceived = 0;
+    const grnBranchId = po[0].branch_id ?? getCreateBranchId(req);
 
     await sequelize.query(`
       INSERT INTO goods_receipt_notes (id, clinic_id, grn_number, po_id, supplier_id, receipt_date,
-        received_by, received_location, received_condition, total_items_received, notes, invoice_number, status, created_at, updated_at)
+        received_by, received_location, received_condition, total_items_received, notes, invoice_number, status, created_at, updated_at, branch_id)
       VALUES (:id, :clinic_id, :grn_number, :po_id, :supplier_id, CURRENT_DATE, :received_by,
-        :received_location, :received_condition, 0, :notes, :invoice_number, 'pending_inspection', NOW(), NOW())
+        :received_location, :received_condition, 0, :notes, :invoice_number, 'pending_inspection', NOW(), NOW(), :branch_id)
     `, {
       replacements: {
         id: grnId, clinic_id: clinic_id || po[0].clinic_id || 1,
         grn_number: grnNumber, po_id, supplier_id: po[0].supplier_id,
         received_by, received_location: received_location || null,
         received_condition: received_condition || 'good', notes: notes || null,
-        invoice_number: invoice_number || null
+        invoice_number: invoice_number || null, branch_id: grnBranchId
       }
     });
 
@@ -1571,10 +1632,10 @@ router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, 
         await sequelize.query(`
           INSERT INTO grn_line_items (id, grn_id, po_line_item_id, item_code, item_description,
             quantity_expected, quantity_received, unit_of_measure, item_condition,
-            batch_number, expiry_date, serial_number, inspection_status, inspection_notes, created_at)
+            batch_number, expiry_date, serial_number, inspection_status, inspection_notes, created_at, branch_id)
           VALUES (:id, :grn_id, :po_line_item_id, :item_code, :item_description,
             :quantity_expected, :quantity_received, :unit_of_measure, :item_condition,
-            :batch_number, :expiry_date, :serial_number, 'pass', :inspection_notes, NOW())
+            :batch_number, :expiry_date, :serial_number, 'pass', :inspection_notes, NOW(), :branch_id)
         `, {
           replacements: {
             id: lineId, grn_id: grnId,
@@ -1588,7 +1649,8 @@ router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, 
             batch_number: line.batch_number || null,
             expiry_date: line.expiry_date || null,
             serial_number: line.serial_number || null,
-            inspection_notes: line.inspection_notes || null
+            inspection_notes: line.inspection_notes || null,
+            branch_id: grnBranchId
           }
         });
 
@@ -1638,16 +1700,18 @@ router.post('/goods-receipt-notes/:id/inspect', requireApprovalPermission('grn_i
   try {
     const { inspected_by, inspection_notes, status, line_updates } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const inspectReplacements = {
+      id: req.params.id, clinicId, status: status || 'inspected',
+      inspected_by: inspected_by || null, inspection_notes: inspection_notes || null
+    };
+    const inspectBranchScope = branchScope(req, inspectReplacements);
 
     const [, inspectMeta] = await sequelize.query(`
       UPDATE goods_receipt_notes SET status = :status, inspected_by = :inspected_by,
         inspection_date = CURRENT_DATE, inspection_notes = :inspection_notes, updated_at = NOW()
-      WHERE id = :id AND clinic_id = :clinicId
+      WHERE id = :id AND clinic_id = :clinicId ${inspectBranchScope}
     `, {
-      replacements: {
-        id: req.params.id, clinicId, status: status || 'inspected',
-        inspected_by: inspected_by || null, inspection_notes: inspection_notes || null
-      }
+      replacements: inspectReplacements
     });
     if (inspectMeta.rowCount === 0) return res.status(404).json({ error: 'GRN not found' });
 
@@ -1690,9 +1754,11 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
     // Get GRN details — locked so a concurrent accept on the same GRN blocks here instead
     // of both readers seeing 'pending_inspection' and both proceeding.
     const clinicIdForAccept = BranchQueryFilter.resolveClinicId(req);
+    const acceptGrnReplacements = { id: req.params.id, clinicId: clinicIdForAccept };
+    const acceptGrnBranchScope = branchScope(req, acceptGrnReplacements);
     const [grns] = await sequelize.query(
-      'SELECT * FROM goods_receipt_notes WHERE id = :id AND clinic_id = :clinicId FOR UPDATE',
-      { replacements: { id: req.params.id, clinicId: clinicIdForAccept }, transaction: t }
+      `SELECT * FROM goods_receipt_notes WHERE id = :id AND clinic_id = :clinicId ${acceptGrnBranchScope} FOR UPDATE`,
+      { replacements: acceptGrnReplacements, transaction: t }
     );
     if (grns.length === 0) {
       await t.rollback();
@@ -2018,7 +2084,9 @@ router.post('/goods-receipt-notes/:id/reject', requireApprovalPermission('grn_ac
   try {
     const { inspection_notes } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [grns] = await sequelize.query('SELECT status FROM goods_receipt_notes WHERE id = :id AND clinic_id = :clinicId', { replacements: { id: req.params.id, clinicId } });
+    const rejectGrnReplacements = { id: req.params.id, clinicId };
+    const rejectGrnBranchScope = branchScope(req, rejectGrnReplacements);
+    const [grns] = await sequelize.query(`SELECT status FROM goods_receipt_notes WHERE id = :id AND clinic_id = :clinicId ${rejectGrnBranchScope}`, { replacements: rejectGrnReplacements });
     if (grns.length === 0) return res.status(404).json({ error: 'GRN not found' });
     if (grns[0].status === 'accepted') {
       return res.status(400).json({ error: 'Cannot reject a GRN that has already been accepted' });
@@ -2050,6 +2118,10 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
     // ambiguous in any query that joins them. Always qualify by alias.
     const cf = (alias) => `AND ${alias}.clinic_id = ${cid}`;
     const cw = (alias) => `WHERE ${alias}.clinic_id = ${cid}`;
+    // Branch scoping alongside the clinic filters above — admins (branchId null) see
+    // every branch within the clinic, same rule as branchScope() elsewhere in this file.
+    const dashboardBranchId = req.user?.role === 'admin' ? null : (req.branchContext?.branchId || req.user?.branchId || null);
+    const bf = (alias) => dashboardBranchId ? `AND ${alias}.branch_id = ${parseInt(dashboardBranchId, 10)}` : '';
 
     // Requisition stats — real enum: draft, submitted, approved, rejected, cancelled
     const [prStats] = await sequelize.query(`
@@ -2059,7 +2131,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0) as approved,
         COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0) as drafts,
         COALESCE(SUM(CASE WHEN status = 'submitted' THEN total_amount ELSE 0 END), 0) as pending_value
-      FROM purchase_requisitions pr WHERE 1=1 ${cf('pr')}
+      FROM purchase_requisitions pr WHERE 1=1 ${cf('pr')} ${bf('pr')}
     `);
 
     // Purchase order stats — real enum: draft, check, approved, authorized,
@@ -2079,7 +2151,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         COALESCE(SUM(CASE WHEN status = 'received' THEN 1 ELSE 0 END), 0) as received,
         COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
         COALESCE(SUM(total_amount), 0) as total_value
-      FROM purchase_orders po ${cw('po')}
+      FROM purchase_orders po ${cw('po')} ${bf('po')}
     `);
 
     // GRN stats — real enum: pending_inspection, inspected, accepted, rejected, partial
@@ -2089,7 +2161,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         COALESCE(SUM(CASE WHEN status = 'pending_inspection' THEN 1 ELSE 0 END), 0) as pending_inspection,
         COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0) as accepted,
         COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) as rejected
-      FROM goods_receipt_notes grn WHERE 1=1 ${cf('grn')}
+      FROM goods_receipt_notes grn WHERE 1=1 ${cf('grn')} ${bf('grn')}
     `);
 
     // Supplier bills (expense_invoices) — real enum: received, verified, approved,
@@ -2100,7 +2172,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         COUNT(*) as total_bills,
         COALESCE(SUM(CASE WHEN status IN ('received','verified') THEN 1 ELSE 0 END), 0) as pending_approval,
         COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN amount_due ELSE 0 END), 0) as outstanding_amount
-      FROM expense_invoices ei WHERE 1=1 ${cf('ei')}
+      FROM expense_invoices ei WHERE 1=1 ${cf('ei')} ${bf('ei')}
     `);
 
     // Supplier stats — "active" = is_active AND NOT on_hold (a supplier can be
@@ -2125,7 +2197,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         SELECT DISTINCT grn.po_id FROM goods_receipt_notes grn
         WHERE grn.status = 'accepted' AND grn.receipt_date >= ((CURRENT_DATE) - INTERVAL '30 day')
       )
-      ${cid !== null ? `AND po.clinic_id = ${cid}` : ''}
+      ${cid !== null ? `AND po.clinic_id = ${cid}` : ''} ${bf('po')}
     `);
 
     // The card totals above (open_value, committed_amount, total_value,
@@ -2140,7 +2212,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         COALESCE(SUM(CASE WHEN status NOT IN ('received','cancelled') THEN total_amount ELSE 0 END), 0) as open_value,
         COALESCE(SUM(CASE WHEN status IN ('approved','authorized') THEN total_amount ELSE 0 END), 0) as committed_amount,
         COALESCE(SUM(total_amount), 0) as total_value
-      FROM purchase_orders po ${cw('po')}
+      FROM purchase_orders po ${cw('po')} ${bf('po')}
       GROUP BY COALESCE(po_currency, 'SSP')
     `);
     const [spendByCurrency] = await sequelize.query(`
@@ -2150,7 +2222,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
         SELECT DISTINCT grn.po_id FROM goods_receipt_notes grn
         WHERE grn.status = 'accepted' AND grn.receipt_date >= ((CURRENT_DATE) - INTERVAL '30 day')
       )
-      ${cid !== null ? `AND po.clinic_id = ${cid}` : ''}
+      ${cid !== null ? `AND po.clinic_id = ${cid}` : ''} ${bf('po')}
       GROUP BY COALESCE(po.po_currency, 'SSP')
     `);
 
@@ -2159,7 +2231,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
     const [paidStats] = await sequelize.query(`
       SELECT COALESCE(SUM(sbp.amount_paid), 0) as paid_30d, COUNT(*) as payment_count
       FROM supplier_bill_payments sbp
-      WHERE sbp.payment_date >= ((CURRENT_DATE) - INTERVAL '30 day') ${cf('sbp')}
+      WHERE sbp.payment_date >= ((CURRENT_DATE) - INTERVAL '30 day') ${cf('sbp')} ${bf('sbp')}
     `);
 
     // Recent POs
@@ -2167,7 +2239,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
       SELECT po.id, po.po_number, po.order_date, po.total_amount, COALESCE(po.po_currency, 'SSP') as po_currency, po.status, s.name as supplier_name
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id
-      ${cw('po')}
+      ${cw('po')} ${bf('po')}
       ORDER BY po.created_at DESC LIMIT 5
     `);
 
@@ -2181,17 +2253,18 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
       WHERE po.status NOT IN ('received','cancelled')
         AND po.requested_delivery_date IS NOT NULL
         AND po.requested_delivery_date < CURRENT_DATE
-        ${cid !== null ? `AND po.clinic_id = ${cid}` : ''}
+        ${cid !== null ? `AND po.clinic_id = ${cid}` : ''} ${bf('po')}
       ORDER BY po.requested_delivery_date ASC LIMIT 5
     `);
 
-    // Top suppliers by spend
+    // Top suppliers by spend — po is joined in (not the shared suppliers row itself)
+    // so order_count/total_spend reflect only this branch's own purchase activity.
     const [topSuppliers] = await sequelize.query(`
       SELECT s.id, s.name, s.supplier_code, s.performance_rating,
         COUNT(po.id) as order_count,
         COALESCE(SUM(po.total_amount), 0) as total_spend
       FROM suppliers s
-      LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.status != 'cancelled'
+      LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.status != 'cancelled' ${bf('po')}
       WHERE 1=1 ${cf('s')}
       GROUP BY s.id, s.name, s.supplier_code, s.performance_rating
       ORDER BY total_spend DESC LIMIT 5
@@ -2206,17 +2279,17 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
                pr.total_amount AS amount, pr.created_at AS ts, u1.display_name AS actor
         FROM purchase_requisitions pr
         LEFT JOIN users u1 ON u1.id = pr.created_by
-        WHERE 1=1 ${cf('pr')}
+        WHERE 1=1 ${cf('pr')} ${bf('pr')}
         UNION ALL
         SELECT 'purchase_order', po.po_number, po.status, po.total_amount, po.created_at, u2.display_name
         FROM purchase_orders po
         LEFT JOIN users u2 ON u2.id = po.created_by
-        ${cw('po')}
+        ${cw('po')} ${bf('po')}
         UNION ALL
         SELECT 'goods_receipt', grn.grn_number, grn.status, NULL, grn.created_at, u3.display_name
         FROM goods_receipt_notes grn
         LEFT JOIN users u3 ON u3.id = grn.received_by
-        WHERE 1=1 ${cf('grn')}
+        WHERE 1=1 ${cf('grn')} ${bf('grn')}
         UNION ALL
         SELECT 'supplier', s.name, CASE WHEN s.on_hold = true THEN 'on_hold' ELSE 'active' END, NULL, s.created_at, NULL
         FROM suppliers s WHERE 1=1 ${cf('s')}
@@ -2400,7 +2473,7 @@ router.get('/reports/purchase-summary', authorize('procurement.read'), async (re
       conditions.push('po.po_currency = :currency');
       replacements.currency = currency;
     }
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = (conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '') + branchScope(req, replacements, 'po');
 
     // POs are raised in different currencies (mostly SSP and USD in this system) — summing
     // po.total_amount across currencies without converting would silently blend, e.g., a
@@ -2461,6 +2534,7 @@ router.get('/reports/delivery-performance', authorize('procurement.read'), async
     // which already excludes cancelled orders from its totals).
     const conditions = ["po.requested_delivery_date IS NOT NULL AND po.status != 'cancelled'", 'po.clinic_id = :clinic_id'];
     const replacements = { clinic_id: clinicId };
+    const deliveryBranchScope = branchScope(req, replacements, 'po');
 
     const [results] = await sequelize.query(`
       SELECT s.name as supplier_name,
@@ -2471,7 +2545,7 @@ router.get('/reports/delivery-performance', authorize('procurement.read'), async
         AVG(((po.delivery_date_actual)::date - (po.order_date)::date)) as avg_delivery_days
       FROM purchase_orders po
       JOIN suppliers s ON po.supplier_id = s.id
-      WHERE ${conditions.join(' AND ')}
+      WHERE ${conditions.join(' AND ')} ${deliveryBranchScope}
       GROUP BY s.id, s.name
       ORDER BY total_orders DESC
     `, { replacements });
@@ -2512,7 +2586,7 @@ router.get('/reports/purchase-orders', authorize('procurement.read'), async (req
       replacements.supplier_id = parseInt(supplier_id);
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = (conditions.length ? `WHERE ${conditions.join(' AND ')}` : '') + branchScope(req, replacements, 'po');
 
     const [results] = await sequelize.query(`
       SELECT po.id, po.po_number, po.order_date, po.status, po.po_currency, po.total_amount,
@@ -2583,7 +2657,7 @@ router.get('/reports/purchase-requisitions', authorize('procurement.read'), asyn
       replacements.user_id = parseInt(user_id, 10);
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = (conditions.length ? `WHERE ${conditions.join(' AND ')}` : '') + branchScope(req, replacements, 'pr');
 
     const [results] = await sequelize.query(`
       SELECT pr.id, pr.pr_number, pr.requisition_date, pr.department, pr.status,
@@ -2633,7 +2707,7 @@ router.get('/reports/goods-receipts', authorize('procurement.read'), async (req,
       replacements.supplier_id = parseInt(supplier_id);
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = (conditions.length ? `WHERE ${conditions.join(' AND ')}` : '') + branchScope(req, replacements, 'grn');
 
     const [results] = await sequelize.query(`
       SELECT grn.id, grn.grn_number, grn.receipt_date, grn.status, grn.total_items_received,
@@ -2682,10 +2756,14 @@ router.post('/attachments/:entityType/:entityId', authorize('procurement.write')
       return res.status(403).json({ error: 'Insufficient permissions', required: PO_WRITE, current: req.user.role });
     }
 
+    // entityDef.table is always purchase_orders or goods_receipt_notes (see
+    // ATTACHMENT_ENTITY_TABLES above) — both carry branch_id, so gate the upload the
+    // same way every other by-ID route on those tables does.
     const [entityRows] = await sequelize.query(
-      `SELECT id FROM ${entityDef.table} WHERE id = :id`, { replacements: { id: entityId } }
+      `SELECT id, branch_id FROM ${entityDef.table} WHERE id = :id`, { replacements: { id: entityId } }
     );
     if (entityRows.length === 0) return res.status(404).json({ error: `${entityType} not found` });
+    if (!assertBranchAccess(entityRows[0], req, res, entityType)) return;
 
     const files = req.files || [];
     if (files.length === 0) return res.status(400).json({ error: 'No files provided' });

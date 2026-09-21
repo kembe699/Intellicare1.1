@@ -400,17 +400,23 @@ app.use('/api', redisCacheMiddleware());
     let added = 0;
     for (const tbl of tablesNeedingBranchId) {
       try {
+        // Postgres COUNT(*) comes back as the string "0"/"1" (bigint), which
+        // is truthy in JS either way — a bare `if (x.cnt)` silently does the
+        // opposite of what it looks like. Found while building the equivalent
+        // per-tenant migration in ensureBranchIsolationColumns.js; this loop
+        // had the identical bug, so tables it hadn't already reached before
+        // this fix were silently never getting branch_id added.
         const [[tableCheck]] = await _sq.query(
           `SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = :tbl`,
           { replacements: { tbl } }
         );
-        if (!tableCheck.cnt) continue; // table doesn't exist yet
+        if (Number(tableCheck.cnt) === 0) continue; // table doesn't exist yet
 
         const [[colCheck]] = await _sq.query(
           `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = :tbl AND column_name = 'branch_id'`,
           { replacements: { tbl } }
         );
-        if (colCheck.cnt) continue; // already has it
+        if (Number(colCheck.cnt) > 0) continue; // already has it
 
         await _sq.query(`ALTER TABLE ${tbl} ADD COLUMN branch_id INTEGER NULL`);
 
@@ -418,7 +424,7 @@ app.use('/api', redisCacheMiddleware());
           `SELECT COUNT(*) AS cnt FROM pg_indexes WHERE schemaname = current_schema() AND tablename = :tbl AND indexname = :idx`,
           { replacements: { tbl, idx: `idx_${tbl.replace(/_/g, '')}_branch` } }
         );
-        if (!idxCheck.cnt) {
+        if (Number(idxCheck.cnt) === 0) {
           await _sq.query(`CREATE INDEX idx_${tbl.replace(/_/g, '')}_branch ON ${tbl}(branch_id)`);
         }
         added++;

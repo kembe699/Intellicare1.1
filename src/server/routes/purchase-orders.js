@@ -6,6 +6,19 @@ const { authorize } = require('../middleware/authorize');
 // App.tsx allows on /procurement/purchase-orders, so the API enforces what the client already assumes.
 const router = express.Router();
 const { PurchaseOrder, PurchaseOrderItem } = require('../models');
+const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
+
+// Branch-level access check for a fetch-by-ID record — same fetch-then-check pattern
+// used throughout accounting.js/patients.js for tables that carry branch_id.
+function assertBranchAccess(record, req, res, label) {
+  const branchContext = req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' };
+  if (!BranchQueryFilter.canAccessRecord(record, branchContext)) {
+    res.status(403).json({ error: `Access denied to this ${label}` });
+    return false;
+  }
+  return true;
+}
 
 // Get all purchase orders
 router.get('/', async (req, res) => {
@@ -15,6 +28,7 @@ router.get('/', async (req, res) => {
     // matches correctly — see models/index.js's tenant-aware proxy comment.
     const { PurchaseOrder, PurchaseOrderItem } = req.models;
     const orders = await PurchaseOrder.findAll({
+      where: { ...getBranchCondition(req) },
       include: [{
         model: PurchaseOrderItem,
         as: 'items'
@@ -41,6 +55,7 @@ router.get('/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Purchase order not found' });
     }
+    if (!assertBranchAccess(order, req, res, 'purchase order')) return;
     res.json(order);
   } catch (error) {
     console.error('Error fetching purchase order:', error);
@@ -74,7 +89,8 @@ router.post('/', authorize('procurement.purchase_orders.write'), async (req, res
       notes: req.body.notes || '',
       po_number: poNumber,
       status: 'draft',
-      total_amount: 0.00 // Will be calculated when items are added
+      total_amount: 0.00, // Will be calculated when items are added
+      branch_id: getCreateBranchId(req)
     });
     
     console.log('Purchase order created successfully:', order.toJSON());
@@ -113,6 +129,7 @@ router.post('/:id/items', authorize('procurement.purchase_orders.write'), async 
     if (!order) {
       return res.status(404).json({ error: 'Purchase order not found' });
     }
+    if (!assertBranchAccess(order, req, res, 'purchase order')) return;
 
     const { item_name, description, quantity, unit_price, unit_of_measure } = req.body;
     const total_price = quantity * unit_price;
@@ -124,7 +141,8 @@ router.post('/:id/items', authorize('procurement.purchase_orders.write'), async 
       quantity,
       unit_price,
       total_price,
-      unit_of_measure
+      unit_of_measure,
+      branch_id: order.branch_id ?? getCreateBranchId(req)
     });
 
     // Update PO total amount
@@ -154,6 +172,7 @@ router.put('/:id/items/:itemId', authorize('procurement.purchase_orders.write'),
     if (!item) {
       return res.status(404).json({ error: 'Purchase order item not found' });
     }
+    if (!assertBranchAccess(item, req, res, 'purchase order item')) return;
 
     const { quantity, unit_price } = req.body;
     const total_price = quantity * unit_price;
@@ -191,6 +210,7 @@ router.delete('/:id/items/:itemId', authorize('procurement.purchase_orders.write
     if (!item) {
       return res.status(404).json({ error: 'Purchase order item not found' });
     }
+    if (!assertBranchAccess(item, req, res, 'purchase order item')) return;
 
     await item.destroy();
 
@@ -216,6 +236,7 @@ router.put('/:id', authorize('procurement.purchase_orders.write'), async (req, r
     if (!order) {
       return res.status(404).json({ error: 'Purchase order not found' });
     }
+    if (!assertBranchAccess(order, req, res, 'purchase order')) return;
 
     const updateData = { ...req.body };
     

@@ -9,6 +9,7 @@ const router = express.Router();
 const { sequelize, ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { resolveCashOrBankAccount, generateJENumber, BASE_CURRENCY } = require('./patientDeposits');
 
 // Neither invoice creation nor invoice payment ever touched the general ledger — an
@@ -35,7 +36,7 @@ async function resolveReceivableAccount(clinicId, schemeId) {
     || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1200', is_active: true } });
 }
 
-async function postJournalEntry({ clinicId, amount, debitAccount, creditAccount, reference, description, userId }) {
+async function postJournalEntry({ clinicId, amount, debitAccount, creditAccount, reference, description, userId, branchId }) {
   try {
     if (!debitAccount || !creditAccount || !(amount > 0)) return;
     const jeNumber = await generateJENumber(clinicId);
@@ -47,14 +48,15 @@ async function postJournalEntry({ clinicId, amount, debitAccount, creditAccount,
         narration: reference, reference, transaction_currency: BASE_CURRENCY, base_currency: BASE_CURRENCY,
         exchange_rate: 1.0, total_debit: amount, total_credit: amount, base_total_debit: amount, base_total_credit: amount,
         status: 'posted', created_by: userId || 'system', posted_by: userId || 'system', posted_date: new Date(),
+        branch_id: branchId || null,
       }, { transaction: t2 });
       await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: debitAccount.id, debit_amount: amount, credit_amount: 0, base_debit_amount: amount, base_credit_amount: 0, description },
-        { je_id: je.id, account_id: creditAccount.id, debit_amount: 0, credit_amount: amount, base_debit_amount: 0, base_credit_amount: amount, description },
+        { je_id: je.id, account_id: debitAccount.id, debit_amount: amount, credit_amount: 0, base_debit_amount: amount, base_credit_amount: 0, description, branch_id: branchId || null },
+        { je_id: je.id, account_id: creditAccount.id, debit_amount: 0, credit_amount: amount, base_debit_amount: 0, base_credit_amount: amount, description, branch_id: branchId || null },
       ], { transaction: t2 });
       await AccountLedger.bulkCreate([
-        { clinic_id: clinicId, account_id: debitAccount.id, transaction_date: today, debit_amount: amount, credit_amount: 0, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-        { clinic_id: clinicId, account_id: creditAccount.id, transaction_date: today, debit_amount: 0, credit_amount: amount, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
+        { clinic_id: clinicId, account_id: debitAccount.id, transaction_date: today, debit_amount: amount, credit_amount: 0, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing', branch_id: branchId || null },
+        { clinic_id: clinicId, account_id: creditAccount.id, transaction_date: today, debit_amount: 0, credit_amount: amount, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing', branch_id: branchId || null },
       ], { transaction: t2 });
       await t2.commit();
       console.log(`Invoice GL posted: ${jeNumber} (${debitAccount.account_name} / ${creditAccount.account_name})`);
@@ -188,7 +190,7 @@ router.post('/', authorize('invoices.write'), async (req, res) => {
       await postJournalEntry({
         clinicId: clinicIdNum, amount: parsedAmount, debitAccount: receivableAccount, creditAccount: revenueAccount,
         reference: `INV-${id}`, description: `Invoice ${invoiceNumber} — ${patient_name || patient_id}`,
-        userId: req.user?.userId,
+        userId: req.user?.userId, branchId: getCreateBranchId(req),
       });
     } else if (!bill_id) {
       console.log(`Note: invoice ${invoiceNumber} is in ${currency} — skipping GL posting (ledger is SSP-only)`);
@@ -222,6 +224,7 @@ router.get('/:id', async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT i.*, ((CURRENT_DATE)::date - (i.due_date)::date) as days_overdue FROM invoices i WHERE i.id=?`, { replacements: [req.params.id] });
     if (!inv.length) return res.status(404).json({ error: 'Not found' });
+    if (!BranchQueryFilter.canAccessRecord(inv[0], req.branchContext)) return res.status(404).json({ error: 'Not found' });
     const [items] = await sequelize.query(`SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY created_at`, { replacements: [req.params.id] });
     const [payments] = await sequelize.query(`SELECT * FROM invoice_payments WHERE invoice_id=? ORDER BY payment_date DESC`, { replacements: [req.params.id] });
     res.json({ data: { ...inv[0], items, payments } });
@@ -234,6 +237,7 @@ router.post('/:id/payments', authorize('invoices.write'), async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id], transaction: t });
     if (!inv.length) { await t.rollback(); return res.status(404).json({ error: 'Not found' }); }
+    if (!BranchQueryFilter.canAccessRecord(inv[0], req.branchContext)) { await t.rollback(); return res.status(404).json({ error: 'Not found' }); }
     const invoice = inv[0];
     const payAmt = parseFloat(req.body.amount);
     if (!payAmt || payAmt <= 0) { await t.rollback(); return res.status(400).json({ error: 'Invalid amount' }); }
@@ -286,7 +290,7 @@ router.post('/:id/payments', authorize('invoices.write'), async (req, res) => {
       await postJournalEntry({
         clinicId: clinicIdNum, amount: payAmt, debitAccount: cashOrBank, creditAccount: receivableAccount,
         reference: `INV-${req.params.id}`, description: `Invoice payment — ${invoice.invoice_number} (${method})`,
-        userId: req.user?.userId,
+        userId: req.user?.userId, branchId: getCreateBranchId(req),
       });
     } else {
       console.log(`Note: invoice ${invoice.invoice_number} payment is in ${invoice.currency} — skipping GL posting (ledger is SSP-only)`);
@@ -299,6 +303,7 @@ router.put('/:id/cancel', authorize('invoices.write'), async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id] });
     if (!inv.length) return res.status(404).json({ error: 'Not found' });
+    if (!BranchQueryFilter.canAccessRecord(inv[0], req.branchContext)) return res.status(404).json({ error: 'Not found' });
     if (inv[0].status === 'paid') return res.status(400).json({ error: 'Cannot cancel paid invoice' });
     await sequelize.query(`UPDATE invoices SET status='cancelled', updated_at=NOW() WHERE id=?`, { replacements: [req.params.id] });
     if (inv[0].bill_id) await sequelize.query(`UPDATE patient_bills SET invoice_id=NULL, billing_type='cash', status='pending' WHERE id=?`, { replacements: [inv[0].bill_id] });
@@ -311,6 +316,7 @@ router.put('/:id/mark-paid', authorize('invoices.write'), async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id] });
     if (!inv.length) return res.status(404).json({ error: 'Not found' });
+    if (!BranchQueryFilter.canAccessRecord(inv[0], req.branchContext)) return res.status(404).json({ error: 'Not found' });
     const bal = parseFloat(inv[0].balance_due);
     if (bal > 0) {
       await sequelize.query(`INSERT INTO invoice_payments (id,invoice_id,amount,payment_date,payment_method,notes,recorded_by,created_at) VALUES (?,?,?,CURRENT_DATE,'cash','Marked as paid',?,NOW())`, { replacements: [uuidv4(),req.params.id,bal,req.user?.userId||null] });
@@ -343,7 +349,7 @@ router.put('/:id/mark-paid', authorize('invoices.write'), async (req, res) => {
       await postJournalEntry({
         clinicId: clinicIdNum, amount: bal, debitAccount: cashOrBank, creditAccount: receivableAccount,
         reference: `INV-${req.params.id}`, description: `Invoice marked paid — ${inv[0].invoice_number}`,
-        userId: req.user?.userId,
+        userId: req.user?.userId, branchId: getCreateBranchId(req),
       });
     } else if (bal > 0) {
       console.log(`Note: invoice ${inv[0].invoice_number} is in ${inv[0].currency} — skipping GL posting (ledger is SSP-only)`);

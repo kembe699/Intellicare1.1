@@ -42,6 +42,13 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: true,
       defaultValue: 'Each'
+    },
+    // Guaranteed by the branch-isolation migration (ensureBranchIsolationColumns.js).
+    // Declared here so create() actually writes it — Sequelize silently drops any
+    // key passed to create() that isn't a declared model attribute.
+    branch_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
     }
   }, {
     tableName: 'purchase_order_items',

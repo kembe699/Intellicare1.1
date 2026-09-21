@@ -3,6 +3,22 @@ const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
+const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
+
+// Named-parameter counterpart to branchFilter's getBranchConditionSQL, for the handlers
+// below that already build their query with Sequelize's :param replacements object
+// instead of positional `?` — the two placeholder styles can't be mixed within one
+// sequelize.query() call, so a query using :named replacements needs this instead of
+// splicing in the `?`-based helper. Same rules as getBranchConditionSQL: admins are
+// never filtered, and the branch comes from req.branchContext first, req.user as fallback.
+function getBranchConditionNamed(req, alias, paramName = 'branchId') {
+  if (!req.user || req.user.role === 'admin') return { sql: '', replacements: {} };
+  const branchId = req.branchContext?.branchId || req.user.branchId || null;
+  if (!branchId) return { sql: '', replacements: {} };
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return { sql: ` AND ${col} = :${paramName}`, replacements: { [paramName]: branchId } };
+}
+
 // Only for the module-scope boot IIFEs below and findByPhone's default arg, which run
 // outside any request/tenant context (see tenantContext.js) and so always resolve to the
 // default tenant, same as every other file-scope migration in this codebase. Every actual
@@ -147,6 +163,7 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   const participant_number = `PTN-${dateStr}-${randomSuffix}`;
   const cleanPhone = phone && phone.trim() ? phone.trim() : null;
+  const branchId = getCreateBranchId(req);
 
   const attemptRegister = async () => {
   const t = await db.transaction();
@@ -203,8 +220,8 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
     }
 
     await db.query(
-      `INSERT INTO lis_participants (id, participant_number, first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO lis_participants (id, participant_number, first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       {
         // Every optional field needs an explicit `|| null`: Sequelize throws
         // ("Positional replacement (?) N has no entry in the replacement map")
@@ -214,7 +231,7 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
         // dispensing's walk-in registration — the only caller that posts just
         // first_name/last_name — 500'd while the LIS registration form (which
         // always sends a gender) worked fine.
-        replacements: [id, participant_number, first_name, last_name, gender || null, date_of_birth || null, cleanPhone, residence || null, study_ref || null, JSON.stringify(demographics || {})],
+        replacements: [id, participant_number, first_name, last_name, gender || null, date_of_birth || null, cleanPhone, residence || null, study_ref || null, JSON.stringify(demographics || {}), branchId],
         transaction: t
       }
     );
@@ -225,8 +242,8 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
     if (clinic_id || doctor_id || consultant_id) {
       queuedVisitId = uuidv4();
       await db.query(
-        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting')`,
-        { replacements: [queuedVisitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null], transaction: t }
+        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?)`,
+        { replacements: [queuedVisitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null, branchId], transaction: t }
       );
     }
 
@@ -318,10 +335,21 @@ router.get('/participants', authorize('lis.participants.read'), async (req, res)
     const { search } = req.query;
     // ILIKE, not LIKE. MySQL's LIKE ignores case; PostgreSQL's does not, so
     // searching "james" found nothing for a participant stored as "James".
-    const where = search
-      ? `WHERE p.first_name ILIKE ? OR p.last_name ILIKE ? OR p.participant_number ILIKE ? OR p.phone ILIKE ?`
-      : '';
-    const replacements = search ? Array(4).fill(`%${search}%`) : [];
+    const branchFilter = getBranchConditionSQL(req, 'p');
+    const conditions = [];
+    const replacements = [];
+    if (search) {
+      conditions.push(`(p.first_name ILIKE ? OR p.last_name ILIKE ? OR p.participant_number ILIKE ? OR p.phone ILIKE ?)`);
+      replacements.push(...Array(4).fill(`%${search}%`));
+    }
+    if (branchFilter.sql) {
+      // branchFilter.sql is ` AND alias.branch_id = ?` — strip the leading " AND " since
+      // it's being folded into `conditions` and joined with AND below rather than appended
+      // after an existing WHERE.
+      conditions.push(branchFilter.sql.replace(/^\s*AND\s*/, ''));
+      replacements.push(...branchFilter.params);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // The cap was 200, applied to every request and ordered newest-first, while
     // the patient pickers fetch this list once with no search and filter what
@@ -402,8 +430,8 @@ router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req,
   try {
     const visitId = uuidv4();
     await db.query(
-      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting')`,
-      { replacements: [visitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null] }
+      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?)`,
+      { replacements: [visitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null, getCreateBranchId(req)] }
     );
 
     // This is the actual "queue a patient to a doctor" path this app uses today
@@ -449,13 +477,13 @@ router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req,
 // clinic/department* (from dr_clinics, e.g. "GP - Consultation") the patient was queued
 // to see — a UUID, never equal to the tenant clinic_id — so that filter silently excluded
 // every real queued patient the moment a caller passed clinic_id, which is exactly what
-// LISQueue.tsx started doing. lis_test_orders has no actual facility/branch column to
-// scope on, so this stays a single pooled queue (correct for this single-facility
-// deployment) until one is added. The clinic_id query param is accepted but ignored —
-// kept only so older callers passing it don't break.
+// LISQueue.tsx started doing. The clinic_id query param is accepted but ignored — kept
+// only so older callers passing it don't break. Branch scoping (below) now uses
+// lis_test_orders.branch_id instead, added in a later migration for exactly this purpose.
 router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
+    const branchFilter = getBranchConditionSQL(req, 'o');
     const [queue] = await db.query(`
       SELECT o.id as order_id, o.doctor_id, o.consultant_id, o.room_number, o.clinic_id, o.clinic_name, o.status, o.created_at, o.updated_at,
              o.vitals, o.triaged_by, o.triaged_at,
@@ -467,8 +495,9 @@ router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
       LEFT JOIN employees ce ON ce.id = o.consultant_id
       LEFT JOIN users tu ON o.triaged_by = tu.id
       WHERE o.status IN ('waiting', 'called')
+      ${branchFilter.sql}
       ORDER BY o.created_at ASC
-    `);
+    `, { replacements: branchFilter.params });
     res.json(queue.map(q => ({ ...q, vitals: parseJSONField(q.vitals, {}) })));
   } catch (error) {
     res.status(500).json({ success: false, error: 'Database error' });
@@ -589,11 +618,11 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
   
   const t = await db.transaction();
   let orderId = order_id;
-  
+
   try {
     if (orderId) {
       await db.query(
-        `UPDATE lis_test_orders 
+        `UPDATE lis_test_orders
          SET clinical_notes = ?, vitals = ?, status = 'ordered', doctor_id = COALESCE(doctor_id, ?)
          WHERE id = ?`,
         { replacements: [clinical_notes || null, JSON.stringify(vitals || {}), doctor_id || null, orderId], transaction: t }
@@ -601,9 +630,9 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
     } else {
       orderId = uuidv4();
       await db.query(
-        `INSERT INTO lis_test_orders (id, participant_id, visit_id, doctor_id, clinical_notes, vitals, status) 
-         VALUES (?, ?, ?, ?, ?, ?, 'ordered')`,
-        { replacements: [orderId, participant_id, visit_id || null, doctor_id || null, clinical_notes || null, JSON.stringify(vitals || {})], transaction: t }
+        `INSERT INTO lis_test_orders (id, participant_id, visit_id, doctor_id, clinical_notes, vitals, status, branch_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'ordered', ?)`,
+        { replacements: [orderId, participant_id, visit_id || null, doctor_id || null, clinical_notes || null, JSON.stringify(vitals || {}), getCreateBranchId(req)], transaction: t }
       );
     }
     
@@ -647,9 +676,9 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
 
       const specimenId = uuidv4();
       await db.query(
-        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending_collection')`,
-        { replacements: [specimenId, orderId, test.code || null, test.name || null, barcode, test.department || null], transaction: t }
+        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status, branch_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending_collection', ?)`,
+        { replacements: [specimenId, orderId, test.code || null, test.name || null, barcode, test.department || null, getCreateBranchId(req)], transaction: t }
       );
     }
 
@@ -697,7 +726,7 @@ router.post('/orders/:id/add-tests', authorize('lis.clinical.write'), async (req
 
   const t = await db.transaction();
   try {
-    const [[order]] = await db.query(`SELECT id, participant_id, status FROM lis_test_orders WHERE id = ?`, { replacements: [id], transaction: t });
+    const [[order]] = await db.query(`SELECT id, participant_id, status, branch_id FROM lis_test_orders WHERE id = ?`, { replacements: [id], transaction: t });
     if (!order) {
       await t.rollback();
       return res.status(404).json({ success: false, error: 'Order not found' });
@@ -727,9 +756,9 @@ router.post('/orders/:id/add-tests', authorize('lis.clinical.write'), async (req
       }
       const specimenId = uuidv4();
       await db.query(
-        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending_collection')`,
-        { replacements: [specimenId, id, test.code || null, test.name || null, barcode, test.department || null], transaction: t }
+        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status, branch_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending_collection', ?)`,
+        { replacements: [specimenId, id, test.code || null, test.name || null, barcode, test.department || null, order.branch_id || getCreateBranchId(req)], transaction: t }
       );
       created++;
     }
@@ -746,12 +775,14 @@ router.post('/orders/:id/add-tests', authorize('lis.clinical.write'), async (req
 router.get('/orders', authorize('lis.clinical.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
+    const branchFilter = getBranchConditionSQL(req, 'o');
     const [orders] = await db.query(`
       SELECT o.*, p.first_name, p.last_name, p.participant_number
       FROM lis_test_orders o
       JOIN lis_participants p ON o.participant_id = p.id
+      WHERE 1=1 ${branchFilter.sql}
       ORDER BY o.created_at DESC
-    `);
+    `, { replacements: branchFilter.params });
     res.json(orders.map(o => ({ ...o, vitals: parseJSONField(o.vitals, {}) })));
   } catch (error) {
     res.status(500).json({ success: false, error: 'Database error' });
@@ -778,6 +809,9 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
       filter += ' AND o.participant_id = :participantId';
       replacements.participantId = participant_id;
     }
+    const branchFilter = getBranchConditionNamed(req, 'o');
+    filter += branchFilter.sql;
+    Object.assign(replacements, branchFilter.replacements);
 
     const [orders] = await db.query(`
       SELECT o.id as order_id, o.participant_id, o.doctor_id, o.consultant_id, o.clinical_notes, o.vitals,
@@ -922,6 +956,7 @@ function markCollectible(specimensForPatient, pool) {
 router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
+    const branchFilter = getBranchConditionSQL(req, 's');
     const [specimens] = await db.query(`
       SELECT s.*, p.id AS participant_id, p.first_name, p.last_name, p.participant_number, o.created_at as order_time,
         COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as requested_by_name,
@@ -939,8 +974,9 @@ router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, re
       LEFT JOIN users u ON u.id = o.doctor_id
       LEFT JOIN employees ce ON ce.id = o.consultant_id
       WHERE s.status IN ('pending_collection', 'recollection_required', 'collected', 'in_transit', 'accepted', 'routed')
+      ${branchFilter.sql}
       ORDER BY o.created_at ASC, s.created_at ASC, s.id ASC
-    `);
+    `, { replacements: branchFilter.params });
 
     const byPatient = new Map();
     for (const s of specimens) {
@@ -963,6 +999,7 @@ router.get('/specimens/history', authorize('lis.results.read'), async (req, res)
   const { sequelize: db } = req.models;
   try {
     const { dateFrom, dateTo } = req.query;
+    const branchFilter = getBranchConditionSQL(req, 's');
     let sql = `
       SELECT s.*, p.first_name, p.last_name, p.participant_number, o.created_at as order_time,
         COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as requested_by_name
@@ -972,13 +1009,14 @@ router.get('/specimens/history', authorize('lis.results.read'), async (req, res)
       LEFT JOIN users u ON u.id = o.doctor_id
       LEFT JOIN employees ce ON ce.id = o.consultant_id
       WHERE s.status IN ('analyzed', 'pending_manager_review', 'approved')
+      ${branchFilter.sql}
     `;
     // COALESCE to created_at: MySQL stamped updated_at automatically via
     // `ON UPDATE current_timestamp()`, which PostgreSQL has no equivalent for.
     // Triggers now reproduce it, but a row whose updated_at is still NULL would
     // otherwise fail both bounds and vanish from history entirely rather than
     // just sorting oddly.
-    const params = [];
+    const params = [...branchFilter.params];
     if (dateFrom) { sql += ` AND COALESCE(s.updated_at, s.created_at) >= ?`; params.push(`${dateFrom} 00:00:00`); }
     if (dateTo) { sql += ` AND COALESCE(s.updated_at, s.created_at) <= ?`; params.push(`${dateTo} 23:59:59`); }
     sql += ` ORDER BY COALESCE(s.updated_at, s.created_at) DESC LIMIT 500`;
@@ -1070,8 +1108,8 @@ router.post('/specimens/:id/qc', authorize('lis.specimen.write'), async (req, re
   const t = await db.transaction();
   try {
     await db.query(
-      `INSERT INTO lis_specimen_qc (id, specimen_id, action, reason, checked_by) VALUES (?, ?, ?, ?, ?)`,
-      { replacements: [qcId, id, action, reason || null, checked_by || null], transaction: t }
+      `INSERT INTO lis_specimen_qc (id, specimen_id, action, reason, checked_by, branch_id) VALUES (?, ?, ?, ?, ?, ?)`,
+      { replacements: [qcId, id, action, reason || null, checked_by || null, getCreateBranchId(req)], transaction: t }
     );
     
     await db.query(
@@ -1120,9 +1158,9 @@ router.post('/specimens/:id/simulate', authorize('lis.specimen.write'), async (r
     for (const result of mockResults) {
       const resultId = uuidv4();
       await db.query(
-        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status)
-         VALUES (?, ?, 'SIMULATED', ?, ?, ?, 'pending_manager_review')`,
-        { replacements: [resultId, id, result.name, result.value, result.unit], transaction: t }
+        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, branch_id)
+         VALUES (?, ?, 'SIMULATED', ?, ?, ?, 'pending_manager_review', ?)`,
+        { replacements: [resultId, id, result.name, result.value, result.unit, getCreateBranchId(req)], transaction: t }
       );
     }
     
@@ -1143,6 +1181,7 @@ router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, 
   const { sequelize: db } = req.models;
   const { id } = req.params;
   try {
+    const branchFilter = getBranchConditionSQL(req, 'r');
     const [results] = await db.query(
       `SELECT r.*, c.reference_range, c.display_order, rec_u.display_name as recorded_by_name, mgr_u.display_name as manager_review_by_name
        FROM lis_results r
@@ -1150,8 +1189,9 @@ router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, 
        LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
        LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
        LEFT JOIN users mgr_u ON mgr_u.id = r.manager_review_by
-       WHERE r.specimen_id = ?`,
-      { replacements: [id] }
+       WHERE r.specimen_id = ?
+       ${branchFilter.sql}`,
+      { replacements: [id, ...branchFilter.params] }
     );
     res.json(results);
   } catch (error) {
@@ -1168,15 +1208,16 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
   const { results, test_code } = req.body;
   // results is an array of { analyte, value, unit }
   const recordedBy = req.user?.id || null;
+  const branchId = getCreateBranchId(req);
 
   const t = await db.transaction();
   try {
     for (const result of results) {
       const resultId = uuidv4();
       await db.query(
-        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, recorded_by)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_review', ?)`,
-        { replacements: [resultId, id, test_code, result.analyte, result.value, result.unit || '', recordedBy], transaction: t }
+        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, recorded_by, branch_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_review', ?, ?)`,
+        { replacements: [resultId, id, test_code, result.analyte, result.value, result.unit || '', recordedBy, branchId], transaction: t }
       );
     }
     
@@ -1199,6 +1240,7 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
 router.get('/results/pending-review', authorize('lis.results.review'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
+    const branchFilter = getBranchConditionSQL(req, 'r');
     const [results] = await db.query(`
       SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, p.first_name, p.last_name, p.participant_number,
         o.id as order_id, o.created_at as order_time,
@@ -1213,8 +1255,9 @@ router.get('/results/pending-review', authorize('lis.results.review'), async (re
       LEFT JOIN employees req_ce ON req_ce.id = o.consultant_id
       LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
       WHERE r.status = 'pending_manager_review'
+      ${branchFilter.sql}
       ORDER BY r.created_at DESC
-    `);
+    `, { replacements: branchFilter.params });
     res.json(results);
   } catch (error) {
     res.status(500).json({ success: false, error: 'Database error' });
@@ -1225,6 +1268,7 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
   const { sequelize: db } = req.models;
   try {
     const { dateFrom, dateTo } = req.query;
+    const branchFilter = getBranchConditionSQL(req, 'r');
     let sql = `
       SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, p.first_name, p.last_name, p.participant_number,
         o.id as order_id, o.created_at as order_time,
@@ -1241,8 +1285,9 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
       LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
       LEFT JOIN users mgr_u ON mgr_u.id = r.manager_review_by
       WHERE r.status != 'pending_manager_review'
+      ${branchFilter.sql}
     `;
-    const params = [];
+    const params = [...branchFilter.params];
     if (dateFrom) { sql += ` AND r.updated_at >= ?`; params.push(`${dateFrom} 00:00:00`); }
     if (dateTo) { sql += ` AND r.updated_at <= ?`; params.push(`${dateTo} 23:59:59`); }
     sql += ` ORDER BY r.updated_at DESC LIMIT 500`;
@@ -1301,9 +1346,12 @@ router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) =
   try {
     const db = req.models?.sequelize || sequelize;
     const today = new Date().toISOString().split('T')[0];
+    const branchFilter = getBranchConditionSQL(req, 's');
+    const branchNamed = getBranchConditionNamed(req, '');
 
     const [statusRows] = await db.query(
-      `SELECT status, COUNT(*)::int AS n FROM lis_specimens GROUP BY status`
+      `SELECT status, COUNT(*)::int AS n FROM lis_specimens s WHERE 1=1 ${branchFilter.sql} GROUP BY status`,
+      { replacements: branchFilter.params }
     );
     const byStatus = Object.fromEntries(statusRows.map(r => [r.status, r.n]));
 
@@ -1315,12 +1363,12 @@ router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) =
 
     const [[todayRow]] = await db.query(
       `SELECT COUNT(*)::int AS n FROM lis_specimens
-        WHERE status = 'approved' AND DATE(COALESCE(updated_at, created_at)) = :today`,
-      { replacements: { today } }
+        WHERE status = 'approved' AND DATE(COALESCE(updated_at, created_at)) = :today ${branchNamed.sql}`,
+      { replacements: { today, ...branchNamed.replacements } }
     );
     const [[todayNewRow]] = await db.query(
-      `SELECT COUNT(*)::int AS n FROM lis_specimens WHERE DATE(created_at) = :today`,
-      { replacements: { today } }
+      `SELECT COUNT(*)::int AS n FROM lis_specimens WHERE DATE(created_at) = :today ${branchNamed.sql}`,
+      { replacements: { today, ...branchNamed.replacements } }
     );
 
     // The queue itself — newest first, with the patient the sample belongs to.
@@ -1333,9 +1381,10 @@ router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) =
         FROM lis_specimens s
         LEFT JOIN lis_test_orders o ON o.id = s.order_id
         LEFT JOIN lis_participants lp ON lp.id = o.participant_id
+       WHERE 1=1 ${branchFilter.sql}
        ORDER BY s.created_at DESC
        LIMIT 50
-    `);
+    `, { replacements: branchFilter.params });
 
     res.json({
       totals: {

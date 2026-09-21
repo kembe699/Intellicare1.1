@@ -8,7 +8,7 @@ const { authorize } = require('../middleware/authorize');
 const router = express.Router();
 const { CashierShift, Receipt, sequelize } = require('../models');
 const { Op } = require('sequelize');
-const { getBranchCondition } = require('../middleware/branchFilter');
+const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 
 // Sequelize's DataTypes.JSON auto-parse depends on the MySQL wire protocol reporting the
 // column as JSON-typed, but MariaDB (common on shared hosts) stores JSON columns as plain
@@ -170,8 +170,8 @@ router.get('/shifts', async (req, res) => {
     }
     
     // Build where clause based on role and filters
-    const whereClause = {};
-    
+    const whereClause = { ...getBranchCondition(req) };
+
     // Non-admins can only see their own shifts
     if (userRole !== 'admin') {
       whereClause.cashier_id = userId;
@@ -378,7 +378,8 @@ router.post('/start-shift', authorize('cashier.write'), async (req, res) => {
       cashier_id: userId,
       cashier_name: req.user?.email || 'Cashier',
       opening_balance: req.body.opening_balance || 0,
-      status: 'open'
+      status: 'open',
+      branch_id: getCreateBranchId(req)
     });
     res.status(201).json(shift);
   } catch (error) {
@@ -543,6 +544,7 @@ router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
 
     const t = await seq.transaction();
     try {
+      const glBranchId = getCreateBranchId(req);
       const je = await JournalEntries.create({
         clinic_id,
         je_number: jeNumber,
@@ -560,17 +562,18 @@ router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
         status: 'posted',
         created_by: 'system',
         posted_by: 'system',
-        posted_date: new Date()
+        posted_date: new Date(),
+        branch_id: glBranchId
       }, { transaction: t });
 
       await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: toAccount.id,          debit_amount: amt, credit_amount: 0,   base_debit_amount: amt, base_credit_amount: 0,   description: `Transfer from ${cashAtHandAccount.account_name}` },
-        { je_id: je.id, account_id: cashAtHandAccount.id,  debit_amount: 0,   credit_amount: amt, base_debit_amount: 0,   base_credit_amount: amt, description: `Transfer to ${toAccount.account_name}` }
+        { je_id: je.id, account_id: toAccount.id,          debit_amount: amt, credit_amount: 0,   base_debit_amount: amt, base_credit_amount: 0,   description: `Transfer from ${cashAtHandAccount.account_name}`, branch_id: glBranchId },
+        { je_id: je.id, account_id: cashAtHandAccount.id,  debit_amount: 0,   credit_amount: amt, base_debit_amount: 0,   base_credit_amount: amt, description: `Transfer to ${toAccount.account_name}`,          branch_id: glBranchId }
       ], { transaction: t });
 
       await AccountLedger.bulkCreate([
-        { clinic_id, account_id: toAccount.id,         transaction_date: today, debit_amount: amt, credit_amount: 0,   reference_number: jeNumber, description: `Cash Transfer from ${cashAtHandAccount.account_name}`, is_posted: true, posted_date: new Date(), source_module: 'cash_transfer' },
-        { clinic_id, account_id: cashAtHandAccount.id, transaction_date: today, debit_amount: 0,   credit_amount: amt, reference_number: jeNumber, description: `Cash Transfer to ${toAccount.account_name}`,          is_posted: true, posted_date: new Date(), source_module: 'cash_transfer' }
+        { clinic_id, account_id: toAccount.id,         transaction_date: today, debit_amount: amt, credit_amount: 0,   reference_number: jeNumber, description: `Cash Transfer from ${cashAtHandAccount.account_name}`, is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId },
+        { clinic_id, account_id: cashAtHandAccount.id, transaction_date: today, debit_amount: 0,   credit_amount: amt, reference_number: jeNumber, description: `Cash Transfer to ${toAccount.account_name}`,          is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId }
       ], { transaction: t });
 
       await t.commit();

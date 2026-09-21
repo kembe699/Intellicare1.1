@@ -253,6 +253,8 @@ router.get('/revenue-by-currency', async (req, res) => {
     const { from, to } = req.query;
     const dateFrom = from || new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
     const dateTo = to || new Date().toISOString().split('T')[0];
+    const bfReceipts = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfBills = getReportBranchSQLNoAlias(req, 'branch_id');
 
     // Revenue collected per payment_currency from receipts
     let receiptsByCurrency = [];
@@ -263,10 +265,10 @@ router.get('/revenue-by-currency', async (req, res) => {
            COUNT(*) AS receipt_count,
            COALESCE(SUM(payment_amount), 0) AS total_collected_base
          FROM receipts
-         WHERE created_at BETWEEN ? AND ? AND status = 'active'
+         WHERE created_at BETWEEN ? AND ? AND status = 'active' ${bfReceipts.sql}
          GROUP BY 1
          ORDER BY total_collected_base DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfReceipts.params] }
       );
       receiptsByCurrency = rows;
     } catch(e) { console.log('receipts currency note:', e.message); }
@@ -299,10 +301,10 @@ router.get('/revenue-by-currency', async (req, res) => {
            COALESCE(SUM(paid_amount), 0) AS total_paid,
            COALESCE(SUM(balance_amount), 0) AS total_outstanding
          FROM patient_bills
-         WHERE created_at BETWEEN ? AND ?
+         WHERE created_at BETWEEN ? AND ? ${bfBills.sql}
          GROUP BY 1
          ORDER BY total_billed DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfBills.params] }
       );
       billsByCurrency = rows;
     } catch(e) { console.log('bills currency note:', e.message); }
@@ -513,11 +515,15 @@ router.get('/patient-registry', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 router.get('/inventory', async (req, res) => {
   try {
+    const bfItems = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfBatches = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfTxns = getReportBranchSQLNoAlias(req, 'branch_id');
+
     let totalItems = 0, lowStock = 0, totalValue = 0;
     try {
-      const [items] = await sequelize.query(`SELECT COUNT(*) as total FROM inventory_items`);
-      const [low] = await sequelize.query(`SELECT COUNT(*) as count FROM inventory_items WHERE quantity_on_hand <= reorder_level AND reorder_level > 0`);
-      const [val] = await sequelize.query(`SELECT COALESCE(SUM(quantity_on_hand * unit_cost),0) as value FROM inventory_items`);
+      const [items] = await sequelize.query(`SELECT COUNT(*) as total FROM inventory_items WHERE 1=1 ${bfItems.sql}`, { replacements: bfItems.params });
+      const [low] = await sequelize.query(`SELECT COUNT(*) as count FROM inventory_items WHERE quantity_on_hand <= reorder_level AND reorder_level > 0 ${bfItems.sql}`, { replacements: bfItems.params });
+      const [val] = await sequelize.query(`SELECT COALESCE(SUM(quantity_on_hand * unit_cost),0) as value FROM inventory_items WHERE 1=1 ${bfItems.sql}`, { replacements: bfItems.params });
       totalItems = items[0]?.total || 0;
       lowStock = low[0]?.count || 0;
       totalValue = parseFloat(val[0]?.value || 0);
@@ -525,13 +531,13 @@ router.get('/inventory', async (req, res) => {
 
     let expiringSoon = 0;
     try {
-      const [exp] = await sequelize.query(`SELECT COUNT(*) as count FROM inventory_batches WHERE expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days' AND quantity_remaining > 0`);
+      const [exp] = await sequelize.query(`SELECT COUNT(*) as count FROM inventory_batches WHERE expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days' AND quantity_remaining > 0 ${bfBatches.sql}`, { replacements: bfBatches.params });
       expiringSoon = exp[0]?.count || 0;
     } catch(e) {}
 
     let stockMovements = [];
     try {
-      const [moves] = await sequelize.query(`SELECT transaction_type as type, COUNT(*) as count, COALESCE(SUM(ABS(quantity_change)),0) as qty FROM inventory_transactions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days' GROUP BY transaction_type`);
+      const [moves] = await sequelize.query(`SELECT transaction_type as type, COUNT(*) as count, COALESCE(SUM(ABS(quantity_change)),0) as qty FROM inventory_transactions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days' ${bfTxns.sql} GROUP BY transaction_type`, { replacements: bfTxns.params });
       stockMovements = moves;
     } catch(e) {}
 
@@ -550,18 +556,21 @@ router.get('/pharmacy', async (req, res) => {
     const { from, to } = req.query;
     const dateFrom = from || new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
     const dateTo = to || new Date().toISOString().split('T')[0];
+    const bfDispensing = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfCharges = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfDispensingDr = getReportBranchSQL(req, 'dr');
 
     let totalDispensed = 0, totalRevenue = 0, topDrugs = [], expiringDrugs = 0;
     try {
-      const [disp] = await sequelize.query(`SELECT COUNT(*) as count FROM dispensing_records WHERE dispensed_at BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [disp] = await sequelize.query(`SELECT COUNT(*) as count FROM dispensing_records WHERE dispensed_at BETWEEN ? AND ? ${bfDispensing.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfDispensing.params] });
       totalDispensed = disp[0]?.count || 0;
     } catch(e) {}
     try {
-      const [rev] = await sequelize.query(`SELECT COALESCE(SUM(total_charge),0) as revenue FROM pharmacy_charges WHERE created_at BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [rev] = await sequelize.query(`SELECT COALESCE(SUM(total_charge),0) as revenue FROM pharmacy_charges WHERE created_at BETWEEN ? AND ? ${bfCharges.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfCharges.params] });
       totalRevenue = parseFloat(rev[0]?.revenue || 0);
     } catch(e) {}
     try {
-      const [top] = await sequelize.query(`SELECT COALESCE(dr.drug_name, di.drug_name, 'Unknown') as name, COUNT(*) as count FROM dispensing_records dr LEFT JOIN drug_inventory di ON dr.drug_id = di.id WHERE dr.dispensed_at BETWEEN ? AND ? GROUP BY 1 ORDER BY count DESC LIMIT 10`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [top] = await sequelize.query(`SELECT COALESCE(dr.drug_name, di.drug_name, 'Unknown') as name, COUNT(*) as count FROM dispensing_records dr LEFT JOIN drug_inventory di ON dr.drug_id = di.id WHERE dr.dispensed_at BETWEEN ? AND ? ${bfDispensingDr.sql} GROUP BY 1 ORDER BY count DESC LIMIT 10`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfDispensingDr.params] });
       topDrugs = top;
     } catch(e) {}
     try {
@@ -711,9 +720,10 @@ router.get('/laboratory', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 router.get('/staff', async (req, res) => {
   try {
-    const [users] = await sequelize.query(`SELECT role, COUNT(*) as count FROM users WHERE is_active=true GROUP BY role`);
-    const [totalUsers] = await sequelize.query(`SELECT COUNT(*) as total FROM users WHERE is_active=true`);
-    const [recentLogins] = await sequelize.query(`SELECT display_name as name, role, updated_at as last_login FROM users WHERE is_active=true ORDER BY updated_at DESC LIMIT 10`);
+    const bfUsers = getReportBranchSQLNoAlias(req, 'branch_id');
+    const [users] = await sequelize.query(`SELECT role, COUNT(*) as count FROM users WHERE is_active=true ${bfUsers.sql} GROUP BY role`, { replacements: bfUsers.params });
+    const [totalUsers] = await sequelize.query(`SELECT COUNT(*) as total FROM users WHERE is_active=true ${bfUsers.sql}`, { replacements: bfUsers.params });
+    const [recentLogins] = await sequelize.query(`SELECT display_name as name, role, updated_at as last_login FROM users WHERE is_active=true ${bfUsers.sql} ORDER BY updated_at DESC LIMIT 10`, { replacements: bfUsers.params });
 
     res.json({
       summary: { totalActive: totalUsers[0]?.total || 0 },
@@ -746,37 +756,41 @@ router.get('/dashboard-summary', async (req, res) => {
     const { from, to } = req.query;
     const dateFrom = from || new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
     const dateTo = to || new Date().toISOString().split('T')[0];
+    const bfBills = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfExpenses = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfPatients = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfVisits = getReportBranchSQLNoAlias(req, 'branch_id');
 
     let totalRevenue = 0, totalCollected = 0, totalExpenses = 0, patientCount = 0, visitCount = 0;
     try {
-      const [rev] = await sequelize.query(`SELECT COALESCE(SUM(total_amount),0) as revenue, COALESCE(SUM(paid_amount),0) as collected FROM patient_bills WHERE created_at BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [rev] = await sequelize.query(`SELECT COALESCE(SUM(total_amount),0) as revenue, COALESCE(SUM(paid_amount),0) as collected FROM patient_bills WHERE created_at BETWEEN ? AND ? ${bfBills.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfBills.params] });
       totalRevenue = parseFloat(rev[0]?.revenue || 0);
       totalCollected = parseFloat(rev[0]?.collected || 0);
     } catch(e) {}
     try {
-      const [exp] = await sequelize.query(`SELECT COALESCE(SUM(amount),0) as total FROM daily_expenses WHERE expense_date BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo] });
+      const [exp] = await sequelize.query(`SELECT COALESCE(SUM(amount),0) as total FROM daily_expenses WHERE expense_date BETWEEN ? AND ? ${bfExpenses.sql}`, { replacements: [dateFrom, dateTo, ...bfExpenses.params] });
       totalExpenses = parseFloat(exp[0]?.total || 0);
     } catch(e) {}
     try {
-      const [pts] = await sequelize.query(`SELECT COUNT(*) as cnt FROM patients WHERE created_at BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [pts] = await sequelize.query(`SELECT COUNT(*) as cnt FROM patients WHERE created_at BETWEEN ? AND ? ${bfPatients.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfPatients.params] });
       patientCount = pts[0]?.cnt || 0;
     } catch(e) {}
     try {
-      const [vis] = await sequelize.query(`SELECT COUNT(*) as cnt FROM visits WHERE visit_date BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [vis] = await sequelize.query(`SELECT COUNT(*) as cnt FROM visits WHERE visit_date BETWEEN ? AND ? ${bfVisits.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfVisits.params] });
       visitCount = vis[0]?.cnt || 0;
     } catch(e) {}
 
     // Revenue by department
     let revenueByDept = [];
     try {
-      const [dept] = await sequelize.query(`SELECT COALESCE(services::jsonb->0->>'category', 'General') as department, COALESCE(SUM(total_amount),0) as amount FROM patient_bills WHERE created_at BETWEEN ? AND ? AND services IS NOT NULL GROUP BY 1 ORDER BY amount DESC LIMIT 8`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [dept] = await sequelize.query(`SELECT COALESCE(services::jsonb->0->>'category', 'General') as department, COALESCE(SUM(total_amount),0) as amount FROM patient_bills WHERE created_at BETWEEN ? AND ? AND services IS NOT NULL ${bfBills.sql} GROUP BY 1 ORDER BY amount DESC LIMIT 8`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfBills.params] });
       revenueByDept = dept;
     } catch(e) {}
 
     // Daily revenue trend
     let dailyTrend = [];
     try {
-      const [trend] = await sequelize.query(`SELECT DATE(created_at) as date, COALESCE(SUM(paid_amount),0) as revenue, COUNT(*) as bills FROM patient_bills WHERE created_at BETWEEN ? AND ? GROUP BY DATE(created_at) ORDER BY date`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [trend] = await sequelize.query(`SELECT DATE(created_at) as date, COALESCE(SUM(paid_amount),0) as revenue, COUNT(*) as bills FROM patient_bills WHERE created_at BETWEEN ? AND ? ${bfBills.sql} GROUP BY DATE(created_at) ORDER BY date`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfBills.params] });
       dailyTrend = trend;
     } catch(e) {}
 
@@ -906,12 +920,14 @@ router.get('/income-statement', async (req, res) => {
 
     // Fallback: Use patient_bills for revenue if no GL data
     let fallbackRevenue = 0, fallbackExpenses = 0;
+    const bfFallbackBills = getReportBranchSQLNoAlias(req, 'branch_id');
+    const bfFallbackExpenses = getReportBranchSQLNoAlias(req, 'branch_id');
     try {
-      const [fb] = await sequelize.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM patient_bills WHERE created_at BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo + ' 23:59:59'] });
+      const [fb] = await sequelize.query(`SELECT COALESCE(SUM(total_amount),0) as total FROM patient_bills WHERE created_at BETWEEN ? AND ? ${bfFallbackBills.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfFallbackBills.params] });
       fallbackRevenue = parseFloat(fb[0]?.total || 0);
     } catch(e) {}
     try {
-      const [fe] = await sequelize.query(`SELECT COALESCE(SUM(amount),0) as total FROM daily_expenses WHERE expense_date BETWEEN ? AND ?`, { replacements: [dateFrom, dateTo] });
+      const [fe] = await sequelize.query(`SELECT COALESCE(SUM(amount),0) as total FROM daily_expenses WHERE expense_date BETWEEN ? AND ? ${bfFallbackExpenses.sql}`, { replacements: [dateFrom, dateTo, ...bfFallbackExpenses.params] });
       fallbackExpenses = parseFloat(fe[0]?.total || 0);
     } catch(e) {}
 
@@ -956,14 +972,15 @@ router.get('/scheme-settlement', async (req, res) => {
     } catch(e) {}
 
     try {
+      const bfPb = getReportBranchSQL(req, 'pb');
       let sql = `SELECT pb.*, s.scheme_name, s.scheme_type,
         CASE WHEN pb.paid_amount >= pb.total_amount THEN 'settled' WHEN pb.paid_amount > 0 THEN 'partial' ELSE 'unsettled' END as settlement_status,
         (COALESCE(pb.updated_at, NOW())::date - DATE(pb.created_at)) as days_to_settle
         FROM patient_bills pb
         LEFT JOIN scheme_membership sm ON pb.patient_id = sm.patient_id
         LEFT JOIN schemes s ON sm.scheme_id = s.id
-        WHERE pb.created_at BETWEEN ? AND ? AND s.id IS NOT NULL`;
-      const params = [dateFrom, dateTo + ' 23:59:59'];
+        WHERE pb.created_at BETWEEN ? AND ? AND s.id IS NOT NULL ${bfPb.sql}`;
+      const params = [dateFrom, dateTo + ' 23:59:59', ...bfPb.params];
       if (scheme_id) { sql += ' AND s.id = ?'; params.push(scheme_id); }
       sql += ' ORDER BY pb.created_at DESC LIMIT 500';
       const [rows] = await sequelize.query(sql, { replacements: params });
@@ -1073,9 +1090,10 @@ router.get('/stock-movement', async (req, res) => {
 
     // Recent stock receipts as "stock in"
     try {
+      const bfBatches = getReportBranchSQL(req, 'ib');
       const [stockIn] = await sequelize.query(
-        `SELECT 'IN' as type, di.drug_name as item, ib.quantity_received as quantity, ib.date_received as date, ib.batch_number as reference FROM inventory_batches ib JOIN drug_inventory di ON ib.drug_id = di.id WHERE ib.date_received BETWEEN ? AND ? ORDER BY ib.date_received DESC LIMIT 100`,
-        { replacements: [dateFrom, dateTo] }
+        `SELECT 'IN' as type, di.drug_name as item, ib.quantity_received as quantity, ib.date_received as date, ib.batch_number as reference FROM inventory_batches ib JOIN drug_inventory di ON ib.drug_id = di.id WHERE ib.date_received BETWEEN ? AND ? ${bfBatches.sql} ORDER BY ib.date_received DESC LIMIT 100`,
+        { replacements: [dateFrom, dateTo, ...bfBatches.params] }
       );
       movements = [...movements, ...stockIn].sort((a, b) => new Date(b.date) - new Date(a.date));
     } catch(e) {}
@@ -1105,6 +1123,7 @@ router.get('/receipts-by-user', async (req, res) => {
     } catch(e) {}
 
     // Per-user aggregation — group by cashier_name (always populated); cashier_id may be NULL
+    const bfReceipts = getReportBranchSQL(req, 'r');
     try {
       const userFilter = user_id ? `AND r.cashier_id = '${user_id}'` : '';
       const [rows] = await sequelize.query(
@@ -1120,10 +1139,10 @@ router.get('/receipts-by-user', async (req, res) => {
          LEFT JOIN users u ON u.id = r.cashier_id
          WHERE r.status = 'active'
            AND r.created_at BETWEEN ? AND ?
-           ${userFilter}
+           ${userFilter} ${bfReceipts.sql}
          GROUP BY COALESCE(r.cashier_name, 'Unknown')
          ORDER BY total_collected DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfReceipts.params] }
       );
       userReceipts = rows;
       summary.totalCollected = userReceipts.reduce((s, u) => s + parseFloat(u.total_collected || 0), 0);
@@ -1145,15 +1164,16 @@ router.get('/receipts-by-user', async (req, res) => {
            LEFT JOIN patients p ON p.id = r.patient_id
            WHERE r.status = 'active'
              AND (r.cashier_id = ? OR (r.cashier_id IS NULL AND r.cashier_name = ?))
-             AND r.created_at BETWEEN ? AND ?
+             AND r.created_at BETWEEN ? AND ? ${bfReceipts.sql}
            ORDER BY r.created_at DESC LIMIT 200`,
-          { replacements: [user_id, user_id, dateFrom, dateTo + ' 23:59:59'] }
+          { replacements: [user_id, user_id, dateFrom, dateTo + ' 23:59:59', ...bfReceipts.params] }
         );
         receiptDetail = rows;
       } catch(e) {}
     }
 
     // Payment method breakdown (filtered by user if selected)
+    const bfReceiptsNoAlias = getReportBranchSQLNoAlias(req, 'branch_id');
     try {
       const userFilter = user_id ? `AND cashier_id = '${user_id}'` : '';
       const [pm] = await sequelize.query(
@@ -1161,9 +1181,9 @@ router.get('/receipts-by-user', async (req, res) => {
                 COUNT(*) AS count,
                 COALESCE(SUM(payment_amount), 0) AS amount
          FROM receipts
-         WHERE status = 'active' AND created_at BETWEEN ? AND ? ${userFilter}
+         WHERE status = 'active' AND created_at BETWEEN ? AND ? ${userFilter} ${bfReceiptsNoAlias.sql}
          GROUP BY payment_method ORDER BY amount DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfReceiptsNoAlias.params] }
       );
       paymentMethods = pm;
     } catch(e) {}
@@ -1176,9 +1196,9 @@ router.get('/receipts-by-user', async (req, res) => {
                 COUNT(*) AS count,
                 COALESCE(SUM(payment_amount), 0) AS amount
          FROM receipts
-         WHERE status = 'active' AND created_at BETWEEN ? AND ? ${userFilter}
+         WHERE status = 'active' AND created_at BETWEEN ? AND ? ${userFilter} ${bfReceiptsNoAlias.sql}
          GROUP BY DATE(created_at) ORDER BY date`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfReceiptsNoAlias.params] }
       );
       dailyTrend = trend;
     } catch(e) {}
@@ -1227,6 +1247,7 @@ router.get('/inpatient-accounting', async (req, res) => {
     let wardStats = [], admissions = [];
 
     try {
+      const bfAdm = getReportBranchSQL(req, 'a');
       const [adm] = await sequelize.query(
         `SELECT a.*, w.name as ward_name, r.room_number, b.bed_number,
          (COALESCE(p.first_name,'') || ' ' || COALESCE(p.last_name,'')) as patient_name,
@@ -1236,9 +1257,9 @@ router.get('/inpatient-accounting', async (req, res) => {
          LEFT JOIN rooms r ON a.room_id = r.id
          LEFT JOIN beds b ON a.bed_id = b.id
          LEFT JOIN patients p ON a.patient_id = p.id
-         WHERE a.admission_date BETWEEN ? AND ?
+         WHERE a.admission_date BETWEEN ? AND ? ${bfAdm.sql}
          ORDER BY a.admission_date DESC LIMIT 200`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfAdm.params] }
       );
       admissions = adm;
 
@@ -1250,6 +1271,7 @@ router.get('/inpatient-accounting', async (req, res) => {
     }
 
     try {
+      const bfWard = getReportBranchSQL(req, 'w');
       const [ws] = await sequelize.query(
         `SELECT w.name as ward_name, COUNT(a.id) as admissions,
          SUM((COALESCE(a.discharge_date, NOW())::date - DATE(a.admission_date))) as total_bed_days,
@@ -1257,9 +1279,9 @@ router.get('/inpatient-accounting', async (req, res) => {
          (SELECT COUNT(*) FROM beds WHERE ward_id = w.id AND status = 'occupied') as occupied_beds
          FROM wards w
          LEFT JOIN inpatient_admissions a ON a.ward_id = w.id AND a.admission_date BETWEEN ? AND ?
-         WHERE w.is_active = true
+         WHERE w.is_active = true ${bfWard.sql}
          GROUP BY w.id, w.name ORDER BY admissions DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfWard.params] }
       );
       wardStats = ws;
 
@@ -1297,12 +1319,13 @@ router.get('/procurement-report', async (req, res) => {
     let orders = [], vendorStats = [];
     let summary = { totalOrders: 0, totalSpend: 0, pendingOrders: 0, avgOrderValue: 0 };
 
+    const bfPo = getReportBranchSQL(req, 'po');
     try {
       let sql = `SELECT po.*, s.name as supplier_name, s.contact_person,
         (SELECT COUNT(*) FROM purchase_order_items WHERE purchase_order_id = po.id) as item_count
         FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id = s.id
-        WHERE po.order_date BETWEEN ? AND ?`;
-      const params = [dateFrom, dateTo];
+        WHERE po.order_date BETWEEN ? AND ? ${bfPo.sql}`;
+      const params = [dateFrom, dateTo, ...bfPo.params];
       if (status) { sql += ' AND po.status = ?'; params.push(status); }
       sql += ' ORDER BY po.order_date DESC LIMIT 200';
 
@@ -1322,9 +1345,9 @@ router.get('/procurement-report', async (req, res) => {
         `SELECT s.name as vendor, COUNT(po.id) as order_count, COALESCE(SUM(po.total_amount),0) as total_spend,
          SUM(CASE WHEN po.status = 'received' THEN 1 ELSE 0 END) as delivered,
          SUM(CASE WHEN po.status IN ('draft','check','approved','authorized') THEN 1 ELSE 0 END) as pending
-         FROM suppliers s LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.order_date BETWEEN ? AND ?
+         FROM suppliers s LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.order_date BETWEEN ? AND ? ${bfPo.sql}
          GROUP BY s.id, s.name ORDER BY total_spend DESC`,
-        { replacements: [dateFrom, dateTo] }
+        { replacements: [dateFrom, dateTo, ...bfPo.params] }
       );
       vendorStats = vendors;
     } catch(e) {}
@@ -1490,13 +1513,14 @@ router.get('/purchases-report', async (req, res) => {
     let purchases = [], categoryStats = [], accountStats = [], dailyTrend = [];
     let summary = { totalPaid: 0, count: 0, avgVoucherValue: 0, topCategory: '—' };
 
+    const bfDe = getReportBranchSQL(req, 'de');
     try {
       let sql = `SELECT de.id, de.voucher_number, de.expense_date, de.description, de.category,
         de.amount, de.payment_method, de.account_name, de.created_by, de.paid_at,
         (SELECT approved_by FROM daily_expense_approvals WHERE expense_id = de.id AND approval_level = 1 LIMIT 1) as approval1_by,
         (SELECT approved_by FROM daily_expense_approvals WHERE expense_id = de.id AND approval_level = 2 LIMIT 1) as approval2_by
-        FROM daily_expenses de WHERE de.status = 'paid' AND de.paid_at BETWEEN ? AND ?`;
-      const params = [dateFrom, dateTo + ' 23:59:59'];
+        FROM daily_expenses de WHERE de.status = 'paid' AND de.paid_at BETWEEN ? AND ? ${bfDe.sql}`;
+      const params = [dateFrom, dateTo + ' 23:59:59', ...bfDe.params];
       if (category) { sql += ' AND de.category = ?'; params.push(category); }
       if (account_id) { sql += ' AND de.account_id = ?'; params.push(account_id); }
       sql += ' ORDER BY de.paid_at DESC LIMIT 500';
@@ -1508,12 +1532,13 @@ router.get('/purchases-report', async (req, res) => {
       summary.avgVoucherValue = summary.count > 0 ? summary.totalPaid / summary.count : 0;
     } catch(e) { console.log('Purchases report note:', e.message); }
 
+    const bfDeNoAlias = getReportBranchSQLNoAlias(req, 'branch_id');
     try {
       const [cats] = await sequelize.query(
         `SELECT COALESCE(category,'Uncategorized') as category, COUNT(*) as count, COALESCE(SUM(amount),0) as total
-         FROM daily_expenses WHERE status='paid' AND paid_at BETWEEN ? AND ?
+         FROM daily_expenses WHERE status='paid' AND paid_at BETWEEN ? AND ? ${bfDeNoAlias.sql}
          GROUP BY category ORDER BY total DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfDeNoAlias.params] }
       );
       categoryStats = cats;
       if (cats.length) summary.topCategory = cats[0].category;
@@ -1522,9 +1547,9 @@ router.get('/purchases-report', async (req, res) => {
     try {
       const [accs] = await sequelize.query(
         `SELECT COALESCE(account_name,'Unknown') as account_name, COUNT(*) as count, COALESCE(SUM(amount),0) as total
-         FROM daily_expenses WHERE status='paid' AND paid_at BETWEEN ? AND ?
+         FROM daily_expenses WHERE status='paid' AND paid_at BETWEEN ? AND ? ${bfDeNoAlias.sql}
          GROUP BY account_name ORDER BY total DESC`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfDeNoAlias.params] }
       );
       accountStats = accs;
     } catch(e) {}
@@ -1532,9 +1557,9 @@ router.get('/purchases-report', async (req, res) => {
     try {
       const [trend] = await sequelize.query(
         `SELECT DATE(paid_at) as date, COUNT(*) as count, COALESCE(SUM(amount),0) as total
-         FROM daily_expenses WHERE status='paid' AND paid_at BETWEEN ? AND ?
+         FROM daily_expenses WHERE status='paid' AND paid_at BETWEEN ? AND ? ${bfDeNoAlias.sql}
          GROUP BY DATE(paid_at) ORDER BY date`,
-        { replacements: [dateFrom, dateTo + ' 23:59:59'] }
+        { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfDeNoAlias.params] }
       );
       dailyTrend = trend;
     } catch(e) {}
@@ -1566,6 +1591,7 @@ router.get('/po-report', async (req, res) => {
     let orders = [], vendorStats = [], statusStats = [], dailyTrend = [];
     let summary = { totalOrders: 0, totalSpend: 0, pendingOrders: 0, receivedOrders: 0 };
 
+    const bfPo = getReportBranchSQL(req, 'po');
     try {
       let sql = `SELECT po.id, po.po_number, po.order_date, po.expected_delivery_date,
         po.total_amount, po.po_currency, po.status, po.payment_terms, po.notes,
@@ -1573,8 +1599,8 @@ router.get('/po-report', async (req, res) => {
         (SELECT COUNT(*) FROM purchase_order_items WHERE purchase_order_id = po.id) as item_count
         FROM purchase_orders po
         LEFT JOIN suppliers s ON po.supplier_id = s.id
-        WHERE po.order_date BETWEEN ? AND ?`;
-      const params = [dateFrom, dateTo];
+        WHERE po.order_date BETWEEN ? AND ? ${bfPo.sql}`;
+      const params = [dateFrom, dateTo, ...bfPo.params];
       if (status) { sql += ' AND po.status = ?'; params.push(status); }
       if (supplier_id) { sql += ' AND po.supplier_id = ?'; params.push(supplier_id); }
       sql += ' ORDER BY po.order_date DESC LIMIT 300';
@@ -1594,24 +1620,26 @@ router.get('/po-report', async (req, res) => {
          SUM(CASE WHEN po.status='received' THEN 1 ELSE 0 END) as delivered,
          SUM(CASE WHEN po.status IN ('draft','check','approved','authorized') THEN 1 ELSE 0 END) as pending
          FROM suppliers s
-         LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.order_date BETWEEN ? AND ?
+         LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.order_date BETWEEN ? AND ? ${bfPo.sql}
          GROUP BY s.id, s.name ORDER BY total_spend DESC LIMIT 20`,
-        { replacements: [dateFrom, dateTo] }
+        { replacements: [dateFrom, dateTo, ...bfPo.params] }
       );
       vendorStats = vs;
     } catch(e) {}
 
     try {
+      const bfPoNoAlias = getReportBranchSQLNoAlias(req, 'branch_id');
       const [ss] = await sequelize.query(
         `SELECT COALESCE(status,'unknown') as status, COUNT(*) as count, COALESCE(SUM(total_amount),0) as total
-         FROM purchase_orders WHERE order_date BETWEEN ? AND ?
+         FROM purchase_orders WHERE order_date BETWEEN ? AND ? ${bfPoNoAlias.sql}
          GROUP BY status ORDER BY count DESC`,
-        { replacements: [dateFrom, dateTo] }
+        { replacements: [dateFrom, dateTo, ...bfPoNoAlias.params] }
       );
       statusStats = ss;
     } catch(e) {}
 
-    // Line items for orders (top 100 orders)
+    // Line items for orders (top 100 orders) — already scoped indirectly:
+    // orderIds only contains ids from the branch-filtered `orders` query above.
     let lineItems = [];
     try {
       const orderIds = orders.slice(0, 100).map(o => o.id);
@@ -1731,6 +1759,7 @@ router.get('/supplier-bills-report', async (req, res) => {
     let bills = [], supplierAging = [];
     let summary = { totalBilled: 0, totalPaid: 0, totalOutstanding: 0, overdueCount: 0 };
 
+    const bfPo = getReportBranchSQL(req, 'po');
     try {
       let sql = `SELECT po.id, po.po_number, po.order_date, po.total_amount,
         COALESCE(sbp_agg.paid,0) as paid_amount,
@@ -1745,8 +1774,8 @@ router.get('/supplier-bills-report', async (req, res) => {
           FROM supplier_bill_payments GROUP BY purchase_order_id
         ) sbp_agg ON sbp_agg.purchase_order_id = po.id
         WHERE po.status IN ('received','approved','authorized')
-        AND po.order_date BETWEEN ? AND ?`;
-      const params = [dateFrom, dateTo];
+        AND po.order_date BETWEEN ? AND ? ${bfPo.sql}`;
+      const params = [dateFrom, dateTo, ...bfPo.params];
       if (supplier_id) { sql += ' AND po.supplier_id = ?'; params.push(supplier_id); }
       sql += ' ORDER BY age_days DESC LIMIT 300';
       const [rows] = await sequelize.query(sql, { replacements: params });
@@ -1770,11 +1799,11 @@ router.get('/supplier-bills-report', async (req, res) => {
          FROM suppliers s
          LEFT JOIN purchase_orders po ON s.id = po.supplier_id
            AND po.status IN ('received','approved','authorized')
-           AND po.order_date BETWEEN ? AND ?
+           AND po.order_date BETWEEN ? AND ? ${bfPo.sql}
          LEFT JOIN (SELECT purchase_order_id, SUM(payment_amount) as paid FROM supplier_bill_payments GROUP BY purchase_order_id) sbp ON sbp.purchase_order_id = po.id
          GROUP BY s.id, s.name HAVING COALESCE(SUM(po.total_amount - COALESCE(sbp.paid,0)),0) > 0
          ORDER BY total_outstanding DESC`,
-        { replacements: [dateFrom, dateTo] }
+        { replacements: [dateFrom, dateTo, ...bfPo.params] }
       );
       supplierAging = aging;
     } catch(e) {}

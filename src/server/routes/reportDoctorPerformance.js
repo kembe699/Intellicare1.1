@@ -114,6 +114,20 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 // A consultation line item's REAL price is not always what its own unitPrice/totalPrice
 // says — insurance/credit-priced items use one of two representations elsewhere in this
 // app (BillDetails.tsx / DispensingWorkflow.tsx's re-pricing logic), and both of them
@@ -175,6 +189,10 @@ router.get('/', async (req, res) => {
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
     const repl = { clinicId, fromTs, toTs };
+    const branchSqlO = branchScope(req, repl, 'o');
+    // branchScope() above already stamped `branchId` into `repl` (or left it
+    // absent for an admin) — reuse it for the unaliased count query below.
+    const branchSqlNoAlias = repl.branchId ? ' AND branch_id = :branchId' : '';
 
     // ── 1. Visits (lis_test_orders) in period whose doctor_id resolves to an
     //      actual role='doctor' user. This is the ONLY set of visits this
@@ -184,7 +202,7 @@ router.get('/', async (req, res) => {
               o.participant_id AS "patientId", DATE(o.created_at) AS "visitDay"
        FROM lis_test_orders o
        INNER JOIN users u ON u.id = o.doctor_id AND u.role = 'doctor'
-       WHERE o.created_at BETWEEN :fromTs AND :toTs
+       WHERE o.created_at BETWEEN :fromTs AND :toTs ${branchSqlO}
        ORDER BY o.created_at`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
@@ -194,7 +212,7 @@ router.get('/', async (req, res) => {
     const [allVisitsRow] = await sequelize.query(
       `SELECT COUNT(*) AS "totalVisits"
        FROM lis_test_orders
-       WHERE created_at BETWEEN :fromTs AND :toTs`,
+       WHERE created_at BETWEEN :fromTs AND :toTs ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const totalVisitsAllStaff = parseInt(allVisitsRow?.totalVisits, 10) || 0;
@@ -245,7 +263,7 @@ router.get('/', async (req, res) => {
               status, DATE(bill_date) AS "billDay", services,
               scheme_id AS "schemeId", bill_currency AS "billCurrency"
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs`,
+       WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 

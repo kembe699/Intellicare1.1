@@ -65,6 +65,14 @@ module.exports = (sequelize) => {
     voucher_number: {
       type: DataTypes.STRING(100),
       allowNull: true
+    },
+    // Guaranteed by the branch-isolation migration (ensureBranchIsolationColumns.js),
+    // same as clinic_id/status/payment_method above — declared here so create()
+    // actually writes it instead of silently dropping it (Sequelize ignores any
+    // key passed to create() that isn't a declared attribute).
+    branch_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
     }
   }, {
     tableName: 'daily_expenses',

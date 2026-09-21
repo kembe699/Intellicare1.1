@@ -67,6 +67,20 @@ function dateRange(from, to) {
   return out;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 // ── GET / ────────────────────────────────────────────────────────────────
 // Query params:
 //   dateFrom, dateTo  — YYYY-MM-DD, default to the last 30 days
@@ -80,6 +94,11 @@ router.get('/', async (req, res) => {
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
     const repl = { clinicId, fromTs, toTs };
+    const branchSql = branchScope(req, repl);
+    // branchScope() above already stamped `branchId` into `repl` (or left it
+    // absent for an admin) — every other replacements object below reuses
+    // that same resolved value rather than recomputing it.
+    const branchIdVal = repl.branchId;
     const days = dateRange(dateFrom, dateTo);
 
     // 1. Total revenue in the period, net of what was handed back.
@@ -99,7 +118,7 @@ router.get('/', async (req, res) => {
                        ELSE 0 END), 0) AS total
        FROM receipts
        WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
-         AND payment_date BETWEEN :fromTs AND :toTs`,
+         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -107,13 +126,13 @@ router.get('/', async (req, res) => {
     const [patientsRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM patients
-       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs`,
+       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const [lisRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM lis_participants
-       WHERE created_at BETWEEN :fromTs AND :toTs`,
+       WHERE created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const fromPatients = parseInt(patientsRow.total, 10) || 0;
@@ -135,7 +154,7 @@ router.get('/', async (req, res) => {
     const [visitsRow] = await sequelize.query(
       `SELECT COUNT(*) AS total
        FROM lis_test_orders
-       WHERE created_at BETWEEN :fromTs AND :toTs`,
+       WHERE created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -144,8 +163,8 @@ router.get('/', async (req, res) => {
     const [outstandingRow] = await sequelize.query(
       `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS total
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND status IN ('pending', 'partial')`,
-      { replacements: { clinicId }, type: QueryTypes.SELECT }
+       WHERE clinic_id = :clinicId AND status IN ('pending', 'partial') ${branchSql}`,
+      { replacements: { clinicId, branchId: branchIdVal }, type: QueryTypes.SELECT }
     );
 
     // 5. Payments collected vs pending — bills created in the period.
@@ -154,7 +173,7 @@ router.get('/', async (req, res) => {
               COALESCE(SUM(paid_amount), 0) AS "totalPaid",
               COALESCE(SUM(balance_amount), 0) AS "totalPending"
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs`,
+       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const totalBilled = parseFloat(collectionRow.totalBilled) || 0;
@@ -167,7 +186,7 @@ router.get('/', async (req, res) => {
       `SELECT COUNT(DISTINCT cashier_id) AS total
        FROM receipts
        WHERE clinic_id = :clinicId AND status = 'active' AND cashier_id IS NOT NULL
-         AND payment_date BETWEEN :fromTs AND :toTs`,
+         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -178,7 +197,7 @@ router.get('/', async (req, res) => {
                        ELSE 0 END), 0) AS total
        FROM receipts
        WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
-         AND payment_date BETWEEN :fromTs AND :toTs
+         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}
        GROUP BY DATE(payment_date)`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
@@ -192,14 +211,14 @@ router.get('/', async (req, res) => {
     const patientsByDay = await sequelize.query(
       `SELECT DATE(created_at) AS day, COUNT(*) AS cnt
        FROM patients
-       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs
+       WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs ${branchSql}
        GROUP BY DATE(created_at)`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const lisByDay = await sequelize.query(
       `SELECT DATE(created_at) AS day, COUNT(*) AS cnt
        FROM lis_participants
-       WHERE created_at BETWEEN :fromTs AND :toTs
+       WHERE created_at BETWEEN :fromTs AND :toTs ${branchSql}
        GROUP BY DATE(created_at)`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
@@ -221,7 +240,7 @@ router.get('/', async (req, res) => {
                        ELSE 0 END), 0) AS total
        FROM receipts
        WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
-         AND payment_date BETWEEN :fromTs AND :toTs
+         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}
        GROUP BY payment_method
        ORDER BY total DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -235,6 +254,8 @@ router.get('/', async (req, res) => {
     // 10. Revenue by clinic — deliberately UNSCOPED (all clinics), since this
     //     system only has 2 clinic_names rows and the whole point of this
     //     section is to compare them side by side.
+    const clinicRevenueRepl = { fromTs, toTs };
+    const branchSqlClinicRevenue = branchScope(req, clinicRevenueRepl, 'r');
     const clinicRevenueRows = await sequelize.query(
       `SELECT cn.id AS "clinicId", cn.name AS "clinicName",
               COALESCE(SUM(CASE WHEN r.status = 'active' THEN r.payment_amount
@@ -242,22 +263,24 @@ router.get('/', async (req, res) => {
                                 ELSE 0 END), 0) AS revenue,
               COUNT(DISTINCT CASE WHEN r.status = 'active' THEN r.id END) AS "receiptCount"
        FROM clinic_names cn
-       LEFT JOIN receipts r ON r.clinic_id = cn.id AND r.payment_date BETWEEN :fromTs AND :toTs
+       LEFT JOIN receipts r ON r.clinic_id = cn.id AND r.payment_date BETWEEN :fromTs AND :toTs ${branchSqlClinicRevenue}
        GROUP BY cn.id, cn.name
        ORDER BY cn.id`,
-      { replacements: { fromTs, toTs }, type: QueryTypes.SELECT }
+      { replacements: clinicRevenueRepl, type: QueryTypes.SELECT }
     );
     // Still the legacy `visits` table: lis_test_orders cannot substitute here,
     // because its clinic_id is a dr_clinics UUID and this widget keys on
     // clinic_names.id (an int) — there is no join between the two dimensions.
     // These per-clinic visit counts are therefore stale; the headline Total
     // Visits KPI above is the accurate figure.
+    const clinicVisitRepl = { fromTs, toTs };
+    const branchSqlClinicVisits = branchScope(req, clinicVisitRepl);
     const clinicVisitRows = await sequelize.query(
       `SELECT clinic_id AS "clinicId", COUNT(*) AS cnt
        FROM visits
-       WHERE visit_date BETWEEN :fromTs AND :toTs
+       WHERE visit_date BETWEEN :fromTs AND :toTs ${branchSqlClinicVisits}
        GROUP BY clinic_id`,
-      { replacements: { fromTs, toTs }, type: QueryTypes.SELECT }
+      { replacements: clinicVisitRepl, type: QueryTypes.SELECT }
     );
     const visitCountByClinic = new Map(clinicVisitRows.map(r => [parseInt(r.clinicId, 10), parseInt(r.cnt, 10) || 0]));
     const revenueByClinic = clinicRevenueRows.map(r => ({
@@ -274,10 +297,10 @@ router.get('/', async (req, res) => {
               payment_amount AS "paymentAmount", payment_method AS "paymentMethod",
               payment_date AS "paymentDate", cashier_name AS "cashierName"
        FROM receipts
-       WHERE clinic_id = :clinicId AND status = 'active'
+       WHERE clinic_id = :clinicId AND status = 'active' ${branchSql}
        ORDER BY payment_date DESC
        LIMIT 8`,
-      { replacements: { clinicId }, type: QueryTypes.SELECT }
+      { replacements: { clinicId, branchId: branchIdVal }, type: QueryTypes.SELECT }
     );
 
     res.json({

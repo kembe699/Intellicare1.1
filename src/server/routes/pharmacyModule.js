@@ -565,6 +565,10 @@ router.get('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) =
 router.get('/prescriptions/:id', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
+    const rxReplacements = { id: req.params.id, cid };
+    let rxWhere = 'WHERE pp.id = :id AND pp.clinic_id = :cid';
+    const { sql: rxBranchSQL, params: rxBranchParams } = getBranchConditionSQL(req, 'pp');
+    if (rxBranchSQL) { rxWhere += ' AND pp.branch_id = :rxBranchId'; rxReplacements.rxBranchId = rxBranchParams[0]; }
     const [rx] = await sequelize.query(`
       SELECT pp.*,
         COALESCE((p.first_name || ' ' || p.last_name), (lp.first_name || ' ' || lp.last_name)) AS patient_name,
@@ -573,8 +577,8 @@ router.get('/prescriptions/:id', authorize('pharmacy.prescribe'), async (req, re
       LEFT JOIN patients p ON pp.patient_id = p.id
       LEFT JOIN lis_participants lp ON pp.patient_id = lp.id
       LEFT JOIN users u ON pp.doctor_id = u.id
-      WHERE pp.id = :id AND pp.clinic_id = :cid
-    `, { replacements: { id: req.params.id, cid } });
+      ${rxWhere}
+    `, { replacements: rxReplacements });
     if (rx.length === 0) return res.status(404).json({ error: 'Prescription not found' });
 
     const [lines] = await sequelize.query(`
@@ -2109,21 +2113,29 @@ router.post('/insurance-pricing', authorize('pharmacy.write'), async (req, res) 
 router.get('/dashboard-stats', authorize('pharmacy.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
+    // dispensing_records/dispensing_returns/pharmacy_charges/pharmacy_prescriptions/
+    // inventory_items/inventory_batches all carry their own branch_id — resolve the
+    // branch param once (getBranchConditionSQL with no alias, so only its `params`
+    // are used) and apply it against each table's own alias below.
+    const { sql: dsBranchSQL, params: dsBranchParams } = getBranchConditionSQL(req);
+    const branchId = dsBranchSQL ? dsBranchParams[0] : null;
+    const branchClause = (alias) => (branchId ? ` AND ${alias}.branch_id = :branchId` : '');
+    const reps = { cid, branchId };
 
-    const [pending] = await sequelize.query("SELECT COUNT(*) AS cnt FROM pharmacy_prescriptions WHERE clinic_id = :cid AND status = 'pending'", { replacements: { cid } });
-    const [todayDisp] = await sequelize.query("SELECT COUNT(*) AS cnt, COALESCE(SUM(total_price), 0) AS revenue FROM dispensing_records WHERE clinic_id = :cid AND dispensing_date = CURRENT_DATE AND status = 'dispensed'", { replacements: { cid } });
-    const [todayReturns] = await sequelize.query("SELECT COUNT(*) AS cnt FROM dispensing_returns WHERE clinic_id = :cid AND return_date = CURRENT_DATE", { replacements: { cid } });
-    const [pendingCharges] = await sequelize.query("SELECT COUNT(*) AS cnt, COALESCE(SUM(charge_amount), 0) AS total FROM pharmacy_charges WHERE clinic_id = :cid AND is_billed = false", { replacements: { cid } });
+    const [pending] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM pharmacy_prescriptions WHERE clinic_id = :cid AND status = 'pending'${branchClause('pharmacy_prescriptions')}`, { replacements: reps });
+    const [todayDisp] = await sequelize.query(`SELECT COUNT(*) AS cnt, COALESCE(SUM(total_price), 0) AS revenue FROM dispensing_records WHERE clinic_id = :cid AND dispensing_date = CURRENT_DATE AND status = 'dispensed'${branchClause('dispensing_records')}`, { replacements: reps });
+    const [todayReturns] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM dispensing_returns WHERE clinic_id = :cid AND return_date = CURRENT_DATE${branchClause('dispensing_returns')}`, { replacements: reps });
+    const [pendingCharges] = await sequelize.query(`SELECT COUNT(*) AS cnt, COALESCE(SUM(charge_amount), 0) AS total FROM pharmacy_charges WHERE clinic_id = :cid AND is_billed = false${branchClause('pharmacy_charges')}`, { replacements: reps });
     const [lowStock] = await sequelize.query(`
       SELECT COUNT(*) AS cnt FROM inventory_items ii
-      WHERE ii.clinic_id = :cid AND ii.is_active = true AND ii.quantity_on_hand <= ii.minimum_stock_level AND ii.minimum_stock_level > 0
-    `, { replacements: { cid } });
+      WHERE ii.clinic_id = :cid AND ii.is_active = true AND ii.quantity_on_hand <= ii.minimum_stock_level AND ii.minimum_stock_level > 0${branchClause('ii')}
+    `, { replacements: reps });
     const [expiringBatches] = await sequelize.query(`
       SELECT COUNT(*) AS cnt FROM inventory_batches ib
       JOIN inventory_items ii ON ib.item_id = ii.id
       WHERE ii.clinic_id = :cid AND ib.status = 'active'
-        AND ib.expiry_date IS NOT NULL AND ib.expiry_date <= CURRENT_DATE + INTERVAL '30 days'
-    `, { replacements: { cid } });
+        AND ib.expiry_date IS NOT NULL AND ib.expiry_date <= CURRENT_DATE + INTERVAL '30 days'${branchClause('ii')}
+    `, { replacements: reps });
 
     // Recent dispensing
     const [recentDisp] = await sequelize.query(`
@@ -2132,9 +2144,9 @@ router.get('/dashboard-stats', authorize('pharmacy.read'), async (req, res) => {
       FROM dispensing_records dr
       LEFT JOIN inventory_items ii ON dr.inventory_item_id = ii.id
       LEFT JOIN patients p ON p.id = dr.patient_id
-      WHERE dr.clinic_id = :cid AND dr.status = 'dispensed'
+      WHERE dr.clinic_id = :cid AND dr.status = 'dispensed'${branchClause('dr')}
       ORDER BY dr.created_at DESC LIMIT 10
-    `, { replacements: { cid } });
+    `, { replacements: reps });
 
     // Top drugs dispensed (last 30 days)
     const [topDrugs] = await sequelize.query(`
@@ -2142,10 +2154,10 @@ router.get('/dashboard-stats', authorize('pharmacy.read'), async (req, res) => {
         SUM(dr.total_price) AS total_revenue
       FROM dispensing_records dr
       JOIN inventory_items ii ON dr.inventory_item_id = ii.id
-      WHERE dr.clinic_id = :cid AND dr.dispensing_date >= CURRENT_DATE - INTERVAL '30 days' AND dr.status = 'dispensed'
+      WHERE dr.clinic_id = :cid AND dr.dispensing_date >= CURRENT_DATE - INTERVAL '30 days' AND dr.status = 'dispensed'${branchClause('dr')}
       GROUP BY ii.id, ii.item_name
       ORDER BY total_qty DESC LIMIT 10
-    `, { replacements: { cid } });
+    `, { replacements: reps });
 
     res.json({
       pending_prescriptions: pending[0]?.cnt || 0,
@@ -2173,6 +2185,11 @@ router.get('/reports/dispensing-summary', authorize('pharmacy.read'), async (req
     const fd = from_date || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
     const td = to_date || new Date().toISOString().split('T')[0];
 
+    const replacements = { cid, fd, td };
+    let branchWhere = '';
+    const { sql: dsBranchSQL, params: dsBranchParams } = getBranchConditionSQL(req, 'dr');
+    if (dsBranchSQL) { branchWhere = ' AND dr.branch_id = :dsBranchId'; replacements.dsBranchId = dsBranchParams[0]; }
+
     const groupCol = group_by === 'drug' ? 'ii.item_name' : 'dr.dispensing_date';
     const [rows] = await sequelize.query(`
       SELECT ${groupCol} AS group_key, COUNT(*) AS dispense_count,
@@ -2180,10 +2197,10 @@ router.get('/reports/dispensing-summary', authorize('pharmacy.read'), async (req
         SUM(dr.total_price) AS total_revenue
       FROM dispensing_records dr
       LEFT JOIN inventory_items ii ON dr.inventory_item_id = ii.id
-      WHERE dr.clinic_id = :cid AND dr.dispensing_date BETWEEN :fd AND :td AND dr.status = 'dispensed'
+      WHERE dr.clinic_id = :cid AND dr.dispensing_date BETWEEN :fd AND :td AND dr.status = 'dispensed'${branchWhere}
       GROUP BY ${groupCol}
       ORDER BY ${group_by === 'drug' ? 'total_revenue DESC' : 'group_key DESC'}
-    `, { replacements: { cid, fd, td } });
+    `, { replacements });
     res.json(rows);
   } catch (error) {
     console.error('Error getting dispensing summary:', error);
@@ -2199,20 +2216,25 @@ router.get('/reports/revenue', authorize('pharmacy.read'), async (req, res) => {
     const fd = from_date || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
     const td = to_date || new Date().toISOString().split('T')[0];
 
+    const replacements = { cid, fd, td };
+    let branchWhere = '';
+    const { sql: revBranchSQL, params: revBranchParams } = getBranchConditionSQL(req);
+    if (revBranchSQL) { branchWhere = ' AND branch_id = :revBranchId'; replacements.revBranchId = revBranchParams[0]; }
+
     const [daily] = await sequelize.query(`
       SELECT dispensing_date, COUNT(*) AS dispense_count,
         SUM(total_price) AS revenue, SUM(quantity_dispensed) AS qty
       FROM dispensing_records
-      WHERE clinic_id = :cid AND dispensing_date BETWEEN :fd AND :td AND status = 'dispensed'
+      WHERE clinic_id = :cid AND dispensing_date BETWEEN :fd AND :td AND status = 'dispensed'${branchWhere}
       GROUP BY dispensing_date ORDER BY dispensing_date
-    `, { replacements: { cid, fd, td } });
+    `, { replacements });
 
     const [totals] = await sequelize.query(`
       SELECT COUNT(*) AS total_dispenses, SUM(total_price) AS total_revenue,
         SUM(quantity_dispensed) AS total_qty, AVG(total_price) AS avg_per_dispense
       FROM dispensing_records
-      WHERE clinic_id = :cid AND dispensing_date BETWEEN :fd AND :td AND status = 'dispensed'
-    `, { replacements: { cid, fd, td } });
+      WHERE clinic_id = :cid AND dispensing_date BETWEEN :fd AND :td AND status = 'dispensed'${branchWhere}
+    `, { replacements });
 
     res.json({ daily, totals: totals[0] });
   } catch (error) {
@@ -2229,6 +2251,11 @@ router.get('/reports/top-drugs', authorize('pharmacy.read'), async (req, res) =>
     const fd = from_date || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
     const td = to_date || new Date().toISOString().split('T')[0];
 
+    const replacements = { cid, fd, td, lim: parseInt(lim) || 20 };
+    let branchWhere = '';
+    const { sql: tdBranchSQL, params: tdBranchParams } = getBranchConditionSQL(req, 'dr');
+    if (tdBranchSQL) { branchWhere = ' AND dr.branch_id = :tdBranchId'; replacements.tdBranchId = tdBranchParams[0]; }
+
     const [rows] = await sequelize.query(`
       SELECT ii.item_name AS drug_name, d.generic_name, ii.item_category AS therapeutic_category,
         SUM(dr.quantity_dispensed) AS total_qty, COUNT(*) AS dispense_count,
@@ -2236,11 +2263,11 @@ router.get('/reports/top-drugs', authorize('pharmacy.read'), async (req, res) =>
       FROM dispensing_records dr
       JOIN inventory_items ii ON dr.inventory_item_id = ii.id
       LEFT JOIN drugs d ON d.inventory_item_id = ii.id
-      WHERE dr.clinic_id = :cid AND dr.dispensing_date BETWEEN :fd AND :td AND dr.status = 'dispensed'
+      WHERE dr.clinic_id = :cid AND dr.dispensing_date BETWEEN :fd AND :td AND dr.status = 'dispensed'${branchWhere}
       GROUP BY ii.id, ii.item_name, d.generic_name, ii.item_category
       ORDER BY total_qty DESC
       LIMIT :lim
-    `, { replacements: { cid, fd, td, lim: parseInt(lim) || 20 } });
+    `, { replacements });
     res.json(rows);
   } catch (error) {
     console.error('Error getting top drugs:', error);
@@ -2255,6 +2282,11 @@ router.get('/reports/stock-usage', authorize('pharmacy.read'), async (req, res) 
     const cid = BranchQueryFilter.resolveClinicId(req);
     const fd = from_date || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
     const td = to_date || new Date().toISOString().split('T')[0];
+
+    const replacements = { cid, fd, td };
+    let branchWhere = '';
+    const { sql: suBranchSQL, params: suBranchParams } = getBranchConditionSQL(req, 'ii');
+    if (suBranchSQL) { branchWhere = ' AND ii.branch_id = :suBranchId'; replacements.suBranchId = suBranchParams[0]; }
 
     const [rows] = await sequelize.query(`
       SELECT ii.item_name AS drug_name, ii.item_code AS drug_code,
@@ -2278,10 +2310,10 @@ router.get('/reports/stock-usage', authorize('pharmacy.read'), async (req, res) 
       FROM inventory_items ii
       LEFT JOIN dispensing_records dr ON dr.inventory_item_id = ii.id
         AND dr.dispensing_date BETWEEN :fd AND :td AND dr.status = 'dispensed'
-      WHERE ii.clinic_id = :cid AND ii.is_active = true
+      WHERE ii.clinic_id = :cid AND ii.is_active = true${branchWhere}
       GROUP BY ii.id, ii.item_name, ii.item_code, ii.quantity_on_hand, ii.minimum_stock_level
       ORDER BY days_of_stock ASC
-    `, { replacements: { cid, fd, td } });
+    `, { replacements });
     res.json(rows);
   } catch (error) {
     console.error('Error getting stock usage:', error);
@@ -2297,20 +2329,30 @@ router.get('/reports/billing-status', authorize('pharmacy.read'), async (req, re
     const fd = from_date || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
     const td = to_date || new Date().toISOString().split('T')[0];
 
+    const summaryReps = { cid, fd, td };
+    let summaryBranchWhere = '';
+    const { sql: bsBranchSQL, params: bsBranchParams } = getBranchConditionSQL(req);
+    if (bsBranchSQL) { summaryBranchWhere = ' AND branch_id = :bsBranchId'; summaryReps.bsBranchId = bsBranchParams[0]; }
+
     const [summary] = await sequelize.query(`
       SELECT payment_status, COUNT(*) AS count, SUM(charge_amount) AS total
       FROM pharmacy_charges
-      WHERE clinic_id = :cid AND charge_date BETWEEN :fd AND :td
+      WHERE clinic_id = :cid AND charge_date BETWEEN :fd AND :td${summaryBranchWhere}
       GROUP BY payment_status
-    `, { replacements: { cid, fd, td } });
+    `, { replacements: summaryReps });
+
+    const unbilledReps = { cid };
+    let unbilledBranchWhere = '';
+    const { sql: ubBranchSQL, params: ubBranchParams } = getBranchConditionSQL(req, 'pc');
+    if (ubBranchSQL) { unbilledBranchWhere = ' AND pc.branch_id = :ubBranchId'; unbilledReps.ubBranchId = ubBranchParams[0]; }
 
     const [unbilled] = await sequelize.query(`
       SELECT pc.*, (p.first_name || ' ' || p.last_name) AS patient_name
       FROM pharmacy_charges pc
       LEFT JOIN patients p ON p.id = pc.patient_id
-      WHERE pc.clinic_id = :cid AND pc.is_billed = false
+      WHERE pc.clinic_id = :cid AND pc.is_billed = false${unbilledBranchWhere}
       ORDER BY pc.charge_date DESC LIMIT 50
-    `, { replacements: { cid } });
+    `, { replacements: unbilledReps });
 
     res.json({ summary, unbilled });
   } catch (error) {
@@ -2381,15 +2423,19 @@ router.put('/settings', authorize('pharmacy.admin'), async (req, res) => {
 router.get('/controlled-substances', authorize('pharmacy.controlled_substances.read'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { cid };
+    let where = 'WHERE ii.clinic_id = :cid AND ii.is_controlled_substance = true AND ii.is_active = true';
+    const { sql: csBranchSQL, params: csBranchParams } = getBranchConditionSQL(req, 'ii');
+    if (csBranchSQL) { where += ' AND ii.branch_id = :csBranchId'; replacements.csBranchId = csBranchParams[0]; }
     const [rows] = await sequelize.query(`
       SELECT ii.id, ii.item_code AS drug_code, ii.item_name AS drug_name,
         ii.quantity_on_hand AS current_stock, ii.is_controlled_substance,
         d.strength, d.dosage_form, d.generic_name
       FROM inventory_items ii
       LEFT JOIN drugs d ON d.inventory_item_id = ii.id
-      WHERE ii.clinic_id = :cid AND ii.is_controlled_substance = true AND ii.is_active = true
+      ${where}
       ORDER BY ii.item_name
-    `, { replacements: { cid } });
+    `, { replacements });
     res.json(rows);
   } catch (error) {
     console.error('Error listing controlled substances:', error);
@@ -2397,15 +2443,25 @@ router.get('/controlled-substances', authorize('pharmacy.controlled_substances.r
   }
 });
 
+// controlled_substance_log has no branch_id column of its own (only
+// clinic_id) — branch (and clinic) isolation is enforced by joining to the
+// drug's own inventory_items row, same as the list route above.
 router.get('/controlled-substances/:drugId/audit-log', authorize('pharmacy.controlled_substances.read'), async (req, res) => {
   try {
+    const cid = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { did: req.params.drugId, cid };
+    let where = 'WHERE csl.drug_id = :did AND ii.clinic_id = :cid';
+    const { sql: auditBranchSQL, params: auditBranchParams } = getBranchConditionSQL(req, 'ii');
+    if (auditBranchSQL) { where += ' AND ii.branch_id = :auditBranchId'; replacements.auditBranchId = auditBranchParams[0]; }
     const [rows] = await sequelize.query(`
       SELECT csl.*, (p.first_name || ' ' || p.last_name) AS patient_name, u.display_name AS dispensed_by_name
       FROM controlled_substance_log csl
+      JOIN inventory_items ii ON ii.id = csl.drug_id
       LEFT JOIN patients p ON p.id = csl.patient_id
       LEFT JOIN users u ON u.id = csl.dispensed_by
-      WHERE csl.drug_id = :did ORDER BY csl.dispensing_date DESC, csl.created_at DESC
-    `, { replacements: { did: req.params.drugId } });
+      ${where}
+      ORDER BY csl.dispensing_date DESC, csl.created_at DESC
+    `, { replacements });
     res.json(rows);
   } catch (error) {
     console.error('Error getting audit log:', error);

@@ -8,6 +8,18 @@ const AccountingService = require('../services/AccountingService');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { authorize } = require('../middleware/authorize');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+
+// Named-replacement raw-SQL branch filter, same convention as accounting.js's
+// branchScope — this file uses named `:params` throughout, not positional `?`.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
 
 // Mirrors allowedRoles already enforced client-side for /procurement/daily-expenses in
 // App.tsx — none of these routes had any role gate server-side, including /:id/pay,
@@ -173,7 +185,7 @@ async function ensureColumnType(table, column, expectedDataType, modifySql) {
 router.get('/', authorize('expenses.read'), async (req, res) => {
   try {
     const { dateFrom, dateTo } = req.query;
-    const where = { clinic_id: BranchQueryFilter.resolveClinicId(req) };
+    const where = { clinic_id: BranchQueryFilter.resolveClinicId(req), ...getBranchCondition(req) };
 
     // Optional date window. The page asks for today by default — the list grows
     // without limit otherwise, and a day's expenses are what anyone actually
@@ -210,6 +222,8 @@ router.get('/', authorize('expenses.read'), async (req, res) => {
 router.get('/supplier-bills', authorize('expenses.read'), async (req, res) => {
   try {
     const cf = `AND po.clinic_id = ${BranchQueryFilter.resolveClinicId(req)}`;
+    const supplierBillsReplacements = {};
+    const supplierBillsBranchScope = branchScope(req, supplierBillsReplacements, 'po');
     const [bills] = await sequelize.query(`
       SELECT po.id, po.po_number, po.order_date, po.total_amount, po.po_currency,
         po.payment_terms, po.status,
@@ -221,8 +235,9 @@ router.get('/supplier-bills', authorize('expenses.read'), async (req, res) => {
       LEFT JOIN suppliers s ON po.supplier_id = s.id
       WHERE po.status IN ('authorized','received')
         ${cf}
+        ${supplierBillsBranchScope}
       ORDER BY po.order_date DESC
-    `);
+    `, { replacements: supplierBillsReplacements });
     res.json(bills);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch supplier bills' });
@@ -232,9 +247,11 @@ router.get('/supplier-bills', authorize('expenses.read'), async (req, res) => {
 // Get approvals for a PO
 router.get('/supplier-bills/:po_id/approvals', authorize('expenses.read'), async (req, res) => {
   try {
+    const approvalsReplacements = { po_id: String(req.params.po_id) };
+    const approvalsBranchScope = branchScope(req, approvalsReplacements);
     const [approvals] = await sequelize.query(
-      'SELECT * FROM supplier_bill_approvals WHERE po_id = :po_id ORDER BY approval_level ASC',
-      { replacements: { po_id: String(req.params.po_id) } }
+      `SELECT * FROM supplier_bill_approvals WHERE po_id = :po_id ${approvalsBranchScope} ORDER BY approval_level ASC`,
+      { replacements: approvalsReplacements }
     );
     res.json(approvals);
   } catch (error) {
@@ -269,8 +286,8 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
     const nextLevel = existing.length + 1;
     const id = uuidv4();
     await sequelize.query(
-      'INSERT INTO supplier_bill_approvals (id, po_id, user_id, approval_level, approved_by, approved_by_title, signature, notes) VALUES (:id, :po_id, :user_id, :level, :approved_by, :title, :signature, :notes)',
-      { replacements: { id, po_id: req.params.po_id, user_id: req.user.id, level: nextLevel, approved_by, title: approved_by_title || null, signature, notes: notes || null } }
+      'INSERT INTO supplier_bill_approvals (id, po_id, user_id, approval_level, approved_by, approved_by_title, signature, notes, branch_id) VALUES (:id, :po_id, :user_id, :level, :approved_by, :title, :signature, :notes, :branchId)',
+      { replacements: { id, po_id: req.params.po_id, user_id: req.user.id, level: nextLevel, approved_by, title: approved_by_title || null, signature, notes: notes || null, branchId: getCreateBranchId(req) } }
     );
     res.status(201).json({ id, approval_level: nextLevel, approved_by, signature, total_approvals: nextLevel });
   } catch (error) {
@@ -296,9 +313,11 @@ router.get('/supplier-bills/:po_id/items', authorize('expenses.read'), async (re
 // Get payments for a PO
 router.get('/supplier-bills/:po_id/payments', authorize('expenses.read'), async (req, res) => {
   try {
+    const paymentsReplacements = { po_id: String(req.params.po_id) };
+    const paymentsBranchScope = branchScope(req, paymentsReplacements);
     const [payments] = await sequelize.query(
-      'SELECT * FROM supplier_bill_payments WHERE po_id = :po_id ORDER BY payment_date DESC',
-      { replacements: { po_id: String(req.params.po_id) } }
+      `SELECT * FROM supplier_bill_payments WHERE po_id = :po_id ${paymentsBranchScope} ORDER BY payment_date DESC`,
+      { replacements: paymentsReplacements }
     );
     res.json(payments);
   } catch (error) {
@@ -337,17 +356,18 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
 
     // Step 1: INSERT — try with explicit UUID id first, fall back to auto-id
     let insertedId = null;
+    const paymentBranchId = getCreateBranchId(req);
     try {
       await sequelize.query(
-        `INSERT INTO supplier_bill_payments (id, po_id, payment_date, amount_paid, payment_method, account_id, clinic_id) VALUES (:id, :po_id, :payment_date, :amount_paid, :payment_method, :account_id, :clinic_id)`,
-        { replacements: { id: paymentId, po_id: String(po_id), payment_date: payment_date || new Date().toISOString().split('T')[0], amount_paid: payAmt, payment_method: payment_method || 'cash', account_id: String(account_id), clinic_id: parseInt(clinic_id || 1) } }
+        `INSERT INTO supplier_bill_payments (id, po_id, payment_date, amount_paid, payment_method, account_id, clinic_id, branch_id) VALUES (:id, :po_id, :payment_date, :amount_paid, :payment_method, :account_id, :clinic_id, :branch_id)`,
+        { replacements: { id: paymentId, po_id: String(po_id), payment_date: payment_date || new Date().toISOString().split('T')[0], amount_paid: payAmt, payment_method: payment_method || 'cash', account_id: String(account_id), clinic_id: parseInt(clinic_id || 1), branch_id: paymentBranchId } }
       );
       insertedId = paymentId;
     } catch(e1) {
       // id column may be SERIAL — try without specifying id
       await sequelize.query(
-        `INSERT INTO supplier_bill_payments (po_id, payment_date, amount_paid, payment_method, account_id, clinic_id) VALUES (:po_id, :payment_date, :amount_paid, :payment_method, :account_id, :clinic_id)`,
-        { replacements: { po_id: String(po_id), payment_date: payment_date || new Date().toISOString().split('T')[0], amount_paid: payAmt, payment_method: payment_method || 'cash', account_id: String(account_id), clinic_id: parseInt(clinic_id || 1) } }
+        `INSERT INTO supplier_bill_payments (po_id, payment_date, amount_paid, payment_method, account_id, clinic_id, branch_id) VALUES (:po_id, :payment_date, :amount_paid, :payment_method, :account_id, :clinic_id, :branch_id)`,
+        { replacements: { po_id: String(po_id), payment_date: payment_date || new Date().toISOString().split('T')[0], amount_paid: payAmt, payment_method: payment_method || 'cash', account_id: String(account_id), clinic_id: parseInt(clinic_id || 1), branch_id: paymentBranchId } }
       );
       const [lastRow] = await sequelize.query(
         `SELECT id FROM supplier_bill_payments WHERE po_id = :po_id ORDER BY created_at DESC LIMIT 1`,
@@ -586,9 +606,11 @@ router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
   try {
     const expenseId = parseInt(req.params.id);
     const payClinicId = BranchQueryFilter.resolveClinicId(req);
+    const payReplacements = { id: expenseId, clinicId: payClinicId };
+    const payBranchScope = branchScope(req, payReplacements);
     const [[exp]] = await sequelize.query(
-      'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :clinicId LIMIT 1',
-      { replacements: { id: expenseId, clinicId: payClinicId } }
+      `SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :clinicId ${payBranchScope} LIMIT 1`,
+      { replacements: payReplacements }
     );
     if (!exp) return res.status(404).json({ error: 'Expense not found' });
     if (exp.status !== 'approved') return res.status(400).json({ error: 'Expense must be fully approved before payment' });
@@ -650,9 +672,11 @@ router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
 // Get single expense by id
 router.get('/:id', authorize('expenses.read'), async (req, res) => {
   try {
+    const getReplacements = { id: parseInt(req.params.id), clinicId: BranchQueryFilter.resolveClinicId(req) };
+    const getBranchScope = branchScope(req, getReplacements);
     const [rows] = await sequelize.query(
-      'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :clinicId LIMIT 1',
-      { replacements: { id: parseInt(req.params.id), clinicId: BranchQueryFilter.resolveClinicId(req) } }
+      `SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :clinicId ${getBranchScope} LIMIT 1`,
+      { replacements: getReplacements }
     );
     if (!rows.length) return res.status(404).json({ error: 'Expense not found' });
     res.json(rows[0]);
@@ -664,12 +688,14 @@ router.get('/:id', authorize('expenses.read'), async (req, res) => {
 // Get approvals for an expense
 router.get('/:id/approvals', authorize('expenses.read'), async (req, res) => {
   try {
+    const expApprovalsReplacements = { id: parseInt(req.params.id), clinicId: BranchQueryFilter.resolveClinicId(req) };
+    const expApprovalsBranchScope = branchScope(req, expApprovalsReplacements, 'de');
     const [approvals] = await sequelize.query(
       `SELECT dea.* FROM daily_expense_approvals dea
        JOIN daily_expenses de ON de.id = dea.expense_id
-       WHERE dea.expense_id = :id AND de.clinic_id = :clinicId
+       WHERE dea.expense_id = :id AND de.clinic_id = :clinicId ${expApprovalsBranchScope}
        ORDER BY dea.approval_level ASC`,
-      { replacements: { id: parseInt(req.params.id), clinicId: BranchQueryFilter.resolveClinicId(req) } }
+      { replacements: expApprovalsReplacements }
     );
     res.json(approvals);
   } catch (error) {
@@ -701,8 +727,8 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
     const nextLevel = existing.length + 1;
     const id = uuidv4();
     await sequelize.query(
-      'INSERT INTO daily_expense_approvals (id, expense_id, user_id, approval_level, approved_by, approved_by_title, signature, notes) VALUES (:id, :expense_id, :user_id, :level, :approved_by, :title, :signature, :notes)',
-      { replacements: { id, expense_id: expenseId, user_id: req.user.id, level: nextLevel, approved_by: dbUser.display_name, title: null, signature: dbUser.signature || null, notes: notes || null } }
+      'INSERT INTO daily_expense_approvals (id, expense_id, user_id, approval_level, approved_by, approved_by_title, signature, notes, branch_id) VALUES (:id, :expense_id, :user_id, :level, :approved_by, :title, :signature, :notes, :branchId)',
+      { replacements: { id, expense_id: expenseId, user_id: req.user.id, level: nextLevel, approved_by: dbUser.display_name, title: null, signature: dbUser.signature || null, notes: notes || null, branchId: getCreateBranchId(req) } }
     );
 
     let voucherNo = null;
@@ -737,9 +763,11 @@ async function loadEditableExpense(req) {
   const id = parseInt(req.params.id);
   if (!Number.isFinite(id)) return { error: { code: 400, body: { error: 'Invalid expense id' } } };
 
+  const editReplacements = { id, cid: BranchQueryFilter.resolveClinicId(req) };
+  const editBranchScope = branchScope(req, editReplacements);
   const [[expense]] = await sequelize.query(
-    'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :cid LIMIT 1',
-    { replacements: { id, cid: BranchQueryFilter.resolveClinicId(req) } });
+    `SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :cid ${editBranchScope} LIMIT 1`,
+    { replacements: editReplacements });
   if (!expense) return { error: { code: 404, body: { error: 'Expense not found' } } };
 
   if (expense.status === 'paid' || expense.paid_at) {
@@ -870,9 +898,11 @@ router.post('/:id/reject', requireApprovalPermission('expense_approve'), async (
       return res.status(400).json({ error: 'A reason is required when rejecting an expense' });
     }
 
+    const rejectReplacements = { id, cid: BranchQueryFilter.resolveClinicId(req) };
+    const rejectBranchScope = branchScope(req, rejectReplacements);
     const [[expense]] = await sequelize.query(
-      'SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :cid LIMIT 1',
-      { replacements: { id, cid: BranchQueryFilter.resolveClinicId(req) } });
+      `SELECT * FROM daily_expenses WHERE id = :id AND clinic_id = :cid ${rejectBranchScope} LIMIT 1`,
+      { replacements: rejectReplacements });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     if (expense.status === 'paid' || expense.paid_at) {
       return res.status(400).json({ error: 'This expense has already been paid and cannot be rejected' });
@@ -944,6 +974,7 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
       clinic_id: parseInt(clinic_id || 1),
       payment_method: payment_method || 'cash',
       status: 'pending_approval',
+      branch_id: getCreateBranchId(req),
     });
     try { const rr = require('./reports'); await rr.logAudit({ user_id: req.user?.id, user_name: created_by || req.user?.display_name, user_role: req.user?.role, module: 'Expenses', action: 'EXPENSE_CREATED', entity_type: 'DailyExpense', entity_id: String(expense.id), description: `Expense created: ${description} — ${amount}`, new_values: { amount, category, account_name: accountName }, ip_address: req.ip, status: 'success' }); } catch(e) {}
     res.status(201).json({ ...expense.toJSON(), status: 'pending_approval' });

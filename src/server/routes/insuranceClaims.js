@@ -8,6 +8,7 @@ const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 
 // ── Helpers ──
 
@@ -256,6 +257,8 @@ router.get('/', async (req, res) => {
   try {
     const { search, status, scheme_id, from, to } = req.query;
     let where = 'WHERE 1=1', reps = [];
+    const branch = getBranchConditionSQL(req, 'bc');
+    if (branch.sql) { where += branch.sql; reps.push(...branch.params); }
 
     if (search) { where += ` AND (bc.claim_number LIKE ? OR bc.scheme_name LIKE ?)`; reps.push(`%${search}%`, `%${search}%`); }
     if (status && status !== 'all') { where += ` AND bc.status = ?`; reps.push(status); }
@@ -317,6 +320,7 @@ router.get('/:id', async (req, res) => {
     `, { replacements: [req.params.id] });
 
     if (!claims.length) return res.status(404).json({ error: 'Claim not found' });
+    if (!BranchQueryFilter.canAccessRecord(claims[0], req.branchContext)) return res.status(404).json({ error: 'Claim not found' });
     const claim = claims[0];
 
     // Get invoices in claim with bill services

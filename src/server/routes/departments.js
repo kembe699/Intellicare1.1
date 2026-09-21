@@ -53,9 +53,21 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
+    // Build branch filter with named parameters — same inline style as
+    // GET / above (getBranchConditionSQL's positional `?` placeholders
+    // can't mix with the named :params this query uses).
+    const isAdmin = req.user?.role === 'admin';
+    const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+    let branchSQL = '';
+    const replacements = { id };
+    if (!isAdmin && branchId) {
+      branchSQL = ' AND d.branch_id = :branchId';
+      replacements.branchId = branchId;
+    }
+
     const [departments] = await sequelize.query(`
-      SELECT 
+      SELECT
         d.id,
         d.department_name,
         d.department_code,
@@ -67,8 +79,9 @@ router.get('/:id', async (req, res) => {
         d.updated_at
       FROM departments d
       WHERE d.id = :id
+        ${branchSQL}
     `, {
-      replacements: { id }
+      replacements
     });
     
     if (departments.length === 0) {

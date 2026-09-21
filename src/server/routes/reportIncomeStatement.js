@@ -41,6 +41,20 @@ const { sequelize } = require('../models');
 // Auth is applied globally in index.js via `app.use('/api', authenticateToken)`,
 // so req.user is already populated by the time requests reach this router.
 
+// Non-admin users only see rows from their own branch; admins see everything
+// clinic-wide. Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 function defaultThisMonthRange() {
   const now = new Date();
   const y = now.getFullYear();
@@ -53,12 +67,15 @@ function defaultThisMonthRange() {
 
 // Fetches the net period amount per active account of a given type ('revenue' | 'expense'),
 // for the given clinic and date range. Only accounts with non-zero net activity are returned.
-async function fetchSection(clinicId, accountType, dateFrom, dateTo) {
+async function fetchSection(clinicId, accountType, dateFrom, dateTo, req) {
   // Revenue: credit - debit increases the balance. Expense: debit - credit increases the balance.
   const amountExpr =
     accountType === 'revenue'
       ? 'COALESCE(SUM(al.credit_amount), 0) - COALESCE(SUM(al.debit_amount), 0)'
       : 'COALESCE(SUM(al.debit_amount), 0) - COALESCE(SUM(al.credit_amount), 0)';
+
+  const replacements = { clinicId, accountType, dateFrom, dateTo };
+  const branchSql = branchScope(req, replacements, 'al');
 
   const [rows] = await sequelize.query(
     `SELECT
@@ -72,6 +89,7 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo) {
       AND al.clinic_id = coa.clinic_id
       AND al.is_posted = true
       AND al.transaction_date BETWEEN :dateFrom AND :dateTo
+      ${branchSql}
      WHERE coa.clinic_id = :clinicId
        AND coa.is_active = true
        AND coa.account_type = :accountType
@@ -83,7 +101,7 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo) {
      HAVING ABS(${amountExpr}) > 0.001
      ORDER BY coa.account_code ASC`,
     {
-      replacements: { clinicId, accountType, dateFrom, dateTo },
+      replacements,
     }
   );
 
@@ -148,9 +166,15 @@ function waterfallAllocate(target, lines) {
   return out;
 }
 
-async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
+async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
   // Each bill's revenue lines, in a fixed order (account_code), for bills that
   // took money in the period — the waterfall below fills them in this order.
+  const billRevenueReplacements = { clinicId, dateFrom, dateTo };
+  const branchSqlAl = branchScope(req, billRevenueReplacements, 'al');
+  // branchScope() stamped `branchId` into the replacements object above already;
+  // reuse it (rather than calling branchScope again, which would just recompute
+  // the same value) for the two receipts subqueries below.
+  const branchSqlReceipts = billRevenueReplacements.branchId ? ' AND r.branch_id = :branchId' : '';
   const [billRevenueRows] = await sequelize.query(
     `WITH bill_revenue AS (
        SELECT gl.reference_id AS bill_id,
@@ -163,6 +187,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
         WHERE al.is_posted = true
           AND al.clinic_id = :clinicId
           AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+          ${branchSqlAl}
         GROUP BY 1, 2
        HAVING SUM(al.credit_amount - al.debit_amount) <> 0
      )
@@ -175,18 +200,22 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
                 SELECT r.bill_id FROM receipts r
                  WHERE r.clinic_id = :clinicId AND COALESCE(r.is_voided, false) = false
                    AND r.bill_id IS NOT NULL AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
+                   ${branchSqlReceipts}
                 UNION
                 SELECT r.bill_id FROM receipts r
                  WHERE r.clinic_id = :clinicId AND COALESCE(r.refund_amount, 0) > 0
                    AND r.bill_id IS NOT NULL AND r.refund_date::date BETWEEN :dateFrom AND :dateTo
+                   ${branchSqlReceipts}
               ) x
             )
       ORDER BY br.bill_id, coa.account_code ASC`,
-    { replacements: { clinicId, dateFrom, dateTo } }
+    { replacements: billRevenueReplacements }
   );
 
   // What was actually taken in on each of those bills during the period —
   // payments in, refunds out — this is the amount the lines above must sum to.
+  const collectedReplacements = { clinicId, dateFrom, dateTo };
+  const branchSqlCollected = branchScope(req, collectedReplacements, 'r');
   const [collectedRows] = await sequelize.query(
     `WITH movements AS (
        SELECT r.bill_id::text AS bill_id,
@@ -196,6 +225,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
           AND COALESCE(r.is_voided, false) = false
           AND r.bill_id IS NOT NULL
           AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
+          ${branchSqlCollected}
         GROUP BY 1
        UNION ALL
        SELECT r.bill_id::text AS bill_id,
@@ -205,10 +235,11 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo) {
           AND COALESCE(r.refund_amount, 0) > 0
           AND r.bill_id IS NOT NULL
           AND r.refund_date::date BETWEEN :dateFrom AND :dateTo
+          ${branchSqlCollected}
         GROUP BY 1
      )
      SELECT bill_id, SUM(amount) AS amount FROM movements GROUP BY 1`,
-    { replacements: { clinicId, dateFrom, dateTo } }
+    { replacements: collectedReplacements }
   );
 
   const linesByBill = new Map();
@@ -280,9 +311,9 @@ router.get('/', async (req, res) => {
 
     const [revenue, expenses] = await Promise.all([
       basis === 'cash'
-        ? fetchCashRevenue(clinicId, dateFrom, dateTo)
-        : fetchSection(clinicId, 'revenue', dateFrom, dateTo),
-      fetchSection(clinicId, 'expense', dateFrom, dateTo),
+        ? fetchCashRevenue(clinicId, dateFrom, dateTo, req)
+        : fetchSection(clinicId, 'revenue', dateFrom, dateTo, req),
+      fetchSection(clinicId, 'expense', dateFrom, dateTo, req),
     ]);
 
     const totalRevenue = revenue.reduce((sum, r) => sum + r.amount, 0);

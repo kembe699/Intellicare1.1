@@ -397,6 +397,32 @@ router.put('/:id', async (req, res) => {
       await User.update(updateData, { where: { id: req.params.id } });
     }
 
+    // branchAccessControl/loadUserBranchContext read user_branches as the source of
+    // truth (falling back to users.branch_id only when user_branches has no rows) —
+    // updating just the users.branch_id column above left a stale user_branches row
+    // in place, so reassigning a user's branch here silently never took effect. Keep
+    // both in sync, mirroring the exact insert POST /users already uses. Non-fatal:
+    // a failure here must not turn a successful field update into a 500.
+    if (updateData.branch_id !== undefined) {
+      try {
+        await sequelize.query('DELETE FROM user_branches WHERE user_id = :id', { replacements: { id: req.params.id } });
+        if (updateData.branch_id) {
+          await sequelize.query(
+            `INSERT INTO user_branches (user_id, branch_id, is_primary, created_at, updated_at)
+             VALUES (:uid, :bid, TRUE, NOW(), NOW())
+             ON CONFLICT DO NOTHING`,
+            { replacements: { uid: req.params.id, bid: updateData.branch_id } }
+          );
+        }
+        // Busts the same cache branchAccessControl.js reads from, keyed exactly the
+        // way it caches it — otherwise the stale branch list lives out its TTL.
+        const { branchCtxCache } = require('../cache');
+        branchCtxCache.del(`${req.tenantSchema}:${req.params.id}`);
+      } catch (branchErr) {
+        console.error(`Could not sync user_branches for user ${req.params.id}:`, branchErr.message);
+      }
+    }
+
     // Extra roles on top of the primary one — effective privileges are the
     // union of every held role (see authorize.js, routes/auth.js
     // buildUserResponse). Undefined means "not part of this update" (the

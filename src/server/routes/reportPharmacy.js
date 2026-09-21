@@ -143,6 +143,23 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js. NOT applied to `drugs` or
+// `drug_inventory` below — `drugs` is a deliberately shared/unscoped catalog
+// table (per the branch-isolation initiative's exclusion list) and
+// `drug_inventory` has no branch_id column at all.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 // ── GET / ────────────────────────────────────────────────────────────────
 // Query params:
 //   dateFrom, dateTo  — YYYY-MM-DD, default to the last 30 days
@@ -156,6 +173,10 @@ router.get('/', async (req, res) => {
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
     const repl = { clinicId, dateFrom, dateTo, fromTs, toTs };
+    const branchSqlDr = branchScope(req, repl, 'dr');
+    // branchScope() above already stamped `branchId` into `repl` (or left it
+    // absent for an admin) — reuse it for the unaliased queries below.
+    const branchSqlNoAlias = repl.branchId ? ' AND branch_id = :branchId' : '';
 
     // ── 1. Dispensing volume by drug, from dispensing_records (the live
     //      table — see header note). dispensing_date is a plain DATE column.
@@ -167,7 +188,7 @@ router.get('/', async (req, res) => {
               COALESCE(SUM(dr.total_price), 0) AS "dispensingValue"
        FROM dispensing_records dr
        LEFT JOIN inventory_items ii ON ii.id = dr.drug_id
-       WHERE dr.clinic_id = :clinicId AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo
+       WHERE dr.clinic_id = :clinicId AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo ${branchSqlDr}
        GROUP BY dr.drug_id, ii.item_name
        ORDER BY qty DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -180,7 +201,7 @@ router.get('/', async (req, res) => {
               COALESCE(SUM(quantity_dispensed), 0) AS "totalQty",
               COALESCE(SUM(total_price), 0) AS "totalDispensingValue"
        FROM dispensing_records
-       WHERE clinic_id = :clinicId AND dispensing_date BETWEEN :dateFrom AND :dateTo`,
+       WHERE clinic_id = :clinicId AND dispensing_date BETWEEN :dateFrom AND :dateTo ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -188,7 +209,7 @@ router.get('/', async (req, res) => {
     const statusRows = await sequelize.query(
       `SELECT status, COUNT(*) AS count
        FROM dispensing_records
-       WHERE clinic_id = :clinicId AND dispensing_date BETWEEN :dateFrom AND :dateTo
+       WHERE clinic_id = :clinicId AND dispensing_date BETWEEN :dateFrom AND :dateTo ${branchSqlNoAlias}
        GROUP BY status
        ORDER BY count DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -201,7 +222,7 @@ router.get('/', async (req, res) => {
     //      legacy tables in live data (0 rows each) but are included
     //      defensively in case they are populated in future/other envs.
     const inventoryItems = await sequelize.query(
-      `SELECT id, item_name AS name FROM inventory_items WHERE clinic_id = :clinicId`,
+      `SELECT id, item_name AS name FROM inventory_items WHERE clinic_id = :clinicId ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const drugsCatalog = await sequelize.query(
@@ -248,7 +269,7 @@ router.get('/', async (req, res) => {
     const bills = await sequelize.query(
       `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services
        FROM patient_bills
-       WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs`,
+       WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -354,14 +375,15 @@ router.get('/', async (req, res) => {
     //      only lists items with dispensing OR billing activity). Items never
     //      dispensed in the period show qtyDispensed = 0 and surface at the top of
     //      "slow moving" — that is the correct, honest signal for dead stock.
+    const branchSqlIi = repl.branchId ? ' AND ii.branch_id = :branchId' : '';
     const movementRows = await sequelize.query(
       `SELECT ii.id AS "itemId", ii.item_name AS "itemName", ii.quantity_on_hand AS "quantityOnHand",
               COALESCE(SUM(dr.quantity_dispensed), 0) AS "qtyDispensed",
               COALESCE(SUM(dr.total_price), 0) AS "dispensingValue"
        FROM inventory_items ii
        LEFT JOIN dispensing_records dr
-         ON dr.drug_id = ii.id AND dr.clinic_id = :clinicId AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo
-       WHERE ii.clinic_id = :clinicId AND ii.is_active = true
+         ON dr.drug_id = ii.id AND dr.clinic_id = :clinicId AND dr.dispensing_date BETWEEN :dateFrom AND :dateTo ${branchSqlDr}
+       WHERE ii.clinic_id = :clinicId AND ii.is_active = true ${branchSqlIi}
        GROUP BY ii.id, ii.item_name, ii.quantity_on_hand`,
       { replacements: repl, type: QueryTypes.SELECT }
     );

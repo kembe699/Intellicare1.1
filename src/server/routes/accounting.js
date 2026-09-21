@@ -18,7 +18,22 @@ const { initializeChartOfAccounts } = require('../scripts/initializeChartOfAccou
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
 const { userHasApprovalPermission } = require('../middleware/requireApprovalPermission');
+const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 const router = express.Router();
+
+// Non-admin users only see/touch rows from their own branch within a clinic; admins see
+// everything. Written inline with named replacements for the raw-SQL queries in this file
+// (branchFilter.js's getBranchConditionSQL uses positional `?` placeholders that can't mix
+// with the named :params these queries use) — same idea as hr.js's branchScope.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
 
 // Approving/rejecting a journal entry already worked for admin + finance_manager
 // via the accounting.journal_entries.approve privilege — that keeps working
@@ -53,6 +68,18 @@ function assertClinicAccess(record, req, res, label) {
   if (String(record.clinic_id) === String(req.user?.clinicId)) return true;
   res.status(403).json({ error: `Access denied to this ${label}` });
   return false;
+}
+
+// Branch-level counterpart to assertClinicAccess, for the tables that now carry
+// branch_id (journal_entries, patient_receivables, etc.). Uses the same
+// fetch-by-ID-then-check pattern as patients.js/patientBills.js.
+function assertBranchAccess(record, req, res, label) {
+  const branchContext = req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' };
+  if (!BranchQueryFilter.canAccessRecord(record, branchContext)) {
+    res.status(403).json({ error: `Access denied to this ${label}` });
+    return false;
+  }
+  return true;
 }
 
 // Permission checks below use privilege keys resolved dynamically against
@@ -345,7 +372,7 @@ router.get('/journal-entries', authorize('accounting.read'), async (req, res) =>
       return res.status(400).json({ error: 'clinic_id is required' });
     }
 
-    const whereClause = { clinic_id: parseInt(clinic_id) };
+    const whereClause = { clinic_id: parseInt(clinic_id), ...getBranchCondition(req) };
     if (status) whereClause.status = status;
 
     const journalEntries = await JournalEntries.findAll({
@@ -437,6 +464,7 @@ router.post('/journal-entries', authorize('accounting.write'), async (req, res) 
       }
       
       const jeNumber = `JE-${year}${month}-${String(sequence).padStart(4, '0')}`;
+      const branchId = getCreateBranchId(req);
 
       // Create journal entry with currency info
       const journalEntry = await JournalEntries.create({
@@ -454,7 +482,8 @@ router.post('/journal-entries', authorize('accounting.write'), async (req, res) 
         base_total_debit: baseTotalDebits,
         base_total_credit: baseTotalCredits,
         status: 'draft',
-        created_by: req.user?.id || 'system'
+        created_by: req.user?.id || 'system',
+        branch_id: branchId
       }, { transaction });
 
       // Create journal entry lines with base currency amounts
@@ -466,7 +495,8 @@ router.post('/journal-entries', authorize('accounting.write'), async (req, res) 
           credit_amount: line.credit_amount || 0,
           base_debit_amount: AccountingService.convertAmount(line.debit_amount || 0, exchangeRate),
           base_credit_amount: AccountingService.convertAmount(line.credit_amount || 0, exchangeRate),
-          description: line.description
+          description: line.description,
+          branch_id: branchId
         }, { transaction });
       }
 
@@ -516,6 +546,7 @@ router.get('/journal-entries/:id', authorize('accounting.read'), async (req, res
       return res.status(404).json({ error: 'Journal entry not found' });
     }
     if (!assertClinicAccess(journalEntry, req, res, 'journal entry')) return;
+    if (!assertBranchAccess(journalEntry, req, res, 'journal entry')) return;
 
     res.json(journalEntry);
   } catch (error) {
@@ -533,6 +564,10 @@ router.put('/journal-entries/:id', authorize('accounting.write'), async (req, re
     if (!journalEntry) {
       return res.status(404).json({ error: 'Journal entry not found' });
     }
+    // NOTE: this route was already missing assertClinicAccess before this change (every
+    // sibling journal-entries route calls it) — flagged, not fixed here per scope; adding
+    // just the branch check below.
+    if (!assertBranchAccess(journalEntry, req, res, 'journal entry')) return;
 
     if (journalEntry.status !== 'draft') {
       return res.status(400).json({ error: 'Only draft entries can be edited' });
@@ -599,7 +634,8 @@ router.put('/journal-entries/:id', authorize('accounting.write'), async (req, re
           credit_amount: line.credit_amount || 0,
           base_debit_amount: AccountingService.convertAmount(line.debit_amount || 0, exchangeRate),
           base_credit_amount: AccountingService.convertAmount(line.credit_amount || 0, exchangeRate),
-          description: line.description
+          description: line.description,
+          branch_id: journalEntry.branch_id
         }, { transaction });
       }
 
@@ -634,6 +670,7 @@ router.post('/journal-entries/:id/submit', authorize('accounting.write'), async 
       return res.status(404).json({ error: 'Journal entry not found' });
     }
     if (!assertClinicAccess(journalEntry, req, res, 'journal entry')) return;
+    if (!assertBranchAccess(journalEntry, req, res, 'journal entry')) return;
 
     if (journalEntry.status !== 'draft') {
       return res.status(400).json({ error: 'Only draft entries can be submitted' });
@@ -656,6 +693,7 @@ router.post('/journal-entries/:id/approve', journalEntryApprovalGate, async (req
       return res.status(404).json({ error: 'Journal entry not found' });
     }
     if (!assertClinicAccess(journalEntry, req, res, 'journal entry')) return;
+    if (!assertBranchAccess(journalEntry, req, res, 'journal entry')) return;
 
     if (journalEntry.status !== 'submitted') {
       return res.status(400).json({ error: 'Only submitted entries can be approved' });
@@ -745,6 +783,7 @@ router.post('/journal-entries/:id/reject', journalEntryApprovalGate, async (req,
       return res.status(404).json({ error: 'Journal entry not found' });
     }
     if (!assertClinicAccess(journalEntry, req, res, 'journal entry')) return;
+    if (!assertBranchAccess(journalEntry, req, res, 'journal entry')) return;
 
     if (!['submitted', 'approved'].includes(journalEntry.status)) {
       return res.status(400).json({ error: 'Only submitted or approved entries can be rejected' });
@@ -770,6 +809,7 @@ router.post('/journal-entries/:id/revert-to-draft', authorize('accounting.write'
       return res.status(404).json({ error: 'Journal entry not found' });
     }
     if (!assertClinicAccess(journalEntry, req, res, 'journal entry')) return;
+    if (!assertBranchAccess(journalEntry, req, res, 'journal entry')) return;
 
     if (journalEntry.status !== 'rejected') {
       return res.status(400).json({ error: 'Only rejected entries can be reverted to draft' });
@@ -806,6 +846,7 @@ router.get('/receivables', authorize('accounting.read'), async (req, res) => {
     const replacements = { clinic_id: parseInt(clinic_id) };
     if (patient_id) { where += ` AND pb.patient_id = :patient_id`; replacements.patient_id = patient_id; }
     if (status) { where += ` AND pb.status = :status`; replacements.status = status; }
+    where += branchScope(req, replacements, 'pb');
 
     const rows = await sequelize.query(`
       SELECT
@@ -842,7 +883,7 @@ router.get('/patient-receivables', authorize('accounting.read'), async (req, res
       return res.status(400).json({ error: 'clinic_id is required' });
     }
 
-    const whereClause = { clinic_id: parseInt(clinic_id) };
+    const whereClause = { clinic_id: parseInt(clinic_id), ...getBranchCondition(req) };
     if (patient_id) whereClause.patient_id = patient_id;
     if (status) whereClause.status = status;
 
@@ -872,8 +913,10 @@ router.get('/patient-receivables/aging', authorize('accounting.read'), async (re
       return res.status(400).json({ error: 'clinic_id is required' });
     }
 
+    const agingReplacements = { clinic_id: parseInt(clinic_id) };
+    const agingBranchScope = branchScope(req, agingReplacements, 'pr');
     const [results] = await sequelize.query(`
-      SELECT 
+      SELECT
         p.first_name,
         p.last_name,
         p.patient_id,
@@ -884,7 +927,7 @@ router.get('/patient-receivables/aging', authorize('accounting.read'), async (re
         pr.amount_paid,
         pr.amount_due - pr.amount_paid as balance,
         ((CURRENT_DATE)::date - (pr.due_date)::date) as days_overdue,
-        CASE 
+        CASE
           WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) <= 0 THEN 'Current'
           WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) BETWEEN 1 AND 30 THEN '1-30 Days'
           WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) BETWEEN 31 AND 60 THEN '31-60 Days'
@@ -893,12 +936,13 @@ router.get('/patient-receivables/aging', authorize('accounting.read'), async (re
         END as aging_bucket
       FROM patient_receivables pr
       LEFT JOIN patients p ON pr.patient_id = p.id
-      WHERE pr.clinic_id = :clinic_id 
+      WHERE pr.clinic_id = :clinic_id
         AND pr.status IN ('pending', 'partial', 'overdue')
         AND (pr.amount_due - pr.amount_paid) > 0
+        ${agingBranchScope}
       ORDER BY pr.due_date ASC
     `, {
-      replacements: { clinic_id: parseInt(clinic_id) }
+      replacements: agingReplacements
     });
 
     // Group by aging buckets
@@ -960,30 +1004,33 @@ router.get('/reports/income-statement', authorize('accounting.read'), async (req
       });
     }
 
+    const incomeStatementReplacements = {
+      clinic_id: parseInt(clinic_id),
+      start_date,
+      end_date
+    };
+    const incomeStatementBranchScope = branchScope(req, incomeStatementReplacements, 'al');
     const [results] = await sequelize.query(`
-      SELECT 
+      SELECT
         coa.account_code,
         coa.account_name,
         coa.account_type,
         coa.sub_account_type,
-        SUM(CASE WHEN coa.balance_type = 'credit' 
-                 THEN al.credit_amount - al.debit_amount 
+        SUM(CASE WHEN coa.balance_type = 'credit'
+                 THEN al.credit_amount - al.debit_amount
                  ELSE al.debit_amount - al.credit_amount END) as balance
       FROM chart_of_accounts coa
-      LEFT JOIN account_ledger al ON coa.id = al.account_id 
+      LEFT JOIN account_ledger al ON coa.id = al.account_id
         AND al.transaction_date BETWEEN :start_date AND :end_date
         AND al.is_posted = true
-      WHERE coa.clinic_id = :clinic_id 
+        ${incomeStatementBranchScope}
+      WHERE coa.clinic_id = :clinic_id
         AND coa.account_type IN ('revenue', 'expense')
         AND coa.is_active = true
       GROUP BY coa.id, coa.account_code, coa.account_name, coa.account_type, coa.sub_account_type
       ORDER BY coa.account_code
     `, {
-      replacements: { 
-        clinic_id: parseInt(clinic_id),
-        start_date,
-        end_date
-      }
+      replacements: incomeStatementReplacements
     });
 
     // Organize into revenue and expenses
@@ -1023,30 +1070,33 @@ router.get('/reports/balance-sheet', authorize('accounting.read'), async (req, r
 
     const asOfDate = as_of_date || new Date().toISOString().split('T')[0];
 
+    const balanceSheetReplacements = {
+      clinic_id: parseInt(clinic_id),
+      as_of_date: asOfDate
+    };
+    const balanceSheetBranchScope = branchScope(req, balanceSheetReplacements, 'al');
     const [results] = await sequelize.query(`
-      SELECT 
+      SELECT
         coa.account_code,
         coa.account_name,
         coa.account_type,
         coa.sub_account_type,
         coa.opening_balance,
-        SUM(CASE WHEN coa.balance_type = 'debit' 
-                 THEN al.debit_amount - al.credit_amount 
+        SUM(CASE WHEN coa.balance_type = 'debit'
+                 THEN al.debit_amount - al.credit_amount
                  ELSE al.credit_amount - al.debit_amount END) as period_balance
       FROM chart_of_accounts coa
-      LEFT JOIN account_ledger al ON coa.id = al.account_id 
+      LEFT JOIN account_ledger al ON coa.id = al.account_id
         AND al.transaction_date <= :as_of_date
         AND al.is_posted = true
-      WHERE coa.clinic_id = :clinic_id 
+        ${balanceSheetBranchScope}
+      WHERE coa.clinic_id = :clinic_id
         AND coa.account_type IN ('asset', 'liability', 'equity')
         AND coa.is_active = true
       GROUP BY coa.id, coa.account_code, coa.account_name, coa.account_type, coa.sub_account_type, coa.opening_balance
       ORDER BY coa.account_code
     `, {
-      replacements: { 
-        clinic_id: parseInt(clinic_id),
-        as_of_date: asOfDate
-      }
+      replacements: balanceSheetReplacements
     });
 
     // Calculate final balances
@@ -1067,6 +1117,8 @@ router.get('/reports/balance-sheet', authorize('accounting.read'), async (req, r
     // Net Income into Retained Earnings (3200), this system has no other mechanism for that,
     // so it's computed live here as "Current Year Earnings" — the same approach QuickBooks
     // and similar tools use for an interim (not-yet-closed) balance sheet.
+    const netIncomeReplacements = { clinic_id: parseInt(clinic_id), as_of_date: asOfDate };
+    const netIncomeBranchScope = branchScope(req, netIncomeReplacements, 'al');
     const [[netIncomeRow]] = await sequelize.query(`
       SELECT
         SUM(CASE WHEN coa.account_type = 'revenue' THEN al.credit_amount - al.debit_amount
@@ -1078,7 +1130,8 @@ router.get('/reports/balance-sheet', authorize('accounting.read'), async (req, r
         AND coa.account_type IN ('revenue', 'expense')
         AND al.transaction_date <= :as_of_date
         AND al.is_posted = true
-    `, { replacements: { clinic_id: parseInt(clinic_id), as_of_date: asOfDate } });
+        ${netIncomeBranchScope}
+    `, { replacements: netIncomeReplacements });
 
     const currentYearEarnings = parseFloat(netIncomeRow?.net_income || 0);
     if (Math.abs(currentYearEarnings) > 0.01) {

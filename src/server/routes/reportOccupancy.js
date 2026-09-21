@@ -26,6 +26,20 @@ function isoDate(d) {
   return d.toISOString().split('T')[0];
 }
 
+// Non-admin users only see rows from their own branch; admins see everything.
+// Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params this file uses in the same query) — same
+// convention as branchScope() in routes/hr.js.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 router.get('/', async (req, res) => {
   try {
     const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
@@ -38,12 +52,14 @@ router.get('/', async (req, res) => {
     const periodEnd = `${dateTo} 23:59:59`;
 
     // ── 1. Overall bed summary (current state) ──────────────────────────
+    const bedStatusRepl = { clinicId };
+    const branchSqlBeds = branchScope(req, bedStatusRepl);
     const [bedStatusRows] = await sequelize.query(
       `SELECT status, COUNT(*) AS cnt
        FROM beds
-       WHERE clinic_id = :clinicId AND is_active = true
+       WHERE clinic_id = :clinicId AND is_active = true ${branchSqlBeds}
        GROUP BY status`,
-      { replacements: { clinicId } }
+      { replacements: bedStatusRepl }
     );
 
     let totalBeds = 0;
@@ -60,6 +76,8 @@ router.get('/', async (req, res) => {
     const occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
     // ── 2. By-ward breakdown (current state) ─────────────────────────────
+    const byWardRepl = { clinicId };
+    const branchSqlWard = branchScope(req, byWardRepl, 'w');
     const [byWard] = await sequelize.query(
       `SELECT
          w.id AS ward_id,
@@ -72,10 +90,10 @@ router.get('/', async (req, res) => {
          SUM(CASE WHEN b.status NOT IN ('occupied', 'available') THEN 1 ELSE 0 END) AS maintenance_beds
        FROM wards w
        LEFT JOIN beds b ON b.ward_id = w.id AND b.is_active = true
-       WHERE w.clinic_id = :clinicId AND w.is_active = true
+       WHERE w.clinic_id = :clinicId AND w.is_active = true ${branchSqlWard}
        GROUP BY w.id, w.name, w.code, w.ward_type
        ORDER BY w.name ASC`,
-      { replacements: { clinicId } }
+      { replacements: byWardRepl }
     );
 
     const wardBreakdown = byWard.map(w => {
@@ -95,6 +113,8 @@ router.get('/', async (req, res) => {
     });
 
     // ── 3. Full bed roster (current state, ward/room detail) ────────────
+    const bedRowsRepl = { clinicId };
+    const branchSqlBedRows = branchScope(req, bedRowsRepl, 'b');
     const [bedRows] = await sequelize.query(
       `SELECT
          b.id, b.bed_number, b.bed_type, b.status,
@@ -103,48 +123,56 @@ router.get('/', async (req, res) => {
        FROM beds b
        LEFT JOIN rooms r ON r.id = b.room_id
        LEFT JOIN wards w ON w.id = b.ward_id
-       WHERE b.clinic_id = :clinicId AND b.is_active = true
+       WHERE b.clinic_id = :clinicId AND b.is_active = true ${branchSqlBedRows}
        ORDER BY w.name ASC, r.room_number ASC, b.bed_number ASC`,
-      { replacements: { clinicId } }
+      { replacements: bedRowsRepl }
     );
 
     // ── 4. Admissions trend (period-based, secondary section) ───────────
+    const dailyRepl = { clinicId, periodStart, periodEnd };
+    const branchSqlAdm = branchScope(req, dailyRepl);
     const [dailyRows] = await sequelize.query(
       `SELECT DATE(admission_date) AS day, COUNT(*) AS admissions
        FROM inpatient_admissions
        WHERE clinic_id = :clinicId
-         AND admission_date >= :periodStart AND admission_date <= :periodEnd
+         AND admission_date >= :periodStart AND admission_date <= :periodEnd ${branchSqlAdm}
        GROUP BY DATE(admission_date)
        ORDER BY day ASC`,
-      { replacements: { clinicId, periodStart, periodEnd } }
+      { replacements: dailyRepl }
     );
 
+    const periodTotalsRepl = { clinicId, periodStart, periodEnd };
+    const branchSqlPeriodTotals = branchScope(req, periodTotalsRepl);
     const [[periodTotals]] = await sequelize.query(
       `SELECT COUNT(*) AS cnt
        FROM inpatient_admissions
        WHERE clinic_id = :clinicId
-         AND admission_date >= :periodStart AND admission_date <= :periodEnd`,
-      { replacements: { clinicId, periodStart, periodEnd } }
+         AND admission_date >= :periodStart AND admission_date <= :periodEnd ${branchSqlPeriodTotals}`,
+      { replacements: periodTotalsRepl }
     );
 
+    const activeTotalsRepl = { clinicId };
+    const branchSqlActiveTotals = branchScope(req, activeTotalsRepl);
     const [[activeTotals]] = await sequelize.query(
       `SELECT COUNT(*) AS cnt
        FROM inpatient_admissions
-       WHERE clinic_id = :clinicId AND status = 'active'`,
-      { replacements: { clinicId } }
+       WHERE clinic_id = :clinicId AND status = 'active' ${branchSqlActiveTotals}`,
+      { replacements: activeTotalsRepl }
     );
 
     // Average length of stay — only meaningful over admissions that actually have
     // both dates populated, and only over discharges that fall within the period.
     // With very little data this may legitimately be based on 0 or 1 rows; the
     // completed_count tells the frontend how much to trust the average.
+    const losTotalsRepl = { clinicId, periodStart, periodEnd };
+    const branchSqlLos = branchScope(req, losTotalsRepl);
     const [[losTotals]] = await sequelize.query(
       `SELECT COUNT(*) AS completed_count, AVG(((discharge_date)::date - (admission_date)::date)) AS avg_los
        FROM inpatient_admissions
        WHERE clinic_id = :clinicId
          AND discharge_date IS NOT NULL
-         AND discharge_date >= :periodStart AND discharge_date <= :periodEnd`,
-      { replacements: { clinicId, periodStart, periodEnd } }
+         AND discharge_date >= :periodStart AND discharge_date <= :periodEnd ${branchSqlLos}`,
+      { replacements: losTotalsRepl }
     );
 
     const admissionsTrend = {

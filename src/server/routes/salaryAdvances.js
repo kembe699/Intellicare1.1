@@ -41,6 +41,10 @@ router.get('/', authorize('hr.salary_advances.read'), async (req, res) => {
     const replacements = { clinicId };
     if (status) { conditions.push('sa.status = :status'); replacements.status = status; }
     if (employee_id) { conditions.push('sa.employee_id = :employeeId'); replacements.employeeId = employee_id; }
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId;
+      if (branchId) { conditions.push('sa.branch_id = :branchId'); replacements.branchId = branchId; }
+    }
 
     const [advances] = await sequelize.query(`
       SELECT sa.*, e.first_name, e.last_name, e.employee_number
@@ -59,12 +63,18 @@ router.get('/', authorize('hr.salary_advances.read'), async (req, res) => {
 router.get('/:id', authorize('hr.salary_advances.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
+    let branchSQL = '';
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId;
+      if (branchId) { branchSQL = ' AND sa.branch_id = :branchId'; replacements.branchId = branchId; }
+    }
     const [[advance]] = await sequelize.query(`
       SELECT sa.*, e.first_name, e.last_name, e.employee_number
       FROM salary_advances sa
       JOIN employees e ON e.id = sa.employee_id
-      WHERE sa.id = :id AND sa.clinic_id = :clinicId
-    `, { replacements: { id: req.params.id, clinicId } });
+      WHERE sa.id = :id AND sa.clinic_id = :clinicId${branchSQL}
+    `, { replacements });
     if (!advance) return res.status(404).json({ error: 'Salary advance not found' });
 
     const [repayments] = await sequelize.query(

@@ -27,6 +27,7 @@
 const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
+const { getBranchConditionSQL } = require('../middleware/branchFilter');
 
 /** Returns today's date as YYYY-MM-DD in server-local time (SQL DATE format). */
 function todayISO() {
@@ -53,6 +54,7 @@ router.get('/', async (req, res) => {
 
     const clinicSQL = clinicId ? ' AND r.clinic_id = ?' : '';
     const clinicParams = clinicId ? [clinicId] : [];
+    const branchReceipts = getBranchConditionSQL(req, 'r');
 
     // ── Section 1: cancelled / refunded receipts ────────────────────────────
     const [receiptRows] = await sequelize.query(
@@ -73,9 +75,9 @@ router.get('/', async (req, res) => {
        LEFT JOIN users u ON u.id = r.cashier_id
        WHERE r.status IN ('voided', 'refunded')
          AND DATE(r.payment_date) BETWEEN ? AND ?
-         ${clinicSQL}
+         ${clinicSQL} ${branchReceipts.sql}
        ORDER BY r.updated_at DESC`,
-      { replacements: [dateFrom, dateTo, ...clinicParams] }
+      { replacements: [dateFrom, dateTo, ...clinicParams, ...branchReceipts.params] }
     );
 
     const cancelledReceipts = receiptRows.map((r) => ({
@@ -104,12 +106,13 @@ router.get('/', async (req, res) => {
     // (not a SQL JSON function) so the shape of legacy rows can be handled defensively.
     const clinicBillSQL = clinicId ? ' AND clinic_id = ?' : '';
     const clinicBillParams = clinicId ? [clinicId] : [];
+    const branchBills = getBranchConditionSQL(req);
     const [billRows] = await sequelize.query(
       `SELECT id, bill_number, patient_id, patient_name, clinic_id, services, bill_date, updated_by, updated_at
        FROM patient_bills
        WHERE DATE(bill_date) BETWEEN ? AND ?
-         ${clinicBillSQL}`,
-      { replacements: [dateFrom, dateTo, ...clinicBillParams] }
+         ${clinicBillSQL} ${branchBills.sql}`,
+      { replacements: [dateFrom, dateTo, ...clinicBillParams, ...branchBills.params] }
     );
 
     const voidedLineItems = [];

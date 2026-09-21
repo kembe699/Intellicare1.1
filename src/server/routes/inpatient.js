@@ -7,6 +7,19 @@ const { authorize } = require('../middleware/authorize');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 
+// Non-admin users only see/touch rows from their own branch; admins see everything
+// clinic-wide. Written inline with named replacements (not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't mix with
+// the named :params every query in this file uses) — same idea as hr.js's branchScope.
+function branchScope(req, replacements, alias = '') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
 // Ward/room/bed layout is facility configuration — everyone who works with inpatient care
 // needs to read it, but only admin changes it (matches the admin-only pattern already used
 // for Clinics/Departments/Facilities in Setup).
@@ -110,14 +123,15 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 router.get('/wards', authorize('inpatient.facility.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { clinicId };
     const [rows] = await sequelize.query(
       `SELECT w.*, s.service_name, s.price as service_price,
         (SELECT COUNT(*) FROM beds b WHERE b.ward_id = w.id AND b.status = 'occupied') as current_occupancy,
         (SELECT COUNT(*) FROM beds b WHERE b.ward_id = w.id AND b.is_active = true) as total_beds,
         (SELECT COUNT(*) FROM rooms r WHERE r.ward_id = w.id AND r.is_active = true) as total_rooms
        FROM wards w LEFT JOIN services s ON s.id = w.service_id
-       WHERE w.clinic_id = :clinicId AND w.is_active = true ORDER BY w.name`,
-      { replacements: { clinicId } }
+       WHERE w.clinic_id = :clinicId AND w.is_active = true${branchScope(req, replacements, 'w')} ORDER BY w.name`,
+      { replacements }
     );
     res.json(rows);
   } catch (error) {
@@ -148,11 +162,12 @@ router.post('/wards', authorize('inpatient.facility.write'), async (req, res) =>
       dailyRate = service ? parseFloat(service.price) || 0 : 0;
     }
 
+    const branchId = getCreateBranchId(req);
     await sequelize.query(
-      `INSERT INTO wards (id, clinic_id, name, code, description, ward_type, capacity, daily_rate, service_id, is_active) VALUES (:id, :clinicId, :name, :code, :description, :wardType, :capacity, :dailyRate, :serviceId, TRUE)`,
-      { replacements: { id, clinicId, name, code, description: description || null, wardType: ward_type || 'general', capacity: parseInt(capacity) || 0, dailyRate, serviceId: service_id || null } }
+      `INSERT INTO wards (id, clinic_id, name, code, description, ward_type, capacity, daily_rate, service_id, is_active, branch_id) VALUES (:id, :clinicId, :name, :code, :description, :wardType, :capacity, :dailyRate, :serviceId, TRUE, :branchId)`,
+      { replacements: { id, clinicId, name, code, description: description || null, wardType: ward_type || 'general', capacity: parseInt(capacity) || 0, dailyRate, serviceId: service_id || null, branchId } }
     );
-    res.status(201).json({ id, name, code, description, ward_type, capacity, daily_rate: dailyRate, service_id: service_id || null });
+    res.status(201).json({ id, name, code, description, ward_type, capacity, daily_rate: dailyRate, service_id: service_id || null, branch_id: branchId });
   } catch (error) {
     console.error('Error creating ward:', error);
     if (isUniqueViolation(error)) {
@@ -175,12 +190,14 @@ router.put('/wards/:id', authorize('inpatient.facility.write'), async (req, res)
       dailyRate = service ? parseFloat(service.price) || 0 : 0;
     }
 
-    // clinic_id in the WHERE clause is the ownership check itself (same pattern as the
-    // atomic bed-claim UPDATE in POST /admissions below) — a non-admin can never match,
-    // let alone update, another clinic's ward.
+    // clinic_id (and, for non-admins, branch_id) in the WHERE clause is the ownership
+    // check itself (same pattern as the atomic bed-claim UPDATE in POST /admissions
+    // below) — a non-admin can never match, let alone update, another clinic's or
+    // another branch's ward.
+    const replacements = { id: req.params.id, clinicId, name, code, description: description || null, wardType: ward_type || 'general', capacity: parseInt(capacity) || 0, dailyRate, serviceId: service_id || null };
     const [, meta] = await sequelize.query(
-      `UPDATE wards SET name = :name, code = :code, description = :description, ward_type = :wardType, capacity = :capacity, daily_rate = :dailyRate, service_id = :serviceId WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId, name, code, description: description || null, wardType: ward_type || 'general', capacity: parseInt(capacity) || 0, dailyRate, serviceId: service_id || null } }
+      `UPDATE wards SET name = :name, code = :code, description = :description, ward_type = :wardType, capacity = :capacity, daily_rate = :dailyRate, service_id = :serviceId WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Ward not found' });
     res.json({ success: true });
@@ -202,7 +219,8 @@ router.delete('/wards/:id', authorize('inpatient.facility.write'), async (req, r
     if (active[0]?.cnt > 0) {
       return res.status(400).json({ error: 'Cannot delete ward with active admissions' });
     }
-    const [, meta] = await sequelize.query(`UPDATE wards SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
+    const replacements = { id: req.params.id, clinicId };
+    const [, meta] = await sequelize.query(`UPDATE wards SET is_active = false WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Ward not found' });
     res.json({ success: true });
   } catch (error) {
@@ -224,6 +242,7 @@ router.get('/rooms', authorize('inpatient.facility.read'), async (req, res) => {
       FROM rooms r LEFT JOIN wards w ON r.ward_id = w.id WHERE r.clinic_id = :clinicId AND r.is_active = true`;
     const replacements = { clinicId };
     if (wardId) { sql += ' AND r.ward_id = :wardId'; replacements.wardId = wardId; }
+    sql += branchScope(req, replacements, 'r');
     sql += ' ORDER BY w.name, r.room_number';
     const [rows] = await sequelize.query(sql, { replacements });
     res.json(rows);
@@ -242,11 +261,12 @@ router.post('/rooms', authorize('inpatient.facility.write'), async (req, res) =>
     const { ward_id, room_number, room_type, description, capacity } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const id = uuidv4();
+    const branchId = getCreateBranchId(req);
     await sequelize.query(
-      `INSERT INTO rooms (id, ward_id, clinic_id, room_number, room_type, description, capacity, is_active) VALUES (:id, :wardId, :clinicId, :roomNumber, :roomType, :description, :capacity, TRUE)`,
-      { replacements: { id, wardId: ward_id || null, clinicId, roomNumber: room_number, roomType: room_type || 'standard', description: description || null, capacity: parseInt(capacity) || 0 } }
+      `INSERT INTO rooms (id, ward_id, clinic_id, room_number, room_type, description, capacity, is_active, branch_id) VALUES (:id, :wardId, :clinicId, :roomNumber, :roomType, :description, :capacity, TRUE, :branchId)`,
+      { replacements: { id, wardId: ward_id || null, clinicId, roomNumber: room_number, roomType: room_type || 'standard', description: description || null, capacity: parseInt(capacity) || 0, branchId } }
     );
-    res.status(201).json({ id, ward_id, room_number, room_type, description, capacity });
+    res.status(201).json({ id, ward_id, room_number, room_type, description, capacity, branch_id: branchId });
   } catch (error) {
     console.error('Error creating room:', error);
     if (isUniqueViolation(error)) {
@@ -261,9 +281,10 @@ router.put('/rooms/:id', authorize('inpatient.facility.write'), async (req, res)
   try {
     const { room_number, room_type, description, capacity } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId, roomNumber: room_number, roomType: room_type || 'standard', description: description || null, capacity: parseInt(capacity) || 0 };
     const [, meta] = await sequelize.query(
-      `UPDATE rooms SET room_number = :roomNumber, room_type = :roomType, description = :description, capacity = :capacity WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId, roomNumber: room_number, roomType: room_type || 'standard', description: description || null, capacity: parseInt(capacity) || 0 } }
+      `UPDATE rooms SET room_number = :roomNumber, room_type = :roomType, description = :description, capacity = :capacity WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Room not found' });
     res.json({ success: true });
@@ -277,7 +298,8 @@ router.put('/rooms/:id', authorize('inpatient.facility.write'), async (req, res)
 router.delete('/rooms/:id', authorize('inpatient.facility.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [, meta] = await sequelize.query(`UPDATE rooms SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
+    const replacements = { id: req.params.id, clinicId };
+    const [, meta] = await sequelize.query(`UPDATE rooms SET is_active = false WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Room not found' });
     res.json({ success: true });
   } catch (error) {
@@ -302,6 +324,7 @@ router.get('/beds', authorize('inpatient.facility.read'), async (req, res) => {
     if (roomId) { sql += ' AND b.room_id = :roomId'; replacements.roomId = roomId; }
     if (wardId) { sql += ' AND b.ward_id = :wardId'; replacements.wardId = wardId; }
     if (status) { sql += ' AND b.status = :status'; replacements.status = status; }
+    sql += branchScope(req, replacements, 'b');
     sql += ' ORDER BY w.name, r.room_number, b.bed_number';
     const [rows] = await sequelize.query(sql, { replacements });
     res.json(rows);
@@ -318,11 +341,12 @@ router.post('/beds', authorize('inpatient.facility.write'), async (req, res) => 
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const id = uuidv4();
     const bedStatus = status || 'available';
+    const branchId = getCreateBranchId(req);
     await sequelize.query(
-      `INSERT INTO beds (id, room_id, ward_id, clinic_id, bed_number, bed_type, status, is_active) VALUES (:id, :roomId, :wardId, :clinicId, :bedNumber, :bedType, :status, TRUE)`,
-      { replacements: { id, roomId: room_id, wardId: ward_id, clinicId, bedNumber: bed_number, bedType: bed_type || 'standard', status: bedStatus } }
+      `INSERT INTO beds (id, room_id, ward_id, clinic_id, bed_number, bed_type, status, is_active, branch_id) VALUES (:id, :roomId, :wardId, :clinicId, :bedNumber, :bedType, :status, TRUE, :branchId)`,
+      { replacements: { id, roomId: room_id, wardId: ward_id, clinicId, bedNumber: bed_number, bedType: bed_type || 'standard', status: bedStatus, branchId } }
     );
-    res.status(201).json({ id, room_id, ward_id, bed_number, bed_type, status: bedStatus });
+    res.status(201).json({ id, room_id, ward_id, bed_number, bed_type, status: bedStatus, branch_id: branchId });
   } catch (error) {
     console.error('Error creating bed:', error);
     if (isUniqueViolation(error)) {
@@ -343,7 +367,7 @@ router.put('/beds/:id', authorize('inpatient.facility.write'), async (req, res) 
     if (bed_number) { fields.push('bed_number = :bedNumber'); replacements.bedNumber = bed_number; }
     if (bed_type) { fields.push('bed_type = :bedType'); replacements.bedType = bed_type; }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
-    const [, meta] = await sequelize.query(`UPDATE beds SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
+    const [, meta] = await sequelize.query(`UPDATE beds SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Bed not found' });
     res.json({ success: true });
   } catch (error) {
@@ -363,7 +387,8 @@ router.delete('/beds/:id', authorize('inpatient.facility.write'), async (req, re
     if (active[0]?.cnt > 0) {
       return res.status(400).json({ error: 'Cannot delete bed with active admission' });
     }
-    const [, meta] = await sequelize.query(`UPDATE beds SET is_active = false WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
+    const replacements = { id: req.params.id, clinicId };
+    const [, meta] = await sequelize.query(`UPDATE beds SET is_active = false WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Bed not found' });
     res.json({ success: true });
   } catch (error) {
@@ -458,6 +483,7 @@ router.get('/admissions', authorize('inpatient.admissions.write'), async (req, r
       sql += ` AND ((COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')) LIKE :search OR p.patient_id LIKE :search OR lp.participant_number LIKE :search OR w.name LIKE :search)`;
       replacements.search = `%${search}%`;
     }
+    sql += branchScope(req, replacements, 'a');
     sql += ' ORDER BY a.admission_date DESC';
     const [rows] = await sequelize.query(sql, { replacements });
     res.json(rows);
@@ -471,6 +497,7 @@ router.get('/admissions', authorize('inpatient.admissions.write'), async (req, r
 router.get('/admissions/:id', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
     const [rows] = await sequelize.query(
       `SELECT a.*,
         (COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')) as patient_name,
@@ -490,8 +517,8 @@ router.get('/admissions/:id', authorize('inpatient.admissions.write'), async (re
         LEFT JOIN users u ON u.id = a.admitted_by_user_id
         LEFT JOIN users d ON d.id = a.attending_doctor_id
         LEFT JOIN employees c ON c.id = a.consultant_id
-        WHERE a.id = :id AND a.clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+        WHERE a.id = :id AND a.clinic_id = :clinicId${branchScope(req, replacements, 'a')}`,
+      { replacements }
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Admission not found' });
 
@@ -554,10 +581,15 @@ router.post('/admissions', authorize('inpatient.admissions.write'), async (req, 
     // credit them as the attending doctor instead of the chosen consultant.
     const doctorId = consultant_id ? null : (attending_doctor_id || userId);
 
+    // branch_id is stamped from the acting user's own branch (getCreateBranchId), not
+    // derived from the ward/bed — the ward and bed pickers now only ever offer the
+    // user's own branch (GET /wards, GET /rooms, GET /beds are branch-filtered above),
+    // so in normal use they always agree anyway.
+    const branchId = getCreateBranchId(req);
     await sequelize.query(
-      `INSERT INTO inpatient_admissions (id, clinic_id, patient_id, admission_date, bed_id, room_id, ward_id, admission_reason, diagnosis, diagnosis_code, admission_type, admitted_by_user_id, attending_doctor_id, consultant_id)
-       VALUES (:id, :clinicId, :patientId, NOW(), :bedId, :roomId, :wardId, :reason, :diagnosis, :diagnosisCode, :type, :userId, :doctorId, :consultantId)`,
-      { replacements: { id, clinicId, patientId: patient_id, bedId: bed_id, roomId: room_id, wardId: ward_id, reason: admission_reason, diagnosis: diagnosis || null, diagnosisCode: diagnosis_code || null, type: admission_type || 'planned', userId, doctorId, consultantId: consultant_id || null }, transaction: t }
+      `INSERT INTO inpatient_admissions (id, clinic_id, patient_id, admission_date, bed_id, room_id, ward_id, admission_reason, diagnosis, diagnosis_code, admission_type, admitted_by_user_id, attending_doctor_id, consultant_id, branch_id)
+       VALUES (:id, :clinicId, :patientId, NOW(), :bedId, :roomId, :wardId, :reason, :diagnosis, :diagnosisCode, :type, :userId, :doctorId, :consultantId, :branchId)`,
+      { replacements: { id, clinicId, patientId: patient_id, bedId: bed_id, roomId: room_id, wardId: ward_id, reason: admission_reason, diagnosis: diagnosis || null, diagnosisCode: diagnosis_code || null, type: admission_type || 'planned', userId, doctorId, consultantId: consultant_id || null, branchId }, transaction: t }
     );
 
     // If this admission fulfills a pending request, close it out
@@ -569,7 +601,7 @@ router.post('/admissions', authorize('inpatient.admissions.write'), async (req, 
     }
 
     await t.commit();
-    await chargeBedAdmission(id, getCreateBranchId(req));
+    await chargeBedAdmission(id, branchId);
 
     try {
       const rr = require('./reports');
@@ -865,9 +897,10 @@ router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'),
     }
 
     // Get admission to find bed
+    const dischargeReplacements = { id: req.params.id, clinicId };
     const [admission] = await sequelize.query(
-      `SELECT bed_id FROM inpatient_admissions WHERE id = :id AND status = 'active' AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId }, transaction: t }
+      `SELECT bed_id FROM inpatient_admissions WHERE id = :id AND status = 'active' AND clinic_id = :clinicId${branchScope(req, dischargeReplacements)}`,
+      { replacements: dischargeReplacements, transaction: t }
     );
     if (admission.length === 0) { await t.rollback(); return res.status(404).json({ error: 'Active admission not found' }); }
 
@@ -957,14 +990,15 @@ router.get('/prescriptions', authorize('inpatient.medications.manage'), async (r
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { admissionId, clinicId };
     const [rows] = await sequelize.query(
       `SELECT ip.*, u.display_name as doctor_name,
         CASE WHEN pl.status IN ('dispensed', 'partial') THEN true ELSE false END AS is_dispensed
        FROM inpatient_prescriptions ip
        LEFT JOIN users u ON ip.doctor_id = u.id
        LEFT JOIN prescription_lines pl ON pl.id = ip.pharmacy_line_id
-       WHERE ip.admission_id = :admissionId AND ip.clinic_id = :clinicId ORDER BY ip.prescription_date DESC`,
-      { replacements: { admissionId, clinicId } }
+       WHERE ip.admission_id = :admissionId AND ip.clinic_id = :clinicId${branchScope(req, replacements, 'ip')} ORDER BY ip.prescription_date DESC`,
+      { replacements }
     );
     res.json(rows);
   } catch (error) {
@@ -986,17 +1020,16 @@ router.post('/prescriptions', authorize('inpatient.clinical.write'), async (req,
     // at, so the name is carried as text. Same rule as the outpatient flow.
     const isExternal = !!is_external || (!drug_id && !!external_drug_name);
     const medName = isExternal ? (external_drug_name || medication_name) : medication_name;
+    const branchId = getCreateBranchId(req);
 
     await sequelize.query(
-      `INSERT INTO inpatient_prescriptions (id, clinic_id, admission_id, patient_id, doctor_id, drug_id, medication_name, prescription_date, dosage, frequency, duration, route, instructions, quantity, start_date, end_date, duration_days, dose_amount, is_external, external_drug_name)
-       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, :drugId, :medName, NOW(), :dosage, :frequency, :duration, :route, :instructions, :qty, :startDate, :endDate, :durDays, :doseAmt, :ext, :extName)`,
+      `INSERT INTO inpatient_prescriptions (id, clinic_id, admission_id, patient_id, doctor_id, drug_id, medication_name, prescription_date, dosage, frequency, duration, route, instructions, quantity, start_date, end_date, duration_days, dose_amount, is_external, external_drug_name, branch_id)
+       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, :drugId, :medName, NOW(), :dosage, :frequency, :duration, :route, :instructions, :qty, :startDate, :endDate, :durDays, :doseAmt, :ext, :extName, :branchId)`,
       { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, drugId: isExternal ? null : (drug_id || null), medName, dosage, frequency, duration: duration || null, route: route || 'oral', instructions: instructions || null, qty: parseInt(quantity) || 0, startDate: start_date || null, endDate: end_date || null,
         durDays: duration_days != null && duration_days !== '' ? parseInt(duration_days, 10) : null,
         doseAmt: dose_amount != null && dose_amount !== '' ? Number(dose_amount) : null,
-        ext: isExternal, extName: isExternal ? medName : null } }
+        ext: isExternal, extName: isExternal ? medName : null, branchId } }
     );
-
-    const branchId = getCreateBranchId(req);
     // An external medicine is bought outside, so it is neither billed here nor
     // sent to this pharmacy to dispense — doing either would charge or task the
     // hospital for something it is not supplying.
@@ -1031,7 +1064,8 @@ router.put('/prescriptions/:id', authorize('inpatient.medications.manage'), asyn
   try {
     const { status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [, meta] = await sequelize.query(`UPDATE inpatient_prescriptions SET status = :status WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, status, clinicId } });
+    const replacements = { id: req.params.id, status, clinicId };
+    const [, meta] = await sequelize.query(`UPDATE inpatient_prescriptions SET status = :status WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Prescription not found' });
     res.json({ success: true });
   } catch (error) {
@@ -1129,13 +1163,14 @@ router.get('/lab-requests', authorize('inpatient.ancillary.write'), async (req, 
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { admissionId, clinicId };
     const [rows] = await sequelize.query(
       `SELECT lr.*, u.display_name as doctor_name, u2.display_name as completed_by_name
        FROM inpatient_lab_requests lr
        LEFT JOIN users u ON lr.doctor_id = u.id
        LEFT JOIN users u2 ON lr.completed_by = u2.id
-       WHERE lr.admission_id = :admissionId AND lr.clinic_id = :clinicId ORDER BY lr.request_date DESC`,
-      { replacements: { admissionId, clinicId } }
+       WHERE lr.admission_id = :admissionId AND lr.clinic_id = :clinicId${branchScope(req, replacements, 'lr')} ORDER BY lr.request_date DESC`,
+      { replacements }
     );
     res.json(rows);
   } catch (error) {
@@ -1151,15 +1186,16 @@ router.post('/lab-requests', authorize('inpatient.ancillary.write'), async (req,
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const doctorId = req.user?.id;
     const id = uuidv4();
+    const branchId = getCreateBranchId(req);
     await sequelize.query(
-      `INSERT INTO inpatient_lab_requests (id, clinic_id, admission_id, patient_id, doctor_id, request_date, test_type, test_code, urgent, clinical_indication, sample_type)
-       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, NOW(), :testType, :testCode, :urgent, :indication, :sampleType)`,
-      { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, testType: test_type, testCode: test_code || null, urgent: urgent || false, indication: clinical_indication || null, sampleType: sample_type || null } }
+      `INSERT INTO inpatient_lab_requests (id, clinic_id, admission_id, patient_id, doctor_id, request_date, test_type, test_code, urgent, clinical_indication, sample_type, branch_id)
+       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, NOW(), :testType, :testCode, :urgent, :indication, :sampleType, :branchId)`,
+      { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, testType: test_type, testCode: test_code || null, urgent: urgent || false, indication: clinical_indication || null, sampleType: sample_type || null, branchId } }
     );
 
     const price = parseFloat(unit_price);
     if (price > 0) {
-      await billInpatientRequest(admission_id, getCreateBranchId(req), {
+      await billInpatientRequest(admission_id, branchId, {
         serviceName: `Lab Test — ${test_type}`, quantity: 1, unitPrice: price, totalPrice: price, revenueCategory: 'laboratory',
       }, 'Auto-billed inpatient lab request');
     }
@@ -1184,7 +1220,7 @@ router.put('/lab-requests/:id', authorize('inpatient.ancillary.write'), async (r
     if (results) { fields.push('results = :results'); replacements.results = JSON.stringify(results); }
     if (result_notes) { fields.push('result_notes = :resultNotes'); replacements.resultNotes = result_notes; }
     if (status === 'completed') { fields.push('completed_date = NOW()'); fields.push('completed_by = :completedBy'); replacements.completedBy = completedBy; }
-    const [, meta] = await sequelize.query(`UPDATE inpatient_lab_requests SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
+    const [, meta] = await sequelize.query(`UPDATE inpatient_lab_requests SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Lab request not found' });
     res.json({ success: true });
   } catch (error) {
@@ -1201,13 +1237,14 @@ router.get('/radiology-requests', authorize('inpatient.ancillary.write'), async 
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { admissionId, clinicId };
     const [rows] = await sequelize.query(
       `SELECT rr.*, u.display_name as doctor_name, u2.display_name as completed_by_name
        FROM inpatient_radiology_requests rr
        LEFT JOIN users u ON rr.doctor_id = u.id
        LEFT JOIN users u2 ON rr.completed_by = u2.id
-       WHERE rr.admission_id = :admissionId AND rr.clinic_id = :clinicId ORDER BY rr.request_date DESC`,
-      { replacements: { admissionId, clinicId } }
+       WHERE rr.admission_id = :admissionId AND rr.clinic_id = :clinicId${branchScope(req, replacements, 'rr')} ORDER BY rr.request_date DESC`,
+      { replacements }
     );
     res.json(rows);
   } catch (error) {
@@ -1223,15 +1260,16 @@ router.post('/radiology-requests', authorize('inpatient.ancillary.write'), async
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const doctorId = req.user?.id;
     const id = uuidv4();
+    const branchId = getCreateBranchId(req);
     await sequelize.query(
-      `INSERT INTO inpatient_radiology_requests (id, clinic_id, admission_id, patient_id, doctor_id, request_date, imaging_type, body_part, urgent, clinical_indication)
-       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, NOW(), :imagingType, :bodyPart, :urgent, :indication)`,
-      { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, imagingType: imaging_type, bodyPart: body_part || null, urgent: urgent || false, indication: clinical_indication || null } }
+      `INSERT INTO inpatient_radiology_requests (id, clinic_id, admission_id, patient_id, doctor_id, request_date, imaging_type, body_part, urgent, clinical_indication, branch_id)
+       VALUES (:id, :clinicId, :admissionId, :patientId, :doctorId, NOW(), :imagingType, :bodyPart, :urgent, :indication, :branchId)`,
+      { replacements: { id, clinicId, admissionId: admission_id, patientId: patient_id, doctorId, imagingType: imaging_type, bodyPart: body_part || null, urgent: urgent || false, indication: clinical_indication || null, branchId } }
     );
 
     const price = parseFloat(unit_price);
     if (price > 0) {
-      await billInpatientRequest(admission_id, getCreateBranchId(req), {
+      await billInpatientRequest(admission_id, branchId, {
         serviceName: `Imaging — ${imaging_type}${body_part ? ` (${body_part})` : ''}`, quantity: 1, unitPrice: price, totalPrice: price, revenueCategory: 'radiology',
       }, 'Auto-billed inpatient radiology request');
     }
@@ -1254,7 +1292,7 @@ router.put('/radiology-requests/:id', authorize('inpatient.ancillary.write'), as
     if (findings) { fields.push('findings = :findings'); replacements.findings = findings; }
     if (impression) { fields.push('impression = :impression'); replacements.impression = impression; }
     if (status === 'completed') { fields.push('completed_date = NOW()'); fields.push('completed_by = :completedBy'); replacements.completedBy = completedBy; }
-    const [, meta] = await sequelize.query(`UPDATE inpatient_radiology_requests SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
+    const [, meta] = await sequelize.query(`UPDATE inpatient_radiology_requests SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`, { replacements });
     if (meta.rowCount === 0) return res.status(404).json({ error: 'Radiology request not found' });
     res.json({ success: true });
   } catch (error) {
@@ -1268,12 +1306,18 @@ router.put('/radiology-requests/:id', authorize('inpatient.ancillary.write'), as
 router.get('/stats', authorize('inpatient.admissions.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const [[admissions]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'active'`, { replacements: { clinicId } });
-    const [[totalBeds]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM beds WHERE clinic_id = :clinicId AND is_active = true`, { replacements: { clinicId } });
-    const [[availableBeds]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM beds WHERE clinic_id = :clinicId AND is_active = true AND status = 'available'`, { replacements: { clinicId } });
-    const [[totalWards]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM wards WHERE clinic_id = :clinicId AND is_active = true`, { replacements: { clinicId } });
-    const [[dischargedToday]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'discharged' AND DATE(discharge_date) = CURRENT_DATE`, { replacements: { clinicId } });
-    const [[admittedToday]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND DATE(admission_date) = CURRENT_DATE`, { replacements: { clinicId } });
+    const r1 = { clinicId };
+    const [[admissions]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'active'${branchScope(req, r1)}`, { replacements: r1 });
+    const r2 = { clinicId };
+    const [[totalBeds]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM beds WHERE clinic_id = :clinicId AND is_active = true${branchScope(req, r2)}`, { replacements: r2 });
+    const r3 = { clinicId };
+    const [[availableBeds]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM beds WHERE clinic_id = :clinicId AND is_active = true AND status = 'available'${branchScope(req, r3)}`, { replacements: r3 });
+    const r4 = { clinicId };
+    const [[totalWards]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM wards WHERE clinic_id = :clinicId AND is_active = true${branchScope(req, r4)}`, { replacements: r4 });
+    const r5 = { clinicId };
+    const [[dischargedToday]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'discharged' AND DATE(discharge_date) = CURRENT_DATE${branchScope(req, r5)}`, { replacements: r5 });
+    const r6 = { clinicId };
+    const [[admittedToday]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND DATE(admission_date) = CURRENT_DATE${branchScope(req, r6)}`, { replacements: r6 });
 
     res.json({
       active_admissions: admissions.cnt,

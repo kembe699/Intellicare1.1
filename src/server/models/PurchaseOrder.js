@@ -67,6 +67,13 @@ module.exports = (sequelize) => {
     authorized_signed_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    // Guaranteed by the branch-isolation migration (ensureBranchIsolationColumns.js).
+    // Declared here so create() actually writes it — Sequelize silently drops any
+    // key passed to create() that isn't a declared model attribute.
+    branch_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
     }
   }, {
     tableName: 'purchase_orders',
