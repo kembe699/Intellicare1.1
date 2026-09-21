@@ -491,7 +491,14 @@ export default function PhysicalCounts() {
 
       {/* Add Count Line Modal */}
       {showAddLine && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        // z-50, not z-[60]: the Item combobox inside this modal opens a Radix
+        // Popover portalled to a z-50 layer (see components/ui/popover.tsx) — at
+        // z-[60] this modal painted above that portal, so the dropdown list was
+        // rendered but invisible/unclickable behind the modal's own fields. Every
+        // other modal+Combobox pairing in this file (Count Detail, Create
+        // Adjustment) is already z-50, which is what lets the popover's later
+        // DOM position win the tie and render on top, as intended.
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Count Item</h3>

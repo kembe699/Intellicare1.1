@@ -1438,7 +1438,7 @@ router.post('/physical-counts/:id/add-line', authorize('inventory.write'), async
     const lineId = uuidv4();
     await sequelize.query(`
       INSERT INTO physical_count_lines (id, count_id, item_id, location_id, system_quantity, counted_quantity, variance, counted_by, count_time, notes)
-      VALUES (:id, :count_id, :item_id, :location_id, :system_quantity, :counted_quantity, :variance, :counted_by, CURTIME(), :notes)
+      VALUES (:id, :count_id, :item_id, :location_id, :system_quantity, :counted_quantity, :variance, :counted_by, LOCALTIME, :notes)
     `, {
       replacements: {
         id: lineId, count_id: req.params.id, item_id,
