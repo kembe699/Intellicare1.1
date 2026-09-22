@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Combobox } from '@/components/ui/combobox';
+import { Combobox, MultiSelectCombobox } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -39,6 +39,9 @@ interface UserData {
   clinic_id?: number;
   branch_id?: number | null;
   branchName?: string;
+  // Full multi-branch assignment — branch_id/branchName above stay as just the
+  // primary (branchIds[0]) for anywhere that only ever needs one.
+  branchIds?: number[];
   isActive: boolean;
   createdAt?: string;
   lastLogin?: string;
@@ -140,7 +143,9 @@ const Security: React.FC = () => {
     role: '' as string,
     additionalRoles: [] as string[],
     clinic: user?.clinic || 'IntelliCare',
-    branch_id: '' as string,
+    // First selected = primary branch, same convention the backend uses when
+    // syncing user_branches (see resolveBranchIdsForNewUser in users.js).
+    branch_ids: [] as string[],
   });
 
   // Edit form
@@ -149,7 +154,7 @@ const Security: React.FC = () => {
     role: '' as string,
     additionalRoles: [] as string[],
     clinic: '',
-    branch_id: '' as string,
+    branch_ids: [] as string[],
   });
 
   // ─── Roles & Privileges tab state ──────────────────────────
@@ -193,6 +198,7 @@ const Security: React.FC = () => {
         clinic_id: u.clinic_id,
         branch_id: u.branch_id || null,
         branchName: u.branch_name || null,
+        branchIds: Array.isArray(u.branch_ids) ? u.branch_ids : (u.branch_id ? [u.branch_id] : []),
         isActive: u.is_active !== undefined ? !!u.is_active : true,
         createdAt: u.created_at || u.createdAt,
         lastLogin: u.last_login || u.lastLogin,
@@ -399,7 +405,7 @@ const Security: React.FC = () => {
           // single-tenant deployment, where the default 'IntelliCare' resolved
           // to 1 on every tenant — stranding new users on a clinic holding none
           // of that tenant's data. The server now resolves it from the tenant.
-          branch_id: createFormData.branch_id ? parseInt(createFormData.branch_id) : null,
+          branch_ids: createFormData.branch_ids.map((id) => parseInt(id, 10)),
           isActive: true,
           status: 'pending',
           createdBy: user.displayName,
@@ -421,7 +427,7 @@ const Security: React.FC = () => {
         email: createFormData.email.toLowerCase().trim(),
         password: created?.tempPassword || '',
       });
-      setCreateFormData({ displayName: '', email: '', role: '', additionalRoles: [], clinic: user?.clinic || 'IntelliCare', branch_id: '' });
+      setCreateFormData({ displayName: '', email: '', role: '', additionalRoles: [], clinic: user?.clinic || 'IntelliCare', branch_ids: [] });
       fetchUsers();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create user');
@@ -444,7 +450,7 @@ const Security: React.FC = () => {
           role: editFormData.role,
           additionalRoles: editFormData.additionalRoles.filter((r) => r !== editFormData.role),
           clinic: editFormData.clinic,
-          branch_id: editFormData.branch_id ? parseInt(editFormData.branch_id) : null,
+          branch_ids: editFormData.branch_ids.map((id) => parseInt(id, 10)),
           updatedBy: user?.displayName,
         }),
       });
@@ -508,7 +514,7 @@ const Security: React.FC = () => {
       role: u.role || '',
       additionalRoles: u.additionalRoles || [],
       clinic: u.clinic || 'IntelliCare',
-      branch_id: u.branch_id ? String(u.branch_id) : '',
+      branch_ids: (u.branchIds && u.branchIds.length ? u.branchIds : (u.branch_id ? [u.branch_id] : [])).map(String),
     });
     setShowEditForm(true);
   };
@@ -526,7 +532,9 @@ const Security: React.FC = () => {
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     const matchesBranch =
       branchFilter === 'all' ||
-      (branchFilter === 'unassigned' ? !u.branch_id : String(u.branch_id) === branchFilter);
+      (branchFilter === 'unassigned'
+        ? !(u.branchIds && u.branchIds.length)
+        : (u.branchIds || []).map(String).includes(branchFilter));
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'active' ? u.isActive : !u.isActive);
@@ -651,20 +659,19 @@ const Security: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Assign to Branch</Label>
-                  <Combobox
-                    options={[
-                      { value: 'none', label: 'No Branch' },
-                      ...branches.filter(b => b.is_active).map((b) => ({ value: String(b.id), label: b.name })),
-                    ]}
-                    value={createFormData.branch_id}
-                    onChange={(value) => setCreateFormData({ ...createFormData, branch_id: value })}
-                    placeholder="Select branch (optional)"
+                  <Label className="text-xs font-medium text-muted-foreground">Assign to Branch(es)</Label>
+                  <MultiSelectCombobox
+                    options={branches.filter(b => b.is_active).map((b) => ({ value: String(b.id), label: b.name }))}
+                    values={createFormData.branch_ids}
+                    onChange={(values) => setCreateFormData({ ...createFormData, branch_ids: values })}
+                    placeholder="Select branch(es) (optional)"
                     searchPlaceholder="Search branches..."
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Assign user to a specific branch location
+                    {createFormData.branch_ids.length > 1
+                      ? `Access to ${createFormData.branch_ids.length} branches — the first one picked is their primary/default branch.`
+                      : 'Assign the user to one or more branch locations'}
                   </p>
                 </div>
 
@@ -749,7 +756,19 @@ const Security: React.FC = () => {
                     </div>
                   ),
                 },
-                { key: 'branchName', header: 'Branch', sortable: true, render: (_v, u) => <span className="text-muted-foreground">{u.branchName || getBranchName(u.branch_id)}</span> },
+                {
+                  key: 'branchName', header: 'Branch', sortable: true,
+                  render: (_v, u) => {
+                    const primary = u.branchName || getBranchName(u.branch_id);
+                    const extra = (u.branchIds?.length || 0) - 1;
+                    return (
+                      <span className="text-muted-foreground">
+                        {primary}
+                        {extra > 0 && <span className="text-xs ml-1" title={`Also assigned to ${extra} more branch${extra === 1 ? '' : 'es'}`}>+{extra} more</span>}
+                      </span>
+                    );
+                  },
+                },
                 {
                   key: 'isActive', header: 'Status', sortable: true,
                   render: (v) => <StatusBadge status={v ? 'active' : 'inactive'} map={{ active: 'success', inactive: 'danger' }} label={v ? 'Active' : 'Disabled'} />,
@@ -1085,18 +1104,20 @@ const Security: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium">Assign to Branch</Label>
-                  <Combobox
-                    options={[
-                      { value: 'none', label: 'No Branch' },
-                      ...branches.filter(b => b.is_active).map((b) => ({ value: String(b.id), label: b.name })),
-                    ]}
-                    value={editFormData.branch_id}
-                    onChange={(value) => setEditFormData({ ...editFormData, branch_id: value })}
-                    placeholder="Select branch (optional)"
+                  <Label className="text-sm font-medium">Assign to Branch(es)</Label>
+                  <MultiSelectCombobox
+                    options={branches.filter(b => b.is_active).map((b) => ({ value: String(b.id), label: b.name }))}
+                    values={editFormData.branch_ids}
+                    onChange={(values) => setEditFormData({ ...editFormData, branch_ids: values })}
+                    placeholder="Select branch(es) (optional)"
                     searchPlaceholder="Search branches..."
                     className="mt-1"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {editFormData.branch_ids.length > 1
+                      ? `Access to ${editFormData.branch_ids.length} branches — the first one picked is their primary/default branch.`
+                      : 'Assign the user to one or more branch locations'}
+                  </p>
                 </div>
 
                 <div className="flex gap-3 pt-4">

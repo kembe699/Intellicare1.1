@@ -1062,9 +1062,37 @@ const NetworkStatus: React.FC = () => {
 export const TopBar: React.FC = () => {
   const { user, currentBranchId, switchBranch } = useAuth();
 
+  // An admin's own accessibleBranches is built from their personal user_branches
+  // assignment, same as any other user — an admin assigned to only one branch would
+  // otherwise see no switcher at all, even though the backend already lets an admin
+  // read/write any branch regardless of assignment (branchAccessControl.js bypasses
+  // the accessibleBranches check entirely for role==='admin'). So for admins, the
+  // switcher's option list comes from every branch the facility has, not just theirs.
+  const [allBranches, setAllBranches] = useState<{ id: number; name: string }[] | null>(null);
+  useEffect(() => {
+    if (!user?.isAdmin) { setAllBranches(null); return; }
+    let cancelled = false;
+    authFetch('/api/facilities/branches/all', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (cancelled || !data) return;
+        const rows = Array.isArray(data) ? data : (data.data || []);
+        // branches.id is a Postgres bigint, which the driver returns as a string —
+        // Number() it here so it strictly-equals the numeric currentBranchId used
+        // throughout this component and AuthContext, instead of silently never
+        // matching (e.g. "4" !== 4).
+        setAllBranches(rows.filter((b: any) => b.is_active !== false).map((b: any) => ({ id: Number(b.id), name: b.name })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.isAdmin]);
+
   if (!user) return null;
 
+  const switcherBranches = user.isAdmin && allBranches ? allBranches : user.accessibleBranches;
+
   const currentBranch = user.accessibleBranches?.find(branch => branch.id === currentBranchId)
+    || switcherBranches?.find((branch: any) => branch.id === currentBranchId)
     || user.accessibleBranches?.find(branch => branch.isPrimary)
     || user.accessibleBranches?.[0]
     || null;
@@ -1086,9 +1114,9 @@ export const TopBar: React.FC = () => {
         </Link>
         <NotificationBell />
         <NetworkStatus />
-        {user.accessibleBranches && user.accessibleBranches.length > 1 && (
+        {switcherBranches && switcherBranches.length > 1 && (
           <Combobox
-            options={user.accessibleBranches.map((branch) => ({ value: String(branch.id), label: `${branch.name}${branch.isPrimary ? ' (Primary)' : ''}` }))}
+            options={switcherBranches.map((branch: any) => ({ value: String(branch.id), label: `${branch.name}${branch.isPrimary ? ' (Primary)' : ''}` }))}
             value={String(currentBranchId || '')}
             onChange={(v) => switchBranch(parseInt(v, 10))}
             searchPlaceholder="Search branches..."

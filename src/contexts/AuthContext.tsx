@@ -116,10 +116,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     displayName: userData.displayName,
     role: userData.role,
     clinic: userData.clinic?.toString() || userData.clinicId?.toString() || '1',
-    branchId: userData.branchId || null,
-    primaryBranchId: userData.primaryBranchId || userData.branchId || null,
+    // branches.id is a Postgres bigint — the driver returns it as a string, so
+    // auth.js's accessibleBranches/branchId/primaryBranchId all arrive here as
+    // strings. Every consumer (TopBar, switchBranch, currentBranchId) compares
+    // these with strict === against a genuine number, so coercing here, once,
+    // at the boundary where backend data enters the app, is what makes those
+    // comparisons ever actually match instead of silently always failing.
+    branchId: userData.branchId != null ? Number(userData.branchId) : null,
+    primaryBranchId: userData.primaryBranchId != null ? Number(userData.primaryBranchId) : (userData.branchId != null ? Number(userData.branchId) : null),
     primaryBranchName: userData.primaryBranchName || null,
-    accessibleBranches: userData.accessibleBranches || [],
+    accessibleBranches: Array.isArray(userData.accessibleBranches)
+      ? userData.accessibleBranches.map((b: any) => ({ ...b, id: Number(b.id) }))
+      : [],
     isAdmin: !!userData.isAdmin,
     id: userData.id,
     currentRoomId: userData.currentRoomId || null,

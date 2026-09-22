@@ -42,32 +42,51 @@ const router = express.Router();
  * The map is gone; only a numeric id the tenant has actually configured is
  * honoured, and anything else is resolved from the tenant's own data.
  */
-/**
- * The branch a new user belongs to, checked against the branches that exist.
- *
- * A branch id was taken from the request and stored without looking at it, so an
- * account could be created on a branch this tenant does not have. Branch is an
- * access boundary: every list is filtered by it, so that user signs in
- * successfully and then sees nothing at all, with no error to explain why —
- * the same shape of fault as a user pinned to a clinic holding no data.
- *
- * An id that does not resolve is dropped rather than honoured; the caller then
- * falls back to the facility's main branch, which is what happens already when
- * no branch is named.
- */
-async function resolveBranchIdForNewUser(req) {
-  const asked = req.body.branch_id ?? req.body.branchId ?? null;
-  if (!asked) return null;
+// The branch(es) a new or edited user belongs to, checked against the branches
+// that actually exist for this tenant. Accepts req.body.branch_ids (an array,
+// from Setup > Security's multi-select) or falls back to a lone branch_id/
+// branchId for any caller that only ever sends one.
+//
+// A branch id was previously taken from the request and stored without
+// looking at it, so an account could be created on a branch this tenant does
+// not have. Branch is an access boundary: every list is filtered by it, so
+// that user signs in successfully and then sees nothing at all, with no
+// error to explain why — the same shape of fault as a user pinned to a
+// clinic holding no data. Every id here is checked against this tenant's own
+// branches table, and an id that doesn't resolve is dropped rather than
+// honoured; the caller then falls back to the facility's main branch, same
+// as when no branch is named at all. The first *valid* id in the list
+// becomes primary (order is whatever the multi-select's selection order
+// was), matching the UI's own "first selected = primary" convention.
+async function resolveBranchIdsForNewUser(req) {
+  const raw = Array.isArray(req.body.branch_ids) ? req.body.branch_ids
+    : (req.body.branch_id ?? req.body.branchId) != null ? [req.body.branch_id ?? req.body.branchId]
+    : [];
+  const asked = [...new Set(raw.map((v) => parseInt(v, 10)).filter((v) => Number.isInteger(v)))];
+  if (!asked.length) return [];
   try {
-    const [[row]] = await sequelize.query(
-      'SELECT id FROM branches WHERE id = :id LIMIT 1',
-      { replacements: { id: asked } });
-    if (row) return row.id;
-    console.warn(`New user: branch ${asked} does not exist in this tenant — falling back to the main branch.`);
+    const [rows] = await sequelize.query(
+      // Sequelize expands an array-valued named replacement into a comma list
+      // of literals (its convention for IN (:ids)), not a single Postgres
+      // array — `= ANY(:ids)` bound that way produced literal invalid SQL
+      // `ANY(4, 5)`, a silent syntax error this function's own try/catch
+      // swallowed into "no valid branches", which was the real reason a
+      // multi-branch pick always fell back to the tenant's main branch.
+      'SELECT id FROM branches WHERE id IN (:ids)',
+      { replacements: { ids: asked } });
+    // branches.id is a Postgres bigint — pg returns it as a string, so without
+    // Number() here `valid` was a Set of strings compared against `asked`'s
+    // numbers via Set.has()'s strict equality, which never matched anything —
+    // every requested branch silently came back "invalid" and got dropped.
+    const valid = new Set(rows.map((r) => Number(r.id)));
+    const resolved = asked.filter((id) => valid.has(id));
+    const dropped = asked.filter((id) => !valid.has(id));
+    if (dropped.length) console.warn(`New user: branch(es) ${dropped.join(', ')} do not exist in this tenant — dropped.`);
+    return resolved;
   } catch (e) {
-    console.error('Could not verify the requested branch:', e.message);
+    console.error('Could not verify the requested branches:', e.message);
+    return [];
   }
-  return null;
 }
 
 async function resolveClinicIdForNewUser(req) {
@@ -110,7 +129,14 @@ router.get('/', async (req, res) => {
         COALESCE(
           (SELECT array_agg(uar.role_key) FROM user_additional_roles uar WHERE uar.user_id = u.id),
           ARRAY[]::varchar[]
-        ) AS additional_roles
+        ) AS additional_roles,
+        -- Full multi-branch assignment (Setup > Security's multi-select) — branch_id/
+        -- branch_name above stay as the single primary branch for every other screen
+        -- that only ever needs one, this is additionally the complete set.
+        COALESCE(
+          (SELECT array_agg(ub.branch_id ORDER BY ub.is_primary DESC, ub.branch_id) FROM user_branches ub WHERE ub.user_id = u.id),
+          ARRAY[]::int[]
+        ) AS branch_ids
       FROM users u
       LEFT JOIN branches b ON u.branch_id = b.id
     `;
@@ -159,7 +185,11 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     const [additionalRoleRows] = await sequelize.query('SELECT role_key FROM user_additional_roles WHERE user_id = :id', { replacements: { id: req.params.id } });
-    res.json({ ...user.toJSON(), additionalRoles: additionalRoleRows.map(r => r.role_key) });
+    const [branchRows] = await sequelize.query(
+      'SELECT branch_id FROM user_branches WHERE user_id = :id ORDER BY is_primary DESC, branch_id',
+      { replacements: { id: req.params.id } }
+    );
+    res.json({ ...user.toJSON(), additionalRoles: additionalRoleRows.map(r => r.role_key), branch_ids: branchRows.map(r => r.branch_id) });
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -217,6 +247,8 @@ router.post('/', authorize(['admin']), async (req, res) => {
       (b) => ALPHABET[b % ALPHABET.length],
     ).join('');
 
+    const resolvedBranchIds = await resolveBranchIdsForNewUser(req);
+
     const userData = {
       email: req.body.email,
       display_name: req.body.displayName,
@@ -233,7 +265,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
       // clinic) and keeps the original single-tenant deployment's behavior unchanged
       // (its admin's own clinicId is 1 anyway).
       clinic_id: await resolveClinicIdForNewUser(req),
-      branch_id: await resolveBranchIdForNewUser(req),
+      branch_id: resolvedBranchIds[0] ?? null,
       is_active: req.body.isActive !== undefined ? req.body.isActive : true,
       status: req.body.status || 'active',
       created_by: req.body.createdBy || 'system',
@@ -264,8 +296,8 @@ router.post('/', authorize(['admin']), async (req, res) => {
     // assign branches afterwards, so a failure here must not turn a successful
     // creation into a 500.
     try {
-      let branchId = user.branch_id;
-      if (!branchId) {
+      let branchIds = resolvedBranchIds;
+      if (!branchIds.length) {
         // Prefer an active branch, but fall back to any branch at all rather
         // than leaving the account with none: a user with no branch passes
         // login and is then refused by every screen, which is a worse outcome
@@ -274,22 +306,27 @@ router.post('/', authorize(['admin']), async (req, res) => {
           `SELECT id FROM branches
             ORDER BY (is_active IS NOT FALSE) DESC, is_main_branch DESC, id ASC LIMIT 1`
         );
-        branchId = rows[0]?.id || null;
-        if (!branchId) {
+        const fallbackId = rows[0]?.id || null;
+        if (!fallbackId) {
           console.error('New user: this tenant has no branches at all — the account cannot be scoped to anything.');
+        } else {
+          branchIds = [fallbackId];
+          await user.update({ branch_id: fallbackId });
         }
-        if (branchId) await user.update({ branch_id: branchId });
       }
-      if (branchId) {
+      // First id is primary — matches the multi-select's own "first selected =
+      // primary" convention on the frontend, and is what the single-branch case
+      // above already resolved to as branch_id.
+      for (let i = 0; i < branchIds.length; i++) {
         await sequelize.query(
           `INSERT INTO user_branches (user_id, branch_id, is_primary, created_at, updated_at)
-           VALUES (:uid, :bid, TRUE, NOW(), NOW())
+           VALUES (:uid, :bid, :isPrimary, NOW(), NOW())
            ON CONFLICT DO NOTHING`,
-          { replacements: { uid: user.id, bid: branchId } }
+          { replacements: { uid: user.id, bid: branchIds[i], isPrimary: i === 0 } }
         );
       }
     } catch (branchErr) {
-      console.error(`Could not assign a branch to new user ${user.id}:`, branchErr.message);
+      console.error(`Could not assign branches to new user ${user.id}:`, branchErr.message);
     }
 
     // Last line of defence: an account that cannot see any of this tenant's
@@ -342,7 +379,7 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Insufficient permissions', required: ['admin'], current: req.user?.role });
     }
 
-    const sensitiveFieldsRequested = ['role', 'clinic', 'branch_id', 'branchId', 'isActive', 'status', 'additionalRoles']
+    const sensitiveFieldsRequested = ['role', 'clinic', 'branch_id', 'branchId', 'branch_ids', 'isActive', 'status', 'additionalRoles']
       .some(f => req.body[f] !== undefined);
     if (isSelf && req.user?.role !== 'admin' && sensitiveFieldsRequested) {
       return res.status(403).json({ error: 'You can only update your own display name' });
@@ -367,8 +404,14 @@ router.put('/:id', async (req, res) => {
         updateData.clinic_id = resolvedClinicId;
       }
     }
-    if (req.body.branch_id !== undefined || req.body.branchId !== undefined) {
-      updateData.branch_id = req.body.branch_id || req.body.branchId || null;
+    // branch_ids (array, from the Security page's multi-select) takes priority over
+    // a lone branch_id/branchId — resolveBranchIdsForNewUser already covers both
+    // shapes and validates every id against this tenant's own branches table.
+    let resolvedBranchIds = null;
+    const branchFieldsRequested = req.body.branch_ids !== undefined || req.body.branch_id !== undefined || req.body.branchId !== undefined;
+    if (branchFieldsRequested) {
+      resolvedBranchIds = await resolveBranchIdsForNewUser(req);
+      updateData.branch_id = resolvedBranchIds[0] ?? null;
     }
     if (req.body.isActive !== undefined) {
       updateData.is_active = req.body.isActive;
@@ -403,15 +446,18 @@ router.put('/:id', async (req, res) => {
     // in place, so reassigning a user's branch here silently never took effect. Keep
     // both in sync, mirroring the exact insert POST /users already uses. Non-fatal:
     // a failure here must not turn a successful field update into a 500.
-    if (updateData.branch_id !== undefined) {
+    if (resolvedBranchIds !== null) {
       try {
+        // Full replace-the-set sync, not a merge — matches the multi-select's own
+        // "this is the complete list" semantics (same convention as additionalRoles
+        // just below). First id is primary, same rule POST / uses on create.
         await sequelize.query('DELETE FROM user_branches WHERE user_id = :id', { replacements: { id: req.params.id } });
-        if (updateData.branch_id) {
+        for (let i = 0; i < resolvedBranchIds.length; i++) {
           await sequelize.query(
             `INSERT INTO user_branches (user_id, branch_id, is_primary, created_at, updated_at)
-             VALUES (:uid, :bid, TRUE, NOW(), NOW())
+             VALUES (:uid, :bid, :isPrimary, NOW(), NOW())
              ON CONFLICT DO NOTHING`,
-            { replacements: { uid: req.params.id, bid: updateData.branch_id } }
+            { replacements: { uid: req.params.id, bid: resolvedBranchIds[i], isPrimary: i === 0 } }
           );
         }
         // Busts the same cache branchAccessControl.js reads from, keyed exactly the
