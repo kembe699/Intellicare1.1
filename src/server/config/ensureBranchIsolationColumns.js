@@ -69,6 +69,13 @@ const TABLES_NEEDING_BRANCH_ID = [
   'scheme_negotiated_prices', 'scheme_price_rules', 'scheme_product_pricing',
   'scheme_product_pricing_history', 'scheme_service_pricing', 'scheme_service_pricing_history',
   'scheme_tiered_pricing',
+  // Storage locations (e.g. a "Pharmacy" storeroom) are a specific physical place
+  // within one branch, not a facility-wide concept — a Paloch OBC Clinic "Pharmacy"
+  // location is a different room from Adar OBC Clinic's. stock_by_location doesn't
+  // need its own branch_id: every row already ties to one location_id, and that
+  // location is now branch-scoped, so the branch is already fully determined
+  // transitively without duplicating it onto every stock row.
+  'stock_locations',
 ];
 
 async function ensureBranchIsolationColumns(sequelize, label = 'database') {

@@ -724,6 +724,7 @@ router.get('/items-expiry-alert', authorize('inventory.read'), async (req, res) 
 router.get('/locations', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const branchFilter = getBranchConditionSQL(req, 'sl');
     const [locations] = await sequelize.query(`
       SELECT sl.*,
         (SELECT COUNT(DISTINCT sbl.item_id) FROM stock_by_location sbl WHERE sbl.location_id = sl.id AND sbl.quantity_on_hand > 0) AS item_count,
@@ -737,9 +738,9 @@ router.get('/locations', authorize('inventory.read'), async (req, res) => {
            JOIN inventory_items ii ON ii.id = sbl3.item_id
           WHERE sbl3.location_id = sl.id) AS stock_value
       FROM stock_locations sl
-      WHERE sl.clinic_id = :clinic_id
+      WHERE sl.clinic_id = ?${branchFilter.sql}
       ORDER BY sl.location_name ASC
-    `, { replacements: { clinic_id: clinicId } });
+    `, { replacements: [clinicId, ...branchFilter.params] });
     res.json(locations);
   } catch (error) {
     console.error('Error fetching locations:', error);
@@ -755,11 +756,11 @@ router.post('/locations', authorize('inventory.write'), async (req, res) => {
     if (!location_code || !location_name) return res.status(400).json({ error: 'location_code and location_name required' });
 
     await sequelize.query(`
-      INSERT INTO stock_locations (id, clinic_id, location_code, location_name, location_type, address, manager_user_id, capacity_description)
-      VALUES (:id, :clinic_id, :location_code, :location_name, :location_type, :address, :manager_user_id, :capacity_description)
+      INSERT INTO stock_locations (id, clinic_id, branch_id, location_code, location_name, location_type, address, manager_user_id, capacity_description)
+      VALUES (:id, :clinic_id, :branch_id, :location_code, :location_name, :location_type, :address, :manager_user_id, :capacity_description)
     `, {
       replacements: {
-        id, clinic_id, location_code, location_name,
+        id, clinic_id, branch_id: getCreateBranchId(req), location_code, location_name,
         location_type: location_type || 'warehouse', address: address || null,
         manager_user_id: manager_user_id || null, capacity_description: capacity_description || null
       }
@@ -774,6 +775,16 @@ router.post('/locations', authorize('inventory.write'), async (req, res) => {
 router.put('/locations/:id', authorize('inventory.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+
+    const [existingLocations] = await sequelize.query(
+      'SELECT id, branch_id FROM stock_locations WHERE id = :id AND clinic_id = :clinicId',
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (existingLocations.length === 0) return res.status(404).json({ error: 'Location not found' });
+    if (!BranchQueryFilter.canAccessRecord(existingLocations[0], req.branchContext)) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
+
     const fields = [];
     const replacements = { id: req.params.id, clinicId };
     const allowed = ['location_name', 'location_type', 'address', 'manager_user_id', 'is_active', 'capacity_description'];
@@ -798,6 +809,16 @@ router.put('/locations/:id', authorize('inventory.write'), async (req, res) => {
 router.get('/locations/:id/stock', authorize('inventory.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+
+    const [locations] = await sequelize.query(
+      'SELECT id, branch_id FROM stock_locations WHERE id = :id AND clinic_id = :clinicId',
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (locations.length === 0) return res.status(404).json({ error: 'Location not found' });
+    if (!BranchQueryFilter.canAccessRecord(locations[0], req.branchContext)) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
+
     const [stock] = await sequelize.query(`
       SELECT sbl.*, i.item_name, i.item_code, i.item_category, i.unit_of_measure,
         i.current_unit_cost, i.average_unit_cost,

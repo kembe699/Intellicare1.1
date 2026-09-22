@@ -111,6 +111,11 @@ async function buildTenantConnection(schemaName) {
   ensureInventoryItemCodeUniqueness(sequelize, schema).catch(() => {});
   const { ensureDepartmentCodeUniqueness } = require('./config/ensureDepartmentCodeUniqueness');
   ensureDepartmentCodeUniqueness(sequelize, schema).catch(() => {});
+  // Same fix for stock_locations' (clinic_id, location_code) constraint — see
+  // ensureStockLocationUniqueness.js for why a "Pharmacy" storeroom needs its own
+  // per-branch identity, not a single tenant-wide one.
+  const { ensureStockLocationUniqueness } = require('./config/ensureStockLocationUniqueness');
+  ensureStockLocationUniqueness(sequelize, schema).catch(() => {});
 
   return { sequelize, models };
 }
