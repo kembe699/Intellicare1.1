@@ -262,7 +262,7 @@ async function createLisOrderForLabServices(billData, labServices) {
 // audit_logs precedent and routes/schemes.js's own branchScope(). Named-`:param`-style
 // helper, matching this function's own raw SQL convention.
 function schemeBranchScope(req, replacements, alias = '') {
-  if (!req || req.user?.role === 'admin') return '';
+  if (!req || (req.user?.role === 'admin' && !req.branchContext?.adminScoped)) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return '';
   replacements.branchId = branchId;

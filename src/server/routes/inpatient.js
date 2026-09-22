@@ -12,7 +12,7 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // getBranchConditionSQL, which uses positional `?` placeholders that can't mix with
 // the named :params every query in this file uses) — same idea as hr.js's branchScope.
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;
@@ -26,7 +26,7 @@ function branchScope(req, replacements, alias = '') {
 // service is a valid link for any branch) — same reasoning as labTests.js's serviceIsLinkable.
 function serviceBelongsToBranch(service, req) {
   if (!service) return false;
-  if (req.user?.role === 'admin') return true;
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return true;
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return true;
   if (!service.branch_id) return true;

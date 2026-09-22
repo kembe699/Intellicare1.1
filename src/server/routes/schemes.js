@@ -23,7 +23,7 @@ const { getCreateBranchId } = require('../middleware/branchFilter');
 // helper, matching this file's own raw SQL convention (every query here uses named
 // replacements, not branchFilter.js's positional `?` placeholders).
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return '';
   replacements.branchId = branchId;
@@ -269,7 +269,7 @@ router.put('/:id', authorize('schemes.write'), async (req, res) => {
     // NULL-inclusive branch check (see branchScope() above) — a non-admin can edit their
     // own branch's schemes plus any not-yet-backfilled (branch_id NULL) shared scheme, but
     // not another branch's.
-    if (req.user?.role !== 'admin') {
+    if (req.user?.role !== 'admin' || req.branchContext?.adminScoped) {
       const ownBranchId = req.branchContext?.branchId || req.user?.branchId || null;
       if (ownBranchId && existing[0].branch_id && String(existing[0].branch_id) !== String(ownBranchId)) {
         await t.rollback();
@@ -586,7 +586,7 @@ router.post('/:id/service-pricing', authorize('schemes.write'), async (req, res)
     if (service_id) {
       const [[svc]] = await sequelize.query('SELECT branch_id FROM services WHERE id = :sid', { replacements: { sid: service_id }, transaction: t });
       if (!svc) { await t.rollback(); return res.status(400).json({ error: 'Service not found' }); }
-      if (req.user?.role !== 'admin' && branchId && svc.branch_id && String(svc.branch_id) !== String(branchId)) {
+      if ((req.user?.role !== 'admin' || req.branchContext?.adminScoped) && branchId && svc.branch_id && String(svc.branch_id) !== String(branchId)) {
         await t.rollback();
         return res.status(400).json({ error: 'Selected service does not belong to your branch' });
       }
@@ -1022,7 +1022,7 @@ router.post('/:id/tiered-pricing', authorize('schemes.write'), async (req, res) 
       const [[svc]] = await sequelize.query('SELECT branch_id FROM services WHERE id = :sid', { replacements: { sid: service_id } });
       if (!svc) return res.status(400).json({ error: 'Service not found' });
       const ownBranchId = req.branchContext?.branchId || req.user?.branchId || null;
-      if (req.user?.role !== 'admin' && ownBranchId && svc.branch_id && String(svc.branch_id) !== String(ownBranchId)) {
+      if ((req.user?.role !== 'admin' || req.branchContext?.adminScoped) && ownBranchId && svc.branch_id && String(svc.branch_id) !== String(ownBranchId)) {
         return res.status(400).json({ error: 'Selected service does not belong to your branch' });
       }
     }
@@ -1871,7 +1871,7 @@ router.post('/bulk-csv-pricing', authorize('schemes.write'), async (req, res) =>
         if (item_type === 'service') {
           // Cross-branch FK safety check — services is branch-isolated too now.
           const [[svc]] = await sequelize.query('SELECT branch_id FROM services WHERE id = :sid', { replacements: { sid: p.item_id } });
-          if (!svc || (req.user?.role !== 'admin' && branchId && svc.branch_id && String(svc.branch_id) !== String(branchId))) {
+          if (!svc || ((req.user?.role !== 'admin' || req.branchContext?.adminScoped) && branchId && svc.branch_id && String(svc.branch_id) !== String(branchId))) {
             failed++;
             if (errors.length < 5) errors.push(`${p.item_id}: service not found or does not belong to your branch`);
             continue;

@@ -21,7 +21,7 @@ const QRCode = require('qrcode');
 // placeholders that can't mix with the named :params the rest of this file
 // uses in the same query).
 function branchScope(req, replacements) {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;

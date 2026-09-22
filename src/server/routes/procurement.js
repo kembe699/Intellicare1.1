@@ -18,7 +18,7 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 // alongside the existing BranchQueryFilter.resolveClinicId(req) clinic filtering, never
 // replacing it — admins still see every branch within their clinic scope.
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;
@@ -2119,8 +2119,11 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
     const cf = (alias) => `AND ${alias}.clinic_id = ${cid}`;
     const cw = (alias) => `WHERE ${alias}.clinic_id = ${cid}`;
     // Branch scoping alongside the clinic filters above — admins (branchId null) see
-    // every branch within the clinic, same rule as branchScope() elsewhere in this file.
-    const dashboardBranchId = req.user?.role === 'admin' ? null : (req.branchContext?.branchId || req.user?.branchId || null);
+    // every branch within the clinic, same rule as branchScope() elsewhere in this file,
+    // unless they've explicitly picked one via the TopBar switcher (adminScoped).
+    const dashboardBranchId = (req.user?.role === 'admin' && !req.branchContext?.adminScoped)
+      ? null
+      : (req.branchContext?.branchId || req.user?.branchId || null);
     const bf = (alias) => dashboardBranchId ? `AND ${alias}.branch_id = ${parseInt(dashboardBranchId, 10)}` : '';
 
     // Requisition stats — real enum: draft, submitted, approved, rejected, cancelled

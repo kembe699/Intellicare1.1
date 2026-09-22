@@ -45,8 +45,8 @@ router.get('/queue/:clinicId', async (req, res) => {
     const { clinicId } = req.params;
     const { startDate, endDate } = req.query;
     // Build a NULL-inclusive branch filter: show entries belonging to user's branch OR unassigned
-    const isAdmin = req.user?.role === 'admin';
-    const userBranchId = req.user?.branchId || null;
+    const isAdmin = req.user?.role === 'admin' && !req.branchContext?.adminScoped;
+    const userBranchId = req.branchContext?.branchId || req.user?.branchId || null;
     const branchSql = (!isAdmin && userBranchId)
       ? `AND (pq.branch_id = ? OR pq.branch_id IS NULL)`
       : '';
@@ -474,7 +474,7 @@ router.get('/medicines/:clinicId', async (req, res) => {
     const cid = parseInt(clinicId) || 1;
 
     // Build branch filter with named parameters
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = req.user?.role === 'admin' && !req.branchContext?.adminScoped;
     const branchId = req.branchContext?.branchId || req.user?.branchId || null;
 
     let branchSQL = '';
@@ -753,14 +753,14 @@ router.delete('/queue/:queueId', authorize('clinical.queue.write'), async (req, 
 // routes/services.js's branchWhere()/canAccessService(), duplicated here because this
 // file has its own separate (and equally unscoped) services CRUD implementation.
 function servicesBranchWhere(req) {
-  if (req.user?.role === 'admin') return {};
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return {};
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return {};
   return { [Op.or]: [{ branch_id: branchId }, { branch_id: null }] };
 }
 function canAccessServiceRecord(service, req) {
   if (!service) return false;
-  if (req.user?.role === 'admin') return true;
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return true;
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return true;
   if (!service.branch_id) return true;

@@ -1091,18 +1091,31 @@ export const TopBar: React.FC = () => {
 
   const switcherBranches = user.isAdmin && allBranches ? allBranches : user.accessibleBranches;
 
-  const currentBranch = user.accessibleBranches?.find(branch => branch.id === currentBranchId)
-    || switcherBranches?.find((branch: any) => branch.id === currentBranchId)
-    || user.accessibleBranches?.find(branch => branch.isPrimary)
-    || user.accessibleBranches?.[0]
-    || null;
+  // currentBranchId === null is a deliberate state for an admin (see AuthContext's
+  // switchBranch/signIn) meaning "All Branches" — reads go unfiltered. Only fall back to
+  // the primary-branch guess when currentBranchId hasn't resolved at all (undefined) or
+  // for a non-admin, who must always show a real branch.
+  const isAllBranches = user.isAdmin && currentBranchId == null;
+  const currentBranch = isAllBranches
+    ? null
+    : (user.accessibleBranches?.find(branch => branch.id === currentBranchId)
+        || switcherBranches?.find((branch: any) => branch.id === currentBranchId)
+        || user.accessibleBranches?.find(branch => branch.isPrimary)
+        || user.accessibleBranches?.[0]
+        || null);
+
+  const ALL_BRANCHES_VALUE = '__all__';
+  const switcherOptions = [
+    ...(user.isAdmin ? [{ value: ALL_BRANCHES_VALUE, label: 'All Branches' }] : []),
+    ...(switcherBranches || []).map((branch: any) => ({ value: String(branch.id), label: `${branch.name}${branch.isPrimary ? ' (Primary)' : ''}` })),
+  ];
 
   return (
     <header className="hidden lg:flex fixed top-0 left-64 right-0 z-30 h-14 items-center justify-between px-4 bg-background border-b border-border">
       <div className="flex items-center gap-3">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Branch</span>
         <span className="text-sm font-semibold text-foreground">
-          {currentBranch?.name || user.primaryBranchName || 'All Branches'}
+          {isAllBranches ? 'All Branches' : (currentBranch?.name || user.primaryBranchName || 'All Branches')}
         </span>
         <span className="text-xs text-muted-foreground">
           {user.isAdmin ? 'Admin access enabled' : `Role: ${user.role}`}
@@ -1114,11 +1127,11 @@ export const TopBar: React.FC = () => {
         </Link>
         <NotificationBell />
         <NetworkStatus />
-        {switcherBranches && switcherBranches.length > 1 && (
+        {switcherOptions.length > 1 && (
           <Combobox
-            options={switcherBranches.map((branch: any) => ({ value: String(branch.id), label: `${branch.name}${branch.isPrimary ? ' (Primary)' : ''}` }))}
-            value={String(currentBranchId || '')}
-            onChange={(v) => switchBranch(parseInt(v, 10))}
+            options={switcherOptions}
+            value={isAllBranches ? ALL_BRANCHES_VALUE : String(currentBranchId || '')}
+            onChange={(v) => switchBranch(v === ALL_BRANCHES_VALUE ? null : parseInt(v, 10))}
             searchPlaceholder="Search branches..."
             className="w-48 h-8 text-xs"
           />

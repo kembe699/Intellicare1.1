@@ -131,7 +131,7 @@ function num(v) {
 // mix with the named :params this file uses in the same query) — same
 // convention as branchScope() in routes/hr.js.
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;

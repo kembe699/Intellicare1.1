@@ -13,7 +13,7 @@ const { getBranchCondition, getCreateBranchId } = require('../middleware/branchF
 // Named-replacement raw-SQL branch filter, same convention as accounting.js's
 // branchScope — this file uses named `:params` throughout, not positional `?`.
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;

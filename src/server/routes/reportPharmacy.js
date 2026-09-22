@@ -152,7 +152,7 @@ function num(v) {
 // table (per the branch-isolation initiative's exclusion list) and
 // `drug_inventory` has no branch_id column at all.
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;

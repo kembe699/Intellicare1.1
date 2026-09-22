@@ -2,7 +2,11 @@
  * Branch-level data isolation helpers.
  *
  * Rules:
- *  - Admin users (role === 'admin') see ALL data across every branch.
+ *  - Admin users (role === 'admin') see ALL data across every branch, UNLESS they've
+ *    explicitly picked one via the TopBar switcher (req.branchContext.adminScoped —
+ *    set by branchAccessControl.js only when the request carries the switcher's own
+ *    X-Branch-ID header, not an admin's mere assigned/primary branch) — then they see
+ *    exactly what a branch user would see, same as everyone else below.
  *  - Non-admin users MUST have a branch assigned (enforced by branchAccessControl).
  *  - Everyone else only sees rows that match their branch_id.
  *
@@ -24,7 +28,7 @@
  */
 function getBranchCondition(req) {
   if (!req.user) return {};
-  if (req.user.role === 'admin') return {};
+  if (req.user.role === 'admin' && !req.branchContext?.adminScoped) return {};
   // Prefer branchContext (DB-resolved by branchAccessControl) over JWT branchId
   const branchId = req.branchContext?.branchId || req.user.branchId || null;
   // branchAccessControl already blocks unassigned users — null here means admin fallback only
@@ -40,7 +44,7 @@ function getBranchCondition(req) {
  */
 function getBranchConditionSQL(req, alias = '') {
   if (!req.user) return { sql: '', params: [] };
-  if (req.user.role === 'admin') return { sql: '', params: [] };
+  if (req.user.role === 'admin' && !req.branchContext?.adminScoped) return { sql: '', params: [] };
   // Prefer branchContext (DB-resolved by branchAccessControl) over JWT branchId
   const branchId = req.branchContext?.branchId || req.user.branchId || null;
   // branchAccessControl already blocks unassigned users — null here means admin fallback only

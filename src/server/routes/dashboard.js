@@ -10,7 +10,7 @@ const { getBranchCondition } = require('../middleware/branchFilter');
 // mix with the named :params used here) — same convention as hr.js's
 // branchScope() and labTests.js's branchScope().
 function branchScope(req, replacements, column = 'branch_id') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return '';
   replacements.branchId = branchId;

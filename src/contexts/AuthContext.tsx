@@ -11,7 +11,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   token: string | null;
   currentBranchId: number | null;
-  switchBranch: (branchId: number) => void;
+  // branchId === null means "All Branches" (admin only) — see switchBranch's own comment.
+  switchBranch: (branchId: number | null) => void;
   updateCurrentRoom: (roomId: string | null) => Promise<void>;
   /**
    * Merge changes into the signed-in user without a page reload.
@@ -155,7 +156,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // first printed, so a receipt can never go out branded with the
           // IntelliCare placeholder just because it was printed quickly.
           void getFacilityInfo(normalizedUser.primaryBranchId || normalizedUser.branchId);
-          setCurrentBranchId(savedBranchId ? parseInt(savedBranchId, 10) : (normalizedUser.primaryBranchId || normalizedUser.branchId || null));
+          // An admin with no explicit prior selection (nothing in localStorage) defaults
+          // to null — "All Branches" — not their own primary branch. Falling back to a
+          // real branch id here would make the very first request after a page refresh
+          // silently scope them to just that branch (see apiClient.ts's authFetch, which
+          // sends X-Branch-ID whenever this is non-null), instead of seeing everything by
+          // default the way an admin who's never touched the switcher expects to. A
+          // non-admin always needs a real value, since every one of their requests must
+          // resolve to a branch.
+          setCurrentBranchId(savedBranchId
+            ? parseInt(savedBranchId, 10)
+            : (normalizedUser.isAdmin ? null : (normalizedUser.primaryBranchId || normalizedUser.branchId || null)));
         }
       } catch (error) {
         console.error('Token verification failed:', error);
@@ -185,10 +196,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // A different account can mean a different facility, so this is
       // re-read rather than reused from the previous session.
       void refreshFacilityInfo(normalizedUser.primaryBranchId || normalizedUser.branchId);
-      const nextBranchId = normalizedUser.primaryBranchId || normalizedUser.branchId || null;
-      setCurrentBranchId(nextBranchId);
-      if (nextBranchId) {
-        localStorage.setItem('current_branch_id', nextBranchId.toString());
+      // Admins default to "All Branches" on every fresh login — only an explicit TopBar
+      // switch (switchBranch()) should ever scope their reads to one branch. Persisting
+      // their primary branch to localStorage here would send X-Branch-ID on every request
+      // from the very first page load, making a brand-new admin session see only their
+      // own branch instead of everything.
+      if (normalizedUser.isAdmin) {
+        localStorage.removeItem('current_branch_id');
+        setCurrentBranchId(null);
+      } else {
+        const nextBranchId = normalizedUser.primaryBranchId || normalizedUser.branchId || null;
+        setCurrentBranchId(nextBranchId);
+        if (nextBranchId) {
+          localStorage.setItem('current_branch_id', nextBranchId.toString());
+        }
       }
 
       // Don't call toast here to avoid render warnings
@@ -256,9 +277,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!user]);
 
-  const switchBranch = (branchId: number) => {
+  // branchId === null means "All Branches" — admin-only, clears any explicit scope so
+  // authFetch stops sending X-Branch-ID and reads go back to unfiltered.
+  const switchBranch = (branchId: number | null) => {
     setCurrentBranchId(branchId);
-    localStorage.setItem('current_branch_id', branchId.toString());
+    if (branchId === null) {
+      localStorage.removeItem('current_branch_id');
+    } else {
+      localStorage.setItem('current_branch_id', branchId.toString());
+    }
   };
 
   const updateUser = (changes: Partial<User>) => {

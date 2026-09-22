@@ -159,6 +159,22 @@ async function branchAccessControl(req, res, next) {
       accessibleBranches,
       isAdmin,
       facilityId: primaryBranch?.facilityId || null,
+      // True only when THIS admin request explicitly carried the TopBar switcher's
+      // X-Branch-ID header (apiClient.ts's authFetch sends it on every request once
+      // switchBranch() has ever been called, from localStorage — never before that).
+      // Deliberately the header only, not req.query.branch_id/req.body.branch_id (which
+      // requestedBranchIdRaw above also accepts for other, unrelated per-endpoint uses of
+      // a branch_id param) — this is specifically "did the global branch switcher pick a
+      // branch", not "did this one request mention a branch_id for some other reason".
+      //
+      // Every branch-scoped read across the app bypasses filtering for role==='admin'
+      // unconditionally (see branchFilter.js's header comment) — an admin with no branch
+      // ever explicitly selected must keep seeing every branch, since req.user.branchId
+      // (their own assigned primary branch) already resolves currentBranchId to a real,
+      // non-null value even when they've never touched the switcher. adminScoped is what
+      // lets a read-filter helper tell "admin, no selection made — show everything" apart
+      // from "admin, explicitly switched to branch X — filter like a branch user would".
+      adminScoped: isAdmin && !!req.headers['x-branch-id'],
     };
 
     if (!hasAccess) {

@@ -15,7 +15,7 @@ const { getCreateBranchId } = require('../middleware/branchFilter');
 // Named-replacement raw-SQL branch filter for credit_notes (has branch_id, part of the
 // branch-data-isolation initiative) — same convention as accounting.js's branchScope.
 function branchScope(req, replacements, alias = '') {
-  if (req.user?.role === 'admin') return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;

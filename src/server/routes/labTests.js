@@ -14,7 +14,7 @@ const router = express.Router();
 // another. Inline, positional-`?`-style helper matching this file's own raw
 // SQL convention (most queries here use `?`, not named `:params`).
 function branchScope(req, alias = 'lt') {
-  if (req.user?.role === 'admin') return { sql: '', param: null };
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return { sql: '', param: null };
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return { sql: '', param: null };
   return { sql: ` AND ${alias}.branch_id = ?`, param: branchId };
@@ -30,7 +30,7 @@ async function serviceIsLinkable(serviceId, req) {
   if (!serviceId) return true;
   const service = await Service.findByPk(serviceId);
   if (!service) return false;
-  if (req.user?.role === 'admin') return true;
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return true;
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return true;
   if (!service.branch_id) return true;
@@ -170,7 +170,7 @@ router.get('/clinic/:clinicId', async (req, res) => {
   try {
     const namedReplacements = { clinicId: req.params.clinicId };
     let branchWhere = '';
-    if (req.user?.role !== 'admin') {
+    if (req.user?.role !== 'admin' || req.branchContext?.adminScoped) {
       const branchId = req.branchContext?.branchId || req.user?.branchId;
       if (branchId) { branchWhere = ' AND lt.branch_id = :branchId'; namedReplacements.branchId = branchId; }
     }

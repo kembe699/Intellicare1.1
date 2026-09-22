@@ -30,7 +30,15 @@ function redisCacheMiddleware(ttlSeconds = DEFAULT_TTL) {
     // cached responses across tenants.
     const schemaName   = req.tenantSchema || 'default';
     const userId   = req.user?.id   || 'anon';
-    const branchId = req.branchContext?.branchId || req.user?.branchId || 'none';
+    // An unscoped admin (branchContext.adminScoped false/undefined) sees every branch —
+    // its cache entry must be keyed distinctly from "explicitly scoped to one branch",
+    // even when that branch happens to be the same id branchContext.branchId falls back
+    // to when nothing was selected (an admin's own assigned/primary branch). Without the
+    // 'all' sentinel here, switching the TopBar to that one specific branch reused the
+    // exact same cache key as being unscoped, silently serving the unfiltered response
+    // right back — the switch looked like it did nothing.
+    const isUnscopedAdmin = req.user?.role === 'admin' && !req.branchContext?.adminScoped;
+    const branchId = isUnscopedAdmin ? 'all' : (req.branchContext?.branchId || req.user?.branchId || 'none');
     const key = `ic|${schemaName}|${userId}|${branchId}|${req.originalUrl}`;
 
     const cached = await redisCache.get(key);

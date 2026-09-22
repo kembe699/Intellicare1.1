@@ -1,6 +1,14 @@
 class BranchQueryFilter {
+  // An admin bypasses branch filtering entirely UNLESS they've explicitly picked a
+  // branch via the TopBar switcher (branchContext.adminScoped — set by
+  // branchAccessControl.js only when the request carries the switcher's own
+  // X-Branch-ID header) — then they're filtered exactly like a branch user.
+  static _bypassesFilter(branchContext) {
+    return !branchContext || (branchContext.isAdmin && !branchContext.adminScoped);
+  }
+
   static applyBranchFilter(queryOptions = {}, branchContext) {
-    if (!branchContext || branchContext.isAdmin) {
+    if (this._bypassesFilter(branchContext)) {
       return queryOptions;
     }
 
@@ -19,7 +27,7 @@ class BranchQueryFilter {
       return data;
     }
 
-    if (branchContext.isAdmin && data.branch_id) {
+    if (branchContext.isAdmin && !branchContext.adminScoped && data.branch_id) {
       return data;
     }
 
@@ -31,19 +39,20 @@ class BranchQueryFilter {
 
   static canAccessRecord(record, branchContext) {
     if (!record) return false;
-    if (!branchContext || branchContext.isAdmin) return true;
+    if (this._bypassesFilter(branchContext)) return true;
     // branchAccessControl now blocks unassigned users before they reach routes,
     // so branchId should always be set for non-admin users here.
     if (!branchContext.branchId) return true;
-    // Record has no branch_id stamped (old pre-branch data) — treat as admin-only
-    // to avoid leaking untagged records across branches.
+    // Record has no branch_id stamped (old pre-branch data) — treat as inaccessible
+    // to avoid leaking untagged records across branches (an unscoped admin already
+    // returned true above; a scoped admin is treated exactly like a branch user here).
     // Run the audit/migration script to stamp these records.
-    if (!record.branch_id) return branchContext.isAdmin;
+    if (!record.branch_id) return false;
     return String(record.branch_id) === String(branchContext.branchId);
   }
 
   static buildBranchWhere(branchContext) {
-    if (!branchContext || branchContext.isAdmin) {
+    if (this._bypassesFilter(branchContext)) {
       return {};
     }
 

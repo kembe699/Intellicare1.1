@@ -87,7 +87,7 @@ router.get('/', async (req, res) => {
     // helper — this file's raw SQL uses named replacements, not
     // branchFilter.js's positional `?` placeholders.
     let branchScopeSQL = '';
-    if (req.user?.role !== 'admin') {
+    if (req.user?.role !== 'admin' || req.branchContext?.adminScoped) {
       const branchId = req.branchContext?.branchId || req.user?.branchId || null;
       if (branchId) {
         branchScopeSQL = ' AND (al.branch_id = :branchId OR al.branch_id IS NULL)';

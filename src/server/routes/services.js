@@ -12,7 +12,7 @@ const { getCreateBranchId } = require('../middleware/branchFilter');
 // rather than strict-equality: a branch's own services PLUS whatever hasn't been
 // assigned a branch yet, matching the pattern used for lab_tests/audit_logs.
 function branchWhere(req) {
-  if (req.user?.role === 'admin') return {};
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return {};
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return {};
   return { [Op.or]: [{ branch_id: branchId }, { branch_id: null }] };
@@ -24,7 +24,7 @@ function branchWhere(req) {
 // pre-existing shared service must stay visible/usable to every branch until backfilled).
 function canAccessService(service, req) {
   if (!service) return false;
-  if (req.user?.role === 'admin') return true;
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return true;
   const branchId = req.branchContext?.branchId || req.user?.branchId || null;
   if (!branchId) return true;
   if (!service.branch_id) return true;
