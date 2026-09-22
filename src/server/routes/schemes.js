@@ -618,7 +618,7 @@ router.post('/:id/service-pricing', authorize('schemes.write'), async (req, res)
     `, {
       replacements: {
         id, cid, sid: schemeId, svid: service_id,
-        price: scheme_price || null, curr: scheme_currency || 'SSP',
+        price: scheme_price != null ? scheme_price : null, curr: scheme_currency || 'SSP',
         markup: markup_percentage || 0, disc: discount_percentage || 0,
         copay: insurance_copay || null, copayPct: insurance_copay_percentage || null,
         coverage: insurance_coverage_amount || null,
@@ -636,7 +636,7 @@ router.post('/:id/service-pricing', authorize('schemes.write'), async (req, res)
     `, {
       replacements: {
         id: uuidv4(), sid: schemeId, svid: service_id,
-        price: scheme_price || null, copay: insurance_copay || null,
+        price: scheme_price != null ? scheme_price : null, copay: insurance_copay || null,
         reason: 'Price set', ef: effective_from || new Date().toISOString().split('T')[0],
         by: req.user?.id || null, branchId
       },
@@ -736,7 +736,7 @@ router.post('/:id/service-pricing/bulk-update', authorize('schemes.write'), asyn
       `, {
         replacements: {
           id, cid, sid: schemeId, svid: p.service_id,
-          price: p.scheme_price || null, markup: p.markup_percentage || 0,
+          price: p.scheme_price != null ? p.scheme_price : null, markup: p.markup_percentage || 0,
           disc: p.discount_percentage || 0, copay: p.insurance_copay || null,
           copayPct: p.insurance_copay_percentage || null, by: req.user?.id || null, branchId
         }, transaction: t
@@ -860,7 +860,7 @@ router.post('/:id/product-pricing', authorize('schemes.write'), async (req, res)
     `, {
       replacements: {
         id, cid, sid: schemeId, pid: product_id, pt: product_type || 'drug',
-        price: scheme_price || null, curr: scheme_currency || 'SSP',
+        price: scheme_price != null ? scheme_price : null, curr: scheme_currency || 'SSP',
         markup: markup_percentage || 0, disc: discount_percentage || 0,
         copay: insurance_copay || null, copayPct: insurance_copay_percentage || null,
         coverage: insurance_coverage_amount || null,
@@ -878,7 +878,7 @@ router.post('/:id/product-pricing', authorize('schemes.write'), async (req, res)
     `, {
       replacements: {
         id: uuidv4(), sid: schemeId, pid: product_id, pt: product_type || 'drug',
-        price: scheme_price || null, copay: insurance_copay || null,
+        price: scheme_price != null ? scheme_price : null, copay: insurance_copay || null,
         ef: effective_from || new Date().toISOString().split('T')[0], by: req.user?.id || null, branchId
       }, transaction: t
     });
@@ -972,7 +972,7 @@ router.post('/:id/product-pricing/bulk-update', authorize('schemes.write'), asyn
       `, {
         replacements: {
           id, cid, sid: schemeId, pid: p.product_id, pt: p.product_type || 'drug',
-          price: p.scheme_price || null, markup: p.markup_percentage || 0,
+          price: p.scheme_price != null ? p.scheme_price : null, markup: p.markup_percentage || 0,
           disc: p.discount_percentage || 0, copay: p.insurance_copay || null,
           copayPct: p.insurance_copay_percentage || null, by: req.user?.id || null, branchId
         }, transaction: t
