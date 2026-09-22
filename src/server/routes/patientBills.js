@@ -254,6 +254,22 @@ async function createLisOrderForLabServices(billData, labServices) {
   }
 }
 
+// Non-admin users only resolve scheme/pricing data from their own branch; admins see
+// everything. Every scheme/pricing table starts with 100% of its existing rows at
+// branch_id NULL (pre-existing shared data becoming isolated for the first time), so
+// this is deliberately NULL-inclusive rather than strict-equality — a branch's own rows
+// PLUS whatever hasn't been assigned a branch yet — matching reportAuditSummary.js's
+// audit_logs precedent and routes/schemes.js's own branchScope(). Named-`:param`-style
+// helper, matching this function's own raw SQL convention.
+function schemeBranchScope(req, replacements, alias = '') {
+  if (!req || req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND (${col} = :branchId OR ${col} IS NULL)`;
+}
+
 // ── Helper: resolve scheme prices for a patient's bill services ──
 // Checks if the patient has an active scheme, then replaces service prices
 // with scheme prices where available (including currency).
@@ -267,14 +283,23 @@ async function createLisOrderForLabServices(billData, labServices) {
 // given, prices are left exactly as provided (cash). When one is given, every line
 // must have a configured scheme price or the whole call is rejected — a cashier in
 // scheme mode should never be able to silently fall back to a cash price either.
-async function applySchemePrice(patientId, services, schemeId) {
+// `req` is the request creating/adding-to the bill (the cashier/user's own branch, NOT
+// the scheme row's own branch_id — see schemeBranchScope() above and its callers below).
+// Once scheme pricing is branch-isolated, every lookup here is matched against the
+// CALLER's branch (NULL-inclusive, so a facility's existing shared scheme/price rows —
+// all branch_id NULL until backfilled — keep resolving for every branch through the
+// transition instead of suddenly rejecting bill lines that used to price successfully).
+// Admin requests (no branch) skip the filter entirely, matching every other branch check
+// in this codebase.
+async function applySchemePrice(patientId, services, schemeId, req = null) {
   if (!schemeId || !patientId || !services || !Array.isArray(services) || services.length === 0) {
     return { services, schemeId: null, schemeName: null, schemeCurrency: null };
   }
 
+  const schemeReplacements = { sid: schemeId };
   const [schemeRows] = await sequelize.query(
-    'SELECT id, scheme_name, currency FROM patient_schemes WHERE id = :sid AND is_active = true LIMIT 1',
-    { replacements: { sid: schemeId } }
+    `SELECT id, scheme_name, currency FROM patient_schemes WHERE id = :sid AND is_active = true${schemeBranchScope(req, schemeReplacements)} LIMIT 1`,
+    { replacements: schemeReplacements }
   );
   if (schemeRows.length === 0) {
     const err = new Error('Selected scheme was not found or is inactive');
@@ -285,12 +310,13 @@ async function applySchemePrice(patientId, services, schemeId) {
   const schemeCurrency = schemeRows[0].currency;
 
   // Membership required — scheme pricing is only for patients actually enrolled.
+  const memberReplacements = { pid: patientId, sid: schemeId };
   const [memberships] = await sequelize.query(`
     SELECT sm.id FROM scheme_membership sm
     WHERE sm.patient_id = :pid AND sm.scheme_id = :sid AND sm.is_active = true
-      AND (sm.effective_to IS NULL OR sm.effective_to >= CURRENT_DATE)
+      AND (sm.effective_to IS NULL OR sm.effective_to >= CURRENT_DATE)${schemeBranchScope(req, memberReplacements, 'sm')}
     LIMIT 1
-  `, { replacements: { pid: patientId, sid: schemeId } });
+  `, { replacements: memberReplacements });
   if (memberships.length === 0) {
     const [defaultCheck] = await sequelize.query(
       'SELECT id FROM patients WHERE (id = :pid OR patient_id = :pid) AND default_scheme_id = :sid LIMIT 1',
@@ -304,21 +330,26 @@ async function applySchemePrice(patientId, services, schemeId) {
   }
 
   // Fetch active scheme prices for both services and products (drugs/inventory items) —
-  // a bill can contain either, and both have their own pricing tables.
+  // a bill can contain either, and both have their own pricing tables. Branch-specific
+  // rows are ordered ahead of shared/NULL-branch ones (then by most recent effective_from
+  // within that), so a branch's own explicit price always wins over a legacy shared one
+  // for the same service/product when both exist.
+  const servicePricingReplacements = { sid: schemeId };
   const [servicePricing] = await sequelize.query(`
     SELECT service_id, scheme_price, scheme_currency
     FROM scheme_service_pricing
     WHERE scheme_id = :sid AND is_active = true
-      AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
-    ORDER BY effective_from DESC
-  `, { replacements: { sid: schemeId } });
+      AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)${schemeBranchScope(req, servicePricingReplacements)}
+    ORDER BY (branch_id IS NOT NULL) DESC, effective_from DESC
+  `, { replacements: servicePricingReplacements });
+  const productPricingReplacements = { sid: schemeId };
   const [productPricing] = await sequelize.query(`
     SELECT product_id, scheme_price, scheme_currency
     FROM scheme_product_pricing
     WHERE scheme_id = :sid AND is_active = true
-      AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
-    ORDER BY effective_from DESC
-  `, { replacements: { sid: schemeId } });
+      AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)${schemeBranchScope(req, productPricingReplacements)}
+    ORDER BY (branch_id IS NOT NULL) DESC, effective_from DESC
+  `, { replacements: productPricingReplacements });
 
   // The scheme's own currency (patient_schemes.currency, set explicitly when the scheme
   // was created) wins over each pricing row's own scheme_currency column — that column
@@ -345,9 +376,13 @@ async function applySchemePrice(patientId, services, schemeId) {
   )];
   const nameToId = {};
   if (neededNames.length > 0) {
+    // services is branch-isolated too now — scoped (NULL-inclusive) so a name match can
+    // never resolve to a different branch's same-named service (whose id would then miss
+    // priceMap, or worse, coincidentally collide with an unrelated shared price row).
+    const svcNameReplacements = { names: neededNames };
     const [matchedServices] = await sequelize.query(
-      'SELECT id, service_name FROM services WHERE LOWER(service_name) IN (:names)',
-      { replacements: { names: neededNames } }
+      `SELECT id, service_name FROM services WHERE LOWER(service_name) IN (:names)${schemeBranchScope(req, svcNameReplacements)}`,
+      { replacements: svcNameReplacements }
     );
     const [matchedProducts] = await sequelize.query(
       'SELECT id, item_name FROM inventory_items WHERE LOWER(item_name) IN (:names)',
@@ -571,7 +606,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     }
 
     if (parsedServices.length > 0) {
-      const result = await applySchemePrice(billData.patient_id, parsedServices, billData.scheme_id);
+      const result = await applySchemePrice(billData.patient_id, parsedServices, billData.scheme_id, req);
       parsedServices = result.services;
       if (result.schemeId) {
         // A scheme-mode bill is always priced entirely in that scheme's own currency —
@@ -892,7 +927,7 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     if (!billPeek) {
       return res.status(404).json({ error: 'Bill not found' });
     }
-    const schemeResult = await applySchemePrice(billPeek.patient_id, services, billPeek.scheme_id);
+    const schemeResult = await applySchemePrice(billPeek.patient_id, services, billPeek.scheme_id, req);
     let pricedServices = schemeResult.services;
 
     // Locking the row for the rest of this handler closes the "lost update" race: without

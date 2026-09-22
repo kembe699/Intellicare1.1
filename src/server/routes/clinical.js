@@ -747,15 +747,36 @@ router.delete('/queue/:queueId', authorize('clinical.queue.write'), async (req, 
 });
 
 // Services CRUD endpoints
+// Non-admin users only see/manage services from their own branch; admins see everything.
+// Existing rows keep branch_id NULL until backfilled, so reads are deliberately
+// NULL-inclusive rather than strict-equality — same reasoning and same helper shape as
+// routes/services.js's branchWhere()/canAccessService(), duplicated here because this
+// file has its own separate (and equally unscoped) services CRUD implementation.
+function servicesBranchWhere(req) {
+  if (req.user?.role === 'admin') return {};
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return {};
+  return { [Op.or]: [{ branch_id: branchId }, { branch_id: null }] };
+}
+function canAccessServiceRecord(service, req) {
+  if (!service) return false;
+  if (req.user?.role === 'admin') return true;
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return true;
+  if (!service.branch_id) return true;
+  return String(service.branch_id) === String(branchId);
+}
+
 // Get services by clinic
 router.get('/services/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params;
-    
-    
+
+
     // Since the services table doesn't have clinic_id, return all active services
+    // (scoped by branch instead — see servicesBranchWhere() above).
     const services = await Service.findAll({
-      where: { is_active: true },
+      where: { is_active: true, ...servicesBranchWhere(req) },
       order: [['created_at', 'DESC']]
     });
 
@@ -769,9 +790,9 @@ router.get('/services/:clinicId', async (req, res) => {
 // Create new service
 router.post('/services', authorize('clinical.services.manage'), async (req, res) => {
   try {
-    
+
     const { service_name, category, price, description, revenue_account_id, department_id, created_by } = req.body;
-    
+
     const service = await Service.create({
       service_name,
       category,
@@ -780,7 +801,8 @@ router.post('/services', authorize('clinical.services.manage'), async (req, res)
       revenue_account_id: revenue_account_id || null,
       department_id: department_id || null,
       is_active: true,
-      created_by: created_by ? String(created_by) : null
+      created_by: created_by ? String(created_by) : null,
+      branch_id: getCreateBranchId(req)
     });
 
     res.status(201).json(service);
@@ -801,7 +823,7 @@ router.put('/services/:id', authorize('clinical.services.manage'), async (req, r
     const { service_name, category, price, description, revenue_account_id, department_id, is_active, updated_by } = req.body;
     
     const service = await Service.findByPk(id);
-    if (!service) {
+    if (!service || !canAccessServiceRecord(service, req)) {
       return res.status(404).json({ error: 'Service not found' });
     }
 
@@ -848,6 +870,13 @@ router.post('/services/bulk-price-adjustment', authorize('clinical.services.repr
     const conditions = ['is_active = true', 'price > 0'];
     const replacements = { multiplier };
     if (category) { conditions.push('category = :category'); replacements.category = category; }
+    // NULL-inclusive branch scope (see servicesBranchWhere() above) — a non-admin bulk
+    // reprice must not silently touch another branch's prices, but must still reach the
+    // caller's own not-yet-backfilled (branch_id NULL) services.
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+      if (branchId) { conditions.push('(branch_id = :branchId OR branch_id IS NULL)'); replacements.branchId = branchId; }
+    }
     const where = conditions.join(' AND ');
 
     const [[before]] = await sequelize.query(
@@ -900,7 +929,12 @@ router.post('/services/bulk-price-adjustment', authorize('clinical.services.repr
 router.delete('/services/:id', authorize('clinical.services.manage'), async (req, res) => {
   try {
     const { id } = req.params;
-    
+
+    const existing = await Service.findByPk(id);
+    if (!existing || !canAccessServiceRecord(existing, req)) {
+      return res.status(404).json({ error: 'Service not found' });
+    }
+
     const deletedRows = await Service.destroy({
       where: { id: id }
     });

@@ -20,6 +20,19 @@ function branchScope(req, replacements, alias = '') {
   return ` AND ${col} = :branchId`;
 }
 
+// Cross-branch FK safety check: wards.service_id references services.id with no DB-level
+// branch check, so without this a ward could be linked to another branch's service now
+// that services are branch-isolated too. NULL-inclusive (a legacy/shared, not-yet-backfilled
+// service is a valid link for any branch) — same reasoning as labTests.js's serviceIsLinkable.
+function serviceBelongsToBranch(service, req) {
+  if (!service) return false;
+  if (req.user?.role === 'admin') return true;
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return true;
+  if (!service.branch_id) return true;
+  return String(service.branch_id) === String(branchId);
+}
+
 // Ward/room/bed layout is facility configuration — everyone who works with inpatient care
 // needs to read it, but only admin changes it (matches the admin-only pattern already used
 // for Clinics/Departments/Facilities in Setup).
@@ -159,6 +172,9 @@ router.post('/wards', authorize('inpatient.facility.write'), async (req, res) =>
     if (service_id) {
       const { Service } = require('../models');
       const service = await Service.findByPk(service_id);
+      if (!serviceBelongsToBranch(service, req)) {
+        return res.status(400).json({ error: 'Selected service does not belong to your branch' });
+      }
       dailyRate = service ? parseFloat(service.price) || 0 : 0;
     }
 
@@ -187,6 +203,9 @@ router.put('/wards/:id', authorize('inpatient.facility.write'), async (req, res)
     if (service_id) {
       const { Service } = require('../models');
       const service = await Service.findByPk(service_id);
+      if (!serviceBelongsToBranch(service, req)) {
+        return res.status(400).json({ error: 'Selected service does not belong to your branch' });
+      }
       dailyRate = service ? parseFloat(service.price) || 0 : 0;
     }
 

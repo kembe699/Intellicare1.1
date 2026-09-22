@@ -23,14 +23,25 @@ const { labTestsSeed } = require('./labTestsSeedData');
  */
 async function seedCommonLabTests(clinicId, createdBy, { LabTest, Service, resolveRevenueAccount }, branchId = null) {
   const sequelize = LabTest.sequelize;
+  const { Op } = require('sequelize');
   let created = 0;
   let updated = 0;
   let servicesCreated = 0;
 
   for (const row of labTestsSeed) {
-    // Find-or-create the linked service.
+    // Find-or-create the linked service — scoped to this branch (NULL-inclusive, so an
+    // existing not-yet-backfilled shared service still matches) the same way the
+    // lab_tests lookup below already is. Without this, seeding the catalog at Branch A
+    // first would make Branch B's later seed run find Branch A's same-named service by
+    // this unscoped name match and silently link to (and never create its own copy of)
+    // it, even though services are now branch-isolated.
     let service = await Service.findOne({
-      where: sequelize.where(sequelize.fn('LOWER', sequelize.col('service_name')), row.service.toLowerCase()),
+      where: {
+        [Op.and]: [
+          sequelize.where(sequelize.fn('LOWER', sequelize.col('service_name')), row.service.toLowerCase()),
+          branchId ? { [Op.or]: [{ branch_id: branchId }, { branch_id: null }] } : {},
+        ],
+      },
     });
     if (!service) {
       const revenueAccountId = await resolveRevenueAccount('Diagnostic', clinicId);
@@ -42,6 +53,7 @@ async function seedCommonLabTests(clinicId, createdBy, { LabTest, Service, resol
         is_active: true,
         created_by: createdBy || 'system',
         revenue_account_id: revenueAccountId || null,
+        branch_id: branchId || null,
       });
       servicesCreated += 1;
     }

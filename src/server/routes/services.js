@@ -1,13 +1,41 @@
 const express = require('express');
 const router = express.Router();
 const { Service } = require('../models');
+const { Op } = require('sequelize');
 const { authorize } = require('../middleware/authorize');
 const { resolveRevenueAccount } = require('../utils/resolveRevenueAccount');
+const { getCreateBranchId } = require('../middleware/branchFilter');
+
+// Non-admin users only see/manage services from their own branch; admins see everything.
+// Existing rows keep branch_id NULL until backfilled (single-branch tenants get
+// auto-backfilled — see backfillBranchIds), so reads are deliberately NULL-inclusive
+// rather than strict-equality: a branch's own services PLUS whatever hasn't been
+// assigned a branch yet, matching the pattern used for lab_tests/audit_logs.
+function branchWhere(req) {
+  if (req.user?.role === 'admin') return {};
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return {};
+  return { [Op.or]: [{ branch_id: branchId }, { branch_id: null }] };
+}
+
+// Same NULL-inclusive reasoning as branchWhere(), for a single already-fetched record —
+// deliberately NOT BranchQueryFilter.canAccessRecord, which treats a NULL branch_id as
+// admin-only (the right call for younger tables with no legacy data, but wrong here: a
+// pre-existing shared service must stay visible/usable to every branch until backfilled).
+function canAccessService(service, req) {
+  if (!service) return false;
+  if (req.user?.role === 'admin') return true;
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return true;
+  if (!service.branch_id) return true;
+  return String(service.branch_id) === String(branchId);
+}
 
 // Get all services
 router.get('/', async (req, res) => {
   try {
     const services = await Service.findAll({
+      where: branchWhere(req),
       order: [['created_at', 'DESC']]
     });
 
@@ -37,7 +65,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     const service = await Service.findByPk(id);
 
-    if (!service) {
+    if (!service || !canAccessService(service, req)) {
       return res.status(404).json({ error: 'Service not found' });
     }
 
@@ -86,7 +114,8 @@ router.post('/', authorize('setup.services.manage'), async (req, res) => {
       description: serviceData.description?.trim() || null,
       is_active: serviceData.is_active !== undefined ? serviceData.is_active : true,
       created_by: serviceData.created_by || 'system',
-      revenue_account_id: revenueAccountId || null
+      revenue_account_id: revenueAccountId || null,
+      branch_id: getCreateBranchId(req)
     });
 
     console.log('Service created successfully:', service.id);
@@ -128,7 +157,7 @@ router.put('/:id', authorize('setup.services.manage'), async (req, res) => {
     console.log('Updating service:', id, 'with data:', updateData);
 
     const service = await Service.findByPk(id);
-    if (!service) {
+    if (!service || !canAccessService(service, req)) {
       return res.status(404).json({ error: 'Service not found' });
     }
 
@@ -190,7 +219,7 @@ router.delete('/:id', authorize('setup.services.manage'), async (req, res) => {
     const { id } = req.params;
 
     const service = await Service.findByPk(id);
-    if (!service) {
+    if (!service || !canAccessService(service, req)) {
       return res.status(404).json({ error: 'Service not found' });
     }
 
@@ -213,9 +242,10 @@ router.get('/category/:category', async (req, res) => {
     const { category } = req.params;
     
     const services = await Service.findAll({
-      where: { 
+      where: {
         category: category,
-        is_active: true 
+        is_active: true,
+        ...branchWhere(req)
       },
       order: [['service_name', 'ASC']]
     });
@@ -244,7 +274,7 @@ router.get('/category/:category', async (req, res) => {
 router.post('/seed-lab-services', authorize('setup.services.manage'), async (req, res) => {
   try {
     const { seedLabServices } = require('../scripts/seedLabServices');
-    const result = await seedLabServices(req.body.clinic_id, req.user?.id, { Service, resolveRevenueAccount });
+    const result = await seedLabServices(req.body.clinic_id, req.user?.id, { Service, resolveRevenueAccount }, getCreateBranchId(req), req.user?.role === 'admin');
     res.status(result.success ? 201 : 200).json(result);
   } catch (error) {
     console.error('Error seeding lab services:', error);

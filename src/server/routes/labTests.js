@@ -20,6 +20,23 @@ function branchScope(req, alias = 'lt') {
   return { sql: ` AND ${alias}.branch_id = ?`, param: branchId };
 }
 
+// Cross-branch FK safety check: lab_tests.service_id references services.id with no DB-level
+// branch check, so without this a lab test could be linked to another branch's service once
+// services became branch-isolated too. NULL-inclusive (a legacy/shared, not-yet-backfilled
+// service is a valid link for any branch), same reasoning as services.js's canAccessService.
+// Returns true if serviceId is empty/null (nothing to check) or genuinely belongs to the
+// caller's branch; false if it exists but belongs to a different branch, or doesn't exist.
+async function serviceIsLinkable(serviceId, req) {
+  if (!serviceId) return true;
+  const service = await Service.findByPk(serviceId);
+  if (!service) return false;
+  if (req.user?.role === 'admin') return true;
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return true;
+  if (!service.branch_id) return true;
+  return String(service.branch_id) === String(branchId);
+}
+
 // Get all lab tests (with optional clinic filter)
 router.get('/', async (req, res) => {
   try {
@@ -339,6 +356,11 @@ router.post('/with-components', authorize('setup.lab_tests.manage'), async (req,
     const machineIntegration = test.machine_integration || null;
     const branchId = getCreateBranchId(req);
 
+    if (!(await serviceIsLinkable(serviceId, req))) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Selected service does not belong to your branch' });
+    }
+
     // Check if test_code already exists — scoped to this branch (admins:
     // tenant-wide), so a second branch seeding its own "CBC" creates a
     // genuinely separate row instead of silently overwriting the first
@@ -486,6 +508,11 @@ router.put('/:id/with-components', authorize('setup.lab_tests.manage'), async (r
     if (!BranchQueryFilter.canAccessRecord(existingForBranchCheck, req.branchContext)) {
       await transaction.rollback();
       return res.status(404).json({ error: 'Lab test not found' });
+    }
+
+    if (!(await serviceIsLinkable(test.service_id || null, req))) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Selected service does not belong to your branch' });
     }
 
     // Use raw SQL to avoid Sequelize model validation issues
@@ -803,12 +830,21 @@ router.post('/bulk-upload', authorize('setup.lab_tests.manage'), async (req, res
       try {
         const testId = uuidv4();
 
-        // Resolve service_name → service_id if provided
+        // Resolve service_name → service_id if provided. services has no clinic_id column
+        // (it's not clinic-scoped) — this used to filter on `clinic_id = ?` anyway, which
+        // threw "column clinic_id does not exist" on every row with a service_name set,
+        // silently aborting that whole test's creation (caught by the per-test try/catch
+        // below). Scoped by branch instead (NULL-inclusive, same reasoning as everywhere
+        // else in this pass), which also doubles as the cross-branch FK safety check: a
+        // service belonging to a different branch can never be resolved/linked here.
         let serviceId = null;
         if (testData.service_name) {
+          const svcReplacements = [testData.service_name];
+          let svcBranchSql = '';
+          if (bulkBranchId) { svcBranchSql = ' AND (branch_id = ? OR branch_id IS NULL)'; svcReplacements.push(bulkBranchId); }
           const [svcRows] = await sequelize.query(
-            `SELECT id FROM services WHERE LOWER(service_name) = LOWER(?) AND clinic_id = ? LIMIT 1`,
-            { replacements: [testData.service_name, clinic_id || 1] }
+            `SELECT id FROM services WHERE LOWER(service_name) = LOWER(?)${svcBranchSql} LIMIT 1`,
+            { replacements: svcReplacements }
           );
           if (svcRows.length > 0) serviceId = svcRows[0].id;
         }

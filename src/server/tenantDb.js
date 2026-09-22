@@ -45,9 +45,19 @@ async function buildTenantConnection(schemaName) {
   // above (single-branch tenants only — see ensureBranchIsolationColumns.js
   // and backfillBranchIds for why). Chained, not parallel, since the backfill
   // needs the column to already exist.
+  // Also widens services.service_name and the 6 real unique indexes across the
+  // scheme/insurance tables to include branch_id (see ensureServiceNameUniqueness.js /
+  // ensureSchemeUniqueness.js) — chained after the branch_id column itself exists, same
+  // reasoning as the backfill.
   const { ensureBranchIsolationColumns, TABLES_NEEDING_BRANCH_ID } = require('./config/ensureBranchIsolationColumns');
   ensureBranchIsolationColumns(sequelize, schema)
-    .then(() => backfillBranchIds(sequelize, schema, TABLES_NEEDING_BRANCH_ID))
+    .then(() => {
+      backfillBranchIds(sequelize, schema, TABLES_NEEDING_BRANCH_ID).catch(() => {});
+      const { ensureServiceNameUniqueness } = require('./config/ensureServiceNameUniqueness');
+      ensureServiceNameUniqueness(sequelize, schema).catch(() => {});
+      const { ensureSchemeUniqueness } = require('./config/ensureSchemeUniqueness');
+      ensureSchemeUniqueness(sequelize, schema).catch(() => {});
+    })
     .catch(() => {});
 
   // roles/privileges/role_privileges tables, ensured per-tenant. The old
