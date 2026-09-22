@@ -65,15 +65,36 @@ const LabTests: React.FC = () => {
     { name: '', unit: '', normalRangeMin: undefined, normalRangeMax: undefined, normalRangeText: '' }
   ]);
 
+  // Which branch each test belongs to, for the "Branch" column below — mostly
+  // useful for an admin, who (unlike everyone else) now sees every branch's
+  // tests merged in one list and needs a way to tell them apart, since the
+  // same test code (e.g. "CBC") can legitimately exist once per branch.
+  const [branchNames, setBranchNames] = useState<Record<number, string>>({});
+
   useEffect(() => {
     if (user?.clinic) {
       const loadData = async () => {
         await fetchServices();
         await fetchTests();
+        await fetchBranches();
       };
       loadData();
     }
   }, [user]);
+
+  const fetchBranches = async () => {
+    try {
+      const res = await authFetch('/api/facilities/branches/all', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (data.data || []);
+      const map: Record<number, string> = {};
+      for (const b of rows) map[Number(b.id)] = b.name;
+      setBranchNames(map);
+    } catch {
+      // Non-fatal — the Branch column just falls back to showing nothing.
+    }
+  };
 
   const fetchServices = async () => {
     console.log('LabTests fetchServices called, user:', user);
@@ -137,6 +158,7 @@ const LabTests: React.FC = () => {
         category: test.category,
         price: test.price,
         service_id: test.service_id,
+        branch_id: test.branch_id ?? null,
         machine_integration: test.machine_integration || null,
         components: test.components || [],
         clinic: test.clinic_id || test.clinic,
@@ -951,6 +973,12 @@ const handleBulkDelete = async () => {
             { key: 'testCode', header: 'Test Code', sortable: true, render: (v) => <span className="font-mono font-semibold text-primary">{v}</span> },
             { key: 'testName', header: 'Test Name', sortable: true, render: (v) => <span className="font-semibold text-foreground">{v}</span> },
             { key: 'category', header: 'Category', sortable: true, render: (v) => <span className="text-muted-foreground">{v}</span> },
+            {
+              key: 'branch_id', header: 'Branch', sortable: true,
+              render: (v) => v ? (
+                <span className="text-muted-foreground">{branchNames[Number(v)] || `Branch ${v}`}</span>
+              ) : <span className="text-muted-foreground text-xs italic">All branches</span>,
+            },
             {
               key: 'service_id', header: 'Service',
               render: (v) => {

@@ -13,8 +13,15 @@ const { labTestsSeed } = require('./labTestsSeedData');
  * Safely re-runnable: an existing test_code is updated in place (price,
  * category, service link refreshed) rather than duplicated, matching the
  * same idempotent pattern as the chart-of-accounts and services seeders.
+ *
+ * branchId scopes the existing-test-code lookup and stamps new rows the
+ * same way — which lab tests a branch offers is a real per-branch
+ * capability, not shared reference data, so seeding the common catalog at
+ * one branch must not silently update or shadow another branch's tests.
+ * null (an admin with no branch selected) falls back to a tenant-wide,
+ * branch-less row — same convention labTests.js's other routes use.
  */
-async function seedCommonLabTests(clinicId, createdBy, { LabTest, Service, resolveRevenueAccount }) {
+async function seedCommonLabTests(clinicId, createdBy, { LabTest, Service, resolveRevenueAccount }, branchId = null) {
   const sequelize = LabTest.sequelize;
   let created = 0;
   let updated = 0;
@@ -39,9 +46,12 @@ async function seedCommonLabTests(clinicId, createdBy, { LabTest, Service, resol
       servicesCreated += 1;
     }
 
+    const existingReplacements = [row.code, clinicId];
+    const branchSql = branchId ? ' AND branch_id = ?' : ' AND branch_id IS NULL';
+    if (branchId) existingReplacements.push(branchId);
     const [[existingTest]] = await sequelize.query(
-      'SELECT id FROM lab_tests WHERE test_code = ? AND clinic_id = ?',
-      { replacements: [row.code, clinicId] }
+      `SELECT id FROM lab_tests WHERE test_code = ? AND clinic_id = ?${branchSql}`,
+      { replacements: existingReplacements }
     );
 
     let testId;
@@ -55,9 +65,9 @@ async function seedCommonLabTests(clinicId, createdBy, { LabTest, Service, resol
     } else {
       testId = crypto.randomUUID();
       await sequelize.query(
-        `INSERT INTO lab_tests (id, test_code, test_name, category, price, service_id, clinic_id, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
-        { replacements: [testId, row.code, row.name, row.category, row.price, service.id, clinicId] }
+        `INSERT INTO lab_tests (id, test_code, test_name, category, price, service_id, clinic_id, branch_id, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
+        { replacements: [testId, row.code, row.name, row.category, row.price, service.id, clinicId, branchId] }
       );
       created += 1;
     }

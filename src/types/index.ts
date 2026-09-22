@@ -262,6 +262,7 @@ export interface LabTest {
   machine_integration?: string | null;
   clinic?: ClinicName;
   clinic_id?: number;
+  branch_id?: number | null;
   components?: LabTestComponent[];
   createdAt?: string;
   created_at?: string;

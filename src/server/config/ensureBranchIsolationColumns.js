@@ -1,11 +1,18 @@
 // Adds branch_id to every transactional table that's missing it, so LIS,
-// Inpatient, Accounting, and Procurement records can finally be scoped by
-// branch the same way patients/bills/receipts/lab requests already are (see
-// middleware/branchFilter.js). Deliberately excludes master/catalog/config
-// tables (chart_of_accounts, exchange_rates, suppliers, procurement_settings,
-// lab_tests) — isolating those would fragment a facility's shared ledger
-// structure, price lists, and vendor directory instead of protecting real
-// per-branch data.
+// Inpatient, Accounting, Procurement, and lab test definitions can finally
+// be scoped by branch the same way patients/bills/receipts/lab requests
+// already are (see middleware/branchFilter.js). Deliberately excludes
+// master/catalog/config tables that are genuinely shared facility-wide
+// (chart_of_accounts, exchange_rates, suppliers, procurement_settings,
+// drugs, services) — isolating those would fragment a facility's shared
+// ledger structure, price lists, and vendor directory instead of protecting
+// real per-branch data.
+//
+// lab_tests started out grouped with that shared-catalog list but doesn't
+// actually belong there — which lab tests a branch can run is a genuine
+// operational/capability difference between branches (one branch may not
+// have the equipment for a CBC at all), not a shared reference table, so a
+// tenant seeding a test at one branch was surprised to see it everywhere.
 //
 // Same idempotent, MySQL/Postgres-safe pattern already proven in index.js's
 // own `tablesNeedingBranchId` loop (information_schema checks before ALTER,
@@ -26,6 +33,12 @@ const TABLES_NEEDING_BRANCH_ID = [
   // Procurement (transactional only — suppliers/procurement_settings stay shared)
   'purchase_requisitions', 'pr_line_items', 'purchase_orders', 'purchase_order_items',
   'goods_receipt_notes', 'grn_line_items', 'supplier_bill_approvals', 'supplier_bill_payments',
+  // Lab test catalog — which tests a branch can run is per-branch capability,
+  // not shared reference data (unlike the drug/service catalogs, which stay
+  // shared). lab_test_components has no branch_id of its own; it's always
+  // reached through its already-filtered parent lab_test_id, so it doesn't
+  // need one.
+  'lab_tests',
 ];
 
 async function ensureBranchIsolationColumns(sequelize, label = 'database') {

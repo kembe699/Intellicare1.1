@@ -3,19 +3,38 @@ const { LabTest, LabTestComponent, Service, sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
 const { resolveRevenueAccount } = require('../utils/resolveRevenueAccount');
+const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 const router = express.Router();
+
+// Non-admin users only see/manage lab tests from their own branch; admins see
+// everything. Which lab tests a branch can run is a real per-branch capability
+// difference (not shared reference data like the drug/service catalogs), so a
+// test seeded at one branch must not appear — or collide on test_code — at
+// another. Inline, positional-`?`-style helper matching this file's own raw
+// SQL convention (most queries here use `?`, not named `:params`).
+function branchScope(req, alias = 'lt') {
+  if (req.user?.role === 'admin') return { sql: '', param: null };
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return { sql: '', param: null };
+  return { sql: ` AND ${alias}.branch_id = ?`, param: branchId };
+}
 
 // Get all lab tests (with optional clinic filter)
 router.get('/', async (req, res) => {
   try {
     const clinicId = req.query.clinic;
-    
+    const branch = branchScope(req, 'lt');
+
     // Build WHERE clause based on clinic filter
-    const whereClause = clinicId ? `WHERE lt.clinic_id = ${parseInt(clinicId)}` : '';
-    
+    const conditions = [];
+    if (clinicId) conditions.push(`lt.clinic_id = ${parseInt(clinicId)}`);
+    if (branch.sql) conditions.push(`lt.branch_id = ${parseInt(branch.param)}`);
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
     // Fetch lab tests using raw SQL
     const labTests = await LabTest.sequelize.query(`
-      SELECT 
+      SELECT
         lt.id,
         lt.test_name,
         lt.test_code,
@@ -23,6 +42,7 @@ router.get('/', async (req, res) => {
         lt.price,
         lt.service_id,
         lt.clinic_id,
+        lt.branch_id,
         lt.is_active,
         lt.machine_integration,
         lt.created_at,
@@ -72,10 +92,14 @@ router.get('/search', async (req, res) => {
     if (!q) {
       return res.status(400).json({ error: 'Search query is required' });
     }
-    
+
+    const branch = branchScope(req, 'lt');
+    const searchReplacements = [`%${q}%`];
+    if (branch.param) searchReplacements.push(branch.param);
+
     // Use raw SQL to avoid association issues
     const [labTests] = await sequelize.query(`
-      SELECT 
+      SELECT
         lt.id,
         lt.test_name,
         lt.test_code,
@@ -83,15 +107,16 @@ router.get('/search', async (req, res) => {
         lt.price,
         lt.service_id,
         lt.clinic_id,
+        lt.branch_id,
         lt.is_active,
         lt.machine_integration,
         lt.created_at,
         lt.updated_at
       FROM lab_tests lt
-      WHERE lt.test_name LIKE ?
+      WHERE lt.test_name LIKE ?${branch.sql}
       ORDER BY lt.test_name ASC
     `, {
-      replacements: [`%${q}%`]
+      replacements: searchReplacements
     });
     
     // Fetch components for each test
@@ -126,9 +151,16 @@ router.get('/search', async (req, res) => {
 // Get lab tests by clinic
 router.get('/clinic/:clinicId', async (req, res) => {
   try {
+    const namedReplacements = { clinicId: req.params.clinicId };
+    let branchWhere = '';
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId;
+      if (branchId) { branchWhere = ' AND lt.branch_id = :branchId'; namedReplacements.branchId = branchId; }
+    }
+
     // Fetch lab tests using raw SQL
     const labTests = await LabTest.sequelize.query(`
-      SELECT 
+      SELECT
         lt.id,
         lt.test_name,
         lt.test_code,
@@ -136,15 +168,16 @@ router.get('/clinic/:clinicId', async (req, res) => {
         lt.price,
         lt.service_id,
         lt.clinic_id,
+        lt.branch_id,
         lt.is_active,
         lt.machine_integration,
         lt.created_at,
         lt.updated_at
       FROM lab_tests lt
-      WHERE lt.clinic_id = :clinicId
+      WHERE lt.clinic_id = :clinicId${branchWhere}
       ORDER BY lt.test_name ASC
     `, {
-      replacements: { clinicId: req.params.clinicId },
+      replacements: namedReplacements,
       type: LabTest.sequelize.QueryTypes.SELECT
     });
 
@@ -186,7 +219,8 @@ router.get('/category/:category', async (req, res) => {
     const labTests = await LabTest.findAll({
       where: {
         category: req.params.category,
-        is_active: true
+        is_active: true,
+        ...getBranchCondition(req),
       },
       include: [{
         model: LabTestComponent,
@@ -206,7 +240,16 @@ router.get('/category/:category', async (req, res) => {
 router.get('/code/:code', async (req, res) => {
   try {
     const code = req.params.code;
-    const [[labTest]] = await LabTest.sequelize.query(`SELECT * FROM lab_tests WHERE test_code = ? OR test_name = ? LIMIT 1`, { replacements: [code, code] });
+    // Without a branch filter, two branches with their own same-coded test
+    // (e.g. both have "CBC") made this arbitrarily return whichever branch's
+    // row LIMIT 1 happened to land on — not necessarily the caller's own.
+    const branch = branchScope(req, 'lt');
+    const codeReplacements = [code, code];
+    if (branch.param) codeReplacements.push(branch.param);
+    const [[labTest]] = await LabTest.sequelize.query(
+      `SELECT lt.* FROM lab_tests lt WHERE (lt.test_code = ? OR lt.test_name = ?)${branch.sql} LIMIT 1`,
+      { replacements: codeReplacements }
+    );
     if (!labTest) return res.status(404).json({ error: 'Lab test not found' });
     const [components] = await LabTest.sequelize.query(`SELECT id, component_name as name, unit, reference_range, display_order AS display_order, display_order FROM lab_test_components WHERE lab_test_id = ? ORDER BY display_order ASC`, { replacements: [labTest.id] });
     labTest.components = components;
@@ -231,6 +274,9 @@ router.get('/:id', async (req, res) => {
     if (!labTest) {
       return res.status(404).json({ error: 'Lab test not found' });
     }
+    if (!BranchQueryFilter.canAccessRecord(labTest, req.branchContext)) {
+      return res.status(404).json({ error: 'Lab test not found' });
+    }
     res.json(labTest);
   } catch (error) {
     console.error('Error fetching lab test:', error);
@@ -244,13 +290,13 @@ router.post('/', authorize('setup.lab_tests.manage'), async (req, res) => {
     
     // Use raw SQL to insert directly into lab_tests table
     const { test_name, test_code, category, price, clinic_id } = req.body;
-    
+
     const testId = require('crypto').randomUUID();
     const [results] = await LabTest.sequelize.query(`
-      INSERT INTO lab_tests (id, test_name, test_code, category, price, clinic_id, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, true, NOW(), NOW())
+      INSERT INTO lab_tests (id, test_name, test_code, category, price, clinic_id, branch_id, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())
     `, {
-      replacements: [testId, test_name, test_code, category, price || 0, clinic_id]
+      replacements: [testId, test_name, test_code, category, price || 0, clinic_id, getCreateBranchId(req)]
     });
     
     // Fetch the created record
@@ -291,11 +337,21 @@ router.post('/with-components', authorize('setup.lab_tests.manage'), async (req,
     const price = parseFloat(test.price) || 0;
     const serviceId = test.service_id || null;
     const machineIntegration = test.machine_integration || null;
+    const branchId = getCreateBranchId(req);
 
-    // Check if test_code already exists
+    // Check if test_code already exists — scoped to this branch (admins:
+    // tenant-wide), so a second branch seeding its own "CBC" creates a
+    // genuinely separate row instead of silently overwriting the first
+    // branch's test. This is the exact bug the tenant owner hit: every
+    // branch seeding the same common test names collapsed onto one shared
+    // row because this check used to ignore branch entirely.
+    const existsReplacements = [testCode];
+    let existsBranchSql = '';
+    if (branchId) { existsBranchSql = ' AND branch_id = ?'; existsReplacements.push(branchId); }
+    else if (req.user?.role !== 'admin') { existsBranchSql = ' AND branch_id IS NULL'; }
     const [[existingTest]] = await LabTest.sequelize.query(
-      `SELECT id FROM lab_tests WHERE test_code = ?`,
-      { replacements: [testCode], transaction }
+      `SELECT id FROM lab_tests WHERE test_code = ?${existsBranchSql}`,
+      { replacements: existsReplacements, transaction }
     );
 
     let testId;
@@ -313,8 +369,8 @@ router.post('/with-components', authorize('setup.lab_tests.manage'), async (req,
       testId = crypto.randomUUID();
       console.log('Creating new lab test with id:', testId);
       await LabTest.sequelize.query(
-        `INSERT INTO lab_tests (id, test_name, test_code, category, clinic_id, price, service_id, machine_integration, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
-        { replacements: [testId, test.test_name, testCode, test.category, clinicId, price, serviceId, machineIntegration], transaction }
+        `INSERT INTO lab_tests (id, test_name, test_code, category, clinic_id, branch_id, price, service_id, machine_integration, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
+        { replacements: [testId, test.test_name, testCode, test.category, clinicId, branchId, price, serviceId, machineIntegration], transaction }
       );
     }
 
@@ -377,7 +433,13 @@ router.post('/with-components', authorize('setup.lab_tests.manage'), async (req,
 router.put('/:id', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     const { test_name, test_code, category, price } = req.body;
-    
+
+    const [[existing]] = await LabTest.sequelize.query(`SELECT branch_id FROM lab_tests WHERE id = ?`, { replacements: [req.params.id] });
+    if (!existing) return res.status(404).json({ error: 'Lab test not found' });
+    if (!BranchQueryFilter.canAccessRecord(existing, req.branchContext)) {
+      return res.status(404).json({ error: 'Lab test not found' });
+    }
+
     // Use raw SQL to update directly in lab_tests table
     const [results] = await LabTest.sequelize.query(`
       UPDATE lab_tests 
@@ -415,7 +477,17 @@ router.put('/:id/with-components', authorize('setup.lab_tests.manage'), async (r
       await transaction.rollback();
       return res.status(400).json({ error: 'Test data is required' });
     }
-    
+
+    const [[existingForBranchCheck]] = await LabTest.sequelize.query(`SELECT branch_id FROM lab_tests WHERE id = ?`, { replacements: [req.params.id], transaction });
+    if (!existingForBranchCheck) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Lab test not found' });
+    }
+    if (!BranchQueryFilter.canAccessRecord(existingForBranchCheck, req.branchContext)) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Lab test not found' });
+    }
+
     // Use raw SQL to avoid Sequelize model validation issues
     const [updateResult] = await LabTest.sequelize.query(
       `UPDATE lab_tests SET test_name = ?, test_code = ?, category = ?, price = ?, service_id = ?, machine_integration = ?, updated_at = NOW() WHERE id = ?`,
@@ -500,13 +572,16 @@ router.delete('/:id', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     // Check if test exists first
     const [test] = await LabTest.sequelize.query(`
-      SELECT id FROM lab_tests WHERE id = :id
+      SELECT id, branch_id FROM lab_tests WHERE id = :id
     `, {
       replacements: { id: req.params.id },
       type: LabTest.sequelize.QueryTypes.SELECT
     });
 
     if (!test) {
+      return res.status(404).json({ error: 'Lab test not found' });
+    }
+    if (!BranchQueryFilter.canAccessRecord(test, req.branchContext)) {
       return res.status(404).json({ error: 'Lab test not found' });
     }
 
@@ -533,7 +608,7 @@ router.delete('/:id/with-components', authorize('setup.lab_tests.manage'), async
   try {
     // Check if test exists first
     const [test] = await LabTest.sequelize.query(`
-      SELECT id FROM lab_tests WHERE id = :id
+      SELECT id, branch_id FROM lab_tests WHERE id = :id
     `, {
       replacements: { id: req.params.id },
       type: LabTest.sequelize.QueryTypes.SELECT,
@@ -541,6 +616,10 @@ router.delete('/:id/with-components', authorize('setup.lab_tests.manage'), async
     });
 
     if (!test) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Lab test not found' });
+    }
+    if (!BranchQueryFilter.canAccessRecord(test, req.branchContext)) {
       await transaction.rollback();
       return res.status(404).json({ error: 'Lab test not found' });
     }
@@ -598,13 +677,14 @@ router.post('/seed', authorize('setup.lab_tests.manage'), async (req, res) => {
       }
     ];
     
+    const seedBranchId = getCreateBranchId(req);
     for (const test of sampleTests) {
       try {
         await LabTest.sequelize.query(`
-          INSERT INTO lab_tests (id, test_name, test_code, category, price, clinic_id, is_active, created_at, updated_at)
-          VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, true, NOW(), NOW())
+          INSERT INTO lab_tests (id, test_name, test_code, category, price, clinic_id, branch_id, is_active, created_at, updated_at)
+          VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, true, NOW(), NOW())
         `, {
-          replacements: [test.test_name, test.test_code, test.category, test.price, test.clinic_id]
+          replacements: [test.test_name, test.test_code, test.category, test.price, test.clinic_id, seedBranchId]
         });
       } catch (insertError) {
         // Skip if test already exists (duplicate test_code)
@@ -635,12 +715,13 @@ router.post('/seed', authorize('setup.lab_tests.manage'), async (req, res) => {
 router.post('/bulk-upload', authorize('setup.lab_tests.manage'), async (req, res) => {
   try {
     const { csvData, clinic_id } = req.body;
-    
+    const bulkBranchId = getCreateBranchId(req);
+
     if (!csvData) {
       return res.status(400).json({ error: 'CSV data is required' });
     }
 
-    console.log('Starting bulk upload for clinic:', clinic_id);
+    console.log('Starting bulk upload for clinic:', clinic_id, 'branch:', bulkBranchId);
     
     // Parse CSV data
     const lines = csvData.trim().split('\n');
@@ -732,10 +813,16 @@ router.post('/bulk-upload', authorize('setup.lab_tests.manage'), async (req, res
           if (svcRows.length > 0) serviceId = svcRows[0].id;
         }
         
-        // Check if test exists
+        // Check if test exists — scoped to this branch too (see the
+        // with-components route above for why: without it, every branch
+        // uploading the same CSV would collapse onto one shared row).
+        const existingReplacements = [testCode, clinic_id || 1];
+        let existingBranchSql = '';
+        if (bulkBranchId) { existingBranchSql = ' AND branch_id = ?'; existingReplacements.push(bulkBranchId); }
+        else if (req.user?.role !== 'admin') { existingBranchSql = ' AND branch_id IS NULL'; }
         const [existing] = await sequelize.query(
-          'SELECT id FROM lab_tests WHERE test_code = ? AND clinic_id = ?',
-          { replacements: [testCode, clinic_id || 1] }
+          `SELECT id FROM lab_tests WHERE test_code = ? AND clinic_id = ?${existingBranchSql}`,
+          { replacements: existingReplacements }
         );
 
         let finalTestId;
@@ -758,10 +845,10 @@ router.post('/bulk-upload', authorize('setup.lab_tests.manage'), async (req, res
           // Create new test
           finalTestId = testId;
           await sequelize.query(`
-            INSERT INTO lab_tests (id, test_code, test_name, category, price, service_id, clinic_id, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())
+            INSERT INTO lab_tests (id, test_code, test_name, category, price, service_id, clinic_id, branch_id, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())
           `, {
-            replacements: [testId, testCode, testData.test_name, testData.category, testData.price, serviceId, clinic_id || 1]
+            replacements: [testId, testCode, testData.test_name, testData.category, testData.price, serviceId, clinic_id || 1, bulkBranchId]
           });
           created++;
           console.log(`Created test: ${testCode}`);
@@ -824,7 +911,7 @@ router.post('/seed-common', authorize('setup.lab_tests.manage'), async (req, res
       return res.status(400).json({ error: 'clinic_id is required' });
     }
     const { seedCommonLabTests } = require('../scripts/seedCommonLabTests');
-    const result = await seedCommonLabTests(parseInt(clinic_id), req.user?.id, { LabTest, Service, resolveRevenueAccount });
+    const result = await seedCommonLabTests(parseInt(clinic_id), req.user?.id, { LabTest, Service, resolveRevenueAccount }, getCreateBranchId(req));
     res.status(201).json(result);
   } catch (error) {
     console.error('Error seeding common lab tests:', error);

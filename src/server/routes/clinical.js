@@ -450,9 +450,10 @@ router.get('/visit-details/:visitId', async (req, res) => {
 router.get('/lab-tests', async (req, res) => {
   try {
     const { LabTest } = require('../models');
-    
+
     const labTests = await LabTest.findAll({
       attributes: ['test_name'],
+      where: { ...getBranchCondition(req) },
       order: [['test_name', 'ASC']]
     });
     

@@ -1185,7 +1185,7 @@ router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, 
     const [results] = await db.query(
       `SELECT r.*, c.reference_range, c.display_order, rec_u.display_name as recorded_by_name, mgr_u.display_name as manager_review_by_name
        FROM lis_results r
-       LEFT JOIN lab_tests t ON r.test_code = t.test_code
+       LEFT JOIN lab_tests t ON r.test_code = t.test_code AND (t.branch_id = r.branch_id OR t.branch_id IS NULL)
        LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
        LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
        LEFT JOIN users mgr_u ON mgr_u.id = r.manager_review_by
@@ -1249,7 +1249,7 @@ router.get('/results/pending-review', authorize('lis.results.review'), async (re
       JOIN lis_specimens s ON r.specimen_id = s.id
       JOIN lis_test_orders o ON s.order_id = o.id
       JOIN lis_participants p ON o.participant_id = p.id
-      LEFT JOIN lab_tests t ON r.test_code = t.test_code
+      LEFT JOIN lab_tests t ON r.test_code = t.test_code AND (t.branch_id = r.branch_id OR t.branch_id IS NULL)
       LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
       LEFT JOIN users req_u ON req_u.id = o.doctor_id
       LEFT JOIN employees req_ce ON req_ce.id = o.consultant_id
@@ -1278,7 +1278,7 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
       JOIN lis_specimens s ON r.specimen_id = s.id
       JOIN lis_test_orders o ON s.order_id = o.id
       JOIN lis_participants p ON o.participant_id = p.id
-      LEFT JOIN lab_tests t ON r.test_code = t.test_code
+      LEFT JOIN lab_tests t ON r.test_code = t.test_code AND (t.branch_id = r.branch_id OR t.branch_id IS NULL)
       LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
       LEFT JOIN users req_u ON req_u.id = o.doctor_id
       LEFT JOIN employees req_ce ON req_ce.id = o.consultant_id
