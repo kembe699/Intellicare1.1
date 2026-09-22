@@ -605,7 +605,7 @@ router.post('/admissions', authorize('inpatient.admissions.write'), async (req, 
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Inpatient', action: 'PATIENT_ADMITTED', entity_type: 'Admission', entity_id: id,
         description: `Patient admitted — ${admission_reason || 'no reason given'}${diagnosis ? ` (${diagnosis})` : ''}`,
@@ -924,7 +924,7 @@ router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'),
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Inpatient', action: 'PATIENT_DISCHARGED', entity_type: 'Admission', entity_id: req.params.id,
         description: `Patient discharged (${discharge_outcome})${discharge_reason ? ` — ${discharge_reason}` : ''}`,

@@ -222,7 +222,7 @@ router.post('/:code/:token/submit', payrollSignLimiter, async (req, res) => {
 
       try {
         const rr = require('./reports');
-        await rr.logAudit({
+        await rr.logAudit({ req,
           user_id: null, user_name: `${line.first_name} ${line.last_name} (self-service)`, user_role: 'employee',
           module: 'HR', action: 'PAYROLL_LINE_SIGNED', entity_type: 'PayrollRunLine', entity_id: line.id,
           description: `Payroll ${line.run_number} — ${line.first_name} ${line.last_name} self-confirmed and signed for payment, GL entry ${glEntry.gl_number}`,

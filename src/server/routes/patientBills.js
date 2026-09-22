@@ -736,7 +736,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
         }
         try {
           const rr = require('./reports');
-          await rr.logAudit({
+          await rr.logAudit({ req,
             clinic_id: billData.clinic_id, user_id: req.user?.id, user_name: billData.created_by || req.user?.displayName, user_role: req.user?.role,
             module: 'Billing', action: 'GL_POSTING_FAILED', entity_type: 'PatientBill', entity_id: bill.id,
             description: `Bill ${bill.bill_number} was created but its accounting entry failed to post — total ${billData.total_amount} is not reflected in the ledger and needs manual reconciliation. Reason: ${BillingIntegrationService.lastBillPostingError || 'not recorded'}`,
@@ -757,7 +757,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: billData.clinic_id, user_id: req.user?.id, user_name: billData.created_by || req.user?.displayName, user_role: req.user?.role,
         module: 'Billing', action: wasNewBill ? 'BILL_CREATED' : 'BILL_SERVICES_ADDED', entity_type: 'PatientBill', entity_id: bill.id,
         description: wasNewBill
@@ -1020,7 +1020,7 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: bill.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName, user_role: req.user?.role,
         module: 'Billing', action: 'BILL_SERVICES_ADDED', entity_type: 'PatientBill', entity_id: billId,
         description: `${pricedServices.length} item${pricedServices.length === 1 ? '' : 's'} added to bill ${bill.bill_number} — new total ${newTotalAmount}`,
@@ -1285,7 +1285,7 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: bill.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Billing', action: 'BILL_ITEM_VOIDED', entity_type: 'PatientBill', entity_id: billId,
         description: `Voided "${item.serviceName || item.name || 'item'}" (${parseFloat(item.totalPrice) || 0}) on bill ${bill.bill_number}${reason ? ` — ${reason}` : ''}`,
@@ -1819,7 +1819,7 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: updatedBill?.clinic_id, user_id: req.body.cashierId || req.user?.id, user_name: req.body.cashierName || req.user?.displayName, user_role: req.user?.role,
         module: 'Billing', action: 'PAYMENT_RECORDED', entity_type: 'PatientBill', entity_id: billId,
         description: `Payment of ${paymentData.amount} (${paymentData.payment_method}) recorded on bill ${updatedBill?.bill_number} — receipt ${receiptNumber}`,

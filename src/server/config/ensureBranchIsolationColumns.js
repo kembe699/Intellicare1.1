@@ -39,6 +39,10 @@ const TABLES_NEEDING_BRANCH_ID = [
   // reached through its already-filtered parent lab_test_id, so it doesn't
   // need one.
   'lab_tests',
+  // Staff-activity audit trail — was entirely unscoped, so a non-admin
+  // viewing the staff-activity report (reportAuditSummary.js) saw every
+  // other branch's activity too.
+  'audit_logs',
 ];
 
 async function ensureBranchIsolationColumns(sequelize, label = 'database') {

@@ -135,6 +135,9 @@ router.get('/items/:id', authorize('inventory.read'), async (req, res) => {
     if (items.length === 0) return res.status(404).json({ error: 'Item not found' });
 
     const item = items[0];
+    if (!BranchQueryFilter.canAccessRecord(item, req.branchContext)) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
 
     // Get batches
     try {
@@ -518,7 +521,7 @@ router.post('/items/bulk-price-adjustment', authorize('inventory.write'), async 
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Inventory', action: 'BULK_PRICE_ADJUSTMENT', entity_type: 'InventoryItem', entity_id: null,
         description,
@@ -547,6 +550,16 @@ router.post('/items/bulk-price-adjustment', authorize('inventory.write'), async 
 router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+
+    const [existingItems] = await sequelize.query(
+      `SELECT id, branch_id FROM inventory_items WHERE id = :id AND clinic_id = :clinicId`,
+      { replacements: { id: req.params.id, clinicId } }
+    );
+    if (existingItems.length === 0) return res.status(404).json({ error: 'Item not found' });
+    if (!BranchQueryFilter.canAccessRecord(existingItems[0], req.branchContext)) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
     const fields = [];
     const replacements = { id: req.params.id, clinicId };
     const allowed = [
@@ -631,7 +644,7 @@ router.delete('/items/clear-all', authorize(['admin']), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: parseInt(clinic_id), user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Inventory', action: 'INVENTORY_CLEARED', entity_type: 'InventoryItem', entity_id: null,
         description: `Cleared all ${itemsBeingDeleted.length} inventory item(s) for clinic ${clinic_id}`,

@@ -595,7 +595,7 @@ router.put('/orders/:id/close', authorize('lis.clinical.write'), async (req, res
         { replacements: [id] }
       );
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Clinical', action: 'VISIT_CLOSED', entity_type: 'LisTestOrder', entity_id: id,
         description: order ? `Visit closed for ${order.first_name} ${order.last_name} (${order.participant_number})` : `Visit closed (order ${id})`,

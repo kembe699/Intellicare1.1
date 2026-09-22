@@ -94,7 +94,7 @@ router.post('/', authorize('procurement.purchase_orders.write'), async (req, res
     });
     
     console.log('Purchase order created successfully:', order.toJSON());
-    try { const rr = require('./reports'); await rr.logAudit({ user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Procurement', action: 'PO_CREATED', entity_type: 'PurchaseOrder', entity_id: String(order.id), description: `PO ${poNumber} created`, new_values: { po_number: poNumber, supplier_id: req.body.supplier_id }, ip_address: req.ip, status: 'success' }); } catch(e) {}
+    try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Procurement', action: 'PO_CREATED', entity_type: 'PurchaseOrder', entity_id: String(order.id), description: `PO ${poNumber} created`, new_values: { po_number: poNumber, supplier_id: req.body.supplier_id }, ip_address: req.ip, status: 'success' }); } catch(e) {}
     res.status(201).json(order);
   } catch (error) {
     console.error('=== ERROR CREATING PURCHASE ORDER ===');
@@ -259,7 +259,7 @@ router.put('/:id', authorize('procurement.purchase_orders.write'), async (req, r
     const prevStatus = order.status;
     await order.update(updateData);
     if (req.body.status && req.body.status !== prevStatus) {
-      try { const rr = require('./reports'); await rr.logAudit({ user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Procurement', action: `PO_STATUS_${req.body.status.toUpperCase()}`, entity_type: 'PurchaseOrder', entity_id: String(order.id), description: `PO ${order.po_number} status changed: ${prevStatus} → ${req.body.status}`, old_values: { status: prevStatus }, new_values: { status: req.body.status }, ip_address: req.ip, status: 'success' }); } catch(e) {}
+      try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Procurement', action: `PO_STATUS_${req.body.status.toUpperCase()}`, entity_type: 'PurchaseOrder', entity_id: String(order.id), description: `PO ${order.po_number} status changed: ${prevStatus} → ${req.body.status}`, old_values: { status: prevStatus }, new_values: { status: req.body.status }, ip_address: req.ip, status: 'success' }); } catch(e) {}
     }
     res.json(order);
   } catch (error) {

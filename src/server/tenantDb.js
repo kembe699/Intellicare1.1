@@ -92,6 +92,16 @@ async function buildTenantConnection(schemaName) {
   const { ensureInpatientBedUniqueness } = require('./config/ensureInpatientBedUniqueness');
   ensureInpatientBedUniqueness(sequelize).catch(() => {});
 
+  // Widens inventory_items' and departments' item/department-code unique
+  // constraints from clinic-wide to (…, branch_id) — see
+  // ensureInventoryItemCodeUniqueness.js / ensureDepartmentCodeUniqueness.js
+  // for why the clinic-only versions wrongly blocked two different branches
+  // from ever sharing a code.
+  const { ensureInventoryItemCodeUniqueness } = require('./config/ensureInventoryItemCodeUniqueness');
+  ensureInventoryItemCodeUniqueness(sequelize, schema).catch(() => {});
+  const { ensureDepartmentCodeUniqueness } = require('./config/ensureDepartmentCodeUniqueness');
+  ensureDepartmentCodeUniqueness(sequelize, schema).catch(() => {});
+
   return { sequelize, models };
 }
 

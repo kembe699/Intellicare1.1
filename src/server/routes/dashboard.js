@@ -3,6 +3,20 @@ const router = express.Router();
 const { PatientQueue, Visit, sequelize } = require('../models');
 const { getBranchCondition } = require('../middleware/branchFilter');
 
+// Non-admin users only see rows from their own branch; admins see
+// everything. Inline, named-`:param`-style helper (this file's raw SQL
+// queries below use named replacements, not branchFilter.js's
+// getBranchConditionSQL, which uses positional `?` placeholders that can't
+// mix with the named :params used here) — same convention as hr.js's
+// branchScope() and labTests.js's branchScope().
+function branchScope(req, replacements, column = 'branch_id') {
+  if (req.user?.role === 'admin') return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  return ` AND ${column} = :branchId`;
+}
+
 // Get dashboard statistics for a clinic
 router.get('/stats/:clinicId', async (req, res) => {
   try {
@@ -30,12 +44,15 @@ router.get('/stats/:clinicId', async (req, res) => {
     // helper's sake) is the legacy, barely-used table (3 stale rows). The
     // actual patient registry every real page (billing, pharmacy, reports,
     // inpatient, and the Patient Directory UI itself) reads and writes is
-    // lis_participants, which has no clinic_id/branch_id column at all — it
-    // isn't clinic-scoped, so neither is this count.
+    // lis_participants, which now has a branch_id column (see
+    // ensureBranchIsolationColumns.js) — scoped by branch below the same way
+    // queuePatients/todayVisits already are.
     const branchWhere = getBranchCondition(req);
     let totalPatients = 0;
     try {
-      const [[row]] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM lis_participants`);
+      const replacements = {};
+      const branchSQL = branchScope(req, replacements);
+      const [[row]] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM lis_participants WHERE 1=1${branchSQL}`, { replacements });
       totalPatients = parseInt(row?.cnt || 0);
     } catch (error) {
       console.log('Total patients count error:', error.message);
@@ -45,9 +62,11 @@ router.get('/stats/:clinicId', async (req, res) => {
     // Today's Registrations
     let todayRegistrations = 0;
     try {
+      const replacements = { today, tomorrow };
+      const branchSQL = branchScope(req, replacements);
       const [[row]] = await sequelize.query(
-        `SELECT COUNT(*) AS cnt FROM lis_participants WHERE created_at >= :today AND created_at < :tomorrow`,
-        { replacements: { today, tomorrow } }
+        `SELECT COUNT(*) AS cnt FROM lis_participants WHERE created_at >= :today AND created_at < :tomorrow${branchSQL}`,
+        { replacements }
       );
       todayRegistrations = parseInt(row?.cnt || 0);
     } catch (error) {
@@ -88,16 +107,20 @@ router.get('/stats/:clinicId', async (req, res) => {
     // (the actively-used lab pipeline) writes to.
     let pendingLabTests = 0;
     try {
+      // No facility filter: lis_test_orders.clinic_id is the *consulting*
+      // clinic (a dr_clinics UUID, alongside clinic_name/room_number), not
+      // the facility id — comparing it to a numeric clinic_id matched nothing
+      // under MySQL (which coerced the UUID to 0) and errors outright on
+      // Postgres, so this count silently read 0 either way. Each tenant has
+      // its own database, so the whole table already belongs to one facility.
+      // It's still branch-scoped, though — lis_specimens has its own
+      // branch_id (see ensureBranchIsolationColumns.js).
+      const replacements = {};
+      const branchSQL = branchScope(req, replacements, 's.branch_id');
       const [[row]] = await sequelize.query(
-        // No facility filter: lis_test_orders.clinic_id is the *consulting*
-        // clinic (a dr_clinics UUID, alongside clinic_name/room_number), not
-        // the facility id — comparing it to a numeric clinic_id matched nothing
-        // under MySQL (which coerced the UUID to 0) and errors outright on
-        // Postgres, so this count silently read 0 either way. Each tenant has
-        // its own database, so the whole table already belongs to one facility.
         `SELECT COUNT(*) AS cnt FROM lis_specimens s
-         WHERE s.status NOT IN ('approved', 'queried', 'cancelled')`,
-        {}
+         WHERE s.status NOT IN ('approved', 'queried', 'cancelled')${branchSQL}`,
+        { replacements }
       );
       pendingLabTests = parseInt(row?.cnt || 0);
     } catch (error) {
@@ -107,11 +130,13 @@ router.get('/stats/:clinicId', async (req, res) => {
     // Completed Lab Tests (today)
     let completedLabTests = 0;
     try {
+      const replacements = { today, tomorrow };
+      const branchSQL = branchScope(req, replacements, 's.branch_id');
       const [[row]] = await sequelize.query(
         `SELECT COUNT(*) AS cnt FROM lis_specimens s
          WHERE s.status = 'approved'
-           AND s.updated_at >= :today AND s.updated_at < :tomorrow`,
-        { replacements: { today, tomorrow } }
+           AND s.updated_at >= :today AND s.updated_at < :tomorrow${branchSQL}`,
+        { replacements }
       );
       completedLabTests = parseInt(row?.cnt || 0);
     } catch (error) {
@@ -123,11 +148,13 @@ router.get('/stats/:clinicId', async (req, res) => {
     // inventory_items, which the active pharmacy-module pages read/write.
     let lowStockAlerts = 0;
     try {
+      const replacements = { clinicId: parseInt(clinicId) };
+      const branchSQL = branchScope(req, replacements);
       const [[row]] = await sequelize.query(
         `SELECT COUNT(*) AS cnt FROM inventory_items
          WHERE clinic_id = :clinicId AND is_active = true
-           AND quantity_on_hand <= minimum_stock_level`,
-        { replacements: { clinicId: parseInt(clinicId) } }
+           AND quantity_on_hand <= minimum_stock_level${branchSQL}`,
+        { replacements }
       );
       lowStockAlerts = parseInt(row?.cnt || 0);
     } catch (error) {
@@ -144,10 +171,12 @@ router.get('/stats/:clinicId', async (req, res) => {
     // of the dashboard uses — outstanding has no such "period" of its own, it's owed right now.
     let totalOutstanding = 0;
     try {
+      const replacements = { clinicId: parseInt(clinicId) };
+      const branchSQL = branchScope(req, replacements);
       const [[row]] = await sequelize.query(
         `SELECT COALESCE(SUM(GREATEST(balance_amount, 0)), 0) AS outstanding
-         FROM patient_bills WHERE clinic_id = :clinicId AND status != 'cancelled'`,
-        { replacements: { clinicId: parseInt(clinicId) } }
+         FROM patient_bills WHERE clinic_id = :clinicId AND status != 'cancelled'${branchSQL}`,
+        { replacements }
       );
       totalOutstanding = parseFloat(row?.outstanding || 0);
     } catch (error) {

@@ -1338,7 +1338,7 @@ router.put('/purchase-orders/:id/items/:itemId', authorize('procurement.purchase
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
         user_role: req.user?.role, module: 'Procurement', action: 'PO_ITEM_UPDATED',
         entity_type: 'PurchaseOrderItem', entity_id: String(req.params.itemId),
@@ -1381,7 +1381,7 @@ router.delete('/purchase-orders/:id/items/:itemId', authorize('procurement.purch
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
         user_role: req.user?.role, module: 'Procurement', action: 'PO_ITEM_REMOVED',
         entity_type: 'PurchaseOrderItem', entity_id: String(req.params.itemId),
@@ -1414,7 +1414,7 @@ router.delete('/purchase-orders/:id', authorize('procurement.purchase_orders.wri
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
         user_role: req.user?.role, module: 'Procurement', action: 'PO_DELETED',
         entity_type: 'PurchaseOrder', entity_id: String(po.id),

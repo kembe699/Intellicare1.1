@@ -207,7 +207,7 @@ router.put('/:id', authorize('patients.write'), async (req, res) => {
     try {
       const changedFields = Object.keys(branchSafePayload).filter(k => JSON.stringify(beforeValues[k]) !== JSON.stringify(branchSafePayload[k]));
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: patient.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Patients', action: 'PATIENT_UPDATED', entity_type: 'Patient', entity_id: patient.id,
         description: `Updated patient ${patient.first_name} ${patient.last_name} (${patient.patient_id}) — changed: ${changedFields.join(', ') || 'no fields'}`,
@@ -240,7 +240,7 @@ router.delete('/:id', authorize('patients.delete'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: deletedInfo.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Patients', action: 'PATIENT_DELETED', entity_type: 'Patient', entity_id: req.params.id,
         description: `Deleted patient ${deletedInfo.first_name} ${deletedInfo.last_name} (${deletedInfo.patient_id})`,

@@ -347,7 +347,7 @@ router.post('/', authorize('deposits.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Billing', action: 'PATIENT_DEPOSIT_TAKEN', entity_type: 'PatientDeposit', entity_id: receiptId,
         description: `Deposit of ${amountNum} ${currency} taken from ${patient_name || patient_id} (${receiptNumber}) — new balance ${balance}`,
@@ -418,7 +418,7 @@ router.post('/:patientId/refund', requireApprovalPermission('deposit_refund_appr
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Billing', action: 'PATIENT_DEPOSIT_REFUNDED', entity_type: 'PatientDeposit', entity_id: receiptId,
         description: `Deposit refund of ${amountNum} ${currency} paid to ${patient_name || patientId} (${receiptNumber}) — new balance ${balance}`,

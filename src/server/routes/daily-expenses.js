@@ -586,7 +586,7 @@ router.post('/consultant-bill-payment', authorize('expenses.write'), async (req,
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
         module: 'HR', action: 'CONSULTANT_BILL_PAID', entity_type: 'ConsultantBill', entity_id: bill.id,
         description: `Consultant bill ${bill.bill_number} paid to ${consultantLabel} — ${billCurrency} ${bill.bill_amount}${glEntry ? `, GL entry ${glEntry.gl_number}` : ''}`,
@@ -661,7 +661,7 @@ router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
       { replacements: { id: expenseId } }
     );
 
-    try { const rr = require('./reports'); await rr.logAudit({ user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Expenses', action: 'EXPENSE_PAID', entity_type: 'DailyExpense', entity_id: String(expenseId), description: `Expense paid: ${exp.description} — ${exp.amount} (voucher: ${exp.voucher_number})`, ip_address: req.ip, status: 'success' }); } catch(e) {}
+    try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Expenses', action: 'EXPENSE_PAID', entity_type: 'DailyExpense', entity_id: String(expenseId), description: `Expense paid: ${exp.description} — ${exp.amount} (voucher: ${exp.voucher_number})`, ip_address: req.ip, status: 'success' }); } catch(e) {}
     res.json({ success: true, status: 'paid', voucher_number: exp.voucher_number });
   } catch (error) {
     console.error('Error processing payment:', error);
@@ -742,7 +742,7 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
       );
     }
 
-    try { const rr = require('./reports'); await rr.logAudit({ user_id: req.user?.id, user_name: dbUser.display_name, user_role: req.user?.role, module: 'Expenses', action: nextLevel === 2 ? 'EXPENSE_FINAL_APPROVED' : 'EXPENSE_APPROVED', entity_type: 'DailyExpense', entity_id: String(expenseId), description: `Expense approval level ${nextLevel} by ${dbUser.display_name}${voucherNo ? ` — voucher ${voucherNo}` : ''}`, ip_address: req.ip, status: 'success' }); } catch(e) {}
+    try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: dbUser.display_name, user_role: req.user?.role, module: 'Expenses', action: nextLevel === 2 ? 'EXPENSE_FINAL_APPROVED' : 'EXPENSE_APPROVED', entity_type: 'DailyExpense', entity_id: String(expenseId), description: `Expense approval level ${nextLevel} by ${dbUser.display_name}${voucherNo ? ` — voucher ${voucherNo}` : ''}`, ip_address: req.ip, status: 'success' }); } catch(e) {}
     res.status(201).json({ id, approval_level: nextLevel, approved_by: dbUser.display_name, signature: dbUser.signature || null, total_approvals: nextLevel, voucher_number: voucherNo });
   } catch (error) {
     console.error('Error submitting expense approval:', error);
@@ -835,7 +835,7 @@ router.put('/:id', authorize('expenses.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
         module: 'Expenses', action: 'EXPENSE_UPDATED', entity_type: 'DailyExpense', entity_id: String(id),
         description: `Expense edited before approval: ${next.description} — ${next.amount}`,
@@ -863,7 +863,7 @@ router.delete('/:id', authorize('expenses.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
         module: 'Expenses', action: 'EXPENSE_DELETED', entity_type: 'DailyExpense', entity_id: String(id),
         description: `Expense removed before approval: ${expense.description} — ${expense.amount}`,
@@ -926,7 +926,7 @@ router.post('/:id/reject', requireApprovalPermission('expense_approve'), async (
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.display_name, user_role: req.user?.role,
         module: 'Expenses', action: 'EXPENSE_REJECTED', entity_type: 'DailyExpense', entity_id: String(id),
         description: `Expense rejected: ${expense.description} — ${expense.amount} (${String(reason).trim()})`,
@@ -976,7 +976,7 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
       status: 'pending_approval',
       branch_id: getCreateBranchId(req),
     });
-    try { const rr = require('./reports'); await rr.logAudit({ user_id: req.user?.id, user_name: created_by || req.user?.display_name, user_role: req.user?.role, module: 'Expenses', action: 'EXPENSE_CREATED', entity_type: 'DailyExpense', entity_id: String(expense.id), description: `Expense created: ${description} — ${amount}`, new_values: { amount, category, account_name: accountName }, ip_address: req.ip, status: 'success' }); } catch(e) {}
+    try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: created_by || req.user?.display_name, user_role: req.user?.role, module: 'Expenses', action: 'EXPENSE_CREATED', entity_type: 'DailyExpense', entity_id: String(expense.id), description: `Expense created: ${description} — ${amount}`, new_values: { amount, category, account_name: accountName }, ip_address: req.ip, status: 'success' }); } catch(e) {}
     res.status(201).json({ ...expense.toJSON(), status: 'pending_approval' });
   } catch (error) {
     console.error('Error creating expense:', error);

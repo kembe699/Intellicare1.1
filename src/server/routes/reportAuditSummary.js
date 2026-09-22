@@ -78,7 +78,24 @@ router.get('/', async (req, res) => {
     const toTs = `${dateTo} 23:59:59`;
     const repl = { clinicId, fromTs, toTs, rowCap: ACTIVITY_ROW_CAP, userId };
 
-    const scopeClause = `(al.clinic_id = :clinicId OR al.clinic_id IS NULL) AND al.created_at BETWEEN :fromTs AND :toTs`;
+    // Non-admin users only see their own branch's staff activity; admins see
+    // the whole clinic. Same clinic_id-NULL-is-in-scope reasoning as above
+    // applies to branch_id: a lot of rows (e.g. LOGIN, or anything logged by
+    // a system/background job) predate branch context or have none, and
+    // hiding those from every non-admin would silently drop a large share of
+    // real activity rather than just scoping it. Inline, named-`:param`-style
+    // helper — this file's raw SQL uses named replacements, not
+    // branchFilter.js's positional `?` placeholders.
+    let branchScopeSQL = '';
+    if (req.user?.role !== 'admin') {
+      const branchId = req.branchContext?.branchId || req.user?.branchId || null;
+      if (branchId) {
+        branchScopeSQL = ' AND (al.branch_id = :branchId OR al.branch_id IS NULL)';
+        repl.branchId = branchId;
+      }
+    }
+
+    const scopeClause = `(al.clinic_id = :clinicId OR al.clinic_id IS NULL) AND al.created_at BETWEEN :fromTs AND :toTs${branchScopeSQL}`;
     const userScopeClause = userId ? `${scopeClause} AND al.user_id = :userId` : scopeClause;
 
     // 1. Summary tiles — total actions, active staff count, most active user, top action.

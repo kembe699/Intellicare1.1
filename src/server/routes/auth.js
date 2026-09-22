@@ -459,7 +459,7 @@ router.post('/logout', async (req, res) => {
       const d = jwt2.decode(token);
       if (d?.userId) {
         const rr = require('./reports');
-        await rr.logAudit({ user_id: d.userId, user_name: d.display_name || d.email, user_role: d.role, module: 'Authentication', action: 'LOGOUT', entity_type: 'User', entity_id: String(d.userId), description: `User logged out`, ip_address: req.ip, status: 'success' });
+        await rr.logAudit({ req, user_id: d.userId, user_name: d.display_name || d.email, user_role: d.role, module: 'Authentication', action: 'LOGOUT', entity_type: 'User', entity_id: String(d.userId), description: `User logged out`, ip_address: req.ip, status: 'success' });
       }
     }
   } catch(e) {}

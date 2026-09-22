@@ -1830,10 +1830,22 @@ router.get('/supplier-bills-report', async (req, res) => {
 router.logAudit = async function(data) {
   try {
     const { v4: uuidv4 } = require('uuid');
+    // branch_id: pass it explicitly (data.branch_id), or pass the Express
+    // `req` (data.req) and it's derived the same way every other
+    // branch-scoped write derives it — see middleware/branchFilter.js's
+    // getCreateBranchId. Admins and callers with no request context (system/
+    // background jobs) stamp null, which reportAuditSummary.js treats as
+    // visible tenant-wide rather than hidden from everyone.
+    let branchId = data.branch_id;
+    if (branchId === undefined && data.req) {
+      const { getCreateBranchId } = require('../middleware/branchFilter');
+      branchId = getCreateBranchId(data.req);
+    }
+    if (branchId === undefined) branchId = null;
     await sequelize.query(
-      `INSERT INTO audit_logs (id, clinic_id, user_id, user_name, user_role, module, action, entity_type, entity_id, description, old_values, new_values, ip_address, user_agent, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      { replacements: [uuidv4(), data.clinic_id || null, data.user_id || null, data.user_name || null, data.user_role || null, data.module, data.action, data.entity_type || null, data.entity_id || null, data.description || null, data.old_values ? JSON.stringify(data.old_values) : null, data.new_values ? JSON.stringify(data.new_values) : null, data.ip_address || null, data.user_agent || null, data.status || 'success'] }
+      `INSERT INTO audit_logs (id, clinic_id, branch_id, user_id, user_name, user_role, module, action, entity_type, entity_id, description, old_values, new_values, ip_address, user_agent, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      { replacements: [uuidv4(), data.clinic_id || null, branchId, data.user_id || null, data.user_name || null, data.user_role || null, data.module, data.action, data.entity_type || null, data.entity_id || null, data.description || null, data.old_values ? JSON.stringify(data.old_values) : null, data.new_values ? JSON.stringify(data.new_values) : null, data.ip_address || null, data.user_agent || null, data.status || 'success'] }
     );
   } catch(e) { console.log('Audit log write error:', e.message); }
 };

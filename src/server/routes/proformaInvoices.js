@@ -118,7 +118,7 @@ router.post('/', authorize('proforma.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName, user_role: req.user?.role,
         module: 'Billing', action: 'PROFORMA_CREATED', entity_type: 'ProformaInvoice', entity_id: id,
         description: `Proforma ${proformaNumber} created for ${patient_name} — ${items.length} item(s), ${subtotal}`,
@@ -135,8 +135,9 @@ router.post('/', authorize('proforma.write'), async (req, res) => {
 
 router.delete('/:id', authorize('proforma.write'), async (req, res) => {
   try {
-    const [[row]] = await sequelize.query(`SELECT status FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id } });
+    const [[row]] = await sequelize.query(`SELECT status, branch_id FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id } });
     if (!row) return res.status(404).json({ error: 'Proforma invoice not found' });
+    if (!BranchQueryFilter.canAccessRecord(row, req.branchContext)) return res.status(404).json({ error: 'Proforma invoice not found' });
     if (row.status === 'converted') return res.status(400).json({ error: 'Cannot delete a proforma that has already been converted to a bill' });
     await sequelize.query(`DELETE FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id } });
     res.json({ message: 'Proforma invoice deleted' });
@@ -154,15 +155,27 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
   try {
     const [[proforma]] = await sequelize.query(`SELECT * FROM proforma_invoices WHERE id = :id`, { replacements: { id: req.params.id }, transaction: t });
     if (!proforma) { await t.rollback(); return res.status(404).json({ error: 'Proforma invoice not found' }); }
+    if (!BranchQueryFilter.canAccessRecord(proforma, req.branchContext)) { await t.rollback(); return res.status(404).json({ error: 'Proforma invoice not found' }); }
     if (proforma.status === 'converted') { await t.rollback(); return res.status(400).json({ error: 'This proforma has already been converted to a bill' }); }
 
     const items = typeof proforma.items === 'string' ? JSON.parse(proforma.items) : proforma.items;
     const clinicId = proforma.clinic_id;
 
+    // Only fold into an existing bill from the SAME branch as the proforma —
+    // otherwise a proforma converted at Branch B could silently merge its
+    // items into a still-open bill left over from Branch A, moving money
+    // across the branch boundary this whole file otherwise enforces.
+    const billBranchClause = proforma.branch_id ? ' AND branch_id = :branchId' : '';
     const [[existingBill]] = await sequelize.query(`
       SELECT * FROM patient_bills WHERE patient_id = :patient_id AND clinic_id = :clinicId
-        AND status IN ('pending', 'partial') ORDER BY created_at DESC LIMIT 1
-    `, { replacements: { patient_id: proforma.patient_id, clinicId }, transaction: t });
+        AND status IN ('pending', 'partial')${billBranchClause} ORDER BY created_at DESC LIMIT 1
+    `, {
+      replacements: {
+        patient_id: proforma.patient_id, clinicId,
+        ...(proforma.branch_id ? { branchId: proforma.branch_id } : {}),
+      },
+      transaction: t,
+    });
 
     let billId;
     if (existingBill) {
@@ -180,12 +193,13 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
       const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
       await sequelize.query(`
         INSERT INTO patient_bills
-          (id, bill_number, patient_id, patient_name, clinic_id, total_amount, paid_amount, balance_amount, status, bill_date, services, notes, created_by, created_at, updated_at)
+          (id, bill_number, patient_id, patient_name, clinic_id, branch_id, total_amount, paid_amount, balance_amount, status, bill_date, services, notes, created_by, created_at, updated_at)
         VALUES
-          (:id, :billNumber, :patient_id, :patient_name, :clinicId, :total, 0, :total, 'pending', NOW(), :services, :notes, :created_by, NOW(), NOW())
+          (:id, :billNumber, :patient_id, :patient_name, :clinicId, :branchId, :total, 0, :total, 'pending', NOW(), :services, :notes, :created_by, NOW(), NOW())
       `, {
         replacements: {
           id: billId, billNumber, patient_id: proforma.patient_id, patient_name: proforma.patient_name, clinicId,
+          branchId: proforma.branch_id || null,
           total: proforma.subtotal, services: JSON.stringify(items),
           notes: `Converted from proforma invoice ${proforma.proforma_number}`,
           created_by: req.user?.displayName || req.user?.email || 'System',
@@ -201,7 +215,7 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName, user_role: req.user?.role,
         module: 'Billing', action: 'PROFORMA_CONVERTED', entity_type: 'ProformaInvoice', entity_id: proforma.id,
         description: `Proforma ${proforma.proforma_number} converted to bill for ${proforma.patient_name}`,

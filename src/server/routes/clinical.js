@@ -710,7 +710,7 @@ router.put('/visits/:visitId/close', authorize('clinical.encounters.write'), asy
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: visit.clinic_id, user_id: req.user?.id, user_name: closedBy || req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Clinical', action: 'VISIT_CLOSED', entity_type: 'Visit', entity_id: visitId,
         description: `Visit closed for ${visit.patient_name || visit.patient_id}`,
@@ -868,7 +868,7 @@ router.post('/services/bulk-price-adjustment', authorize('clinical.services.repr
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: req.user?.clinicId || 1,
         user_id: req.user?.id,
         user_name: req.user?.displayName,

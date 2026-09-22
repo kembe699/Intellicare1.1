@@ -106,15 +106,27 @@ router.post('/', authorize('setup.departments.manage'), async (req, res) => {
     
     const id = uuidv4();
     const branchId = getCreateBranchId(req);
-    
-    // Check if department code already exists for this clinic
+
+    // Check if department code already exists — scoped to this branch
+    // (admins: clinic-wide), so a second branch creating its own department
+    // with the same code doesn't get a false "already exists" 409 against a
+    // different branch's department. Same convention as labTests.js's
+    // POST /with-components uses for its equivalent check.
+    const existsReplacements = { code: department_code.toUpperCase(), clinicId: clinic_id || 1 };
+    let existsBranchSQL = '';
+    if (branchId) {
+      existsBranchSQL = ' AND branch_id = :branchId';
+      existsReplacements.branchId = branchId;
+    } else if (req.user?.role !== 'admin') {
+      existsBranchSQL = ' AND branch_id IS NULL';
+    }
     const [existing] = await sequelize.query(`
-      SELECT id FROM departments 
-      WHERE department_code = :code AND clinic_id = :clinicId
+      SELECT id FROM departments
+      WHERE department_code = :code AND clinic_id = :clinicId${existsBranchSQL}
     `, {
-      replacements: { code: department_code.toUpperCase(), clinicId: clinic_id || 1 }
+      replacements: existsReplacements
     });
-    
+
     if (existing.length > 0) {
       return res.status(409).json({ error: 'Department code already exists for this clinic' });
     }

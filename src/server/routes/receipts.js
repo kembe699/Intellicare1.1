@@ -502,7 +502,7 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     if (previousStatus !== status) {
       try {
         const rr = require('./reports');
-        await rr.logAudit({
+        await rr.logAudit({ req,
           clinic_id: receipt.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
           module: 'Billing', action: status === 'voided' ? 'RECEIPT_VOIDED' : status === 'refunded' ? 'RECEIPT_REFUNDED' : 'RECEIPT_STATUS_CHANGED',
           entity_type: 'Receipt', entity_id: receiptId,

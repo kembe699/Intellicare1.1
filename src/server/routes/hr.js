@@ -1339,7 +1339,7 @@ router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write')
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'HR', action: 'PAYROLL_LINE_PAID', entity_type: 'PayrollRunLine', entity_id: line.id,
         description: `Payroll ${run.run_number} — ${line.first_name} ${line.last_name} paid, GL entry ${glEntry.gl_number}`,
@@ -1394,7 +1394,7 @@ router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, 
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'HR', action: 'PAYROLL_PAID', entity_type: 'PayrollRun', entity_id: run.id,
         description: `Payroll run ${run.run_number} — ${paidCount} employee(s) paid`,

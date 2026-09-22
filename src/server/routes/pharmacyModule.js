@@ -98,6 +98,7 @@ router.get('/drugs/:id', authorize('pharmacy.read'), async (req, res) => {
         i.reorder_quantity, i.is_active, i.is_controlled_substance, i.item_type,
         i.cogs_account_id, i.inventory_account_id,
         i.id AS inventory_item_id, i.item_name AS inventory_item_name,
+        i.branch_id,
         i.notes,
         d.strength, d.dosage_form, d.generic_name,
         d.requires_prescription, d.max_quantity_per_prescription,
@@ -108,6 +109,12 @@ router.get('/drugs/:id', authorize('pharmacy.read'), async (req, res) => {
       WHERE i.id = :id AND i.clinic_id = :cid
     `, { replacements: { id: req.params.id, cid } });
     if (rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+    // The `drugs` table itself carries no branch_id — this row's branch
+    // scope comes from the inventory_items row it's 1:1 with (see
+    // inventory.js's GET /items/:id, which applies the same check).
+    if (!BranchQueryFilter.canAccessRecord(rows[0], req.branchContext)) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
     res.json(rows[0]);
   } catch (error) {
     console.error('Error getting item:', error);
@@ -180,6 +187,19 @@ router.post('/drugs', authorize('pharmacy.write'), async (req, res) => {
 router.put('/drugs/:id', authorize('pharmacy.write'), async (req, res) => {
   try {
     const cid = BranchQueryFilter.resolveClinicId(req);
+
+    // `drugs` carries no branch_id of its own — its branch scope is the
+    // inventory_items row it's 1:1 with (via inventory_item_id), same as
+    // GET /drugs/:id above.
+    const [existingDrugs] = await sequelize.query(
+      `SELECT d.id, i.branch_id FROM drugs d LEFT JOIN inventory_items i ON i.id = d.inventory_item_id WHERE d.id = :id AND d.clinic_id = :cid`,
+      { replacements: { id: req.params.id, cid } }
+    );
+    if (existingDrugs.length === 0) return res.status(404).json({ error: 'Drug not found' });
+    if (!BranchQueryFilter.canAccessRecord(existingDrugs[0], req.branchContext)) {
+      return res.status(404).json({ error: 'Drug not found' });
+    }
+
     const fields = [];
     const replacements = { id: req.params.id, cid };
     const allowed = [
@@ -713,7 +733,7 @@ router.post('/prescriptions/:id/cancel', authorize('pharmacy.prescribe'), async 
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'PRESCRIPTION_CANCELLED', entity_type: 'Prescription', entity_id: req.params.id,
         description: `Prescription cancelled${reason ? ` — ${reason}` : ''}`,
@@ -848,7 +868,7 @@ router.post('/prescriptions/:id/lines', authorize('pharmacy.prescribe'), async (
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'PRESCRIPTION_LINE_ADDED', entity_type: 'Prescription', entity_id: req.params.id,
         description: `Drug added to prescription — qty ${quantity_prescribed || 1}`,
@@ -925,7 +945,7 @@ router.delete('/prescriptions/:id/lines/:lineId', authorize('pharmacy.prescribe'
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: line.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'PRESCRIPTION_LINE_REMOVED', entity_type: 'Prescription', entity_id: id,
         description: `Removed "${line.drug_name || 'item'}" from prescription before dispensing${billAdjusted ? ' (bill adjusted)' : ''}`,
@@ -1008,7 +1028,7 @@ router.put('/prescriptions/:id/lines/:lineId', authorize('pharmacy.prescribe'), 
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: line.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'PRESCRIPTION_LINE_QTY_CHANGED', entity_type: 'Prescription', entity_id: id,
         description: `Changed "${line.drug_name || 'item'}" quantity from ${line.quantity_prescribed} to ${newQty}${billAdjusted ? ' (bill adjusted)' : ''}`,
@@ -1104,7 +1124,7 @@ router.put('/prescriptions/:id/lines/:lineId/reprice', authorize('pharmacy.presc
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: line.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'PRESCRIPTION_LINE_REPRICED', entity_type: 'Prescription', entity_id: id,
         description: `Repriced "${line.drug_name || 'item'}" to ${unitPrice}/unit (scheme rate)`,
@@ -1733,7 +1753,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: cid, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'DRUG_DISPENSED', entity_type: 'DispensingRecord', entity_id: dispId,
         description: `Dispensed ${quantity_dispensed} × ${drug.drug_name} (${dispensingNumber}) — ${totalPrice}${selectedBatch?.batch_number ? `, batch ${selectedBatch.batch_number}` : ''}`,
@@ -1966,7 +1986,7 @@ router.post('/returns', authorize('pharmacy.write'), async (req, res) => {
 
     try {
       const rr = require('./reports');
-      await rr.logAudit({
+      await rr.logAudit({ req,
         clinic_id: cid, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Pharmacy', action: 'DRUG_RETURNED', entity_type: 'DispensingRecord', entity_id: dispensing_record_id,
         description: `Returned ${qty} × ${record.dispensing_number} (${return_reason || 'unused'}) — refund ${refundAmount}`,
