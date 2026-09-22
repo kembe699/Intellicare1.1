@@ -40,8 +40,15 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false,
   },
+  // Plain string, not DataTypes.ENUM — the actual users.role column has been plain
+  // TEXT for a while (no DB-level enum constraint at all), but Sequelize's ENUM type
+  // validates client-side against exactly the list given here before a query is even
+  // sent. Security.tsx's role dropdown is fed live from GET /api/roles, which includes
+  // any custom role an admin creates (e.g. "Branch Manager") alongside the system
+  // ones — so picking a custom role as a user's primary role always 500'd with a
+  // Sequelize ValidationError, even though the database itself would have accepted it.
   role: {
-    type: DataTypes.ENUM('admin', 'doctor', 'lab', 'pharmacy', 'reception', 'reports', 'accountant', 'finance_manager', 'auditor', 'procurement', 'nurse'),
+    type: DataTypes.STRING,
     allowNull: false,
   },
   clinic_id: {

@@ -71,6 +71,13 @@ async function buildTenantConnection(schemaName) {
   const { ensurePrivilegesCatalog } = require('./config/ensurePrivilegesCatalog');
   ensureRolesTables(sequelize)
     .then(() => ensurePrivilegesCatalog(sequelize))
+    .then(() => {
+      // Needs the roles table (and its system-role rows) to already exist — see
+      // ensureUsersRoleForeignKey.js for why users.role's old hardcoded CHECK
+      // constraint blocked ever assigning a custom role as someone's primary role.
+      const { ensureUsersRoleForeignKey } = require('./config/ensureUsersRoleForeignKey');
+      return ensureUsersRoleForeignKey(sequelize, schema);
+    })
     .catch(() => {});
 
   // In-app notifications table, ensured per-tenant the same way.
