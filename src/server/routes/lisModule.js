@@ -930,7 +930,13 @@ async function getCollectiblePool(db, patientId) {
       const name = String(s.serviceName || '').toLowerCase().trim().replace(INPATIENT_LAB_BILL_PREFIX, '');
       if (!name) continue;
       const isIndividuallyInsured = s.schemePrice != null && (parseFloat(s.unitPrice) || 0) === 0;
-      if (!(billIsScheme || s.paid || isIndividuallyInsured)) continue;
+      // A line billed at exactly 0 has nothing left to collect, full stop — true whether
+      // it's scheme-priced, individually insured, or a plain cash line that just happens
+      // to be free. Checked as its own condition (not folded into isIndividuallyInsured,
+      // which also requires schemePrice to be set) so a genuinely zero-priced cash item
+      // is never blocked waiting for a payment nobody will ever make.
+      const isZeroPriced = (parseFloat(s.unitPrice) || 0) === 0;
+      if (!(billIsScheme || s.paid || isIndividuallyInsured || isZeroPriced)) continue;
       pool.set(name, (pool.get(name) || 0) + 1);
     }
   }
@@ -940,8 +946,17 @@ async function getCollectiblePool(db, patientId) {
 // Consumes getCollectiblePool() against a patient's specimens in a fixed, deterministic
 // order (oldest first) so the same specimen always resolves the same way regardless of
 // which endpoint asks — the list view and the single-specimen collect action must agree.
-function markCollectible(specimensForPatient, pool) {
+//
+// freeTenant (true only for the dpoc schema — see both call sites below) skips the whole
+// pool match: every service at this facility is free, so a matching bill line may not even
+// exist yet (billOrderItems only bills what's actually selected, and a front-desk workflow
+// built around "nothing is ever paid for" has no reason to create one) — waiting for a bill
+// line that was never going to appear left every specimen stuck on "Payment Required"
+// forever. Scoped to this one tenant rather than turned into a general bypass, since every
+// other tenant is a real paying facility where this gate is doing real work.
+function markCollectible(specimensForPatient, pool, freeTenant = false) {
   for (const s of specimensForPatient) {
+    if (freeTenant) { s.item_paid = true; continue; }
     const name = String(s.test_name || '').toLowerCase().trim();
     const remaining = pool.get(name) || 0;
     if (remaining > 0) {
@@ -983,9 +998,10 @@ router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, re
       if (!byPatient.has(s.participant_id)) byPatient.set(s.participant_id, []);
       byPatient.get(s.participant_id).push(s);
     }
+    const freeTenant = req.tenantSchema === 'tenant_dpoc';
     for (const [patientId, list] of byPatient) {
       const pool = await getCollectiblePool(db, patientId);
-      markCollectible(list, pool);
+      markCollectible(list, pool, freeTenant);
     }
 
     res.json(specimens);
@@ -1057,7 +1073,7 @@ router.post('/specimens/:id/collect', authorize('lis.specimen.write'), async (re
       { replacements: [specimenRow.participant_id] }
     );
     const pool = await getCollectiblePool(db, specimenRow.participant_id);
-    markCollectible(siblings, pool);
+    markCollectible(siblings, pool, req.tenantSchema === 'tenant_dpoc');
     const thisOne = siblings.find(s => s.id === id);
     if (!thisOne?.item_paid) {
       return res.status(402).json({
