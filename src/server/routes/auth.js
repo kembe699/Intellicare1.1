@@ -298,6 +298,16 @@ router.get('/verify', async (req, res) => {
 
     const branchContext = await loadUserBranchContext(sequelize, user);
 
+    // A token minted before clientCode existed carries no clientCode claim at all —
+    // resolved fresh here (by schema, the one thing every token has always carried)
+    // so a plain page refresh picks it up immediately, not only after an explicit
+    // logout/login or a 24h token expiry.
+    let clientCode = decoded.clientCode;
+    if (!clientCode) {
+      const client = await Client.findOne({ where: { schema_name: decoded.schemaName } });
+      clientCode = client?.code || null;
+    }
+
     // Re-issue the token when the identity it carries has drifted from the
     // database.
     //
@@ -307,10 +317,13 @@ router.get('/verify', async (req, res) => {
     // an empty clinic until the token expires — up to 24 hours, and a page
     // refresh does not help, because /me only handed back a new token when the
     // role or branch differed. That is what left a pharmacy account staring at
-    // an empty inventory after its clinic had already been fixed.
+    // an empty inventory after its clinic had already been fixed. clientCode is
+    // checked the same way, for the same reason — otherwise a tenant-gated
+    // feature stays invisible to an already-logged-in user for up to 24h.
     const freshToken = (decoded.role !== user.role
       || decoded.clinicId !== user.clinic_id
-      || decoded.branchId !== (branchContext.primaryBranch?.id || user.branch_id || null))
+      || decoded.branchId !== (branchContext.primaryBranch?.id || user.branch_id || null)
+      || decoded.clientCode !== clientCode)
       ? jwt.sign(
           {
             userId: user.id,
@@ -319,7 +332,7 @@ router.get('/verify', async (req, res) => {
             clinicId: user.clinic_id,
             branchId: branchContext.primaryBranch?.id || user.branch_id || null,
             schemaName: decoded.schemaName,
-            clientCode: decoded.clientCode
+            clientCode
           },
           JWT_SECRET,
           { expiresIn: '24h' }
@@ -327,9 +340,7 @@ router.get('/verify', async (req, res) => {
       : null;
 
     res.json({
-      // decoded.clientCode is undefined only for a token minted before this field
-      // existed — resolves itself once that token expires and the user logs in again.
-      user: { ...(await buildUserResponse(user, branchContext, sequelize, decoded.schemaName)), tenantCode: decoded.clientCode },
+      user: { ...(await buildUserResponse(user, branchContext, sequelize, decoded.schemaName)), tenantCode: clientCode },
       ...(freshToken && { token: freshToken })
     });
   } catch (error) {
