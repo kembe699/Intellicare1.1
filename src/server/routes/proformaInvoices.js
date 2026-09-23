@@ -8,6 +8,7 @@ const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+const AccountingService = require('../services/AccountingService');
 
 function getClinicId(req) {
   return parseInt(req.query.clinic_id || req.body.clinic_id) || req.user?.clinicId || 1;
@@ -160,6 +161,48 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
 
     const items = typeof proforma.items === 'string' ? JSON.parse(proforma.items) : proforma.items;
     const clinicId = proforma.clinic_id;
+    const proformaCurrency = proforma.currency || 'SSP';
+
+    // Converts the proforma's items/subtotal from proformaCurrency into targetCurrency
+    // using the rate configured under Accounting → Exchange Rates. A proforma is always
+    // quoted in a single currency, so one rate covers the whole thing. When both
+    // currencies already match, this is a no-op — no rate lookup, no rounding drift.
+    // Throws (isExchangeRateError) rather than silently billing the raw foreign-currency
+    // number as if it were the target currency, matching computeBaseCurrencyTotal's
+    // convention in patientBills.js.
+    async function convertToCurrency(targetCurrency) {
+      const subtotal = parseFloat(proforma.subtotal) || 0;
+      if (proformaCurrency === targetCurrency) {
+        return { items, subtotal };
+      }
+      let rate;
+      try {
+        rate = await AccountingService.getExchangeRate(clinicId, proformaCurrency, targetCurrency, proforma.created_at || new Date());
+      } catch (e) {
+        const err = new Error(`No exchange rate configured for ${proformaCurrency} → ${targetCurrency} — add one under Accounting → Exchange Rates first.`);
+        err.isExchangeRateError = true;
+        throw err;
+      }
+      const convertedItems = items.map((it) => {
+        const unitPrice = parseFloat(it.unitPrice ?? it.unit_price ?? it.price ?? 0) || 0;
+        const qty = parseFloat(it.quantity ?? 1) || 1;
+        const totalPrice = parseFloat(it.totalPrice ?? it.total_price ?? (unitPrice * qty)) || 0;
+        const convertedUnit = AccountingService.convertAmount(unitPrice, rate);
+        const convertedTotal = AccountingService.convertAmount(totalPrice, rate);
+        return {
+          ...it,
+          unitPrice: convertedUnit,
+          unit_price: convertedUnit,
+          totalPrice: convertedTotal,
+          total_price: convertedTotal,
+          currency: targetCurrency,
+          original_currency: proformaCurrency,
+          original_unit_price: unitPrice,
+          original_total_price: totalPrice,
+        };
+      });
+      return { items: convertedItems, subtotal: AccountingService.convertAmount(subtotal, rate) };
+    }
 
     // Only fold into an existing bill from the SAME branch as the proforma —
     // otherwise a proforma converted at Branch B could silently merge its
@@ -179,28 +222,41 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
 
     let billId;
     if (existingBill) {
+      // Fold into the existing bill's own currency, not the proforma's — that bill may
+      // already be a scheme bill (its own currency) or a prior cash bill in the base
+      // currency; converting the incoming items to match keeps every line on that bill
+      // in one consistent currency instead of re-introducing the mix this fix removes.
+      const targetCurrency = existingBill.bill_currency || 'SSP';
+      const { items: convertedItems, subtotal: convertedSubtotal } = await convertToCurrency(targetCurrency);
       const existingServices = typeof existingBill.services === 'string' ? JSON.parse(existingBill.services) : (existingBill.services || []);
-      const combinedServices = [...existingServices, ...items];
-      const newTotal = parseFloat(existingBill.total_amount) + parseFloat(proforma.subtotal);
-      const newBalance = parseFloat(existingBill.balance_amount) + parseFloat(proforma.subtotal);
+      const combinedServices = [...existingServices, ...convertedItems];
+      const newTotal = parseFloat(existingBill.total_amount) + convertedSubtotal;
+      const newBalance = parseFloat(existingBill.balance_amount) + convertedSubtotal;
       await sequelize.query(`
         UPDATE patient_bills SET services = :services, total_amount = :total, balance_amount = :balance, updated_at = NOW()
         WHERE id = :id
       `, { replacements: { services: JSON.stringify(combinedServices), total: newTotal, balance: newBalance, id: existingBill.id }, transaction: t });
       billId = existingBill.id;
     } else {
+      // No open bill to fold into — the new bill is billed in the clinic's configured
+      // base currency (mirrors computeBaseCurrencyTotal in patientBills.js), converting
+      // the proforma's amounts into it via the configured exchange rate when needed.
+      const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`, { transaction: t });
+      const baseCurrency = baseCurrencyRow?.code || 'SSP';
+      const { items: convertedItems, subtotal: convertedSubtotal } = await convertToCurrency(baseCurrency);
+
       billId = uuidv4();
       const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
       await sequelize.query(`
         INSERT INTO patient_bills
-          (id, bill_number, patient_id, patient_name, clinic_id, branch_id, total_amount, paid_amount, balance_amount, status, bill_date, services, notes, created_by, created_at, updated_at)
+          (id, bill_number, patient_id, patient_name, clinic_id, branch_id, total_amount, paid_amount, balance_amount, bill_currency, status, bill_date, services, notes, created_by, created_at, updated_at)
         VALUES
-          (:id, :billNumber, :patient_id, :patient_name, :clinicId, :branchId, :total, 0, :total, 'pending', NOW(), :services, :notes, :created_by, NOW(), NOW())
+          (:id, :billNumber, :patient_id, :patient_name, :clinicId, :branchId, :total, 0, :total, :billCurrency, 'pending', NOW(), :services, :notes, :created_by, NOW(), NOW())
       `, {
         replacements: {
           id: billId, billNumber, patient_id: proforma.patient_id, patient_name: proforma.patient_name, clinicId,
           branchId: proforma.branch_id || null,
-          total: proforma.subtotal, services: JSON.stringify(items),
+          total: convertedSubtotal, billCurrency: baseCurrency, services: JSON.stringify(convertedItems),
           notes: `Converted from proforma invoice ${proforma.proforma_number}`,
           created_by: req.user?.displayName || req.user?.email || 'System',
         },
@@ -226,6 +282,9 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
     res.json({ message: 'Converted to bill', bill_id: billId });
   } catch (error) {
     await t.rollback();
+    if (error.isExchangeRateError) {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Error converting proforma invoice:', error);
     res.status(500).json({ error: 'Failed to convert proforma invoice to a bill' });
   }
