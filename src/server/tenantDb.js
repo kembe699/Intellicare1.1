@@ -88,6 +88,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureHRTables } = require('./config/ensureHRTables');
   ensureHRTables(sequelize).catch(() => {});
 
+  // clinical_insights (Clinical Insights AI decision-support panel), ensured
+  // per-tenant the same way.
+  const { ensureClinicalInsightsTable } = require('./config/ensureClinicalInsightsTable');
+  ensureClinicalInsightsTable(sequelize).catch(() => {});
+
   // lis_test_orders.consultant_id, ensured per-tenant the same way — lets a
   // visit be attributed to a consultant with no linked user account.
   const { ensureLisConsultantSupport } = require('./config/ensureLisConsultantSupport');

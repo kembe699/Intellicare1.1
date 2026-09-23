@@ -554,6 +554,7 @@ const insuranceClaimsRouter = require('./routes/insuranceClaims');
 const exchangeRatesRouter = require('./routes/exchangeRates');
 const inpatientRouter = require('./routes/inpatient');
 const lisModuleRouter = require('./routes/lisModule');
+const clinicalInsightsRouter = require('./routes/clinicalInsights');
 const chiefComplaintsRouter = require('./routes/chiefComplaints');
 const clinicalDiagnosesRouter = require('./routes/clinicalDiagnoses');
 
@@ -694,6 +695,7 @@ app.use('/api/insurance-claims', insuranceClaimsRouter);
 app.use('/api/exchange-rates', exchangeRatesRouter);
 app.use('/api/inpatient', inpatientRouter);
 app.use('/api/lis', lisModuleRouter);
+app.use('/api/lis/orders', clinicalInsightsRouter);
 app.use('/api/chief-complaints', chiefComplaintsRouter);
 app.use('/api/clinical-diagnoses', clinicalDiagnosesRouter);
 
@@ -972,6 +974,22 @@ async function startServer() {
         .catch((err) => console.error('⚠️  Visit auto-close failed:', err.message));
       runVisitAutoClose();
       setInterval(runVisitAutoClose, 30 * 60 * 1000); // every 30 minutes
+    });
+
+    // A Clinical Insights generation is fire-and-forget (no job queue in this
+    // codebase) — if the process restarts mid-call, its row would otherwise
+    // sit "pending" forever, leaving a doctor staring at an infinite spinner.
+    // Checked every 2 minutes; the sweep itself only fails rows already
+    // pending for 3+ minutes.
+    setImmediate(() => {
+      const { sweepStuckInsightsAllTenants } = require('./services/clinicalInsightsSweeper');
+      const runInsightsSweep = () => sweepStuckInsightsAllTenants()
+        .then(({ failed, errored }) => {
+          if (errored > 0) console.warn(`⚠️  Clinical Insights sweep: ${errored} tenant(s) could not be checked.`);
+        })
+        .catch((err) => console.error('⚠️  Clinical Insights sweep failed:', err.message));
+      runInsightsSweep();
+      setInterval(runInsightsSweep, 2 * 60 * 1000); // every 2 minutes
     });
 
     setImmediate(() => {

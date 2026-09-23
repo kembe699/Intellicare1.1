@@ -77,4 +77,21 @@ const payrollSignLimiter = rateLimit({
   message: { error: 'Too many attempts. Please try again in a few minutes or contact HR.' },
 });
 
-module.exports = { authLimiter, authSourceLimiter, passwordResetLimiter, payrollSignLimiter };
+// Clinical Insights calls out to a paid LLM API per request, so this bounds
+// runaway cost/spam per doctor rather than guarding a credential-guessing
+// surface — keyed on the authenticated user (this route always runs after
+// authenticateToken, so req.user is set), IP as a fallback only.
+function userKey(req) {
+  return req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
+}
+
+const clinicalInsightsLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  keyGenerator: userKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many Clinical Insights requests this hour. Please try again later.' },
+});
+
+module.exports = { authLimiter, authSourceLimiter, passwordResetLimiter, payrollSignLimiter, clinicalInsightsLimiter };

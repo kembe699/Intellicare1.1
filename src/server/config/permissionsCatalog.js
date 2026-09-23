@@ -107,6 +107,7 @@ const CATALOG = [
   ['lis.specimen.write', 'Manage specimens', 'lis', 'Collect, dispatch, QC, route specimens; enter results', ['admin', 'lab']],
   ['lis.results.review', 'Review LIS results', 'lis', 'Manager review of pending results', ['admin', 'lab']],
   ['lis.results.read', 'View LIS result history', 'lis', 'View specimen/result history', ['admin', 'lab', 'doctor']],
+  ['lis.clinical.insights.write', 'Generate clinical insights', 'lis', 'Request AI-assisted differential diagnosis suggestions for a visit', ['admin', 'doctor']],
 
   ['pharmacy.read', 'View pharmacy data', 'pharmacy', 'Drugs, stock levels, pricing history, reports', ['admin', 'pharmacy', 'doctor']],
   ['pharmacy.write', 'Manage pharmacy operations', 'pharmacy', 'Drugs, dispensing, returns, charges, pricing', ['admin', 'pharmacy']],

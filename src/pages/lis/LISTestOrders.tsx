@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -52,7 +52,7 @@ const QUICK_REGISTER_TENANT = 'dpoc';
 const EMPTY_QUICK_REGISTER = { full_name: '', age: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
 
 export default function LISTestOrders() {
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
   const facilityInfo = useFacilityInfo();
   const [queuedPatients, setQueuedPatients] = useState<any[]>([]);
   const [labTests, setLabTests] = useState<any[]>([]);
@@ -66,6 +66,15 @@ export default function LISTestOrders() {
   const [quickRegisterSchemes, setQuickRegisterSchemes] = useState<any[]>([]);
   const [quickRegisterForm, setQuickRegisterForm] = useState(EMPTY_QUICK_REGISTER);
   const [quickRegisterSubmitting, setQuickRegisterSubmitting] = useState(false);
+
+  // Clinical Insights — decision support only, read-only, never writes back
+  // to the patient record. See ClinicalInsightsService.js for what's sent.
+  const [showClinicalInsights, setShowClinicalInsights] = useState(false);
+  const [clinicalInsightsStatus, setClinicalInsightsStatus] = useState<'idle' | 'pending' | 'completed' | 'failed'>('idle');
+  const [clinicalInsightsResponse, setClinicalInsightsResponse] = useState<any | null>(null);
+  const [clinicalInsightsError, setClinicalInsightsError] = useState<string | null>(null);
+  const clinicalInsightsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const clinicalInsightsDeadlineRef = useRef<number>(0);
   const EMPTY_VITALS = {
     blood_pressure: '', temperature: '', pulse: '', weight: '',
     height: '', respiratory_rate: '', spo2: '', fasting_status: 'No', chief_complaints: [] as string[],
@@ -530,6 +539,79 @@ export default function LISTestOrders() {
       toast.error('Network error');
     } finally {
       setClosingVisit(false);
+    }
+  };
+
+  // Clinical Insights — stops polling on unmount so a background timer never
+  // outlives the component (e.g. the doctor navigates away while pending).
+  useEffect(() => {
+    return () => { if (clinicalInsightsPollRef.current) clearInterval(clinicalInsightsPollRef.current); };
+  }, []);
+
+  const stopClinicalInsightsPoll = () => {
+    if (clinicalInsightsPollRef.current) {
+      clearInterval(clinicalInsightsPollRef.current);
+      clinicalInsightsPollRef.current = null;
+    }
+  };
+
+  const pollClinicalInsights = (orderId: string) => {
+    stopClinicalInsightsPoll();
+    clinicalInsightsDeadlineRef.current = Date.now() + 60 * 1000;
+    clinicalInsightsPollRef.current = setInterval(async () => {
+      try {
+        const res = await authFetch(`/api/lis/orders/${orderId}/clinical-insights`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.status === 'completed') {
+          setClinicalInsightsStatus('completed');
+          setClinicalInsightsResponse(data.response);
+          stopClinicalInsightsPoll();
+        } else if (data.status === 'failed') {
+          setClinicalInsightsStatus('failed');
+          setClinicalInsightsError(data.error_message || 'Failed to generate insights.');
+          stopClinicalInsightsPoll();
+        } else if (Date.now() > clinicalInsightsDeadlineRef.current) {
+          setClinicalInsightsStatus('failed');
+          setClinicalInsightsError('This is taking longer than expected. Please try again.');
+          stopClinicalInsightsPoll();
+        }
+      } catch {
+        // A transient network blip during polling isn't fatal — keep polling
+        // until the deadline above gives up.
+      }
+    }, 3000);
+  };
+
+  const requestClinicalInsights = async (regenerate = false) => {
+    if (!selectedSummary) return;
+    setShowClinicalInsights(true);
+    setClinicalInsightsStatus('pending');
+    setClinicalInsightsResponse(null);
+    setClinicalInsightsError(null);
+    try {
+      const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/clinical-insights${regenerate ? '?regenerate=true' : ''}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setClinicalInsightsStatus('failed');
+        setClinicalInsightsError(data.error || 'Failed to request clinical insights.');
+        return;
+      }
+      if (data.status === 'completed') {
+        // A cached result — fetch it once rather than polling for something
+        // that's already done.
+        const getRes = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/clinical-insights`, { credentials: 'include' });
+        const getData = await getRes.json();
+        setClinicalInsightsStatus('completed');
+        setClinicalInsightsResponse(getData.response);
+        return;
+      }
+      pollClinicalInsights(selectedSummary.order_id);
+    } catch {
+      setClinicalInsightsStatus('failed');
+      setClinicalInsightsError('Network error requesting clinical insights.');
     }
   };
 
@@ -2329,6 +2411,11 @@ export default function LISTestOrders() {
                         Close Visit
                       </Button>
                     )}
+                    {hasPrivilege('lis.clinical.insights.write') && (
+                      <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(false)} className="text-violet-600 border-violet-300 hover:bg-violet-50">
+                        <Sparkles className="w-4 h-4 mr-2" /> Clinical Insights
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="bg-card rounded-lg border shadow-sm flex-1 overflow-auto p-6 space-y-5">
@@ -3035,6 +3122,93 @@ export default function LISTestOrders() {
               {quickRegisterSubmitting ? 'Registering...' : 'Register & Queue'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showClinicalInsights} onOpenChange={(open) => { setShowClinicalInsights(open); if (!open) stopClinicalInsightsPoll(); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-violet-600" /> Clinical Insights</DialogTitle>
+            <DialogDescription>Read-only decision support — nothing here is saved to the patient record.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs px-3 py-2">
+            AI-generated suggestions for clinician consideration only. Not a diagnosis. Clinical judgement must prevail.
+          </div>
+
+          {clinicalInsightsStatus === 'pending' && (
+            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <p className="text-sm">Generating suggestions...</p>
+            </div>
+          )}
+
+          {clinicalInsightsStatus === 'failed' && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 text-sm px-3 py-3 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{clinicalInsightsError || 'Something went wrong generating suggestions.'}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(true)}>
+                <RefreshCw className="w-4 h-4 mr-2" /> Try again
+              </Button>
+            </div>
+          )}
+
+          {clinicalInsightsStatus === 'completed' && clinicalInsightsResponse && (
+            <div className="space-y-5">
+              {(clinicalInsightsResponse.urgent_flags || []).length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase text-red-700 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Urgent Flags
+                  </h4>
+                  {clinicalInsightsResponse.urgent_flags.map((f: any, i: number) => (
+                    <div key={i} className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                      <p className="text-sm font-medium text-red-800">{f.finding}</p>
+                      <p className="text-xs text-red-700 mt-0.5">{f.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Differentials</h4>
+                {(clinicalInsightsResponse.differentials || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No differentials suggested.</p>
+                ) : clinicalInsightsResponse.differentials.map((d: any, i: number) => (
+                  <div key={i} className="rounded-lg border p-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{d.condition}</p>
+                      <span className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
+                        d.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
+                        d.confidence === 'moderate' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                      )}>{d.confidence}</span>
+                    </div>
+                    {(d.supporting_findings || []).length > 0 && (
+                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Supports:</span> {d.supporting_findings.join(', ')}</p>
+                    )}
+                    {(d.against_findings || []).length > 0 && (
+                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Against:</span> {d.against_findings.join(', ')}</p>
+                    )}
+                    {d.suggested_next_step && (
+                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Suggested next step:</span> {d.suggested_next_step}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {clinicalInsightsResponse.data_limitations && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground">Data Limitations</h4>
+                  <p className="text-sm p-3 border rounded-lg bg-card text-muted-foreground">{clinicalInsightsResponse.data_limitations}</p>
+                </div>
+              )}
+
+              <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(true)}>
+                <RefreshCw className="w-4 h-4 mr-2" /> Regenerate
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </AppLayout>
