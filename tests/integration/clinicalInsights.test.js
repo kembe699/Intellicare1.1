@@ -165,6 +165,27 @@ describe('Clinical Insights', () => {
       expect(error).toBeUndefined();
       expect(data.urgent_flags.length).toBeGreaterThan(0);
     });
+
+    test('rejects a response using an invented shape instead of the required schema', () => {
+      // What production actually got back before tool_choice was added: valid
+      // JSON, fence-wrapped, but with the model's own made-up "summary" field
+      // instead of urgent_flags/differentials/data_limitations. Confirms this
+      // is still caught (as a defensive backstop) even though tool_choice
+      // now makes it far less likely to happen at all.
+      const invented = '```json\n{"summary": "30-year-old male with fever and headache, malaria positive."}\n```';
+      const { data, error } = ClinicalInsightsService.parseAndValidate(invented);
+      expect(data).toBeUndefined();
+      expect(error).toBe('urgent_flags must be an array');
+    });
+
+    test('the tool schema forces exactly the shape parseAndValidate requires', () => {
+      const tool = ClinicalInsightsService.CLINICAL_INSIGHTS_TOOL;
+      expect(tool.name).toBe('submit_clinical_insights');
+      expect(tool.input_schema.required).toEqual(
+        expect.arrayContaining(['urgent_flags', 'differentials', 'data_limitations'])
+      );
+      expect(tool.input_schema.properties.differentials.items.properties.confidence.enum).toEqual(['high', 'moderate', 'low']);
+    });
   });
 
   describe('Permissions', () => {

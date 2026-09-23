@@ -15,7 +15,57 @@ const MODEL_DEFAULT = process.env.CLINICAL_INSIGHTS_MODEL || 'claude-sonnet-5';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const FETCH_TIMEOUT_MS = 60 * 1000;
 
-const SYSTEM_PROMPT = `You are a clinical decision support assistant for hospitals in South Sudan. You assist qualified clinicians; you do not diagnose. Weight locally prevalent conditions appropriately (e.g. malaria, typhoid, tuberculosis, HIV-related illness, malnutrition, diarrhoeal disease) alongside general causes. Base every suggestion only on the data provided. If data is insufficient, say so. Respond ONLY with valid JSON matching the schema, no other text.`;
+const SYSTEM_PROMPT = `You are a clinical decision support assistant for hospitals in South Sudan. You assist qualified clinicians; you do not diagnose. Weight locally prevalent conditions appropriately (e.g. malaria, typhoid, tuberculosis, HIV-related illness, malnutrition, diarrhoeal disease) alongside general causes. Base every suggestion only on the data provided. If data is insufficient, say so. Call the submit_clinical_insights tool exactly once with your findings — do not write any other text.`;
+
+// Forces the response through Anthropic's tool-use JSON schema rather than
+// asking for raw JSON in prose: prompting alone ("respond ONLY with valid
+// JSON") was unreliable in practice — real responses came back wrapped in a
+// ```json fence, or used the model's own invented shape (e.g. a top-level
+// "summary" field) instead of the required one. tool_choice below forces
+// exactly this tool to be called, so the response is always a single
+// structured input matching this schema, not prose to parse.
+const CLINICAL_INSIGHTS_TOOL = {
+  name: 'submit_clinical_insights',
+  description: 'Submit the structured clinical decision-support findings for this visit.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      urgent_flags: {
+        type: 'array',
+        description: 'Findings that need prompt clinician attention.',
+        items: {
+          type: 'object',
+          properties: {
+            finding: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['finding', 'reason'],
+        },
+      },
+      differentials: {
+        type: 'array',
+        description: 'Ranked candidate conditions, at most 5.',
+        maxItems: 5,
+        items: {
+          type: 'object',
+          properties: {
+            condition: { type: 'string' },
+            confidence: { type: 'string', enum: ['high', 'moderate', 'low'] },
+            supporting_findings: { type: 'array', items: { type: 'string' } },
+            against_findings: { type: 'array', items: { type: 'string' } },
+            suggested_next_step: { type: 'string' },
+          },
+          required: ['condition', 'confidence', 'supporting_findings', 'against_findings', 'suggested_next_step'],
+        },
+      },
+      data_limitations: {
+        type: 'string',
+        description: 'What data would have been needed for a more confident assessment, or an empty string if none.',
+      },
+    },
+    required: ['urgent_flags', 'differentials', 'data_limitations'],
+  },
+};
 
 // ── Age-appropriate vital ranges ────────────────────────────────────────────
 // Only HR and RR genuinely need age buckets for a clinically meaningful
@@ -250,13 +300,14 @@ async function callAnthropic(payload, model) {
       body: JSON.stringify({
         model,
         // Headroom above what 5 differentials + urgent flags + data_limitations
-        // typically need, so a verbose response (or one with a preamble
-        // sentence eating into the budget) doesn't get cut off mid-JSON —
-        // truncated JSON fails parsing the same way malformed JSON does, but
-        // for a completely different, budget-driven reason.
+        // typically need, so a verbose response doesn't get cut off mid-way —
+        // truncated tool input fails parsing the same way malformed JSON
+        // does, but for a completely different, budget-driven reason.
         max_tokens: 2000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: JSON.stringify(payload) }],
+        tools: [CLINICAL_INSIGHTS_TOOL],
+        tool_choice: { type: 'tool', name: CLINICAL_INSIGHTS_TOOL.name },
       }),
       signal: controller.signal,
     });
@@ -268,8 +319,14 @@ async function callAnthropic(payload, model) {
       throw err;
     }
     const data = await res.json();
-    const textBlock = (data.content || []).find((c) => c.type === 'text');
-    return { raw: textBlock?.text || '', modelUsed: model, truncated: data.stop_reason === 'max_tokens' };
+    const toolBlock = (data.content || []).find((c) => c.type === 'tool_use' && c.name === CLINICAL_INSIGHTS_TOOL.name);
+    // tool_choice forces exactly this tool, so `input` is already the parsed,
+    // schema-shaped object — no JSON-in-prose to extract. Falling back to a
+    // stray text block covers the (should-not-happen) case of the model not
+    // calling the tool at all, so that still surfaces as a real, diagnosable
+    // parse failure instead of silently returning nothing.
+    const raw = toolBlock ? JSON.stringify(toolBlock.input) : ((data.content || []).find((c) => c.type === 'text')?.text || '');
+    return { raw, modelUsed: model, truncated: data.stop_reason === 'max_tokens' };
   } catch (e) {
     if (e.name === 'AbortError') {
       const err = new Error('Request to the model timed out');
@@ -421,4 +478,5 @@ module.exports = {
   isMockMode,
   SYSTEM_PROMPT,
   MOCK_RESPONSE,
+  CLINICAL_INSIGHTS_TOOL,
 };
