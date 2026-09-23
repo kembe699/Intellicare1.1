@@ -151,6 +151,20 @@ describe('Clinical Insights', () => {
       const { error } = ClinicalInsightsService.parseAndValidate(JSON.stringify(bad));
       expect(error).toMatch(/data_limitations/);
     });
+
+    test('accepts a response wrapped in a ```json fence — a real, common model quirk', () => {
+      const fenced = '```json\n' + JSON.stringify(ClinicalInsightsService.MOCK_RESPONSE) + '\n```';
+      const { data, error } = ClinicalInsightsService.parseAndValidate(fenced);
+      expect(error).toBeUndefined();
+      expect(data.differentials.length).toBeGreaterThan(0);
+    });
+
+    test('accepts a response with a stray sentence before/after the JSON', () => {
+      const wrapped = 'Here is my assessment:\n' + JSON.stringify(ClinicalInsightsService.MOCK_RESPONSE) + '\nLet me know if you need more detail.';
+      const { data, error } = ClinicalInsightsService.parseAndValidate(wrapped);
+      expect(error).toBeUndefined();
+      expect(data.urgent_flags.length).toBeGreaterThan(0);
+    });
   });
 
   describe('Permissions', () => {

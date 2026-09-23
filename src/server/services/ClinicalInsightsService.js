@@ -279,6 +279,26 @@ async function callAnthropic(payload, model) {
 
 // ── Response validation ──────────────────────────────────────────────────────
 
+// Claude models sometimes wrap structured output in a ```json ... ``` fence
+// (or add a stray sentence before/after) even when told to respond with only
+// JSON — a real, common quirk, not something a stricter prompt reliably
+// prevents. Strips a fence if present, then falls back to the substring
+// between the first "{" and the last "}" so a stray leading/trailing word
+// doesn't fail parsing on otherwise-valid JSON.
+function extractJsonText(raw) {
+  let text = String(raw || '').trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) {
+    text = fenced[1].trim();
+  }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    text = text.slice(start, end + 1);
+  }
+  return text;
+}
+
 const CONFIDENCE_VALUES = new Set(['high', 'moderate', 'low']);
 
 function validateInsightsShape(parsed) {
@@ -302,7 +322,7 @@ function validateInsightsShape(parsed) {
 function parseAndValidate(raw) {
   let parsed;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(extractJsonText(raw));
   } catch (e) {
     return { error: 'Model did not return valid JSON' };
   }
@@ -374,6 +394,7 @@ module.exports = {
   computeAgeYears,
   validateInsightsShape,
   parseAndValidate,
+  extractJsonText,
   isMockMode,
   SYSTEM_PROMPT,
   MOCK_RESPONSE,
