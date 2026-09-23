@@ -249,7 +249,12 @@ async function callAnthropic(payload, model) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1500,
+        // Headroom above what 5 differentials + urgent flags + data_limitations
+        // typically need, so a verbose response (or one with a preamble
+        // sentence eating into the budget) doesn't get cut off mid-JSON —
+        // truncated JSON fails parsing the same way malformed JSON does, but
+        // for a completely different, budget-driven reason.
+        max_tokens: 2000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: JSON.stringify(payload) }],
       }),
@@ -264,7 +269,7 @@ async function callAnthropic(payload, model) {
     }
     const data = await res.json();
     const textBlock = (data.content || []).find((c) => c.type === 'text');
-    return { raw: textBlock?.text || '', modelUsed: model };
+    return { raw: textBlock?.text || '', modelUsed: model, truncated: data.stop_reason === 'max_tokens' };
   } catch (e) {
     if (e.name === 'AbortError') {
       const err = new Error('Request to the model timed out');
@@ -357,12 +362,30 @@ async function generateInsights(sequelize, { orderId, requestedBy, clinicId, bra
         );
         return;
       }
-      const { raw, modelUsed } = await callAnthropic(payload, useModel);
+      const { raw, modelUsed, truncated } = await callAnthropic(payload, useModel);
       const { data, error } = parseAndValidate(raw);
       if (error) {
+        if (truncated) {
+          await sequelize.query(
+            `UPDATE clinical_insights SET status = 'failed', error_message = ?, model = ?, updated_at = NOW() WHERE id = ?`,
+            { replacements: ['The model\'s response was cut off before it finished — please try again.', modelUsed, id] }
+          );
+          return;
+        }
+        // The failure reason alone ("Model did not return valid JSON") gives
+        // no way to tell what actually went wrong without server console
+        // access — which this feature deliberately never logs the model
+        // response to (it can only be model output, not patient data, but
+        // still). A short snippet of the actual response, stored here rather
+        // than logged, lets the same clinician who made the request (and
+        // support) see what the model returned without a hidden log to dig
+        // through, and without ever printing the de-identified payload
+        // itself anywhere.
+        const snippet = String(raw || '').slice(0, 300).replace(/\s+/g, ' ').trim();
+        const detailedMessage = snippet ? `${error} — response started with: "${snippet}"` : `${error} — the model returned an empty response`;
         await sequelize.query(
           `UPDATE clinical_insights SET status = 'failed', error_message = ?, model = ?, updated_at = NOW() WHERE id = ?`,
-          { replacements: [error, modelUsed, id] }
+          { replacements: [detailedMessage, modelUsed, id] }
         );
         return;
       }
