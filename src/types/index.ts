@@ -36,6 +36,10 @@ export interface User {
   // in, so most code should just use hasPrivilege() rather than reading this
   // directly. Present mainly for displaying/editing what's assigned.
   additionalRoles?: string[];
+  // The login code for this tenant (e.g. "dpoc") — from the JWT's clientCode claim, via
+  // auth.js's /login and /verify. Only for tenant-specific feature gating (there is no
+  // other way to tell tenants apart on the frontend); not a general-purpose identifier.
+  tenantCode?: string;
 }
 
 export interface Patient {

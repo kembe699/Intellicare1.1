@@ -254,7 +254,12 @@ router.post('/login', authSourceLimiter, authLimiter, async (req, res) => {
         role: user.role,
         clinicId: user.clinic_id,
         branchId: branchContext.primaryBranch?.id || user.branch_id || null,
-        schemaName: client.schema_name
+        schemaName: client.schema_name,
+        // Carried in the token (not just the /login response body) so /verify can hand
+        // it back on every page refresh without an extra Client lookup — the frontend
+        // needs this for tenant-specific features (e.g. a dpoc-only quick-register flow
+        // on the LIS orders page) that have no other way to tell tenants apart.
+        clientCode: client.code
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -263,7 +268,7 @@ router.post('/login', authSourceLimiter, authLimiter, async (req, res) => {
     // Return user data and token
     res.json({
       token,
-      user: await buildUserResponse(user, branchContext, sequelize, client.schema_name),
+      user: { ...(await buildUserResponse(user, branchContext, sequelize, client.schema_name)), tenantCode: client.code },
       client: { name: client.name, code: client.code }
     });
   } catch (error) {
@@ -313,7 +318,8 @@ router.get('/verify', async (req, res) => {
             role: user.role,
             clinicId: user.clinic_id,
             branchId: branchContext.primaryBranch?.id || user.branch_id || null,
-            schemaName: decoded.schemaName
+            schemaName: decoded.schemaName,
+            clientCode: decoded.clientCode
           },
           JWT_SECRET,
           { expiresIn: '24h' }
@@ -321,7 +327,9 @@ router.get('/verify', async (req, res) => {
       : null;
 
     res.json({
-      user: await buildUserResponse(user, branchContext, sequelize, decoded.schemaName),
+      // decoded.clientCode is undefined only for a token minted before this field
+      // existed — resolves itself once that token expires and the user logs in again.
+      user: { ...(await buildUserResponse(user, branchContext, sequelize, decoded.schemaName)), tenantCode: decoded.clientCode },
       ...(freshToken && { token: freshToken })
     });
   } catch (error) {

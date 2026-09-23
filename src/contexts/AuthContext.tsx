@@ -134,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentRoomId: userData.currentRoomId || null,
     privileges: Array.isArray(userData.privileges) ? userData.privileges : [],
     additionalRoles: Array.isArray(userData.additionalRoles) ? userData.additionalRoles : [],
+    tenantCode: userData.tenantCode || undefined,
   });
 
   // Check for existing token on mount

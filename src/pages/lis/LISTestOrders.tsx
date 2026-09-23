@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -36,6 +36,21 @@ const calculateAge = (dob: string): number | null => {
   return age >= 0 ? age : null;
 };
 
+const GENDER_OPTIONS = [
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' },
+];
+
+// dpoc-only quick registration (see the "Register New Patient" button/dialog below): a
+// deliberately minimal, all-mandatory form for fast walk-in intake — full name, age,
+// gender, scheme, phone, next of kin, straight into this same doctor's queue. Scoped to
+// this one tenant via user.tenantCode (see AuthContext.tsx/auth.js) rather than a page
+// route or config flag, since it's specific to how this facility's front desk works, not
+// a general product feature.
+const QUICK_REGISTER_TENANT = 'dpoc';
+const EMPTY_QUICK_REGISTER = { full_name: '', age: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
+
 export default function LISTestOrders() {
   const { user } = useAuth();
   const facilityInfo = useFacilityInfo();
@@ -45,6 +60,12 @@ export default function LISTestOrders() {
   const [searchTest, setSearchTest] = useState('');
   const [testPopoverOpen, setTestPopoverOpen] = useState(false);
   const [orderForm, setOrderForm] = useState({ participant_id: '', order_id: '', clinical_notes: '' });
+
+  // dpoc-only quick registration (see GENDER_OPTIONS/EMPTY_QUICK_REGISTER above).
+  const [showQuickRegister, setShowQuickRegister] = useState(false);
+  const [quickRegisterSchemes, setQuickRegisterSchemes] = useState<any[]>([]);
+  const [quickRegisterForm, setQuickRegisterForm] = useState(EMPTY_QUICK_REGISTER);
+  const [quickRegisterSubmitting, setQuickRegisterSubmitting] = useState(false);
   const EMPTY_VITALS = {
     blood_pressure: '', temperature: '', pulse: '', weight: '',
     height: '', respiratory_rate: '', spo2: '', fasting_status: 'No', chief_complaints: [] as string[],
@@ -921,6 +942,101 @@ export default function LISTestOrders() {
     }
   };
 
+  // Fetched lazily (only once the dialog is actually opened) rather than on every page
+  // load — this whole feature only ever renders for the one tenant it's built for.
+  useEffect(() => {
+    if (!showQuickRegister) return;
+    authFetch(`/api/schemes/active?clinic_id=${user?.clinic || 1}`, { credentials: 'include' })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setQuickRegisterSchemes(Array.isArray(data) ? data : []))
+      .catch(() => setQuickRegisterSchemes([]));
+  }, [showQuickRegister, user?.clinic]);
+
+  const quickRegisterSelectedScheme = quickRegisterSchemes.find((s: any) => s.id === quickRegisterForm.scheme_id);
+  // Matched by scheme_code (the stable identifier set at creation), not the display
+  // name, which an admin could rename later without meaning to change this behavior.
+  const quickRegisterIsArmedGroup = quickRegisterSelectedScheme?.scheme_code === 'ARMED-GROUPS';
+
+  const handleQuickRegisterSubmit = async () => {
+    const { full_name, age, gender, scheme_id, phone, next_of_kin, army_unit } = quickRegisterForm;
+    if (!full_name.trim() || !age || !gender || !scheme_id || !phone.trim() || !next_of_kin.trim()) {
+      toast.error('Please fill in every field before registering.');
+      return;
+    }
+    const ageNum = parseInt(age, 10);
+    if (!Number.isFinite(ageNum) || ageNum <= 0 || ageNum > 130) {
+      toast.error('Enter a valid age.');
+      return;
+    }
+    if (quickRegisterIsArmedGroup && !army_unit.trim()) {
+      toast.error('Please indicate which army or police unit.');
+      return;
+    }
+
+    const nameParts = full_name.trim().split(/\s+/);
+    const first_name = nameParts[0];
+    const last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
+    // lis_participants only has date_of_birth, not a plain age column — Jan 1 of the
+    // implied birth year is the closest a whole-years age can get to a real DOB. The
+    // exact age given is also kept in demographics so nothing is lost to the rounding.
+    const date_of_birth = `${new Date().getFullYear() - ageNum}-01-01`;
+
+    setQuickRegisterSubmitting(true);
+    try {
+      const res = await authFetch('/api/lis/participants', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name, last_name, gender, date_of_birth,
+          phone: phone.trim(),
+          doctor_id: user?.id,
+          clinic_id: user?.clinic || 1,
+          demographics: {
+            scheme_id, scheme_name: quickRegisterSelectedScheme?.scheme_name || '',
+            age: ageNum,
+            next_of_kin: next_of_kin.trim(),
+            ...(quickRegisterIsArmedGroup ? { army_or_police_unit: army_unit.trim() } : {}),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.message || data.error || 'Failed to register patient');
+        return;
+      }
+
+      // Recording scheme_id in demographics alone never actually enrolls the patient —
+      // applySchemePrice (patientBills.js) checks scheme_membership before it'll price
+      // anything under a scheme, so without this every bill for this patient would
+      // reject with "not priced under this scheme" despite scheme_id being set. Same
+      // enrollPatientInScheme call LISRegistration.tsx's own full form makes.
+      try {
+        const enrollRes = await authFetch(`/api/schemes/patient-schemes/${data.id}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheme_id, clinic_id: user?.clinic || 1, member_number: null }),
+        });
+        if (!enrollRes.ok) {
+          const enrollErr = await enrollRes.json().catch(() => ({}));
+          toast.error(enrollErr.error || 'Registered and queued, but scheme enrollment failed — billing may not price correctly under this scheme.');
+        }
+      } catch (e) {
+        toast.error('Registered and queued, but scheme enrollment failed — billing may not price correctly under this scheme.');
+      }
+
+      toast.success(`${full_name.trim()} registered and added to your queue.`);
+      setShowQuickRegister(false);
+      setQuickRegisterForm(EMPTY_QUICK_REGISTER);
+      fetchQueue();
+    } catch (e) {
+      toast.error('Network error registering patient');
+    } finally {
+      setQuickRegisterSubmitting(false);
+    }
+  };
+
   const [callingId, setCallingId] = useState('');
   const handleCallPatient = async (e: React.MouseEvent, orderId: string) => {
     e.stopPropagation();
@@ -1455,6 +1571,12 @@ export default function LISTestOrders() {
             icon={<TestTube2 />}
           />
 
+          <div className="flex items-center gap-3">
+          {user?.tenantCode === QUICK_REGISTER_TENANT && (
+            <Button variant="outline" size="sm" onClick={() => setShowQuickRegister(true)} className="gap-2">
+              <UserPlus className="w-4 h-4" /> Register New Patient
+            </Button>
+          )}
           <div className="flex bg-muted p-1 rounded-lg">
             <button
               onClick={() => setActiveMode('order')}
@@ -1468,6 +1590,7 @@ export default function LISTestOrders() {
             >
               <History className="w-4 h-4" /> Visit Summary
             </button>
+          </div>
           </div>
         </div>
 
@@ -2845,6 +2968,63 @@ export default function LISTestOrders() {
             <Button onClick={handleRequestAdmission} disabled={requestingAdmission || !admitDiagnosis.trim()}>
               {requestingAdmission ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BedDouble className="w-4 h-4 mr-2" />}
               {requestingAdmission ? 'Requesting...' : 'Request Admission'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Register New Patient (dpoc only) */}
+      <Dialog open={showQuickRegister} onOpenChange={(open) => { setShowQuickRegister(open); if (!open) setQuickRegisterForm(EMPTY_QUICK_REGISTER); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Register New Patient</DialogTitle>
+            <DialogDescription>Quick registration — the patient goes straight into your queue.</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-5 space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Full Name *</label>
+              <Input value={quickRegisterForm.full_name} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, full_name: e.target.value })} placeholder="e.g. John Deng" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Age *</label>
+                <Input type="number" min="0" max="130" value={quickRegisterForm.age} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, age: e.target.value })} placeholder="e.g. 34" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Gender *</label>
+                <Combobox options={GENDER_OPTIONS} value={quickRegisterForm.gender} onChange={v => setQuickRegisterForm({ ...quickRegisterForm, gender: v })} searchPlaceholder="Search..." className="h-9" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Scheme *</label>
+              <Combobox
+                options={quickRegisterSchemes.map((s: any) => ({ value: s.id, label: s.scheme_name }))}
+                value={quickRegisterForm.scheme_id}
+                onChange={v => setQuickRegisterForm({ ...quickRegisterForm, scheme_id: v })}
+                searchPlaceholder="Search schemes..."
+                className="h-9"
+              />
+            </div>
+            {quickRegisterIsArmedGroup && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Which Army or Police? *</label>
+                <Input value={quickRegisterForm.army_unit} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, army_unit: e.target.value })} placeholder="e.g. SSPDF, SSNPS..." />
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Phone Number *</label>
+              <Input value={quickRegisterForm.phone} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, phone: e.target.value })} placeholder="09XXXXXXXX" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Next of Kin *</label>
+              <Input value={quickRegisterForm.next_of_kin} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, next_of_kin: e.target.value })} placeholder="Full name of next of kin" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQuickRegister(false)}>Cancel</Button>
+            <Button onClick={handleQuickRegisterSubmit} disabled={quickRegisterSubmitting}>
+              {quickRegisterSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
+              {quickRegisterSubmitting ? 'Registering...' : 'Register & Queue'}
             </Button>
           </DialogFooter>
         </DialogContent>
