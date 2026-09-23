@@ -3146,12 +3146,12 @@ export default function LISTestOrders() {
       </Dialog>
 
       <Dialog open={showClinicalInsights} onOpenChange={(open) => { setShowClinicalInsights(open); if (!open) stopClinicalInsightsPoll(); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-violet-600" /> Clinical Insights</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-lg"><Sparkles className="w-5 h-5 text-violet-600" /> Clinical Insights</DialogTitle>
             <DialogDescription>Read-only decision support — nothing here is saved to the patient record.</DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs px-3 py-2">
+          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
             AI-generated suggestions for clinician consideration only. Not a diagnosis. Clinical judgement must prevail.
           </div>
 
@@ -3178,52 +3178,58 @@ export default function LISTestOrders() {
           )}
 
           {clinicalInsightsStatus === 'completed' && clinicalInsightsResponse && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               {(clinicalInsightsResponse.urgent_flags || []).length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase text-red-700 flex items-center gap-1.5">
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-red-700 flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5" /> Urgent Flags
                   </h4>
-                  {clinicalInsightsResponse.urgent_flags.map((f: any, i: number) => (
-                    <div key={i} className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                      <p className="text-sm font-medium text-red-800">{f.finding}</p>
-                      <p className="text-xs text-red-700 mt-0.5">{f.reason}</p>
-                    </div>
-                  ))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {clinicalInsightsResponse.urgent_flags.map((f: any, i: number) => (
+                      <div key={i} className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                        <p className="text-sm font-medium text-red-800">{f.finding}</p>
+                        <p className="text-sm text-red-700 mt-1 leading-relaxed">{f.reason}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Differentials</h4>
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Differentials</h4>
                 {(clinicalInsightsResponse.differentials || []).length === 0 ? (
                   <p className="text-sm text-muted-foreground">No differentials suggested.</p>
-                ) : clinicalInsightsResponse.differentials.map((d: any, i: number) => (
-                  <div key={i} className="rounded-lg border p-3 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold">{d.condition}</p>
-                      <span className={cn(
-                        'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
-                        d.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
-                        d.confidence === 'moderate' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
-                      )}>{d.confidence}</span>
-                    </div>
-                    {(d.supporting_findings || []).length > 0 && (
-                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Supports:</span> {d.supporting_findings.join(', ')}</p>
-                    )}
-                    {(d.against_findings || []).length > 0 && (
-                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Against:</span> {d.against_findings.join(', ')}</p>
-                    )}
-                    {d.suggested_next_step && (
-                      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Suggested next step:</span> {d.suggested_next_step}</p>
-                    )}
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {clinicalInsightsResponse.differentials.map((d: any, i: number) => (
+                      <div key={i} className="rounded-lg border p-4 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">{d.condition}</p>
+                          <span className={cn(
+                            'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0',
+                            d.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
+                            d.confidence === 'moderate' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                          )}>{d.confidence}</span>
+                        </div>
+                        {(d.supporting_findings || []).length > 0 && (
+                          <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Supports:</span> {d.supporting_findings.join(', ')}</p>
+                        )}
+                        {(d.against_findings || []).length > 0 && (
+                          <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Against:</span> {d.against_findings.join(', ')}</p>
+                        )}
+                        {d.suggested_next_step && (
+                          <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Suggested next step:</span> {d.suggested_next_step}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
 
               {clinicalInsightsResponse.data_limitations && (
-                <div className="space-y-1">
-                  <h4 className="text-xs font-semibold uppercase text-muted-foreground">Data Limitations</h4>
-                  <p className="text-sm p-3 border rounded-lg bg-card text-muted-foreground">{clinicalInsightsResponse.data_limitations}</p>
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Data Limitations</h4>
+                  <p className="text-sm p-4 border rounded-lg bg-card text-muted-foreground leading-relaxed">{clinicalInsightsResponse.data_limitations}</p>
                 </div>
               )}
 

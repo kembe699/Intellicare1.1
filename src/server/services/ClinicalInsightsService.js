@@ -15,7 +15,7 @@ const MODEL_DEFAULT = process.env.CLINICAL_INSIGHTS_MODEL || 'claude-sonnet-5';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const FETCH_TIMEOUT_MS = 60 * 1000;
 
-const SYSTEM_PROMPT = `You are a clinical decision support assistant for hospitals in South Sudan. You assist qualified clinicians; you do not diagnose. Weight locally prevalent conditions appropriately (e.g. malaria, typhoid, tuberculosis, HIV-related illness, malnutrition, diarrhoeal disease) alongside general causes. Base every suggestion only on the data provided. If data is insufficient, say so. Call the submit_clinical_insights tool exactly once with your findings — do not write any other text.`;
+const SYSTEM_PROMPT = `You are a clinical decision support assistant for hospitals in South Sudan. You assist qualified clinicians; you do not diagnose. Weight locally prevalent conditions appropriately (e.g. malaria, typhoid, tuberculosis, HIV-related illness, malnutrition, diarrhoeal disease) alongside general causes. Base every suggestion only on the data provided. If data is insufficient, say so. Be brief: a busy clinician is scanning this between patients, not reading a report — every field is a short phrase or one short sentence, never a paragraph. Call the submit_clinical_insights tool exactly once with your findings — do not write any other text.`;
 
 // Forces the response through Anthropic's tool-use JSON schema rather than
 // asking for raw JSON in prose: prompting alone ("respond ONLY with valid
@@ -36,8 +36,8 @@ const CLINICAL_INSIGHTS_TOOL = {
         items: {
           type: 'object',
           properties: {
-            finding: { type: 'string' },
-            reason: { type: 'string' },
+            finding: { type: 'string', description: 'A short phrase naming the finding — a few words, not a sentence.' },
+            reason: { type: 'string', description: 'One short sentence: why this needs prompt attention.' },
           },
           required: ['finding', 'reason'],
         },
@@ -49,18 +49,18 @@ const CLINICAL_INSIGHTS_TOOL = {
         items: {
           type: 'object',
           properties: {
-            condition: { type: 'string' },
+            condition: { type: 'string', description: 'The condition name only.' },
             confidence: { type: 'string', enum: ['high', 'moderate', 'low'] },
-            supporting_findings: { type: 'array', items: { type: 'string' } },
-            against_findings: { type: 'array', items: { type: 'string' } },
-            suggested_next_step: { type: 'string' },
+            supporting_findings: { type: 'array', items: { type: 'string', description: 'A short phrase, not a sentence.' }, description: 'At most 3 short phrases.' },
+            against_findings: { type: 'array', items: { type: 'string', description: 'A short phrase, not a sentence.' }, description: 'At most 3 short phrases; empty array if none.' },
+            suggested_next_step: { type: 'string', description: 'One short, actionable sentence.' },
           },
           required: ['condition', 'confidence', 'supporting_findings', 'against_findings', 'suggested_next_step'],
         },
       },
       data_limitations: {
         type: 'string',
-        description: 'What data would have been needed for a more confident assessment, or an empty string if none.',
+        description: 'One or two short sentences at most on what data would sharpen this assessment, or an empty string if none.',
       },
     },
     required: ['urgent_flags', 'differentials', 'data_limitations'],
