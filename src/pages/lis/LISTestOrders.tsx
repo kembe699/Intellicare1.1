@@ -1273,7 +1273,11 @@ export default function LISTestOrders() {
     const patientName = patient?.name ?? (selectedParticipant ? `${selectedParticipant.first_name} ${selectedParticipant.last_name}` : '');
     if (!patientId) return;
     if (billedItemKeys.has(dedupeKey)) return;
-    if (!price || price <= 0) return;
+    // A price of exactly 0 (a deliberately free drug/service, e.g. under a zero-priced
+    // scheme) must still create a bill line — only a genuinely missing/invalid price
+    // skips billing. See billOrderItems' identical fix above for why: with no bill line
+    // at all, this item can never show as paid/collectible downstream.
+    if (price == null || Number.isNaN(price) || price < 0) return;
     setBilledItemKeys(prev => new Set(prev).add(dedupeKey));
 
     // Chained onto the shared queue so the "does an active bill already
@@ -1359,7 +1363,14 @@ export default function LISTestOrders() {
       const unitPrice = parseFloat(s.price) || 0;
       return { serviceId: s.id, serviceName: s.service_name || s.name, quantity: 1, unitPrice, totalPrice: unitPrice, currency: s.currency || 'SSP' };
     });
-    const lineItems = [...testLines, ...serviceLines].filter(l => l.unitPrice > 0);
+    // A test/service priced at exactly 0 (deliberately free — e.g. dpoc's zero-priced
+    // schemes) used to get filtered out here entirely, so no bill line was ever created
+    // for it. Without a matching patient_bills.services[] entry, getCollectiblePool() /
+    // markCollectible() in lisModule.js can never find it, so item_paid stayed false
+    // forever — the specimen was permanently stuck on "Payment Required" for a test that
+    // should have needed no payment at all. unitPrice is already a real, valid number
+    // here (parseFloat(...) || 0 above), never undefined/NaN, so every line is billable.
+    const lineItems = [...testLines, ...serviceLines];
     if (lineItems.length === 0) return;
 
     try {
