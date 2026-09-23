@@ -73,6 +73,12 @@ export default function LISTestOrders() {
   const [clinicalInsightsStatus, setClinicalInsightsStatus] = useState<'idle' | 'pending' | 'completed' | 'failed'>('idle');
   const [clinicalInsightsResponse, setClinicalInsightsResponse] = useState<any | null>(null);
   const [clinicalInsightsError, setClinicalInsightsError] = useState<string | null>(null);
+  // True only when WE gave up waiting client-side (the generation may still
+  // complete in the background) — distinct from the server itself reporting
+  // status: 'failed'. Drives whether "Try again" resumes waiting on the same
+  // request or actually starts a brand new (billable) one — see
+  // requestClinicalInsights's regenerate param.
+  const [clinicalInsightsClientTimedOut, setClinicalInsightsClientTimedOut] = useState(false);
   const clinicalInsightsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const clinicalInsightsDeadlineRef = useRef<number>(0);
   const EMPTY_VITALS = {
@@ -557,7 +563,15 @@ export default function LISTestOrders() {
 
   const pollClinicalInsights = (orderId: string) => {
     stopClinicalInsightsPoll();
-    clinicalInsightsDeadlineRef.current = Date.now() + 60 * 1000;
+    // The server's own model call can run up to 60s (its AbortController
+    // timeout) before it even starts writing a result — plus request/DB
+    // round-trip and, on a Render free/starter instance that had spun down,
+    // real cold-start latency on top of that. 60s here routinely gave up on
+    // a request that was still genuinely in flight. 110s leaves comfortable
+    // margin above the server's own 60s cap without leaving a doctor waiting
+    // indefinitely on a truly stuck request (the backend sweep independently
+    // fails anything still pending after 3 minutes).
+    clinicalInsightsDeadlineRef.current = Date.now() + 110 * 1000;
     clinicalInsightsPollRef.current = setInterval(async () => {
       try {
         const res = await authFetch(`/api/lis/orders/${orderId}/clinical-insights`, { credentials: 'include' });
@@ -567,12 +581,17 @@ export default function LISTestOrders() {
           setClinicalInsightsResponse(data.response);
           stopClinicalInsightsPoll();
         } else if (data.status === 'failed') {
+          setClinicalInsightsClientTimedOut(false);
           setClinicalInsightsStatus('failed');
           setClinicalInsightsError(data.error_message || 'Failed to generate insights.');
           stopClinicalInsightsPoll();
         } else if (Date.now() > clinicalInsightsDeadlineRef.current) {
+          // We gave up watching, but the generation may still complete in the
+          // background — "Try again" below resumes waiting on it instead of
+          // paying for a brand new request.
+          setClinicalInsightsClientTimedOut(true);
           setClinicalInsightsStatus('failed');
-          setClinicalInsightsError('This is taking longer than expected. Please try again.');
+          setClinicalInsightsError('This is taking longer than usual. It may still finish in the background — click Try again to check.');
           stopClinicalInsightsPoll();
         }
       } catch {
@@ -588,6 +607,7 @@ export default function LISTestOrders() {
     setClinicalInsightsStatus('pending');
     setClinicalInsightsResponse(null);
     setClinicalInsightsError(null);
+    setClinicalInsightsClientTimedOut(false);
     try {
       const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/clinical-insights${regenerate ? '?regenerate=true' : ''}`, {
         method: 'POST',
@@ -3148,7 +3168,10 @@ export default function LISTestOrders() {
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{clinicalInsightsError || 'Something went wrong generating suggestions.'}</span>
               </div>
-              <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(true)}>
+              {/* A client-side give-up resumes waiting on the same (possibly still
+                  finishing) request; a genuine server-reported failure starts a new
+                  one — see pollClinicalInsights/requestClinicalInsights. */}
+              <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(!clinicalInsightsClientTimedOut)}>
                 <RefreshCw className="w-4 h-4 mr-2" /> Try again
               </Button>
             </div>
