@@ -956,40 +956,24 @@ export default function LISTestOrders() {
   // Matched by scheme_code (the stable identifier set at creation), not the display
   // name, which an admin could rename later without meaning to change this behavior.
   const quickRegisterIsArmedGroup = quickRegisterSelectedScheme?.scheme_code === 'ARMED-GROUPS';
-  // Drives the submit button's own disabled state (see the Dialog below) — every field
-  // was already enforced inside handleQuickRegisterSubmit via a toast-and-refuse, but
-  // that only shows up after clicking. Disabling the button itself until every mandatory
-  // field (army_unit included, only when it's actually shown) is filled makes "required"
-  // visible before the click, not just after it.
-  const quickRegisterFormValid = !!(
-    quickRegisterForm.full_name.trim() && quickRegisterForm.age && quickRegisterForm.gender &&
-    quickRegisterForm.scheme_id && quickRegisterForm.phone.trim() && quickRegisterForm.next_of_kin.trim() &&
-    (!quickRegisterIsArmedGroup || quickRegisterForm.army_unit.trim())
-  );
 
   const handleQuickRegisterSubmit = async () => {
     const { full_name, age, gender, scheme_id, phone, next_of_kin, army_unit } = quickRegisterForm;
-    if (!full_name.trim() || !age || !gender || !scheme_id || !phone.trim() || !next_of_kin.trim()) {
-      toast.error('Please fill in every field before registering.');
-      return;
-    }
-    const ageNum = parseInt(age, 10);
-    if (!Number.isFinite(ageNum) || ageNum <= 0 || ageNum > 130) {
-      toast.error('Enter a valid age.');
-      return;
-    }
-    if (quickRegisterIsArmedGroup && !army_unit.trim()) {
-      toast.error('Please indicate which army or police unit.');
-      return;
-    }
 
-    const nameParts = full_name.trim().split(/\s+/);
-    const first_name = nameParts[0];
-    const last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
+    // Nothing here is mandatory — staff can register with just whatever they
+    // know at the moment and fill the rest in later. Only sanitize what was
+    // actually given, never block on what wasn't.
+    const ageNum = parseInt(age, 10);
+    const hasValidAge = Number.isFinite(ageNum) && ageNum > 0 && ageNum <= 130;
+
+    const trimmedName = full_name.trim();
+    const nameParts = trimmedName ? trimmedName.split(/\s+/) : [''];
+    const first_name = nameParts[0] || '';
+    const last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : (nameParts[0] || '');
     // lis_participants only has date_of_birth, not a plain age column — Jan 1 of the
     // implied birth year is the closest a whole-years age can get to a real DOB. The
     // exact age given is also kept in demographics so nothing is lost to the rounding.
-    const date_of_birth = `${new Date().getFullYear() - ageNum}-01-01`;
+    const date_of_birth = hasValidAge ? `${new Date().getFullYear() - ageNum}-01-01` : null;
 
     setQuickRegisterSubmitting(true);
     try {
@@ -998,15 +982,15 @@ export default function LISTestOrders() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          first_name, last_name, gender, date_of_birth,
+          first_name, last_name, gender: gender || null, date_of_birth,
           phone: phone.trim(),
           doctor_id: user?.id,
           clinic_id: user?.clinic || 1,
           demographics: {
-            scheme_id, scheme_name: quickRegisterSelectedScheme?.scheme_name || '',
-            age: ageNum,
-            next_of_kin: next_of_kin.trim(),
-            ...(quickRegisterIsArmedGroup ? { army_or_police_unit: army_unit.trim() } : {}),
+            ...(scheme_id ? { scheme_id, scheme_name: quickRegisterSelectedScheme?.scheme_name || '' } : {}),
+            ...(hasValidAge ? { age: ageNum } : {}),
+            ...(next_of_kin.trim() ? { next_of_kin: next_of_kin.trim() } : {}),
+            ...(quickRegisterIsArmedGroup && army_unit.trim() ? { army_or_police_unit: army_unit.trim() } : {}),
           },
         }),
       });
@@ -1020,23 +1004,26 @@ export default function LISTestOrders() {
       // applySchemePrice (patientBills.js) checks scheme_membership before it'll price
       // anything under a scheme, so without this every bill for this patient would
       // reject with "not priced under this scheme" despite scheme_id being set. Same
-      // enrollPatientInScheme call LISRegistration.tsx's own full form makes.
-      try {
-        const enrollRes = await authFetch(`/api/schemes/patient-schemes/${data.id}`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scheme_id, clinic_id: user?.clinic || 1, member_number: null }),
-        });
-        if (!enrollRes.ok) {
-          const enrollErr = await enrollRes.json().catch(() => ({}));
-          toast.error(enrollErr.error || 'Registered and queued, but scheme enrollment failed — billing may not price correctly under this scheme.');
+      // enrollPatientInScheme call LISRegistration.tsx's own full form makes. Skipped
+      // entirely when no scheme was chosen — nothing to enroll into.
+      if (scheme_id) {
+        try {
+          const enrollRes = await authFetch(`/api/schemes/patient-schemes/${data.id}`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scheme_id, clinic_id: user?.clinic || 1, member_number: null }),
+          });
+          if (!enrollRes.ok) {
+            const enrollErr = await enrollRes.json().catch(() => ({}));
+            toast.error(enrollErr.error || 'Registered and queued, but scheme enrollment failed — billing may not price correctly under this scheme.');
+          }
+        } catch (e) {
+          toast.error('Registered and queued, but scheme enrollment failed — billing may not price correctly under this scheme.');
         }
-      } catch (e) {
-        toast.error('Registered and queued, but scheme enrollment failed — billing may not price correctly under this scheme.');
       }
 
-      toast.success(`${full_name.trim()} registered and added to your queue.`);
+      toast.success(`${trimmedName || 'Patient'} registered and added to your queue.`);
       setShowQuickRegister(false);
       setQuickRegisterForm(EMPTY_QUICK_REGISTER);
       fetchQueue();
@@ -3003,21 +2990,21 @@ export default function LISTestOrders() {
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Full Name *</label>
+              <label className="text-xs font-medium text-muted-foreground">Full Name</label>
               <Input value={quickRegisterForm.full_name} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, full_name: e.target.value })} placeholder="e.g. John Deng" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Age *</label>
+                <label className="text-xs font-medium text-muted-foreground">Age</label>
                 <Input type="number" min="0" max="130" value={quickRegisterForm.age} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, age: e.target.value })} placeholder="e.g. 34" />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Gender *</label>
+                <label className="text-xs font-medium text-muted-foreground">Gender</label>
                 <Combobox options={GENDER_OPTIONS} value={quickRegisterForm.gender} onChange={v => setQuickRegisterForm({ ...quickRegisterForm, gender: v })} searchPlaceholder="Search..." className="h-9" />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Scheme *</label>
+              <label className="text-xs font-medium text-muted-foreground">Scheme</label>
               <Combobox
                 options={quickRegisterSchemes.map((s: any) => ({ value: s.id, label: s.scheme_name }))}
                 value={quickRegisterForm.scheme_id}
@@ -3028,22 +3015,22 @@ export default function LISTestOrders() {
             </div>
             {quickRegisterIsArmedGroup && (
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Which Army or Police? *</label>
+                <label className="text-xs font-medium text-muted-foreground">Which Army or Police?</label>
                 <Input value={quickRegisterForm.army_unit} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, army_unit: e.target.value })} placeholder="e.g. SSPDF, SSNPS..." />
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Phone Number *</label>
+              <label className="text-xs font-medium text-muted-foreground">Phone Number</label>
               <Input value={quickRegisterForm.phone} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, phone: e.target.value })} placeholder="09XXXXXXXX" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Next of Kin *</label>
+              <label className="text-xs font-medium text-muted-foreground">Next of Kin</label>
               <Input value={quickRegisterForm.next_of_kin} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, next_of_kin: e.target.value })} placeholder="Full name of next of kin" />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowQuickRegister(false)}>Cancel</Button>
-            <Button onClick={handleQuickRegisterSubmit} disabled={quickRegisterSubmitting || !quickRegisterFormValid}>
+            <Button onClick={handleQuickRegisterSubmit} disabled={quickRegisterSubmitting}>
               {quickRegisterSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
               {quickRegisterSubmitting ? 'Registering...' : 'Register & Queue'}
             </Button>
