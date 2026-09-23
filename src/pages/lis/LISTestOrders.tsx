@@ -956,6 +956,16 @@ export default function LISTestOrders() {
   // Matched by scheme_code (the stable identifier set at creation), not the display
   // name, which an admin could rename later without meaning to change this behavior.
   const quickRegisterIsArmedGroup = quickRegisterSelectedScheme?.scheme_code === 'ARMED-GROUPS';
+  // Drives the submit button's own disabled state (see the Dialog below) — every field
+  // was already enforced inside handleQuickRegisterSubmit via a toast-and-refuse, but
+  // that only shows up after clicking. Disabling the button itself until every mandatory
+  // field (army_unit included, only when it's actually shown) is filled makes "required"
+  // visible before the click, not just after it.
+  const quickRegisterFormValid = !!(
+    quickRegisterForm.full_name.trim() && quickRegisterForm.age && quickRegisterForm.gender &&
+    quickRegisterForm.scheme_id && quickRegisterForm.phone.trim() && quickRegisterForm.next_of_kin.trim() &&
+    (!quickRegisterIsArmedGroup || quickRegisterForm.army_unit.trim())
+  );
 
   const handleQuickRegisterSubmit = async () => {
     const { full_name, age, gender, scheme_id, phone, next_of_kin, army_unit } = quickRegisterForm;
@@ -3022,7 +3032,7 @@ export default function LISTestOrders() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowQuickRegister(false)}>Cancel</Button>
-            <Button onClick={handleQuickRegisterSubmit} disabled={quickRegisterSubmitting}>
+            <Button onClick={handleQuickRegisterSubmit} disabled={quickRegisterSubmitting || !quickRegisterFormValid}>
               {quickRegisterSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
               {quickRegisterSubmitting ? 'Registering...' : 'Register & Queue'}
             </Button>
