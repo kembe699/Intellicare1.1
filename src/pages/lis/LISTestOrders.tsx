@@ -1674,7 +1674,7 @@ export default function LISTestOrders() {
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
+      <div className="w-full h-[calc(100vh-64px)] flex flex-col">
         <div className="flex justify-between items-start">
           <PageHeader
             title={activeMode === 'order' ? "Test Orders" : activeMode === 'results' ? "Lab Results" : "Visit Summary"}
@@ -1710,7 +1710,7 @@ export default function LISTestOrders() {
           {/* LEFT: Participant Selection */}
           <div className="md:col-span-3 bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
             <div className="p-4 border-b bg-muted/30">
-              <h3 className="font-medium mb-3">1. Select Participant</h3>
+              <h3 className="font-medium mb-3">1. Select Patient</h3>
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
                 <Input 
