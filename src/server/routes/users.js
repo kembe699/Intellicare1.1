@@ -4,6 +4,14 @@ const { authorize } = require('../middleware/authorize');
 const { resolveTenantClinicId, clinicExists, checkUserCanSeeData } = require('../services/tenantClinic');
 const router = express.Router();
 
+// Shared by account creation and admin-triggered password reset — 12
+// characters from crypto randomness, avoiding the pairs that get misread when
+// a password is written down and typed in by hand (O/0, l/1/I).
+function generateTempPassword() {
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  return Array.from(require('crypto').randomBytes(12), (b) => ALPHABET[b % ALPHABET.length]).join('');
+}
+
 // Clinic name map
 /**
  * Which clinic a newly-created user belongs to.
@@ -239,13 +247,7 @@ router.post('/', authorize(['admin']), async (req, res) => {
     // id is intentionally omitted — users.id is a real INT AUTO_INCREMENT column, not a
     // UUID, so MySQL assigns it (a manually-generated UUID string here would overflow
     // the column and fail with "Data truncated for column 'id'").
-    // 12 characters from crypto randomness, avoiding the pairs that get misread
-    // when a password is written down and typed in by hand (O/0, l/1/I).
-    const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    const tempPassword = Array.from(
-      require('crypto').randomBytes(12),
-      (b) => ALPHABET[b % ALPHABET.length],
-    ).join('');
+    const tempPassword = generateTempPassword();
 
     const resolvedBranchIds = await resolveBranchIdsForNewUser(req);
 
@@ -358,12 +360,80 @@ router.post('/', authorize(['admin']), async (req, res) => {
       }
     }
 
+    // Best-effort — a bounced/misconfigured email must never turn a
+    // successful account creation into a failure. The temp password is
+    // returned in the response either way (below), so the admin can always
+    // hand it over directly if delivery didn't work.
+    let emailDelivered = false;
+    try {
+      if (user.email) {
+        const { Client } = require('../models/platform');
+        const client = await Client.findOne({ where: { schema_name: req.tenantSchema } });
+        const { sendNewUserWelcomeEmail } = require('../utils/emailService');
+        const result = await sendNewUserWelcomeEmail({
+          to: user.email, displayName: user.display_name, clientCode: client?.code || '', tempPassword,
+        });
+        emailDelivered = !!result?.delivered;
+      }
+    } catch (emailErr) {
+      console.error(`Could not email credentials to new user ${user.id}:`, emailErr.message);
+    }
+
     // Returned once, here, so the admin can pass it on. It is not recoverable
     // afterwards — only a reset can replace it.
-    res.status(201).json({ ...user.toJSON(), additionalRoles, tempPassword });
+    res.status(201).json({ ...user.toJSON(), additionalRoles, tempPassword, emailDelivered });
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user', details: error.message });
+  }
+});
+
+// Admin-triggered password reset — for a locked-out user, not their own
+// self-service change (see POST /api/auth/change-password for that, and the
+// public forgot-password token flow for a user who can still receive email
+// but has forgotten their password). Generates a brand-new temporary
+// password the same way account creation does, so it works even when the
+// account has no working email on file or the admin is standing with the
+// user in person.
+router.post('/:id/reset-password', authorize(['admin']), async (req, res) => {
+  try {
+    const bcrypt = require('bcrypt');
+    const targetUser = await User.findByPk(req.params.id);
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+    const tempPassword = generateTempPassword();
+    await targetUser.update({ password_hash: await bcrypt.hash(tempPassword, 10) });
+
+    let emailDelivered = false;
+    try {
+      if (targetUser.email) {
+        const { Client } = require('../models/platform');
+        const client = await Client.findOne({ where: { schema_name: req.tenantSchema } });
+        const { sendNewUserWelcomeEmail } = require('../utils/emailService');
+        const result = await sendNewUserWelcomeEmail({
+          to: targetUser.email, displayName: targetUser.display_name, clientCode: client?.code || '', tempPassword, isReset: true,
+        });
+        emailDelivered = !!result?.delivered;
+      }
+    } catch (emailErr) {
+      console.error(`Could not email reset credentials to user ${targetUser.id}:`, emailErr.message);
+    }
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        req, clinic_id: targetUser.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName, user_role: req.user?.role,
+        module: 'Security', action: 'USER_PASSWORD_RESET', entity_type: 'User', entity_id: String(targetUser.id),
+        description: `Password reset for ${targetUser.display_name} (${targetUser.email}) by ${req.user?.displayName || 'admin'}`,
+      });
+    } catch (auditErr) { /* audit failure must never block the reset itself */ }
+
+    // Returned once, exactly like account creation's tempPassword — not
+    // recoverable afterwards, only replaceable by another reset.
+    res.json({ tempPassword, emailDelivered });
+  } catch (error) {
+    console.error('Error resetting user password:', error);
+    res.status(500).json({ error: 'Failed to reset password', details: error.message });
   }
 });
 

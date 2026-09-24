@@ -238,8 +238,64 @@ Need help? Contact ${supportEmail()}`;
   return deliver({ to, subject: `Welcome to IntelliCare — ${facilityName}`, html, text });
 }
 
+// ── New staff account credentials ────────────────────────────────────────────
+/**
+ * Sent to a staff member's own email when an admin creates their account
+ * (routes/users.js POST /) or resets their password (POST /:id/reset-password)
+ * from Setup > Security. Unlike sendTenantWelcomeEmail (a brand-new tenant's
+ * own admin account), this is an existing tenant's staff login — the sign-in
+ * page still needs the tenant's instance code, so it's carried the same way.
+ * Delivery is always best-effort: the temp password is also returned in the
+ * API response for the admin to hand over directly, so a bounced/undelivered
+ * email never leaves the account inaccessible.
+ */
+async function sendNewUserWelcomeEmail({ to, displayName, clientCode, tempPassword, isReset = false }) {
+  const loginUrl = `${frontendUrl()}/login`;
+  const safeName = displayName || 'there';
+  const intro = isReset
+    ? `Your IntelliCare password has been reset by an administrator.`
+    : `Your IntelliCare account has been created.`;
+
+  const html = shell(isReset ? 'Password Reset' : 'Welcome to IntelliCare', `
+    <p style="margin:0 0 20px;font-size:16px;color:#333;">Hello <strong>${safeName}</strong>,</p>
+    <p style="margin:0 0 20px;font-size:16px;color:#333;">${intro}</p>
+    <p style="margin:0 0 12px;font-size:15px;color:#333;font-weight:600;">Your sign-in details</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;">
+      <tr><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;width:45%;">Instance code</td>
+          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;font-weight:700;">${clientCode}</td></tr>
+      <tr><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;">Email address</td>
+          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;font-weight:700;">${to}</td></tr>
+      <tr><td style="padding:12px 16px;font-size:14px;color:#666;">Temporary password</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111;font-weight:700;font-family:monospace;">${tempPassword}</td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:30px 0;"><tr><td align="center">
+      <a href="${loginUrl}" style="display:inline-block;padding:16px 40px;background-color:#3D8A97;color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">Sign In</a>
+    </td></tr></table>
+    <div style="margin:30px 0 0;padding:20px;background-color:#fff3cd;border-left:4px solid #ffc107;border-radius:4px;">
+      <p style="margin:0;font-size:14px;color:#856404;">⚠️ <strong>Please change this password after signing in.</strong> It is shared only in this email.</p>
+    </div>`);
+
+  const text = `Hello ${safeName},
+
+${intro}
+
+YOUR SIGN-IN DETAILS
+  Instance code:      ${clientCode}
+  Email address:      ${to}
+  Temporary password: ${tempPassword}
+
+Sign in at ${loginUrl}, then change this password straight away from your profile.
+
+---
+IntelliCare Hospital Management System
+Need help? Contact ${supportEmail()}`;
+
+  return deliver({ to, subject: isReset ? 'Your IntelliCare password was reset' : 'Welcome to IntelliCare', html, text });
+}
+
 module.exports = {
   sendPasswordResetEmail,
   sendTenantWelcomeEmail,
+  sendNewUserWelcomeEmail,
   deliver,
 };

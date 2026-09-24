@@ -6,7 +6,7 @@ import { PageHeader, StatusBadge, type StatusBadgeTone } from '@/components/comm
 import { UserRole } from '@/types';
 import {
   UserPlus, Search, Eye, EyeOff, Edit, Check, X, Loader2, AlertCircle, Trash2, Settings,
-  Users, ShieldCheck, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  Users, ShieldCheck, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,7 +133,8 @@ const Security: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserData | null>(null);
   const [saving, setSaving] = useState(false);
-  const [newCredentials, setNewCredentials] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [newCredentials, setNewCredentials] = useState<{ name: string; email: string; password: string; emailDelivered?: boolean; mode?: 'created' | 'reset' } | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
 
   // Create form
@@ -426,6 +427,8 @@ const Security: React.FC = () => {
         name: createFormData.displayName,
         email: createFormData.email.toLowerCase().trim(),
         password: created?.tempPassword || '',
+        emailDelivered: created?.emailDelivered,
+        mode: 'created',
       });
       setCreateFormData({ displayName: '', email: '', role: '', additionalRoles: [], clinic: user?.clinic || 'IntelliCare', branch_ids: [] });
       fetchUsers();
@@ -433,6 +436,34 @@ const Security: React.FC = () => {
       toast.error(error.message || 'Failed to create user');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Admin-triggered reset for a locked-out user — generates a brand-new
+  // temporary password (same mechanism as account creation) and, if the
+  // account has an email on file, sends it there too. Shown once in the same
+  // "credentials" dialog account creation already uses.
+  const handleResetPassword = async (u: UserData) => {
+    if (!confirm(`Reset the password for ${u.displayName}? A new temporary password will be generated${u.email ? ' and emailed to them if possible' : ''}.`)) return;
+    setResettingUserId(u.id);
+    try {
+      const response = await authFetch(`/api/users/${u.id}/reset-password`, { method: 'POST' });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to reset password');
+      }
+      const data = await response.json();
+      setNewCredentials({
+        name: u.displayName,
+        email: u.email,
+        password: data.tempPassword || '',
+        emailDelivered: data.emailDelivered,
+        mode: 'reset',
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reset password');
+    } finally {
+      setResettingUserId(null);
     }
   };
 
@@ -779,6 +810,16 @@ const Security: React.FC = () => {
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEditForm(u)} className="h-7 w-7" title="Edit user">
                         <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleResetPassword(u)}
+                        disabled={resettingUserId === u.id}
+                        className="h-7 w-7"
+                        title="Reset password"
+                      >
+                        {resettingUserId === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
                       </Button>
                       <Button
                         variant="ghost"
@@ -1192,7 +1233,7 @@ const Security: React.FC = () => {
       <Dialog open={!!newCredentials} onOpenChange={(o) => { if (!o) setNewCredentials(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Account created</DialogTitle>
+            <DialogTitle>{newCredentials?.mode === 'reset' ? 'Password reset' : 'Account created'}</DialogTitle>
             <DialogDescription>
               Give these details to {newCredentials?.name}. The password is shown only now.
             </DialogDescription>
@@ -1208,6 +1249,12 @@ const Security: React.FC = () => {
                 <span className="font-mono font-semibold tracking-wide">{newCredentials?.password || '—'}</span>
               </div>
             </div>
+            {newCredentials?.emailDelivered === true && (
+              <p className="text-xs text-emerald-600">It was also emailed to {newCredentials?.email}.</p>
+            )}
+            {newCredentials?.emailDelivered === false && (
+              <p className="text-xs text-amber-600">The email could not be sent — please share this password with them directly.</p>
+            )}
             <p className="text-xs text-muted-foreground">
               It cannot be shown again. If it is lost, reset the account instead.
               Ask them to change it after signing in.
