@@ -49,7 +49,7 @@ const GENDER_OPTIONS = [
 // route or config flag, since it's specific to how this facility's front desk works, not
 // a general product feature.
 const QUICK_REGISTER_TENANT = 'dpoc';
-const EMPTY_QUICK_REGISTER = { full_name: '', age: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
+const EMPTY_QUICK_REGISTER = { full_name: '', age_years: '', age_months: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
 
 export default function LISTestOrders() {
   const { user, hasPrivilege } = useAuth();
@@ -1129,22 +1129,36 @@ export default function LISTestOrders() {
   const quickRegisterIsArmedGroup = quickRegisterSelectedScheme?.scheme_code === 'ARMED-GROUPS';
 
   const handleQuickRegisterSubmit = async () => {
-    const { full_name, age, gender, scheme_id, phone, next_of_kin, army_unit } = quickRegisterForm;
+    const { full_name, age_years, age_months, gender, scheme_id, phone, next_of_kin, army_unit } = quickRegisterForm;
 
     // Nothing here is mandatory — staff can register with just whatever they
     // know at the moment and fill the rest in later. Only sanitize what was
-    // actually given, never block on what wasn't.
-    const ageNum = parseInt(age, 10);
-    const hasValidAge = Number.isFinite(ageNum) && ageNum > 0 && ageNum <= 130;
+    // actually given, never block on what wasn't. Months matters as its own
+    // field, not just years rounded down to 0 — a 5-month-old baby has to be
+    // registrable as exactly that, not silently "0 years old".
+    const yearsNum = parseInt(age_years, 10);
+    const monthsNum = parseInt(age_months, 10);
+    const hasValidYears = Number.isFinite(yearsNum) && yearsNum >= 0 && yearsNum <= 130;
+    const hasValidMonths = Number.isFinite(monthsNum) && monthsNum >= 0 && monthsNum <= 11;
+    const hasValidAge = hasValidYears || hasValidMonths;
 
     const trimmedName = full_name.trim();
     const nameParts = trimmedName ? trimmedName.split(/\s+/) : [''];
     const first_name = nameParts[0] || '';
     const last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : (nameParts[0] || '');
-    // lis_participants only has date_of_birth, not a plain age column — Jan 1 of the
-    // implied birth year is the closest a whole-years age can get to a real DOB. The
-    // exact age given is also kept in demographics so nothing is lost to the rounding.
-    const date_of_birth = hasValidAge ? `${new Date().getFullYear() - ageNum}-01-01` : null;
+    // lis_participants only has date_of_birth, not a plain age column — today
+    // minus the given years and months is the closest this can get to a real
+    // DOB without an exact birth date (day is fixed at the 1st, since that's
+    // never known either). The exact years/months given are also kept in
+    // demographics so nothing is lost to the day-of-month rounding.
+    let date_of_birth: string | null = null;
+    if (hasValidAge) {
+      const dob = new Date();
+      dob.setDate(1);
+      dob.setFullYear(dob.getFullYear() - (hasValidYears ? yearsNum : 0));
+      dob.setMonth(dob.getMonth() - (hasValidMonths ? monthsNum : 0));
+      date_of_birth = dob.toISOString().split('T')[0];
+    }
 
     setQuickRegisterSubmitting(true);
     try {
@@ -1159,7 +1173,8 @@ export default function LISTestOrders() {
           clinic_id: user?.clinic || 1,
           demographics: {
             ...(scheme_id ? { scheme_id, scheme_name: quickRegisterSelectedScheme?.scheme_name || '' } : {}),
-            ...(hasValidAge ? { age: ageNum } : {}),
+            ...(hasValidYears ? { age_years: yearsNum } : {}),
+            ...(hasValidMonths ? { age_months: monthsNum } : {}),
             ...(next_of_kin.trim() ? { next_of_kin: next_of_kin.trim() } : {}),
             ...(quickRegisterIsArmedGroup && army_unit.trim() ? { army_or_police_unit: army_unit.trim() } : {}),
           },
@@ -3316,7 +3331,10 @@ export default function LISTestOrders() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Age</label>
-                <Input type="number" min="0" max="130" value={quickRegisterForm.age} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, age: e.target.value })} placeholder="e.g. 34" />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Input type="number" min="0" max="130" value={quickRegisterForm.age_years} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, age_years: e.target.value })} placeholder="Years" title="Years" />
+                  <Input type="number" min="0" max="11" value={quickRegisterForm.age_months} onChange={e => setQuickRegisterForm({ ...quickRegisterForm, age_months: e.target.value })} placeholder="Months" title="Months — for a baby under 1 year" />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Gender</label>
