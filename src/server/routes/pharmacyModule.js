@@ -16,7 +16,20 @@ const AccountingService = require('../services/AccountingService');
 // PharmacyReturns, ['admin','pharmacy','doctor'] for PrescriptionManagement.
 // Controlled-substance stock/audit visibility — narrower than general pharmacy read
 // (no doctor access), matching how sensitive this data is everywhere else in healthcare software.
-function bustPharmacyCache() { try { redisCache.delPattern('|pharmacy'); redisCache.delPattern('|inventory'); } catch(e) {} }
+// Was `redisCache.delPattern('|pharmacy')`/`delPattern('|inventory')`, and
+// never actually called anywhere in this file. delPattern does a plain
+// substring/glob match against the real cache key
+// (`ic|${schemaName}|${userId}|${branchId}|${req.originalUrl}` — see
+// redisCacheMiddleware.js), and that key's URL segment is
+// "/api/pharmacy-module/..." / "/api/inventory/..." — neither ever contains
+// the literal substring "|pharmacy" or "|inventory", so this deleted nothing
+// even when called. A GET made right after a write (prescribing, dispensing,
+// a stock adjustment) kept serving the pre-write response for up to the 60s
+// TTL. Fixed to the one pattern already proven to work elsewhere
+// (clinical.js's own `ic|${schemaName}|` call) — a whole-tenant cache flush,
+// broader than strictly necessary but guaranteed to match the real key
+// prefix, same tradeoff that existing call already makes.
+function bustPharmacyCache(req) { try { redisCache.delPattern(`ic|${req.tenantSchema}|`); } catch(e) {} }
 
 // Safe schema migration: allow NULL patient_id for walk-in/OTC dispensing.
 //
@@ -48,7 +61,7 @@ function bustPharmacyCache() { try { redisCache.delPattern('|pharmacy'); redisCa
 // List all inventory items for pharmacy use
 router.get('/drugs', authorize('pharmacy.read'), async (req, res) => {
   try {
-    const { is_active, category, search, item_category } = req.query;
+    const { is_active, category, search, item_category, location_id } = req.query;
     let where = 'WHERE i.clinic_id = :cid';
     const replacements = { cid: BranchQueryFilter.resolveClinicId(req) };
 
@@ -58,23 +71,35 @@ router.get('/drugs', authorize('pharmacy.read'), async (req, res) => {
     const { sql: drugsBranchSQL, params: drugsBranchParams } = getBranchConditionSQL(req, 'i');
     if (drugsBranchSQL) { where += ' AND i.branch_id = :drugsBranchId'; replacements.drugsBranchId = drugsBranchParams[0]; }
 
+    // When a store is picked, report that store's own stock instead of the
+    // clinic-wide total — a LEFT JOIN so an item with no stock_by_location
+    // row there correctly shows 0 (not stocked at that location) rather
+    // than being silently dropped from the list.
+    const locationJoin = location_id ? 'LEFT JOIN stock_by_location sbl ON sbl.item_id = i.id AND sbl.location_id = :locationId' : '';
+    if (location_id) replacements.locationId = location_id;
+    const stockOnHandExpr = location_id ? 'COALESCE(sbl.quantity_on_hand, 0)' : 'i.quantity_on_hand';
+    const availableExpr = location_id
+      ? 'COALESCE(sbl.quantity_on_hand, 0) - COALESCE(sbl.reserved_quantity, 0)'
+      : '(i.quantity_on_hand - i.reserved_quantity)';
+
     const [rows] = await sequelize.query(`
       SELECT i.id, i.id AS drug_id, i.item_code AS drug_code, i.item_name AS drug_name,
         i.item_description AS drug_description, i.item_category AS therapeutic_category,
         i.unit_of_measure, i.selling_price, i.current_unit_cost, i.cost_currency,
-        i.quantity_on_hand AS stock_on_hand, i.minimum_stock_level,
+        ${stockOnHandExpr} AS stock_on_hand, i.minimum_stock_level,
         i.is_active, i.is_controlled_substance, i.item_type,
         i.requires_batch_tracking, i.requires_expiry_tracking,
         i.cogs_account_id, i.inventory_account_id, i.usage_account_id,
         i.id AS inventory_item_id, i.item_name AS inventory_item_name,
         i.notes,
-        (i.quantity_on_hand - i.reserved_quantity) AS available_quantity,
+        ${availableExpr} AS available_quantity,
         d.strength, d.dosage_form, d.generic_name,
         d.requires_prescription, d.max_quantity_per_prescription,
         d.drug_allergy_keywords, d.major_drug_interactions,
         d.revenue_account_id AS drug_revenue_account_id
       FROM inventory_items i
       LEFT JOIN drugs d ON d.inventory_item_id = i.id
+      ${locationJoin}
       ${where}
       ORDER BY i.item_name
     `, { replacements });
@@ -83,6 +108,32 @@ router.get('/drugs', authorize('pharmacy.read'), async (req, res) => {
   } catch (error) {
     console.error('Error listing inventory items for pharmacy:', error);
     res.status(500).json({ error: 'Failed to list items' });
+  }
+});
+
+// Lightweight store list for prescribing/dispensing pickers — same access
+// gate as /drugs (pharmacy.read) rather than inventory.read, since a doctor
+// who can already see the drug catalog needs to see which stores to pick
+// from without being granted broader inventory-management access.
+router.get('/locations', authorize('pharmacy.read'), async (req, res) => {
+  try {
+    const cid = BranchQueryFilter.resolveClinicId(req);
+    let where = 'WHERE sl.clinic_id = :cid AND sl.is_active = true';
+    const replacements = { cid };
+    const { sql: locBranchSQL, params: locBranchParams } = getBranchConditionSQL(req, 'sl');
+    if (locBranchSQL) { where += ' AND sl.branch_id = :locBranchId'; replacements.locBranchId = locBranchParams[0]; }
+
+    const [rows] = await sequelize.query(`
+      SELECT sl.id, sl.location_name AS name, sl.location_type AS type, sl.location_code
+      FROM stock_locations sl
+      ${where}
+      ORDER BY sl.location_name
+    `, { replacements });
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing pharmacy stock locations:', error);
+    res.status(500).json({ error: 'Failed to list locations' });
   }
 });
 
@@ -694,6 +745,7 @@ router.post('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) 
       }
     }
 
+    bustPharmacyCache(req);
     res.status(201).json({ id, prescription_number: rxNumber, message: 'Prescription created' });
   } catch (error) {
     console.error('Error creating prescription:', error);
@@ -1377,6 +1429,23 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       }
       console.log('✅ Step 2 complete: Stock available:', stockCheck[0]?.quantity_on_hand);
 
+      // A location-scoped dispense must also fit what that specific store
+      // actually has — the clinic-wide check above can pass even when the
+      // chosen store itself is empty (stock_by_location has no row for an
+      // item until someone has explicitly stocked it there).
+      if (cleanFromLocationId) {
+        const [locStockCheck] = await sequelize.query(
+          'SELECT COALESCE(quantity_on_hand, 0) AS quantity_on_hand FROM stock_by_location WHERE item_id = :itemId AND location_id = :locationId',
+          { replacements: { itemId: inventoryItemId, locationId: cleanFromLocationId }, transaction: t }
+        );
+        const locAvailable = locStockCheck.length > 0 ? locStockCheck[0].quantity_on_hand : 0;
+        if (locAvailable < quantity_dispensed) {
+          console.log('❌ Insufficient stock at selected location');
+          await t.rollback();
+          return res.status(400).json({ error: 'Insufficient stock at selected location', available: locAvailable, requested: quantity_dispensed });
+        }
+      }
+
       // Select batch (FIFO - earliest expiry first)
       if (batch_id) {
         const [batchRows] = await sequelize.query(
@@ -1750,6 +1819,11 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
     });
 
     await t.commit();
+    // Dispensing changes both the prescription/line's status and the item's
+    // (and, if from_location_id was given, that location's) stock — both are
+    // read back through cached GETs (prescriptions list, drugs list),
+    // previously never invalidated. See bustPharmacyCache's own comment.
+    bustPharmacyCache(req);
 
     try {
       const rr = require('./reports');

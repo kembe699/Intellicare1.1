@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+const redisCache = require('../services/RedisCache');
 
 // Non-admin users only see/touch rows from their own branch; admins see everything
 // clinic-wide. Written inline with named replacements (not branchFilter.js's
@@ -772,7 +773,7 @@ async function billInpatientRequest(admissionId, branchId, lineItem, autoNote) {
 // inpatient_prescriptions, which Pharmacy has no visibility into at all. Only runs when a
 // real catalog drug was selected (drug_id present) — prescription_lines.drug_id is NOT NULL
 // and must be an inventory_items.id, which a free-typed medication name can't satisfy.
-async function mirrorPrescriptionToPharmacy(clinicId, patientId, doctorId, doctorName, admissionId, wardName, rx) {
+async function mirrorPrescriptionToPharmacy(clinicId, patientId, doctorId, doctorName, admissionId, wardName, rx, branchId) {
   try {
     if (!rx.drug_id) return null;
     const id = uuidv4();
@@ -794,13 +795,13 @@ async function mirrorPrescriptionToPharmacy(clinicId, patientId, doctorId, docto
     const lineId = uuidv4();
     try {
       await sequelize.query(
-        `INSERT INTO pharmacy_prescriptions (id, clinic_id, prescription_number, visit_id, patient_id, doctor_id,
+        `INSERT INTO pharmacy_prescriptions (id, clinic_id, branch_id, prescription_number, visit_id, patient_id, doctor_id,
           prescription_date, prescribed_by_name, prescription_notes, special_instructions,
           status, expires_date, valid_for_days, number_of_refills_allowed)
-         VALUES (:id, :clinicId, :rxNumber, NULL, :patientId, :doctorId, :rxDate, :doctorName,
+         VALUES (:id, :clinicId, :branchId, :rxNumber, NULL, :patientId, :doctorId, :rxDate, :doctorName,
           :notes, :instructions, 'pending', :expiresDate, :validDays, 0)`,
         { replacements: {
-          id, clinicId, rxNumber, patientId, doctorId: doctorId || null, rxDate, doctorName: doctorName || null,
+          id, clinicId, branchId: branchId || null, rxNumber, patientId, doctorId: doctorId || null, rxDate, doctorName: doctorName || null,
           notes: `Inpatient ward prescription — Admission ${admissionId}${wardName ? ` (${wardName})` : ''}`,
           instructions: rx.instructions || null, expiresDate, validDays,
         }, transaction: mirrorTxn }
@@ -1065,13 +1066,18 @@ router.post('/prescriptions', authorize('inpatient.clinical.write'), async (req,
     const admissionCtx = isExternal ? null : await getAdmissionBillingContext(admission_id);
     const pharmacyLineId = isExternal ? null : await mirrorPrescriptionToPharmacy(
       clinicId, patient_id, doctorId, req.user?.displayName || req.user?.email, admission_id, admissionCtx?.ward_name,
-      { drug_id, quantity, unit_of_measure, dosage, frequency, duration, instructions }
+      { drug_id, quantity, unit_of_measure, dosage, frequency, duration, instructions }, branchId
     );
     if (pharmacyLineId) {
       await sequelize.query(`UPDATE inpatient_prescriptions SET pharmacy_line_id = :lineId WHERE id = :id`, { replacements: { lineId: pharmacyLineId, id } });
     }
 
-    res.status(201).json({ id, message: 'Prescription created' });
+    // Both /inpatient/prescriptions and /pharmacy-module/prescriptions read
+    // through the 60s response cache — without this a fresh prescription
+    // stays invisible on the pharmacy queue until the TTL expires.
+    try { redisCache.delPattern(`ic|${req.tenantSchema}|`); } catch (e) { /* ignore */ }
+
+    res.status(201).json({ id, pharmacy_line_id: pharmacyLineId, message: 'Prescription created' });
   } catch (error) {
     console.error('Error creating prescription:', error);
     res.status(500).json({ error: 'Failed to create prescription' });

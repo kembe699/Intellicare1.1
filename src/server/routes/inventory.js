@@ -37,9 +37,15 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
   await backfillInventoryBranchIds(sq, 'default');
 })();
 
-// Bust all inventory cache entries for a user/branch after any mutation
+// Bust all inventory cache entries for a user/branch after any mutation.
+// Was `delPattern('|inventory')` — delPattern does a plain substring/glob
+// match against the real key (`ic|${schemaName}|${userId}|${branchId}|${req.originalUrl}`),
+// and this route's originalUrl segment is "/api/inventory/...", which never
+// contains the literal substring "|inventory" — so this deleted nothing.
+// Fixed to the same whole-tenant-flush pattern already proven correct in
+// clinical.js.
 function bustInventoryCache(req) {
-  try { redisCache.delPattern('|inventory'); } catch(e) { /* ignore */ }
+  try { redisCache.delPattern(`ic|${req.tenantSchema}|`); } catch(e) { /* ignore */ }
 }
 
 // ═══════════════════════════════════════════════════

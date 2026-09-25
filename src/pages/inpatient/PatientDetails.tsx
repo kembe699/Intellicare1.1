@@ -59,7 +59,7 @@ const OUTCOME_LABEL: Record<string, string> = { alive: 'Alive', dead: 'Deceased'
 
 export default function PatientDetails() {
   const { id: admissionId } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
   const { fmt } = useCurrency();
   const facilityInfo = useFacilityInfo();
   const navigate = useNavigate();
@@ -73,7 +73,11 @@ export default function PatientDetails() {
   const [noteForm, setNoteForm] = useState({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' });
 
   const [rxForm, setRxForm] = useState({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '',
-    dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '' });
+    dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: '' });
+  // Dispensing immediately after prescribing is a separate step from the prescribing
+  // form itself (matches how Pharmacy already treats prescribe/dispense everywhere
+  // else) — kept as its own flag rather than folded into rxForm.
+  const [dispenseNow, setDispenseNow] = useState(false);
   // Same rule as the outpatient flow: quantity = dose x per-day x days, unless
   // the prescriber types their own, and never for PRN/STAT where no total is
   // derivable. See src/lib/prescriptionFrequency.ts.
@@ -165,8 +169,19 @@ export default function PatientDetails() {
     }
   };
   const { data: drugCatalog = [] } = useQuery({
-    queryKey: ['ip-drug-catalog', clinicId],
-    queryFn: async () => { const r = await authFetch(`/api/pharmacy-module/drugs?clinic_id=${clinicId}&is_active=true`); return r.ok ? r.json() : []; },
+    queryKey: ['ip-drug-catalog', clinicId, rxForm.location_id],
+    queryFn: async () => {
+      const locationParam = rxForm.location_id ? `&location_id=${rxForm.location_id}` : '';
+      const r = await authFetch(`/api/pharmacy-module/drugs?clinic_id=${clinicId}&is_active=true${locationParam}`);
+      return r.ok ? r.json() : [];
+    },
+  });
+  // Multi-store pharmacies (e.g. a ward's own "nurse store" separate from the
+  // main pharmacy) — optional; tenants with no stock_locations configured just
+  // see an empty list and prescribe against clinic-wide stock as before.
+  const { data: storeLocations = [] } = useQuery({
+    queryKey: ['ip-pharmacy-locations', clinicId],
+    queryFn: async () => { const r = await authFetch(`/api/pharmacy-module/locations?clinic_id=${clinicId}`); return r.ok ? r.json() : []; },
   });
   const { data: labCatalog = [] } = useQuery({
     queryKey: ['ip-lab-catalog', clinicId],
@@ -178,6 +193,7 @@ export default function PatientDetails() {
   });
 
   const drugOptions = drugCatalog.map((d: any) => ({ value: String(d.id), label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''}` }));
+  const locationOptions = storeLocations.map((l: any) => ({ value: String(l.id), label: l.name }));
   const labOptions = labCatalog.map((t: any) => ({ value: String(t.id), label: t.test_name }));
   const serviceOptions = serviceCatalog.map((s: any) => ({ value: String(s.id), label: s.name }));
 
@@ -203,7 +219,47 @@ export default function PatientDetails() {
   });
 
   const notesMut = createMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' }); });
-  const rxMut = createMutation('/api/inpatient/prescriptions', 'Prescription created', () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '' }); setRxQtyTouched(false); });
+
+  const resetRxForm = () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: '' }); setRxQtyTouched(false); setDispenseNow(false); };
+
+  // Prescribing and dispensing are two separate real-world steps (same as
+  // everywhere else in this app), so a failed dispense never rolls back an
+  // already-successful prescription — it just surfaces its own toast.
+  const rxMut = useMutation({
+    mutationFn: async (data: typeof rxForm) => {
+      const r = await authFetch('/api/inpatient/prescriptions', {
+        method: 'POST',
+        body: JSON.stringify({ ...data, admission_id: admissionId, patient_id: admission?.patient_id, clinic_id: user?.clinic || 1 }),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Failed'); }
+      const created = await r.json();
+
+      if (dispenseNow && !data.is_external && data.drug_id && created.pharmacy_line_id) {
+        const dr = await authFetch('/api/pharmacy-module/dispensing', {
+          method: 'POST',
+          body: JSON.stringify({
+            clinic_id: user?.clinic || 1,
+            prescription_line_id: created.pharmacy_line_id,
+            inventory_item_id: data.drug_id,
+            quantity_dispensed: parseInt(data.quantity, 10) || 1,
+            unit_of_measure: data.unit_of_measure,
+            patient_id: admission?.patient_id,
+            pharmacist_id: user?.id,
+            from_location_id: data.location_id || undefined,
+          }),
+        });
+        if (!dr.ok) {
+          const de = await dr.json().catch(() => ({}));
+          toast.error(de.error || 'Prescription saved, but dispensing failed');
+        } else {
+          toast.success('Dispensed');
+        }
+      }
+      return created;
+    },
+    onSuccess: () => { toast.success('Prescription created'); resetRxForm(); invalidateAll(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const nursingMut = createMutation('/api/inpatient/nursing-notes', 'Nursing note saved', () => { setNursingForm({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' }); });
   const adminMut = createMutation('/api/inpatient/drug-administrations', 'Administration recorded', () => { setShowAdminForm(false); setAdminForm({ prescription_id: '', medication_name: '', dosage_given: '', route: 'oral', notes: '', status: 'given' }); });
   const labMut = createMutation('/api/inpatient/lab-requests', 'Lab request created', () => { setLabForm({ test_id: '', test_type: '', test_code: '', category: '', unit_price: 0, clinical_indication: '', sample_type: '', urgent: false }); });
@@ -554,6 +610,20 @@ export default function PatientDetails() {
                       Not in stock — family buys from an outside pharmacy
                     </label>
 
+                    {!rxForm.is_external && locationOptions.length > 0 && (
+                      <div>
+                        <Combobox
+                          options={locationOptions}
+                          value={rxForm.location_id}
+                          onChange={v => setRxForm({ ...rxForm, location_id: v, drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '' })}
+                          placeholder="Store (optional — clinic-wide stock)"
+                          searchPlaceholder="Search stores..."
+                          emptyText="No matching stores"
+                        />
+                        <p className="text-[11px] mt-1 text-muted-foreground">Pick a store (e.g. a ward's own stock) to see and prescribe from its stock specifically.</p>
+                      </div>
+                    )}
+
                     {rxForm.is_external ? (
                       <Input
                         placeholder="Medicine name e.g. Amoxicillin 500mg caps"
@@ -628,8 +698,14 @@ export default function PatientDetails() {
                       </p>
                     )}
                     <Textarea placeholder="Instructions" value={rxForm.instructions} onChange={e => setRxForm({ ...rxForm, instructions: e.target.value })} rows={2} />
+                    {!rxForm.is_external && rxForm.drug_id && hasPrivilege('pharmacy.write') && (
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                        <input type="checkbox" className="rounded border-input" checked={dispenseNow} onChange={e => setDispenseNow(e.target.checked)} />
+                        Dispense now from {rxForm.location_id ? (locationOptions.find((l: any) => l.value === rxForm.location_id)?.label || 'selected store') : 'clinic-wide stock'}
+                      </label>
+                    )}
                     <Button className="w-full gap-1.5" disabled={rxMut.isPending} onClick={() => { if (!rxForm.medication_name || !rxForm.frequency) { toast.error('Medicine and frequency are required'); return; } rxMut.mutate(rxForm); }}>
-                      {rxMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Prescription
+                      {rxMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Prescription{dispenseNow && !rxForm.is_external && rxForm.drug_id ? ' & Dispense' : ''}
                     </Button>
                 </FormCard>
               </div>
