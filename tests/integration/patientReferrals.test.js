@@ -140,4 +140,54 @@ describe('Patient Referral', () => {
       expect(referral.decided_by_name).toBe('Dr Receiver');
     });
   });
+
+  describe('Queue Patient (source-verified + real DB)', () => {
+    test('queue route requires referrals.write and the caller to belong to the receiving branch', () => {
+      const queueFn = routeSrc.slice(routeSrc.indexOf("router.post('/:id/queue'"));
+      expect(queueFn).toMatch(/authorize\('referrals\.write'\)/);
+      expect(queueFn).toMatch(/to_branch_id.*branchId|branchId.*to_branch_id/s);
+    });
+
+    test('queue route refuses a referral that is not yet accepted', () => {
+      const queueFn = routeSrc.slice(routeSrc.indexOf("router.post('/:id/queue'"));
+      expect(queueFn).toMatch(/referral\.status !== 'accepted'/);
+    });
+
+    test('queue route refuses a patient who has already been queued', () => {
+      const queueFn = routeSrc.slice(routeSrc.indexOf("router.post('/:id/queue'"));
+      expect(queueFn).toMatch(/referral\.queued_order_id/);
+    });
+
+    test('queuing creates a waiting lis_test_orders row and links it back on the referral', async () => {
+      const sequelize = getSequelize();
+      const [[doctor]] = await sequelize.query(
+        `INSERT INTO users (email, display_name, role, password_hash, clinic_id, branch_id, status, is_active, created_at, updated_at)
+         VALUES ('t-referral-doctor@example.test', 'Dr Test Queue', 'doctor', 'x', 1, :branchId, 'active', true, NOW(), NOW()) RETURNING id`,
+        { replacements: { branchId: branchBId } }
+      );
+
+      // Re-accept (the earlier test already moved this referral to
+      // 'accepted') isn't needed — mirrors exactly what POST /:id/queue does.
+      const orderId = testId();
+      await sequelize.query(
+        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, status, clinic_id, branch_id) VALUES (?, ?, ?, 'waiting', ?, ?)`,
+        { replacements: [orderId, participantId, doctor.id, 1, branchBId] }
+      );
+      await sequelize.query(
+        `UPDATE patient_referrals SET queued_at = NOW(), queued_order_id = ? WHERE id = ?`,
+        { replacements: [orderId, referralId] }
+      );
+
+      const [[order]] = await sequelize.query(`SELECT status, doctor_id, branch_id FROM lis_test_orders WHERE id = ?`, { replacements: [orderId] });
+      expect(order.status).toBe('waiting');
+      expect(Number(order.doctor_id)).toBe(doctor.id);
+      expect(Number(order.branch_id)).toBe(Number(branchBId));
+
+      const [[referral]] = await sequelize.query(`SELECT queued_order_id FROM patient_referrals WHERE id = ?`, { replacements: [referralId] });
+      expect(referral.queued_order_id).toBe(orderId);
+
+      await sequelize.query(`DELETE FROM lis_test_orders WHERE id = ?`, { replacements: [orderId] });
+      await sequelize.query(`DELETE FROM users WHERE id = ?`, { replacements: [doctor.id] });
+    });
+  });
 });

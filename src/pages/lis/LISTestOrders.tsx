@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -81,6 +81,15 @@ export default function LISTestOrders() {
   const [clinicalInsightsClientTimedOut, setClinicalInsightsClientTimedOut] = useState(false);
   const clinicalInsightsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const clinicalInsightsDeadlineRef = useRef<number>(0);
+
+  // Refer Patient — quick inter-branch referral from wherever the current
+  // patient is already in view, so a doctor doesn't have to leave this
+  // screen and re-search for them on the Patient Referral page.
+  const [showReferDialog, setShowReferDialog] = useState(false);
+  const [referBranches, setReferBranches] = useState<{ id: number; name: string }[]>([]);
+  const [referToBranchId, setReferToBranchId] = useState('');
+  const [referReason, setReferReason] = useState('');
+  const [referring, setReferring] = useState(false);
   const EMPTY_VITALS = {
     blood_pressure: '', temperature: '', pulse: '', weight: '',
     height: '', respiratory_rate: '', spo2: '', fasting_status: 'No', chief_complaints: [] as string[],
@@ -426,6 +435,52 @@ export default function LISTestOrders() {
       toast.error('Network error');
     } finally {
       setPrescribing(false);
+    }
+  };
+
+  // Same dual-mode pattern as handleSubmitPrescription — works from either
+  // Place Order (selectedParticipant) or Visit Summary (selectedSummary),
+  // since a referral only ever needs a patient_id.
+  const openReferDialog = async () => {
+    setShowReferDialog(true);
+    setReferToBranchId('');
+    setReferReason('');
+    if (referBranches.length === 0) {
+      try {
+        const res = await authFetch('/api/facilities/branches/all', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data) ? data : (data.data || []);
+          setReferBranches(rows.filter((b: any) => b.is_active !== false).map((b: any) => ({ id: Number(b.id), name: b.name })));
+        }
+      } catch { /* branch picker just stays empty */ }
+    }
+  };
+
+  const handleCreateReferral = async () => {
+    const inSummaryMode = activeMode === 'summary';
+    const patientId = inSummaryMode ? selectedSummary?.participant_id : orderForm.participant_id;
+    if (!patientId) return;
+    if (!referToBranchId) return toast.error('Select the receiving branch');
+    setReferring(true);
+    try {
+      const res = await authFetch('/api/patient-referrals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ patient_id: patientId, to_branch_id: parseInt(referToBranchId, 10), reason: referReason.trim() || null }),
+      });
+      if (res.ok) {
+        toast.success('Referral sent');
+        setShowReferDialog(false);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to send referral');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setReferring(false);
     }
   };
 
@@ -2196,6 +2251,11 @@ export default function LISTestOrders() {
                     <div className="font-mono font-medium text-primary mb-1">{selectedParticipant.participant_number}</div>
                     <div>{selectedParticipant.first_name} {selectedParticipant.last_name}</div>
                     <div className="text-muted-foreground text-xs mt-1">Study: {selectedParticipant.study_ref || 'None'}</div>
+                    {hasPrivilege('referrals.write') && (
+                      <Button variant="outline" size="sm" className="w-full mt-2" onClick={openReferDialog}>
+                        <ArrowLeftRight className="w-3.5 h-3.5 mr-2" /> Refer to Another Branch
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="p-3 border border-dashed rounded-md text-sm text-muted-foreground text-center">
@@ -2582,6 +2642,11 @@ export default function LISTestOrders() {
                     {hasPrivilege('lis.clinical.insights.write') && (
                       <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(false)} className="text-violet-600 border-violet-300 hover:bg-violet-50">
                         <Sparkles className="w-4 h-4 mr-2" /> Clinical Insights
+                      </Button>
+                    )}
+                    {hasPrivilege('referrals.write') && (
+                      <Button variant="outline" size="sm" onClick={openReferDialog}>
+                        <ArrowLeftRight className="w-4 h-4 mr-2" /> Refer
                       </Button>
                     )}
                   </div>
@@ -3386,6 +3451,49 @@ export default function LISTestOrders() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Refer Patient — pre-filled with whichever patient is already in
+          view (Place Order's selectedParticipant or Visit Summary's
+          selectedSummary), see handleCreateReferral. */}
+      <Dialog open={showReferDialog} onOpenChange={setShowReferDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Send className="w-5 h-5 text-primary" /> Refer Patient</DialogTitle>
+            <DialogDescription>
+              Send {activeMode === 'summary' ? (selectedSummary ? `${selectedSummary.first_name} ${selectedSummary.last_name}` : 'this patient') : (selectedParticipant ? `${selectedParticipant.first_name} ${selectedParticipant.last_name}` : 'this patient')}'s care to another branch for review.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6 pt-2 space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Receiving Branch</label>
+              <Combobox
+                options={referBranches.filter((b) => !user?.branchId || b.id !== Number(user.branchId)).map((b) => ({ value: String(b.id), label: b.name }))}
+                value={referToBranchId}
+                onChange={setReferToBranchId}
+                placeholder="Select branch..."
+                searchPlaceholder="Search branches..."
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Reason for Referral</label>
+              <Textarea
+                placeholder="Why this patient needs to be seen at the other branch..."
+                className="resize-none h-24"
+                value={referReason}
+                onChange={(e) => setReferReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReferDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateReferral} disabled={referring || !referToBranchId}>
+              {referring ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              {referring ? 'Sending...' : 'Send Referral'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>

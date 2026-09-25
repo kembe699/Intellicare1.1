@@ -313,4 +313,63 @@ router.post('/:id/cancel', authorize('referrals.write'), async (req, res) => {
   }
 });
 
+// Puts the referred patient on the receiving branch's consultation queue —
+// deliberately a separate action from accept, not folded into it: a branch
+// can accept a referral well before the patient has actually arrived, and
+// queuing them immediately on accept would show them as "waiting" for a
+// doctor who has nothing in front of them yet. Same shape as
+// lisModule.js's own registration-time auto-queue (a plain 'waiting'
+// lis_test_orders row with a doctor_id).
+router.post('/:id/queue', authorize('referrals.write'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { doctor_id } = req.body;
+  try {
+    const [[referral]] = await db.query(`SELECT * FROM patient_referrals WHERE id = ?`, { replacements: [req.params.id] });
+    if (!referral) return res.status(404).json({ error: 'Referral not found' });
+    if (referral.status !== 'accepted') return res.status(409).json({ error: 'Only an accepted referral can be queued' });
+    if (referral.queued_order_id) return res.status(409).json({ error: 'This patient has already been queued', order_id: referral.queued_order_id });
+
+    const branchId = getUserBranchId(req);
+    if (!isUnscopedAdmin(req) && String(referral.to_branch_id) !== String(branchId)) {
+      return res.status(403).json({ error: 'Only the receiving branch can queue this patient' });
+    }
+    if (!doctor_id) return res.status(400).json({ error: 'Select a doctor to queue the patient to' });
+
+    const orderId = uuidv4();
+    await db.query(
+      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, status, clinic_id, branch_id)
+       VALUES (?, ?, ?, 'waiting', ?, ?)`,
+      { replacements: [orderId, referral.patient_id, doctor_id, req.user?.clinicId || null, referral.to_branch_id] }
+    );
+    await db.query(
+      `UPDATE patient_referrals SET queued_at = NOW(), queued_order_id = ?, updated_at = NOW() WHERE id = ?`,
+      { replacements: [orderId, referral.id] }
+    );
+
+    try {
+      const { notifyUser } = require('../services/notificationService');
+      await notifyUser(db, {
+        clinic_id: req.user?.clinicId, user_id: doctor_id,
+        type: 'patient_queued', title: 'Referred patient queued',
+        message: `${referral.patient_name} (referred from another branch) has been queued for you`,
+        entity_type: 'LisTestOrder', entity_id: orderId, link: '/lis/queue',
+      });
+    } catch (e) { /* non-blocking */ }
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({
+        req, clinic_id: req.user?.clinicId, user_id: req.user?.id, user_name: req.user?.displayName, user_role: req.user?.role,
+        module: 'Clinical', action: 'REFERRAL_QUEUED', entity_type: 'PatientReferral', entity_id: referral.id,
+        description: `${referral.patient_name} queued after accepted referral`,
+      });
+    } catch (e) { /* non-blocking */ }
+
+    res.json({ id: referral.id, order_id: orderId });
+  } catch (error) {
+    console.error('Error queuing referred patient:', error);
+    res.status(500).json({ error: 'Failed to queue patient' });
+  }
+});
+
 module.exports = router;

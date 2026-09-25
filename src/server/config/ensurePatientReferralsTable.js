@@ -11,6 +11,14 @@
  * to_branch_id reference branches.id. No FKs declared — this app's other
  * ensureXxxTable migrations don't either, consistent with a schema that
  * predates strict FK enforcement across these tables.
+ *
+ * queued_at/queued_order_id record that an ACCEPTED referral's patient was
+ * put on the receiving branch's queue (a separate, later action from
+ * acceptance itself — the receiving branch may accept before the patient has
+ * actually arrived). queued_order_id points at the lis_test_orders row the
+ * queue action created. Added via ALTER ... ADD COLUMN IF NOT EXISTS (not
+ * baked into the original CREATE TABLE) since this table may already exist
+ * in a tenant from before this pair of columns was introduced.
  */
 async function ensurePatientReferralsTable(sequelize) {
   await sequelize.query(`
@@ -33,6 +41,8 @@ async function ensurePatientReferralsTable(sequelize) {
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
   `);
+  await sequelize.query(`ALTER TABLE patient_referrals ADD COLUMN IF NOT EXISTS queued_at TIMESTAMP WITH TIME ZONE`);
+  await sequelize.query(`ALTER TABLE patient_referrals ADD COLUMN IF NOT EXISTS queued_order_id VARCHAR(36)`);
   await sequelize.query(`
     CREATE INDEX IF NOT EXISTS idx_patient_referrals_branches ON patient_referrals(from_branch_id, to_branch_id, status)
   `);
