@@ -99,8 +99,14 @@ router.get('/:id', authorize('pages.patient_referral.view'), async (req, res) =>
     let labResults = [];
     if (orders.length > 0) {
       const orderIds = orders.map((o) => o.id);
+      // Only specimens whose results have cleared manager review — a
+      // specimen still 'analyzed'/'in_transit'/etc has a value that can
+      // still change, and showing it here as if final is exactly the wrong
+      // thing to hand a doctor deciding whether their branch can take the
+      // case. Same 'approved' filter ClinicalInsightsService.js already
+      // uses for the same reason.
       const [specimens] = await db.query(
-        `SELECT id, order_id, test_name, status FROM lis_specimens WHERE order_id IN (:orderIds)`,
+        `SELECT id, order_id, test_name, status FROM lis_specimens WHERE order_id IN (:orderIds) AND status = 'approved'`,
         { replacements: { orderIds } }
       );
       if (specimens.length > 0) {
@@ -110,7 +116,7 @@ router.get('/:id', authorize('pages.patient_referral.view'), async (req, res) =>
            FROM lis_results r
            LEFT JOIN lab_tests t ON r.test_code = t.test_code AND (t.branch_id = r.branch_id OR t.branch_id IS NULL)
            LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
-           WHERE r.specimen_id IN (:specimenIds)
+           WHERE r.specimen_id IN (:specimenIds) AND r.status = 'approved'
            ORDER BY r.created_at DESC`,
           { replacements: { specimenIds } }
         );

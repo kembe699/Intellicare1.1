@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
-import { ArrowLeftRight, Plus, Loader2, Send, User, ChevronRight } from 'lucide-react';
+import { ArrowLeftRight, Plus, Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
@@ -11,6 +11,7 @@ import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { fetchPatientDirectory, type DirectoryPerson } from '@/lib/patientDirectory';
+import { AdvancedDataTable, type Column } from '@/components/common/DataTable/AdvancedDataTable';
 
 export interface ReferralRow {
   id: string;
@@ -124,57 +125,53 @@ export default function PatientReferrals() {
             </Button>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-20 text-muted-foreground">
-              <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading referrals...
-            </div>
-          ) : referrals.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground border border-dashed rounded-lg bg-card">
-              No referrals yet. Click "New Referral" to send a patient's care to another branch.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {referrals.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => navigate(`/patient-referrals/${r.id}`)}
-                  className="w-full text-left bg-card border rounded-lg p-4 flex items-center justify-between gap-4 hover:border-primary/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{r.patient_name}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <span className="font-medium">{r.from_branch_name}</span>
-                        <ArrowLeftRight className="w-3 h-3" />
-                        <span className="font-medium">{r.to_branch_name}</span>
-                        <span className="mx-1">·</span>
-                        {r.requested_by_name || 'Unknown'}
-                        <span className="mx-1">·</span>
-                        {new Date(r.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {canRespond(r) && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase">
-                        Needs your response
-                      </span>
-                    )}
-                    {r.status === 'accepted' && !r.queued_order_id && (isAdmin || Number(r.to_branch_id) === myBranchId) && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 uppercase">
-                        Ready to queue
-                      </span>
-                    )}
-                    <StatusBadge status={r.status} map={REFERRAL_STATUS_TONE} label={r.status} />
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          <AdvancedDataTable<ReferralRow>
+            data={referrals}
+            keyExtractor={(r) => r.id}
+            loading={loading}
+            emptyMessage="No referrals yet. Click &quot;New Referral&quot; to send a patient's care to another branch."
+            onRowClick={(r) => navigate(`/patient-referrals/${r.id}`)}
+            searchable
+            searchPlaceholder="Search by patient, branch, or requester..."
+            exportable
+            exportFileName="patient-referrals"
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'patient_name', header: 'Patient', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
+              { key: 'from_branch_name', header: 'From Branch', sortable: true },
+              { key: 'to_branch_name', header: 'To Branch', sortable: true },
+              {
+                key: 'reason', header: 'Reason', render: (v) => (
+                  <span className="text-muted-foreground truncate block max-w-[220px]" title={v || ''}>{v || '—'}</span>
+                ),
+              },
+              { key: 'requested_by_name', header: 'Requested By', sortable: true, render: (v) => v || 'Unknown' },
+              {
+                key: 'created_at', header: 'Requested At', sortable: true,
+                render: (v) => <span className="text-muted-foreground whitespace-nowrap">{new Date(v).toLocaleString()}</span>,
+              },
+              {
+                key: 'status', header: 'Status', sortable: true,
+                render: (v, r) => <StatusBadge status={v} map={REFERRAL_STATUS_TONE} label={v} />,
+              },
+              {
+                key: '__action', header: 'Action',
+                render: (_v, r) => (
+                  canRespond(r) ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase whitespace-nowrap">
+                      Needs your response
+                    </span>
+                  ) : r.status === 'accepted' && !r.queued_order_id && (isAdmin || Number(r.to_branch_id) === myBranchId) ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 uppercase whitespace-nowrap">
+                      Ready to queue
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )
+                ),
+              },
+            ] as Column<ReferralRow>[]}
+          />
         </div>
       </div>
 

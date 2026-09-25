@@ -90,6 +90,70 @@ describe('Patient Referral', () => {
     });
   });
 
+  describe('Lab results snapshot only includes manager-approved results', () => {
+    // A specimen/result still awaiting manager review can still change — showing it
+    // in a referral snapshot as if final is exactly the wrong thing to hand a doctor
+    // deciding whether their branch can take the case. Verified two ways: the route
+    // source actually filters on 'approved' (not just "some filter"), and a real mix
+    // of approved/pending_manager_review rows against the fixtures above only ever
+    // yields the approved one when queried the same way the route does.
+    let orderId, specimenApprovedId, specimenPendingId;
+
+    beforeAll(async () => {
+      orderId = testId();
+      await query(`INSERT INTO lis_test_orders (id, participant_id, status, branch_id) VALUES (:id, :pid, 'closed', :branchId)`,
+        { id: orderId, pid: participantId, branchId: branchAId });
+
+      specimenApprovedId = testId();
+      specimenPendingId = testId();
+      await query(
+        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, status) VALUES (:id, :orderId, 'GLU', 'Glucose', :bc, 'approved')`,
+        { id: specimenApprovedId, orderId, bc: `BC${testId().slice(-10)}` }
+      );
+      await query(
+        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, status) VALUES (:id, :orderId, 'UREA', 'Urea', :bc, 'analyzed')`,
+        { id: specimenPendingId, orderId, bc: `BC${testId().slice(-10)}` }
+      );
+      await query(
+        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status) VALUES (:id, :sid, 'GLU', 'Glucose', '5.2', 'mmol/L', 'approved')`,
+        { id: testId(), sid: specimenApprovedId }
+      );
+      await query(
+        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status) VALUES (:id, :sid, 'UREA', 'Urea', '4.1', 'mmol/L', 'pending_manager_review')`,
+        { id: testId(), sid: specimenPendingId }
+      );
+    });
+
+    afterAll(async () => {
+      await query(`DELETE FROM lis_results WHERE specimen_id IN (:a, :b)`, { a: specimenApprovedId, b: specimenPendingId });
+      await query(`DELETE FROM lis_specimens WHERE id IN (:a, :b)`, { a: specimenApprovedId, b: specimenPendingId });
+      await query(`DELETE FROM lis_test_orders WHERE id = :id`, { id: orderId });
+    });
+
+    test("the route's own query strings filter both specimens and results to status = 'approved'", () => {
+      const detailFn = routeSrc.slice(routeSrc.indexOf("router.get('/:id'"));
+      expect(detailFn).toMatch(/lis_specimens WHERE order_id IN \(:orderIds\) AND status = 'approved'/);
+      expect(detailFn).toMatch(/WHERE r\.specimen_id IN \(:specimenIds\) AND r\.status = 'approved'/);
+    });
+
+    test('a mixed approved/pending-review result set only returns the approved one', async () => {
+      const sequelize = getSequelize();
+      const [specimens] = await sequelize.query(
+        `SELECT id, test_name FROM lis_specimens WHERE order_id IN (:orderIds) AND status = 'approved'`,
+        { replacements: { orderIds: [orderId] } }
+      );
+      expect(specimens.length).toBe(1);
+      expect(specimens[0].test_name).toBe('Glucose');
+
+      const [results] = await sequelize.query(
+        `SELECT analyte FROM lis_results WHERE specimen_id IN (:specimenIds) AND status = 'approved'`,
+        { replacements: { specimenIds: specimens.map((s) => s.id) } }
+      );
+      expect(results.length).toBe(1);
+      expect(results[0].analyte).toBe('Glucose');
+    });
+  });
+
   describe('Workflow logic (source-verified)', () => {
     test('only accept reassigns the patient\'s branch — reject/cancel never touch lis_participants', () => {
       const acceptFn = routeSrc.slice(routeSrc.indexOf("newStatus: 'accepted'"), routeSrc.indexOf("newStatus: 'rejected'"));

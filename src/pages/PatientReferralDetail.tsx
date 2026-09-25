@@ -4,15 +4,34 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
 import {
   ArrowLeft, ArrowLeftRight, Loader2, Check, X, Building2, User, Calendar,
-  Pill, TestTube2, UserPlus, CheckCircle2,
+  Pill, TestTube2, UserPlus, CheckCircle2, Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
+import * as docTemplate from '@/utils/documentTemplate';
 import { type ReferralRow, REFERRAL_STATUS_TONE } from './PatientReferrals';
+
+// Mirrors LISTestOrders.tsx's own print-time remark logic exactly — a
+// result's flag column is set by whoever entered it and isn't always
+// reliable, so the value is checked against its own reference range rather
+// than trusting r.flag alone.
+function computeRemark(value: string | null, referenceRange: string | null): { label: string; tone: 'high' | 'low' | 'normal' | 'unknown' } {
+  if (!referenceRange || !value) return { label: '—', tone: 'unknown' };
+  const parts = referenceRange.split('-').map((p) => p.trim());
+  if (parts.length !== 2) return { label: 'NORMAL', tone: 'normal' };
+  const min = parseFloat(parts[0]);
+  const max = parseFloat(parts[1]);
+  const val = parseFloat(value);
+  if (Number.isNaN(min) || Number.isNaN(max) || Number.isNaN(val)) return { label: 'NORMAL', tone: 'normal' };
+  if (val < min) return { label: 'LOW', tone: 'low' };
+  if (val > max) return { label: 'HIGH', tone: 'high' };
+  return { label: 'NORMAL', tone: 'normal' };
+}
 
 interface ReferralDetail {
   referral: ReferralRow;
@@ -37,6 +56,7 @@ export default function PatientReferralDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const facilityInfo = useFacilityInfo();
 
   const [detail, setDetail] = useState<ReferralDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +159,100 @@ export default function PatientReferralDetail() {
     }
   };
 
+  // Same shared template/print-window flow LISTestOrders.tsx's Visit Summary
+  // print already uses — buildDocument for the branded letterhead/footer,
+  // openPrintWindow triggers the browser's own print dialog, whose "Save as
+  // PDF" destination is this app's download path (no separate PDF library
+  // anywhere else in the codebase to diverge from).
+  const handlePrint = async () => {
+    if (!detail) return;
+    const { referral, patient, visits, lab_results, prescriptions } = detail;
+    const patientName = patient ? `${patient.first_name} ${patient.last_name}`.trim() : referral.patient_name;
+    const signature = await docTemplate.fetchUserSignature(user?.uid);
+
+    const plainNote = (label: string, value?: string | null) =>
+      value ? `<p style="margin:2px 0 8px 0;font-size:11px;line-height:1.5;color:#334155;"><strong style="color:#0F172A">${label}:</strong> ${value}</p>` : '';
+
+    const visitsHTML = visits.length > 0 ? [
+      '<div class="ic-section-title">Recent Visits</div>',
+      docTemplate.buildTable(
+        [{ label: 'Date' }, { label: 'Status' }, { label: 'Notes' }],
+        visits.map((v) => ({ cells: [docTemplate.formatDate(v.created_at), v.status, v.clinical_notes || '—'] }))
+      ),
+    ].join('\n') : '';
+
+    const labResultsHTML = lab_results.length > 0 ? [
+      '<div class="ic-section-title">Lab Results</div>',
+      (() => {
+        const rows = lab_results.map((l) => {
+          const remark = computeRemark(l.value, l.reference_range);
+          return `<tr>
+            <td class="bold" style="color:#0F172A">${l.test ? `${l.test} — ` : ''}${l.analyte}</td>
+            <td class="bold" style="color:${remark.tone === 'high' ? '#dc2626' : remark.tone === 'low' ? '#1A7A75' : '#0F172A'}">${l.value || '—'}</td>
+            <td class="center" style="color:#64748B">${l.reference_range || '—'}</td>
+            <td class="center" style="color:#64748B">${l.unit || '—'}</td>
+            <td>${remark.label}</td>
+          </tr>`;
+        }).join('');
+        return `<table class="ic-table">
+          <thead><tr><th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      })(),
+    ].join('\n') : '';
+
+    const prescriptionsHTML = prescriptions.length > 0 ? [
+      '<div class="ic-section-title">Prescriptions</div>',
+      docTemplate.buildTable(
+        [{ label: 'Drug' }, { label: 'Strength' }, { label: 'Frequency' }, { label: 'Duration' }, { label: 'Date' }],
+        prescriptions.map((p) => ({
+          cells: [p.drug_name, p.dose_strength || '—', p.frequency || '—', p.duration_days ? `${p.duration_days} day(s)` : '—', docTemplate.formatDate(p.prescription_date)],
+        }))
+      ),
+    ].join('\n') : '';
+
+    const bodyHTML = [
+      docTemplate.buildInfoGrid(
+        { title: 'Patient Details', rows: [
+          { label: 'Patient Name', value: patientName, bold: true },
+          { label: 'Participant ID', value: patient?.participant_number || '—' },
+          { label: 'Age / Gender', value: `${calculateAge(patient?.date_of_birth || null) ?? '—'}${patient?.gender ? ` · ${patient.gender}` : ''}` },
+          { label: 'Phone', value: patient?.phone || '—' },
+        ]},
+        { title: 'Referral Details', rows: [
+          { label: 'From Branch', value: referral.from_branch_name },
+          { label: 'To Branch', value: referral.to_branch_name },
+          { label: 'Status', value: referral.status.charAt(0).toUpperCase() + referral.status.slice(1), bold: true },
+          { label: 'Requested By', value: referral.requested_by_name || 'Unknown' },
+          { label: 'Requested At', value: docTemplate.formatDate(referral.created_at) },
+        ]}
+      ),
+      plainNote('Reason for Referral', referral.reason),
+      referral.status !== 'pending' ? plainNote(`Decision Note — ${referral.decided_by_name || ''}`, referral.decision_reason) : '',
+      visitsHTML,
+      labResultsHTML,
+      prescriptionsHTML,
+      docTemplate.buildSignatures([
+        { label: 'Printed By', name: user?.displayName || '', signature: signature || undefined },
+        { label: 'Requesting Doctor', name: referral.requested_by_name || '' },
+      ]),
+    ].join('\n');
+
+    const html = docTemplate.buildDocument({
+      title: 'Patient Referral',
+      docType: 'Patient Referral Report',
+      docNumber: `REF-${referral.id.slice(-6).toUpperCase()}`,
+      status: referral.status,
+      date: new Date(referral.created_at),
+      bodyHTML,
+      logoUrl: facilityInfo.facilityLogo || `${window.location.origin}/hjd-icon.png`,
+      facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
+      branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
+    });
+
+    docTemplate.openPrintWindow(html);
+  };
+
   const myBranchId = user?.branchId ? Number(user.branchId) : null;
   const isAdmin = !!user?.isAdmin;
   const canRespond = detail ? detail.referral.status === 'pending' && (isAdmin || Number(detail.referral.to_branch_id) === myBranchId) : false;
@@ -153,7 +267,14 @@ export default function PatientReferralDetail() {
           <Button variant="ghost" size="sm" onClick={() => navigate('/patient-referrals')} className="self-start text-muted-foreground hover:text-foreground -ml-2 mb-2">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Referrals
           </Button>
-          <PageHeader title="Referral Details" icon={<ArrowLeftRight />} />
+          <div className="flex justify-between items-start">
+            <PageHeader title="Referral Details" icon={<ArrowLeftRight />} />
+            {detail && (
+              <Button variant="outline" size="sm" onClick={handlePrint}>
+                <Printer className="w-4 h-4 mr-2" /> Print / Download PDF
+              </Button>
+            )}
+          </div>
 
           {loading && (
             <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -236,18 +357,43 @@ export default function PatientReferralDetail() {
                   <TestTube2 className="w-3.5 h-3.5" /> Lab Results ({detail.lab_results.length})
                 </h4>
                 {detail.lab_results.length > 0 ? (
-                  <div className="border rounded-lg divide-y">
-                    {detail.lab_results.map((l, i) => (
-                      <div key={i} className="flex justify-between items-center px-3 py-2 text-sm">
-                        <span>{l.test ? `${l.test} — ` : ''}{l.analyte}: {l.value} {l.unit || ''}{l.reference_range ? ` (ref: ${l.reference_range})` : ''}</span>
-                        {l.flag && l.flag !== 'normal' && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-red-100 text-red-700">{l.flag}</span>
-                        )}
-                      </div>
-                    ))}
+                  <div className="border rounded-lg overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-muted/40 text-left text-[10px] uppercase text-muted-foreground">
+                          <th className="px-3 py-2 font-semibold">Test</th>
+                          <th className="px-3 py-2 font-semibold">Component</th>
+                          <th className="px-3 py-2 font-semibold">Value</th>
+                          <th className="px-3 py-2 font-semibold">Reference Range</th>
+                          <th className="px-3 py-2 font-semibold">Unit</th>
+                          <th className="px-3 py-2 font-semibold">Remark</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {detail.lab_results.map((l, i) => {
+                          const remark = computeRemark(l.value, l.reference_range);
+                          return (
+                            <tr key={i}>
+                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.test || '—'}</td>
+                              <td className="px-3 py-2 font-medium">{l.analyte}</td>
+                              <td className={`px-3 py-2 font-mono font-semibold ${remark.tone === 'high' ? 'text-red-600' : remark.tone === 'low' ? 'text-primary' : ''}`}>{l.value || '—'}</td>
+                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.reference_range || '—'}</td>
+                              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.unit || '—'}</td>
+                              <td className="px-3 py-2">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                  remark.tone === 'high' ? 'bg-red-100 text-red-700' :
+                                  remark.tone === 'low' ? 'bg-sky-100 text-sky-700' :
+                                  remark.tone === 'normal' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                }`}>{remark.label}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
-                  <div className="p-3 border rounded-lg text-sm text-muted-foreground text-center">No lab results on record.</div>
+                  <div className="p-3 border rounded-lg text-sm text-muted-foreground text-center">No approved lab results on record.</div>
                 )}
               </div>
 
