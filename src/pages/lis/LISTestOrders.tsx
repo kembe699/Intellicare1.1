@@ -206,6 +206,7 @@ export default function LISTestOrders() {
       fetchServices();
       fetchChiefComplaints();
       fetchDiagnoses();
+      if (pharmacyDrugs.length === 0) fetchPharmacyDrugs();
       const interval = setInterval(fetchQueue, 3000);
       return () => clearInterval(interval);
     } else if (activeMode === 'results') {
@@ -365,9 +366,22 @@ export default function LISTestOrders() {
     setRxLines(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Works from either screen: Visit Summary (an existing order, keyed on
+  // selectedSummary) or Place Order (a patient picked but no order submitted
+  // yet, keyed on selectedParticipant/orderForm) — a prescription only ever
+  // needs a patient_id, never an order id (pharmacy_prescriptions has no FK to
+  // lis_test_orders; it's matched back to a visit by patient + same day, same
+  // as the visit-summaries endpoint's own read side), so prescribing here
+  // doesn't need the order to exist first.
   const handleSubmitPrescription = async () => {
-    if (!selectedSummary || rxLines.length === 0) return;
-    if (selectedSummary.status === 'closed') { toast.error('This visit is closed — start a new visit to prescribe medicine.'); return; }
+    const inSummaryMode = activeMode === 'summary';
+    const patientId = inSummaryMode ? selectedSummary?.participant_id : orderForm.participant_id;
+    const patientName = inSummaryMode
+      ? (selectedSummary ? `${selectedSummary.first_name} ${selectedSummary.last_name}` : '')
+      : (selectedParticipant ? `${selectedParticipant.first_name} ${selectedParticipant.last_name}` : '');
+    const doctorId = inSummaryMode ? (selectedSummary?.doctor_id || user?.id) : user?.id;
+    if (!patientId || rxLines.length === 0) return;
+    if (inSummaryMode && selectedSummary?.status === 'closed') { toast.error('This visit is closed — start a new visit to prescribe medicine.'); return; }
     setPrescribing(true);
     try {
       const branchClinicId = user?.clinic || 1;
@@ -377,8 +391,8 @@ export default function LISTestOrders() {
         credentials: 'include',
         body: JSON.stringify({
           clinic_id: branchClinicId,
-          patient_id: selectedSummary.participant_id,
-          doctor_id: selectedSummary.doctor_id || user?.id,
+          patient_id: patientId,
+          doctor_id: doctorId,
           prescription_date: new Date().toISOString().split('T')[0],
           prescribed_by_name: user?.displayName,
           lines: rxLines.map(l => ({
@@ -391,7 +405,7 @@ export default function LISTestOrders() {
       if (res.ok) {
         const created = await res.json();
         toast.success(`Prescription ${created.prescription_number} created`);
-        const patient = { id: selectedSummary.participant_id, name: `${selectedSummary.first_name} ${selectedSummary.last_name}` };
+        const patient = { id: patientId, name: patientName };
         // Only what this pharmacy actually supplies goes on the bill. An
         // external line is bought outside, so billing it here would charge the
         // patient twice for one medicine.
@@ -403,7 +417,7 @@ export default function LISTestOrders() {
           toast.info(`${externalCount} item${externalCount === 1 ? '' : 's'} marked for purchase outside — not billed here. Print the prescription for the patient.`);
         }
         setRxLines([]);
-        await refreshSelectedSummary();
+        if (inSummaryMode) await refreshSelectedSummary();
       } else {
         const err = await res.json();
         toast.error(err.error || 'Failed to create prescription');
@@ -1511,7 +1525,9 @@ export default function LISTestOrders() {
     e.preventDefault();
     if (submittingOrderRef.current) return;
     if (!orderForm.participant_id) return toast.error('Select a participant');
-    if (selectedTests.length === 0) return toast.error('Select at least one test');
+    // No test-count requirement — a doctor can save vitals/notes (and now a
+    // prescription, see handleSubmitPrescription) as a visit on their own,
+    // with no lab test ordered at all.
 
     const formattedTests = selectedTests.map(t => ({
       code: t.test_code,
@@ -2237,10 +2253,142 @@ export default function LISTestOrders() {
                 )}
               </div>
 
+              {/* Prescribe Medicine — same as Visit Summary's, but usable before an
+                  order even exists: a prescription only ever needs a patient_id (see
+                  handleSubmitPrescription), never an order id. */}
+              {selectedParticipant && (
+                <div className="mb-6">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                    <Pill className="w-3.5 h-3.5" /> Prescribe Medicine
+                  </h4>
+                  <div className="border rounded-lg p-3 space-y-2.5 bg-card">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-input"
+                        checked={rxIsExternal}
+                        onChange={e => { setRxIsExternal(e.target.checked); setRxDrugId(''); setRxExternalName(''); }}
+                      />
+                      Not in stock — patient buys from an outside pharmacy
+                    </label>
+
+                    {rxIsExternal ? (
+                      <Input
+                        placeholder="Medicine name e.g. Amoxicillin 500mg caps"
+                        value={rxExternalName}
+                        onChange={e => setRxExternalName(e.target.value)}
+                      />
+                    ) : (
+                      <Combobox
+                        options={[{ value: '', label: 'Select drug...' }, ...pharmacyDrugs.map((d: any) => ({ value: d.id, label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''} — stock ${d.stock_on_hand ?? 0}` }))]}
+                        value={rxDrugId}
+                        onChange={v => setRxDrugId(v)}
+                        placeholder="Select drug..."
+                        searchPlaceholder="Search drugs..."
+                        className="h-9"
+                      />
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="number" min="0.25" step="0.25"
+                        placeholder="Dose e.g. 1"
+                        title="How much is taken each time — the multiplier for the quantity"
+                        value={rxDoseAmount}
+                        onChange={e => setRxDoseAmount(e.target.value)}
+                      />
+                      <Input placeholder="Strength e.g. 500mg" value={rxDose} onChange={e => setRxDose(e.target.value)} />
+                    </div>
+
+                    <Combobox
+                      options={FREQUENCY_OPTIONS.map(f => ({
+                        value: f.code,
+                        label: `${f.code} — ${f.label}`,
+                      }))}
+                      value={rxFrequency}
+                      onChange={v => setRxFrequency(v)}
+                      placeholder="Frequency..."
+                      searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                      className="h-9"
+                    />
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        type="number" min="0" placeholder="Days"
+                        value={rxDuration}
+                        onChange={e => setRxDuration(e.target.value)}
+                      />
+                      <Input
+                        type="number" min="1" placeholder="Qty"
+                        value={rxQty}
+                        onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
+                      />
+                      <div
+                        className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
+                        title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
+                      >
+                        {rxIsExternal ? 'unit' : (rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—')}
+                      </div>
+                    </div>
+
+                    {rxSuggestedQty != null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
+                        {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
+                          <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
+                            use this
+                          </button>
+                        )}
+                      </p>
+                    )}
+                    {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                      </p>
+                    )}
+
+                    <Input
+                      placeholder={rxIsExternal ? 'Instructions for the patient (required for outside purchase)' : 'Instructions (optional)'}
+                      value={rxNotes}
+                      onChange={e => setRxNotes(e.target.value)}
+                    />
+                    <Button type="button" variant="outline" className="w-full" onClick={handleAddRxLine}>
+                      <Plus className="w-4 h-4 mr-2" /> Add
+                    </Button>
+
+                    {rxLines.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t">
+                        {rxLines.map((l, i) => (
+                          <div key={i} className="flex justify-between items-center text-sm bg-muted/30 rounded px-2 py-1.5">
+                            <span>
+                              {l.drug_name} × {l.quantity_prescribed} {l.unit_of_measure}
+                              {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
+                              {l.duration_days ? ` · ${l.duration_days}d` : ''}
+                              {l.is_external && (
+                                <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                  buy outside
+                                </span>
+                              )}
+                            </span>
+                            <button type="button" onClick={() => removeRxLine(i)} className="text-muted-foreground hover:text-foreground">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        <Button className="w-full" onClick={handleSubmitPrescription} disabled={prescribing}>
+                          {prescribing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pill className="w-4 h-4 mr-2" />}
+                          Submit Prescription & Bill
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Clinical Notes</h4>
-                <Textarea 
-                  placeholder="Enter clinical notes or research instructions..." 
+                <Textarea
+                  placeholder="Enter clinical notes or research instructions..."
                   className="resize-none h-24 mb-4"
                   value={orderForm.clinical_notes}
                   onChange={e => setOrderForm({...orderForm, clinical_notes: e.target.value})}
@@ -2249,10 +2397,10 @@ export default function LISTestOrders() {
                 <Button
                   onClick={handleOrder}
                   className="w-full"
-                  disabled={!orderForm.participant_id || selectedTests.length === 0 || submittingOrder}
+                  disabled={!orderForm.participant_id || submittingOrder}
                 >
                   {submittingOrder ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                  {submittingOrder ? 'Submitting...' : 'Submit Order'}
+                  {submittingOrder ? 'Saving...' : (selectedTests.length === 0 && selectedServiceIds.length === 0) ? 'Save Visit' : 'Submit Order'}
                 </Button>
               </div>
 
