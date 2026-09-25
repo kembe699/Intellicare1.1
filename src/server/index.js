@@ -555,6 +555,7 @@ const exchangeRatesRouter = require('./routes/exchangeRates');
 const inpatientRouter = require('./routes/inpatient');
 const lisModuleRouter = require('./routes/lisModule');
 const clinicalInsightsRouter = require('./routes/clinicalInsights');
+const patientReferralsRouter = require('./routes/patientReferrals');
 const chiefComplaintsRouter = require('./routes/chiefComplaints');
 const clinicalDiagnosesRouter = require('./routes/clinicalDiagnoses');
 
@@ -696,6 +697,7 @@ app.use('/api/exchange-rates', exchangeRatesRouter);
 app.use('/api/inpatient', inpatientRouter);
 app.use('/api/lis', lisModuleRouter);
 app.use('/api/lis/orders', clinicalInsightsRouter);
+app.use('/api/patient-referrals', patientReferralsRouter);
 app.use('/api/chief-complaints', chiefComplaintsRouter);
 app.use('/api/clinical-diagnoses', clinicalDiagnosesRouter);
 

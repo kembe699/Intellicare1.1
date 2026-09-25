@@ -39,6 +39,7 @@ const ClaimDetails = lazyWithRetry(() => import('./pages/ClaimDetails'));
 const SchemeManagement = lazyWithRetry(() => import('./pages/SchemeManagement'));
 const Receipts = lazyWithRetry(() => import('./pages/Receipts'));
 const LISRegistration = lazyWithRetry(() => import('./pages/lis/LISRegistration'));
+const PatientReferrals = lazyWithRetry(() => import('./pages/PatientReferrals'));
 const LISTestOrders = lazyWithRetry(() => import('./pages/lis/LISTestOrders'));
 const LISQueue = lazyWithRetry(() => import('./pages/lis/LISQueue'));
 const Triage = lazyWithRetry(() => import('./pages/lis/Triage'));
@@ -333,6 +334,11 @@ const AppRoutes = () => {
       <Route path="/lis/registration" element={
         <ProtectedRoute requiredPrivilege="pages.lis_registration.view">
           <LISRegistration />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient-referrals" element={
+        <ProtectedRoute requiredPrivilege="pages.patient_referral.view">
+          <PatientReferrals />
         </ProtectedRoute>
       } />
       <Route path="/lis/queue" element={

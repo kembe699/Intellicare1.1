@@ -34,6 +34,7 @@ import {
   PiggyBank,
   TrendingUp,
   ArrowRightLeft,
+  ArrowLeftRight,
   Truck,
   DollarSign,
   Warehouse,
@@ -83,6 +84,7 @@ const navItems: NavItem[] = [
   { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read' },
   { label: 'Queue Display', href: '/lis/queue', icon: Users, privilege: 'lis.queue.write' },
   { label: 'Triage', href: '/triage', icon: Activity, privilege: 'lis.triage.write' },
+  { label: 'Patient Referral', href: '/patient-referrals', icon: ArrowLeftRight, privilege: 'pages.patient_referral.view' },
   // "Laboratory" (legacy /laboratory page) intentionally removed — it's a
   // disconnected, effectively-unused parallel system (lab_requests/lab_results
   // are nearly empty and stuck in pending/partial; the LIS Module dropdown
@@ -437,6 +439,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
                   {/* 3. Clinical (flat link) — the doctor's encounter */}
                   {renderNavLink('/lis/orders')}
+
+                  {/* 3.1 Patient Referral (flat link) — send a patient's care to another branch */}
+                  {renderNavLink('/patient-referrals')}
 
                   {/* 4. Inpatient */}
                   {showInpatient && (

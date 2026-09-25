@@ -108,6 +108,7 @@ const CATALOG = [
   ['lis.results.review', 'Review LIS results', 'lis', 'Manager review of pending results', ['admin', 'lab']],
   ['lis.results.read', 'View LIS result history', 'lis', 'View specimen/result history', ['admin', 'lab', 'doctor']],
   ['lis.clinical.insights.write', 'Generate clinical insights', 'lis', 'Request AI-assisted differential diagnosis suggestions for a visit', ['admin', 'doctor']],
+  ['referrals.write', 'Manage patient referrals', 'referrals', 'Create, accept, reject, or cancel an inter-branch patient referral', ['admin', 'doctor']],
 
   ['pharmacy.read', 'View pharmacy data', 'pharmacy', 'Drugs, stock levels, pricing history, reports', ['admin', 'pharmacy', 'doctor']],
   ['pharmacy.write', 'Manage pharmacy operations', 'pharmacy', 'Drugs, dispensing, returns, charges, pricing', ['admin', 'pharmacy']],
@@ -149,6 +150,7 @@ const CATALOG = [
   ['pages.reports.view', 'View reports section', 'pages', 'Access to the Reports section and its sub-reports', ['admin', 'reports', 'finance_manager', 'accountant', 'auditor']],
   ['pages.visits_history.view', 'View patient visits history', 'pages', 'Access to the clinical visits history page', ['admin', 'doctor']],
   ['pages.patients_bill.view', 'View Patient Bills page', 'pages', 'Access to the Patient Bills page', ['admin', 'reception', 'doctor']],
+  ['pages.patient_referral.view', 'View Patient Referral page', 'pages', 'Access to the Patient Referral page', ['admin', 'doctor', 'reception', 'nurse']],
   ['pages.lis_registration.view', 'View patient registration page', 'pages', 'Access to the LIS patient registration page', ['admin', 'reception', 'lab']],
   ['pages.setup_lab_tests.view', 'View lab tests setup page', 'pages', 'Access to the lab tests setup page', ['admin', 'doctor', 'lab']],
   ['pages.setup_departments.view', 'View departments setup page', 'pages', 'Access to the departments setup page', ['admin', 'doctor']],
