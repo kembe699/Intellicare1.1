@@ -46,29 +46,27 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function buildPrintHtml(request: RadiologyRequestItem, facilityInfo: ReturnType<typeof useFacilityInfo>): string {
-  const patientBox = {
-    title: 'Patient Information',
-    rows: [
-      { label: 'Name', value: `${request.first_name} ${request.last_name}`, bold: true },
-      { label: 'Patient No', value: request.participant_number },
-      { label: 'Gender', value: request.gender || 'N/A' },
-      { label: 'Date of Birth', value: request.date_of_birth ? new Date(request.date_of_birth).toLocaleDateString() : 'N/A' },
-    ],
-  };
-  const examBox = {
-    title: 'Exam Details',
-    rows: [
-      { label: 'Exam', value: request.exam_name, bold: true },
-      { label: 'Requested By', value: request.doctor_name || '-' },
-      { label: 'Request Date', value: new Date(request.request_date).toLocaleString() },
-      { label: 'Reported By', value: request.reported_by_name || '-' },
-    ],
-  };
-  let body = docTemplate.buildInfoGrid(patientBox, examBox);
+  // A single full-width table instead of two side-by-side info boxes — each
+  // row gets the whole page's width rather than half of it, which matters
+  // once a real report is long enough to need the room.
+  const metaRows: docTemplate.TableRow[] = [
+    { cells: ['Patient', `${request.first_name} ${request.last_name}`], bold: true },
+    { cells: ['Patient No', request.participant_number] },
+    { cells: ['Gender', request.gender || 'N/A'] },
+    { cells: ['Date of Birth', request.date_of_birth ? new Date(request.date_of_birth).toLocaleDateString() : 'N/A'] },
+    { cells: ['Exam', request.exam_name], bold: true },
+    { cells: ['Requested By', request.doctor_name || '-'] },
+    { cells: ['Request Date', new Date(request.request_date).toLocaleString()] },
+    { cells: ['Reported By', request.reported_by_name || '-'] },
+  ];
+  let body = docTemplate.buildTable(
+    [{ label: 'Field', width: '35%' }, { label: 'Value' }],
+    metaRows,
+  );
   if (request.clinical_indication) {
     body += `<div class="ic-section-title">Clinical Indication</div><p style="font-size:11px;margin:0 0 12px;">${request.clinical_indication}</p>`;
   }
-  body += `<div class="ic-section-title">Report</div><div style="font-size:12px;line-height:1.6;">${request.report_html || ''}</div>`;
+  body += `<div class="ic-section-title">Report</div><div style="font-size:12px;line-height:1.7;padding:10px 0;">${request.report_html || ''}</div>`;
   body += docTemplate.buildSignatures([{ label: 'Reporting Officer', name: request.reported_by_name || '' }]);
 
   return docTemplate.buildDocument({
@@ -146,20 +144,32 @@ function RequestCard({ request, canWrite, onChanged }: { request: RadiologyReque
         </span>
       </div>
       <CardContent className="p-5 space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Field label="Requested" value={new Date(request.request_date).toLocaleString()} />
-          {request.clinical_indication && (
-            <div className="col-span-2 sm:col-span-3">
-              <Field label="Clinical Indication" value={request.clinical_indication} />
-            </div>
-          )}
-          {request.confirmed_by_name && (
-            <Field label="Confirmed By" value={`${request.confirmed_by_name} · ${new Date(request.confirmed_at!).toLocaleString()}`} />
-          )}
-          {request.reported_by_name && (
-            <Field label="Reported By" value={`${request.reported_by_name} · ${new Date(request.reported_at!).toLocaleString()}`} />
-          )}
-        </div>
+        <table className="w-full text-sm border-collapse">
+          <tbody>
+            <tr className="border-b border-border">
+              <td className="py-2 pr-4 w-36 shrink-0 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Requested</td>
+              <td className="py-2 font-medium text-foreground">{new Date(request.request_date).toLocaleString()}</td>
+            </tr>
+            {request.clinical_indication && (
+              <tr className="border-b border-border">
+                <td className="py-2 pr-4 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Clinical Indication</td>
+                <td className="py-2 font-medium text-foreground break-words">{request.clinical_indication}</td>
+              </tr>
+            )}
+            {request.confirmed_by_name && (
+              <tr className="border-b border-border">
+                <td className="py-2 pr-4 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Confirmed By</td>
+                <td className="py-2 font-medium text-foreground break-words">{request.confirmed_by_name} · {new Date(request.confirmed_at!).toLocaleString()}</td>
+              </tr>
+            )}
+            {request.reported_by_name && (
+              <tr>
+                <td className="py-2 pr-4 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Reported By</td>
+                <td className="py-2 font-medium text-foreground break-words">{request.reported_by_name} · {new Date(request.reported_at!).toLocaleString()}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
 
         {request.status === 'pending' && (
           <div className="flex items-center justify-between border-t border-border pt-4">
@@ -283,7 +293,10 @@ export default function RadiologyRequestDetail() {
             </div>
 
             {/* RIGHT: one card per requested exam — a wide screen shows two side by side instead of one long column */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 min-w-0 items-start">
+            {/* Full width, one exam per row — a real completed report (findings,
+                impression, etc.) needs room to read comfortably; a 2-up grid
+                squeezed that badly, so it's one column regardless of screen size. */}
+            <div className="grid grid-cols-1 gap-4 min-w-0 items-start">
               {requests.map((r) => (
                 <RequestCard key={r.id} request={r} canWrite={canWrite} onChanged={fetchVisit} />
               ))}
