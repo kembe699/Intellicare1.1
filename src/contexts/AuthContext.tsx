@@ -171,8 +171,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Token verification failed:', error);
+        // current_branch_id deliberately survives this too — an expired/invalid
+        // token just means signing in again, and signIn() restores it from here.
         localStorage.removeItem('auth_token');
-        localStorage.removeItem('current_branch_id');
       } finally {
         setLoading(false);
       }
@@ -197,14 +198,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // A different account can mean a different facility, so this is
       // re-read rather than reused from the previous session.
       void refreshFacilityInfo(normalizedUser.primaryBranchId || normalizedUser.branchId);
-      // Admins default to "All Branches" on every fresh login — only an explicit TopBar
-      // switch (switchBranch()) should ever scope their reads to one branch. Persisting
-      // their primary branch to localStorage here would send X-Branch-ID on every request
-      // from the very first page load, making a brand-new admin session see only their
-      // own branch instead of everything.
+      // An admin who has never touched the TopBar switcher on this browser defaults to
+      // "All Branches" — but one who explicitly picked a branch before (current_branch_id
+      // survives sign-out, see signOut()) comes back to that same branch on their next
+      // login instead of silently resetting to everything.
       if (normalizedUser.isAdmin) {
-        localStorage.removeItem('current_branch_id');
-        setCurrentBranchId(null);
+        const savedBranchId = localStorage.getItem('current_branch_id');
+        setCurrentBranchId(savedBranchId ? parseInt(savedBranchId, 10) : null);
       } else {
         const nextBranchId = normalizedUser.primaryBranchId || normalizedUser.branchId || null;
         setCurrentBranchId(nextBranchId);
@@ -228,9 +228,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Always clear local state
+      // Clear the session, but deliberately NOT current_branch_id — a branch
+      // chosen via the TopBar switcher should still be in effect the next
+      // time this account signs back in on this browser (see signIn()'s own
+      // restore-from-localStorage logic), not silently reset to "All
+      // Branches" on every fresh login.
       localStorage.removeItem('auth_token');
-      localStorage.removeItem('current_branch_id');
       setToken(null);
       setUser(null);
       setCurrentBranchId(null);
@@ -280,6 +283,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // branchId === null means "All Branches" — admin-only, clears any explicit scope so
   // authFetch stops sending X-Branch-ID and reads go back to unfiltered.
+  //
+  // Reloads the page immediately after — most pages in this app fetch their
+  // data once on mount (plain useEffect, not a branch-keyed query), so just
+  // updating this context's state left everything already on screen showing
+  // the previous branch's data until the user manually refreshed. A full
+  // reload re-runs the whole app boot sequence against the new branch, which
+  // is blunt but the one change guaranteed to actually refresh every page,
+  // not just the ones already written to react to a branch change.
   const switchBranch = (branchId: number | null) => {
     setCurrentBranchId(branchId);
     if (branchId === null) {
@@ -287,6 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       localStorage.setItem('current_branch_id', branchId.toString());
     }
+    window.location.reload();
   };
 
   const updateUser = (changes: Partial<User>) => {
