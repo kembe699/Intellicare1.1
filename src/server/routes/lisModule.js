@@ -1167,13 +1167,18 @@ router.post('/specimens/:id/route', authorize('lis.specimen.write'), async (req,
 router.post('/specimens/:id/simulate', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
-  
+
   const mockResults = [
     { name: 'WBC', value: (4 + Math.random() * 6).toFixed(1), unit: '10^9/L', ref: '4.0-10.0' },
     { name: 'RBC', value: (3.5 + Math.random() * 2).toFixed(2), unit: '10^12/L', ref: '3.5-5.5' },
     { name: 'HGB', value: (11 + Math.random() * 5).toFixed(1), unit: 'g/dL', ref: '11.0-16.0' }
   ];
-  
+
+  // Same branch-inheritance rule as the real result-entry endpoint above —
+  // stamp the specimen's own branch, not the caller's.
+  const [[specimen]] = await db.query(`SELECT branch_id FROM lis_specimens WHERE id = ?`, { replacements: [id] });
+  const branchId = specimen?.branch_id ?? getCreateBranchId(req);
+
   const t = await db.transaction();
   try {
     for (const result of mockResults) {
@@ -1181,7 +1186,7 @@ router.post('/specimens/:id/simulate', authorize('lis.specimen.write'), async (r
       await db.query(
         `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, branch_id)
          VALUES (?, ?, 'SIMULATED', ?, ?, ?, 'pending_manager_review', ?)`,
-        { replacements: [resultId, id, result.name, result.value, result.unit, getCreateBranchId(req)], transaction: t }
+        { replacements: [resultId, id, result.name, result.value, result.unit, branchId], transaction: t }
       );
     }
     
@@ -1229,7 +1234,17 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
   const { results, test_code } = req.body;
   // results is an array of { analyte, value, unit }
   const recordedBy = req.user?.id || null;
-  const branchId = getCreateBranchId(req);
+  // A result must carry the SAME branch as the specimen it belongs to, not
+  // whichever branch the person entering it happens to be scoped to right
+  // now — otherwise an admin (who sees every branch) or anyone acting across
+  // branches stamps the result with their own context, and it silently
+  // becomes invisible to everyone actually scoped to the specimen's real
+  // branch (getBranchConditionSQL is a strict equality filter, not
+  // NULL/mismatch-inclusive). Confirmed live: a specimen on branch 2 had
+  // approved results stamped branch_id=1, so its own order's visit summary
+  // showed "No results recorded" despite the results genuinely existing.
+  const [[specimen]] = await db.query(`SELECT branch_id FROM lis_specimens WHERE id = ?`, { replacements: [id] });
+  const branchId = specimen?.branch_id ?? getCreateBranchId(req);
 
   const t = await db.transaction();
   try {
