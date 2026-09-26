@@ -282,4 +282,17 @@ router.post('/seed-lab-services', authorize('setup.services.manage'), async (req
   }
 });
 
+// Seed the curated radiology exam catalog (see scripts/radiologyServicesData.js)
+// — same safely re-runnable shape as seed-lab-services above.
+router.post('/seed-radiology-services', authorize('setup.services.manage'), async (req, res) => {
+  try {
+    const { seedRadiologyServices } = require('../scripts/seedRadiologyServices');
+    const result = await seedRadiologyServices(req.body.clinic_id, req.user?.id, { Service, resolveRevenueAccount }, getCreateBranchId(req), req.user?.role === 'admin');
+    res.status(result.success ? 201 : 200).json(result);
+  } catch (error) {
+    console.error('Error seeding radiology services:', error);
+    res.status(500).json({ error: 'Failed to seed radiology services' });
+  }
+});
+
 module.exports = router;

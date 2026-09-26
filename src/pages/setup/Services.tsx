@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
-import { Plus, Trash2, Edit, Wrench, X, Search, Download, Upload, FileText, Settings, Loader2, Percent, FlaskConical } from 'lucide-react';
+import { Plus, Trash2, Edit, Wrench, X, Search, Download, Upload, FileText, Settings, Loader2, Percent, FlaskConical, Scan } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -234,6 +234,7 @@ const Services: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [seedingLab, setSeedingLab] = useState(false);
+  const [seedingRadiology, setSeedingRadiology] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -324,6 +325,29 @@ const Services: React.FC = () => {
       toast.error(error.message || 'Failed to seed lab services');
     } finally {
       setSeedingLab(false);
+    }
+  };
+
+  const handleSeedRadiologyServices = async () => {
+    try {
+      setSeedingRadiology(true);
+      const clinicId = user?.clinic || '6';
+      const response = await authFetch('/api/services/seed-radiology-services', {
+        method: 'POST',
+        body: JSON.stringify({ clinic_id: clinicId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to seed radiology services');
+      if (result.success) {
+        toast.success(result.message);
+        await fetchServices();
+      } else {
+        toast.info(result.message);
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to seed radiology services');
+    } finally {
+      setSeedingRadiology(false);
     }
   };
 
@@ -801,6 +825,15 @@ const Services: React.FC = () => {
                 >
                   {seedingLab ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-2" />}
                   Seed
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSeedRadiologyServices}
+                  disabled={seedingRadiology}
+                  className="h-9"
+                >
+                  {seedingRadiology ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Scan className="w-4 h-4 mr-2" />}
+                  Seed Radiology
                 </Button>
                 <Button
                   variant="outline"

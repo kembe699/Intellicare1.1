@@ -51,6 +51,13 @@ const GENDER_OPTIONS = [
 const QUICK_REGISTER_TENANT = 'dpoc';
 const EMPTY_QUICK_REGISTER = { full_name: '', age_years: '', age_months: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
 
+// Same dpoc-only scoping idea as QUICK_REGISTER_TENANT above, for a separate
+// ask: consolidating radiology ordering and admission requests onto this
+// "Place Order" screen so dpoc staff don't have to jump to Visit Summary or
+// elsewhere. Kept as its own constant (not reusing QUICK_REGISTER_TENANT)
+// since the two features are unrelated even though the tenant is the same.
+const DPOC_TENANT = 'dpoc';
+
 export default function LISTestOrders() {
   const { user, hasPrivilege } = useAuth();
   const facilityInfo = useFacilityInfo();
@@ -120,6 +127,16 @@ export default function LISTestOrders() {
   // billed via clinic queueing and the lab test picker respectively) + chief complaints
   const [services, setServices] = useState<any[]>([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  // Radiology ordering — dpoc-only (see DPOC_TENANT below), placed order-mode
+  // side by side with tests/services rather than folded into the picker above
+  // it, so nothing about that existing combined picker has to change for
+  // every other tenant. Requests are created (not billed — dpoc is a
+  // payment-free tenant) via POST /api/radiology/requests after the order
+  // itself is submitted.
+  const [radiologyExamTypes, setRadiologyExamTypes] = useState<any[]>([]);
+  const [selectedRadiologyIds, setSelectedRadiologyIds] = useState<string[]>([]);
+  const [radiologyPopoverOpen, setRadiologyPopoverOpen] = useState(false);
+  const [searchRadiology, setSearchRadiology] = useState('');
   const [billedItemKeys, setBilledItemKeys] = useState<Set<string>>(new Set());
   const [chiefComplaints, setChiefComplaints] = useState<any[]>([]);
   const [complaintPopoverOpen, setComplaintPopoverOpen] = useState(false);
@@ -216,6 +233,7 @@ export default function LISTestOrders() {
       fetchChiefComplaints();
       fetchDiagnoses();
       if (pharmacyDrugs.length === 0) fetchPharmacyDrugs();
+      if (user?.tenantCode === DPOC_TENANT) fetchRadiologyExamTypes();
       const interval = setInterval(fetchQueue, 3000);
       return () => clearInterval(interval);
     } else if (activeMode === 'results') {
@@ -740,8 +758,15 @@ export default function LISTestOrders() {
   };
 
   const handleRequestAdmission = async () => {
+    // Reachable from either Visit Summary (selectedSummary) or, dpoc-only, this
+    // "Place Order" screen directly (selectedParticipant) — same dual-mode
+    // branch shape as handleSubmitPrescription above. The admission-requests
+    // endpoint only ever needs patient_id/patient_name/diagnosis, no
+    // visit/order id, so either source works unchanged.
+    const inSummaryMode = activeMode === 'summary';
+    const patient = inSummaryMode ? selectedSummary : selectedParticipant;
     if (requestingAdmission) return;
-    if (!selectedSummary) return;
+    if (!patient) return;
     if (!admitDiagnosis.trim()) { toast.error('Diagnosis is required to request admission'); return; }
     setRequestingAdmission(true);
     try {
@@ -750,8 +775,8 @@ export default function LISTestOrders() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          patient_id: selectedSummary.participant_id,
-          patient_name: `${selectedSummary.first_name} ${selectedSummary.last_name}`.trim(),
+          patient_id: patient.participant_id,
+          patient_name: `${patient.first_name} ${patient.last_name}`.trim(),
           reason: admitReason,
           diagnosis: admitDiagnosis,
           clinic_id: user?.clinic || 1,
@@ -1252,8 +1277,9 @@ export default function LISTestOrders() {
     }
   };
 
-  // Everything except consultation (billed at queueing) and lab/diagnostic services
-  // (billed via the lab test picker below) — so nothing is offered twice.
+  // Everything except consultation (billed at queueing), lab/diagnostic services
+  // (billed via the lab test picker below), and radiology (its own picker below,
+  // dpoc-only) — so nothing is offered twice.
   const fetchServices = async () => {
     try {
       const res = await authFetch('/api/services', { credentials: 'include' });
@@ -1261,11 +1287,20 @@ export default function LISTestOrders() {
         const data = await res.json();
         setServices((Array.isArray(data) ? data : []).filter((s: any) =>
           s.isActive !== false && s.is_active !== false &&
-          !/consult|diagnos|lab/i.test(s.category || '')
+          !/consult|diagnos|lab|radiology/i.test(s.category || '')
         ));
       }
     } catch (e) {
       console.error('Failed to fetch services', e);
+    }
+  };
+
+  const fetchRadiologyExamTypes = async () => {
+    try {
+      const res = await authFetch('/api/radiology/exam-types', { credentials: 'include' });
+      if (res.ok) setRadiologyExamTypes(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch radiology exam types', e);
     }
   };
 
@@ -1520,6 +1555,11 @@ export default function LISTestOrders() {
     setSelectedServiceIds(prev => isSelected ? prev.filter(id => id !== service.id) : [...prev, service.id]);
   };
 
+  const toggleRadiology = (exam: any) => {
+    const isSelected = selectedRadiologyIds.includes(exam.id);
+    setSelectedRadiologyIds(prev => isSelected ? prev.filter(id => id !== exam.id) : [...prev, exam.id]);
+  };
+
   // Bills every selected test + service in ONE combined add-services (or
   // create-bill) call, run once from handleOrder right after the order
   // itself is created. Best-effort — a billing failure here is logged and
@@ -1635,12 +1675,36 @@ export default function LISTestOrders() {
         const patientName = selectedParticipant ? `${selectedParticipant.first_name} ${selectedParticipant.last_name}` : '';
         await billOrderItems(orderForm.participant_id, patientName, testsToBill, selectedServiceIds);
 
+        // Radiology requests are created (not billed — see the state comment
+        // near selectedRadiologyIds) so the exam shows up in the /radiology
+        // queue immediately. Best-effort: a failure here is toasted but never
+        // rolls back the order/tests/services that were already saved above.
+        if (selectedRadiologyIds.length > 0) {
+          const radiologyItems = selectedRadiologyIds
+            .map(id => radiologyExamTypes.find((e: any) => e.id === id))
+            .filter(Boolean)
+            .map((exam: any) => ({ service_id: exam.id, exam_name: exam.name }));
+          try {
+            const radRes = await authFetch('/api/radiology/requests', {
+              method: 'POST',
+              body: JSON.stringify({ participant_id: orderForm.participant_id, order_id: body.order_id, doctor_id: user?.id, items: radiologyItems }),
+            });
+            if (!radRes.ok) {
+              const radErr = await radRes.json().catch(() => ({}));
+              toast.error(radErr.error || 'Order saved, but the radiology request failed');
+            }
+          } catch {
+            toast.error('Order saved, but the radiology request failed (network error)');
+          }
+        }
+
         setOrderForm({ participant_id: '', order_id: '', clinical_notes: '' });
         setVitals(EMPTY_VITALS);
         setTriagedByName(null);
         setTriagedAt(null);
         setSelectedTests([]);
         setSelectedServiceIds([]);
+        setSelectedRadiologyIds([]);
         setBilledItemKeys(new Set());
         setMiddleStep(1);
         setBillingMode('cash');
@@ -2247,6 +2311,72 @@ export default function LISTestOrders() {
                       </div>
                     )}
                   </div>
+
+                  {/* Radiology — dpoc-only (see DPOC_TENANT), kept as its own picker
+                      rather than a 3rd group folded into "Tests & Services" above, so
+                      that combined picker needs no change for every other tenant. */}
+                  {user?.tenantCode === DPOC_TENANT && (
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Radiology</label>
+                      <Popover open={radiologyPopoverOpen} onOpenChange={setRadiologyPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            className="mt-1 w-full justify-between font-normal h-auto min-h-9 py-2 text-left"
+                          >
+                            <span className="text-muted-foreground">
+                              {selectedRadiologyIds.length > 0 ? `${selectedRadiologyIds.length} selected` : 'Search and select an exam...'}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                          <Command shouldFilter={false}>
+                            <CommandInput
+                              placeholder="Search X-Ray, Ultrasound..."
+                              value={searchRadiology}
+                              onValueChange={setSearchRadiology}
+                            />
+                            <CommandList className="max-h-72">
+                              <CommandEmpty>No matching exams.</CommandEmpty>
+                              <CommandGroup>
+                                {radiologyExamTypes
+                                  .filter((exam: any) => exam.name?.toLowerCase().includes(searchRadiology.toLowerCase()))
+                                  .map((exam: any) => {
+                                    const isSelected = selectedRadiologyIds.includes(exam.id);
+                                    return (
+                                      <CommandItem key={exam.id} value={exam.name} onSelect={() => toggleRadiology(exam)}>
+                                        <Check className={cn('mr-2 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                        <span className="truncate">{exam.name}</span>
+                                      </CommandItem>
+                                    );
+                                  })}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+
+                      {selectedRadiologyIds.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {selectedRadiologyIds.map(id => {
+                            const exam = radiologyExamTypes.find((e: any) => e.id === id);
+                            if (!exam) return null;
+                            return (
+                              <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                                {exam.name}
+                                <button type="button" onClick={() => toggleRadiology(exam)} className="hover:bg-primary/20 rounded-full p-0.5">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2269,6 +2399,11 @@ export default function LISTestOrders() {
                     {hasPrivilege('referrals.write') && (
                       <Button variant="outline" size="sm" className="w-full mt-2" onClick={openReferDialog}>
                         <ArrowLeftRight className="w-3.5 h-3.5 mr-2" /> Refer to Another Branch
+                      </Button>
+                    )}
+                    {user?.tenantCode === DPOC_TENANT && (
+                      <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => { setAdmitReason(''); setAdmitDiagnosis(''); setShowAdmitRequestModal(true); }}>
+                        <BedDouble className="w-3.5 h-3.5 mr-2" /> Request Admission
                       </Button>
                     )}
                   </div>
@@ -2316,6 +2451,27 @@ export default function LISTestOrders() {
                           </span>
                         </div>
                       ))}
+                    </div>
+                  </>
+                )}
+
+                {user?.tenantCode === DPOC_TENANT && selectedRadiologyIds.length > 0 && (
+                  <>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mt-4 mb-2 flex justify-between">
+                      Selected Radiology
+                      <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full">{selectedRadiologyIds.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {selectedRadiologyIds.map(id => {
+                        const exam = radiologyExamTypes.find((e: any) => e.id === id);
+                        if (!exam) return null;
+                        return (
+                          <div key={id} className="flex justify-between items-center gap-2 p-2 border rounded-md text-sm bg-card">
+                            <span className="truncate">{exam.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">Not billed</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -2475,7 +2631,7 @@ export default function LISTestOrders() {
                   disabled={!orderForm.participant_id || submittingOrder}
                 >
                   {submittingOrder ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                  {submittingOrder ? 'Saving...' : (selectedTests.length === 0 && selectedServiceIds.length === 0) ? 'Save Visit' : 'Submit Order'}
+                  {submittingOrder ? 'Saving...' : (selectedTests.length === 0 && selectedServiceIds.length === 0 && selectedRadiologyIds.length === 0) ? 'Save Visit' : 'Submit Order'}
                 </Button>
               </div>
 
@@ -3290,7 +3446,10 @@ export default function LISTestOrders() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><BedDouble className="w-5 h-5 text-primary" /> Request Admission</DialogTitle>
             <DialogDescription>
-              {selectedSummary ? `Flag ${selectedSummary.first_name} ${selectedSummary.last_name} for inpatient admission — ward staff will assign a bed.` : ''}
+              {(() => {
+                const patient = activeMode === 'summary' ? selectedSummary : selectedParticipant;
+                return patient ? `Flag ${patient.first_name} ${patient.last_name} for inpatient admission — ward staff will assign a bed.` : '';
+              })()}
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
@@ -3298,7 +3457,7 @@ export default function LISTestOrders() {
               <label className="text-xs font-medium text-muted-foreground">Diagnosis *</label>
               <Textarea placeholder="e.g. Acute appendicitis, requires surgical admission" value={admitDiagnosis} onChange={e => setAdmitDiagnosis(e.target.value)} rows={2} />
               <p className="text-[11px] text-muted-foreground">
-                {admitDiagnosis ? 'Pre-filled from the visit\'s saved diagnosis — edit if needed.' : 'Required — this diagnosis carries through to the admission record.'}
+                {activeMode === 'summary' && admitDiagnosis ? 'Pre-filled from the visit\'s saved diagnosis — edit if needed.' : 'Required — this diagnosis carries through to the admission record.'}
               </p>
             </div>
             <div className="space-y-2">

@@ -110,6 +110,9 @@ const CATALOG = [
   ['lis.clinical.insights.write', 'Generate clinical insights', 'lis', 'Request AI-assisted differential diagnosis suggestions for a visit', ['admin', 'doctor']],
   ['referrals.write', 'Manage patient referrals', 'referrals', 'Create, accept, reject, or cancel an inter-branch patient referral', ['admin', 'doctor']],
 
+  ['radiology.read', 'View radiology requests', 'radiology', 'View the radiology request queue and reports', ['admin', 'doctor', 'lab']],
+  ['radiology.write', 'Manage radiology requests', 'radiology', 'Confirm a radiology request and file its report', ['admin', 'doctor', 'lab']],
+
   ['pharmacy.read', 'View pharmacy data', 'pharmacy', 'Drugs, stock levels, pricing history, reports', ['admin', 'pharmacy', 'doctor']],
   ['pharmacy.write', 'Manage pharmacy operations', 'pharmacy', 'Drugs, dispensing, returns, charges, pricing', ['admin', 'pharmacy']],
   ['pharmacy.prescribe', 'Manage clinical prescriptions', 'pharmacy', 'Patient allergies, prescriptions, interaction checks', ['admin', 'pharmacy', 'doctor']],

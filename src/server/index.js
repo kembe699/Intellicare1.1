@@ -554,6 +554,7 @@ const insuranceClaimsRouter = require('./routes/insuranceClaims');
 const exchangeRatesRouter = require('./routes/exchangeRates');
 const inpatientRouter = require('./routes/inpatient');
 const lisModuleRouter = require('./routes/lisModule');
+const radiologyRouter = require('./routes/radiology');
 const clinicalInsightsRouter = require('./routes/clinicalInsights');
 const patientReferralsRouter = require('./routes/patientReferrals');
 const chiefComplaintsRouter = require('./routes/chiefComplaints');
@@ -696,6 +697,7 @@ app.use('/api/insurance-claims', insuranceClaimsRouter);
 app.use('/api/exchange-rates', exchangeRatesRouter);
 app.use('/api/inpatient', inpatientRouter);
 app.use('/api/lis', lisModuleRouter);
+app.use('/api/radiology', radiologyRouter);
 app.use('/api/lis/orders', clinicalInsightsRouter);
 app.use('/api/patient-referrals', patientReferralsRouter);
 app.use('/api/chief-complaints', chiefComplaintsRouter);
@@ -786,6 +788,7 @@ async function runBackgroundMigrations() {
     ['InsuranceClaims',   () => require('./scripts/migrateInsuranceClaims')()],
     ['MultiCurrency',     () => require('./scripts/migrateMultiCurrency').migrateMultiCurrency()],
     ['Inpatient',         () => require('./scripts/migrateInpatientTables').migrateInpatientTables()],
+    ['Radiology',         () => require('./scripts/migrateRadiologyModule').migrateRadiologyModule()],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],

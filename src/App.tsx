@@ -42,6 +42,8 @@ const LISRegistration = lazyWithRetry(() => import('./pages/lis/LISRegistration'
 const PatientReferrals = lazyWithRetry(() => import('./pages/PatientReferrals'));
 const PatientReferralDetail = lazyWithRetry(() => import('./pages/PatientReferralDetail'));
 const LISTestOrders = lazyWithRetry(() => import('./pages/lis/LISTestOrders'));
+const RadiologyQueue = lazyWithRetry(() => import('./pages/radiology/RadiologyQueue'));
+const RadiologyRequestDetail = lazyWithRetry(() => import('./pages/radiology/RadiologyRequestDetail'));
 const LISQueue = lazyWithRetry(() => import('./pages/lis/LISQueue'));
 const Triage = lazyWithRetry(() => import('./pages/lis/Triage'));
 const LISCollection = lazyWithRetry(() => import('./pages/lis/LISCollection'));
@@ -360,6 +362,16 @@ const AppRoutes = () => {
       <Route path="/lis/orders" element={
         <ProtectedRoute requiredPrivilege="lis.clinical.read">
           <LISTestOrders />
+        </ProtectedRoute>
+      } />
+      <Route path="/radiology" element={
+        <ProtectedRoute requiredPrivilege="radiology.read">
+          <RadiologyQueue />
+        </ProtectedRoute>
+      } />
+      <Route path="/radiology/requests/:id" element={
+        <ProtectedRoute requiredPrivilege="radiology.read">
+          <RadiologyRequestDetail />
         </ProtectedRoute>
       } />
       <Route path="/lis/collection" element={
