@@ -71,10 +71,6 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   privilege: string | string[];
-  // One-off tenant scoping, e.g. Radiology (only dpoc uses it today) — same
-  // ad hoc per-feature pattern already used in LISTestOrders.tsx's
-  // QUICK_REGISTER_TENANT, not a general feature-flag system.
-  tenantOnly?: string;
 }
 
 interface NavDropdown {
@@ -87,7 +83,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, privilege: 'pages.dashboard.view' },
   { label: 'Patient Registry', href: '/lis/registration', icon: Users, privilege: 'pages.lis_registration.view' },
   { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read' },
-  { label: 'Radiology', href: '/radiology', icon: Scan, privilege: 'radiology.read', tenantOnly: 'dpoc' },
+  { label: 'Radiology', href: '/radiology', icon: Scan, privilege: 'radiology.read' },
   { label: 'Queue Display', href: '/lis/queue', icon: Users, privilege: 'lis.queue.write' },
   { label: 'Triage', href: '/triage', icon: Activity, privilege: 'lis.triage.write' },
   { label: 'Patient Referral', href: '/patient-referrals', icon: ArrowLeftRight, privilege: 'pages.patient_referral.view' },
@@ -306,9 +302,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     }
   };
 
-  const filteredNavItems = navItems.filter(item =>
-    (!item.tenantOnly || user?.tenantCode === item.tenantOnly) && hasPrivilege(item.privilege)
-  );
+  const filteredNavItems = navItems.filter(item => hasPrivilege(item.privilege));
 
   // A dropdown section shows if the user can actually use at least one of its
   // items — derived from the same per-item privilege checks used to filter
@@ -448,7 +442,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   {/* 3. Clinical (flat link) — the doctor's encounter */}
                   {renderNavLink('/lis/orders')}
 
-                  {/* 3.05 Radiology (flat link) — dpoc-only for now, see tenantOnly on the navItems entry */}
+                  {/* 3.05 Radiology (flat link) */}
                   {renderNavLink('/radiology')}
 
                   {/* 3.1 Patient Referral (flat link) — send a patient's care to another branch */}

@@ -90,18 +90,24 @@ describe('radiology seed data lands in services under its own category', () => {
   });
 });
 
-describe('LIS "Place Order" screen additions are dpoc-gated and do not touch Visit Summary', () => {
+describe('LIS "Place Order" screen: radiology is available to every tenant, admission-request consolidation stays dpoc-only', () => {
   const src = read('src/pages/lis/LISTestOrders.tsx');
 
-  test('a distinct DPOC_TENANT constant exists (not reusing QUICK_REGISTER_TENANT for an unrelated feature)', () => {
+  test('a DPOC_TENANT constant still exists, now scoped to just the Request Admission button', () => {
     expect(src).toMatch(/const DPOC_TENANT = 'dpoc';/);
   });
 
-  test('the radiology picker only renders for user.tenantCode === DPOC_TENANT', () => {
-    const pickerStart = src.indexOf('Radiology — dpoc-only');
+  test('the radiology picker renders unconditionally — no tenant gate left on it', () => {
+    const pickerStart = src.indexOf('Radiology — kept as its own picker');
     expect(pickerStart).toBeGreaterThan(-1);
     const pickerSection = src.slice(pickerStart, pickerStart + 400);
-    expect(pickerSection).toMatch(/user\?\.tenantCode === DPOC_TENANT/);
+    expect(pickerSection).not.toMatch(/user\?\.tenantCode === DPOC_TENANT/);
+  });
+
+  test('the exam-types fetch runs for every tenant, not just dpoc', () => {
+    const effectSrc = src.slice(src.indexOf("if (activeMode === 'order')"), src.indexOf("if (activeMode === 'order')") + 500);
+    expect(effectSrc).toMatch(/fetchRadiologyExamTypes\(\);/);
+    expect(effectSrc).not.toMatch(/if \(user\?\.tenantCode === DPOC_TENANT\) fetchRadiologyExamTypes/);
   });
 
   test('the Request Admission button in order mode only renders for user.tenantCode === DPOC_TENANT', () => {

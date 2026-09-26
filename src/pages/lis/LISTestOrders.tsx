@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send, Scan } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -51,15 +52,16 @@ const GENDER_OPTIONS = [
 const QUICK_REGISTER_TENANT = 'dpoc';
 const EMPTY_QUICK_REGISTER = { full_name: '', age_years: '', age_months: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
 
-// Same dpoc-only scoping idea as QUICK_REGISTER_TENANT above, for a separate
-// ask: consolidating radiology ordering and admission requests onto this
-// "Place Order" screen so dpoc staff don't have to jump to Visit Summary or
-// elsewhere. Kept as its own constant (not reusing QUICK_REGISTER_TENANT)
-// since the two features are unrelated even though the tenant is the same.
+// Same dpoc-only scoping idea as QUICK_REGISTER_TENANT above — radiology
+// ordering itself is now available to every tenant (see fetchRadiologyExamTypes
+// and the Radiology picker below), but requesting an admission straight from
+// this "Place Order" screen (instead of only from Visit Summary) is still a
+// dpoc-specific workflow tweak, so this constant now only gates that one button.
 const DPOC_TENANT = 'dpoc';
 
 export default function LISTestOrders() {
   const { user, hasPrivilege } = useAuth();
+  const navigate = useNavigate();
   const facilityInfo = useFacilityInfo();
   const [queuedPatients, setQueuedPatients] = useState<any[]>([]);
   const [labTests, setLabTests] = useState<any[]>([]);
@@ -127,12 +129,12 @@ export default function LISTestOrders() {
   // billed via clinic queueing and the lab test picker respectively) + chief complaints
   const [services, setServices] = useState<any[]>([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
-  // Radiology ordering — dpoc-only (see DPOC_TENANT below), placed order-mode
-  // side by side with tests/services rather than folded into the picker above
-  // it, so nothing about that existing combined picker has to change for
-  // every other tenant. Requests are created (not billed — dpoc is a
-  // payment-free tenant) via POST /api/radiology/requests after the order
-  // itself is submitted.
+  // Radiology ordering — placed order-mode side by side with tests/services
+  // rather than folded into the picker above it, so that existing combined
+  // picker needed no change to add this. Requests are created (not billed —
+  // radiology billing isn't wired up yet, same as when this started as a
+  // dpoc-only pilot) via POST /api/radiology/requests after the order itself
+  // is submitted.
   const [radiologyExamTypes, setRadiologyExamTypes] = useState<any[]>([]);
   const [selectedRadiologyIds, setSelectedRadiologyIds] = useState<string[]>([]);
   const [radiologyPopoverOpen, setRadiologyPopoverOpen] = useState(false);
@@ -174,6 +176,7 @@ export default function LISTestOrders() {
   const [selectedSummary, setSelectedSummary] = useState<any | null>(null);
   const [summaryResults, setSummaryResults] = useState<Record<string, any[]>>({});
   const [summaryResultsLoading, setSummaryResultsLoading] = useState(false);
+  const [summaryRadiology, setSummaryRadiology] = useState<any[]>([]);
   const [closingVisit, setClosingVisit] = useState(false);
   const [visitDiagnosis, setVisitDiagnosis] = useState('');
   const [savingDiagnosis, setSavingDiagnosis] = useState(false);
@@ -233,7 +236,7 @@ export default function LISTestOrders() {
       fetchChiefComplaints();
       fetchDiagnoses();
       if (pharmacyDrugs.length === 0) fetchPharmacyDrugs();
-      if (user?.tenantCode === DPOC_TENANT) fetchRadiologyExamTypes();
+      fetchRadiologyExamTypes();
       const interval = setInterval(fetchQueue, 3000);
       return () => clearInterval(interval);
     } else if (activeMode === 'results') {
@@ -317,6 +320,14 @@ export default function LISTestOrders() {
     fetchPharmacyDrugs();
     if (labTests.length === 0) fetchLabTests();
     if (services.length === 0) fetchServices();
+    // Independent of the lab-results fetch below (and its early return when
+    // there's nothing to show there) — a visit can have radiology requests
+    // with zero lab tests ordered, or vice versa.
+    setSummaryRadiology([]);
+    authFetch(`/api/radiology/requests?order_id=${summary.order_id}`, { credentials: 'include' })
+      .then(res => res.ok ? res.json() : [])
+      .then(setSummaryRadiology)
+      .catch(() => {});
     const readyTests = (summary.tests || []).filter((t: any) => t.status === 'approved');
     if (readyTests.length === 0) { setSummaryResults({}); return; }
     setSummaryResultsLoading(true);
@@ -958,6 +969,24 @@ export default function LISTestOrders() {
       ),
     ].join('\n') : '';
 
+    // One block per requested exam: a small table row up top (matches the
+    // Tests Ordered summary style) plus, once completed, the full report text
+    // right below its own row rather than in a separate document — a doctor
+    // printing the visit summary wants the radiology finding right there.
+    const radiologyHTML = summaryRadiology.length > 0 ? [
+      '<div class="ic-section-title">Radiology</div>',
+      docTemplate.buildTable(
+        [{ label: 'Exam' }, { label: 'Status' }],
+        summaryRadiology.map((r: any) => ({ cells: [r.exam_name, r.status.replace(/_/g, ' ')] }))
+      ),
+      ...summaryRadiology
+        .filter((r: any) => r.status === 'completed')
+        .map((r: any) => `
+          <div class="ic-section-title">Radiology Report: ${r.exam_name} <span>${r.request_number}</span></div>
+          <div style="font-size:12px;line-height:1.6;margin-bottom:12px;">${r.report_html || ''}</div>
+        `),
+    ].join('\n') : '';
+
     const resultSectionsHTML = (s.tests || []).map((t: any) => {
       const rawResults = summaryResults[t.id] || [];
       if (t.status !== 'approved' || rawResults.length === 0) return '';
@@ -1026,6 +1055,7 @@ export default function LISTestOrders() {
       testsHTML,
       resultSectionsHTML,
       prescriptionsHTML,
+      radiologyHTML,
       docTemplate.buildSignatures([
         { label: 'Printed By', name: user?.displayName || '', signature: signature || undefined },
         { label: 'Attending Doctor', name: s.doctor_name ? `Dr. ${s.doctor_name}` : '' },
@@ -2312,71 +2342,69 @@ export default function LISTestOrders() {
                     )}
                   </div>
 
-                  {/* Radiology — dpoc-only (see DPOC_TENANT), kept as its own picker
-                      rather than a 3rd group folded into "Tests & Services" above, so
-                      that combined picker needs no change for every other tenant. */}
-                  {user?.tenantCode === DPOC_TENANT && (
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Radiology</label>
-                      <Popover open={radiologyPopoverOpen} onOpenChange={setRadiologyPopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            role="combobox"
-                            className="mt-1 w-full justify-between font-normal h-auto min-h-9 py-2 text-left"
-                          >
-                            <span className="text-muted-foreground">
-                              {selectedRadiologyIds.length > 0 ? `${selectedRadiologyIds.length} selected` : 'Search and select an exam...'}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                          <Command shouldFilter={false}>
-                            <CommandInput
-                              placeholder="Search X-Ray, Ultrasound..."
-                              value={searchRadiology}
-                              onValueChange={setSearchRadiology}
-                            />
-                            <CommandList className="max-h-72">
-                              <CommandEmpty>No matching exams.</CommandEmpty>
-                              <CommandGroup>
-                                {radiologyExamTypes
-                                  .filter((exam: any) => exam.name?.toLowerCase().includes(searchRadiology.toLowerCase()))
-                                  .map((exam: any) => {
-                                    const isSelected = selectedRadiologyIds.includes(exam.id);
-                                    return (
-                                      <CommandItem key={exam.id} value={exam.name} onSelect={() => toggleRadiology(exam)}>
-                                        <Check className={cn('mr-2 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
-                                        <span className="truncate">{exam.name}</span>
-                                      </CommandItem>
-                                    );
-                                  })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                  {/* Radiology — kept as its own picker rather than a 3rd group folded
+                      into "Tests & Services" above, so that combined picker needed no
+                      change to add this. */}
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Radiology</label>
+                    <Popover open={radiologyPopoverOpen} onOpenChange={setRadiologyPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          className="mt-1 w-full justify-between font-normal h-auto min-h-9 py-2 text-left"
+                        >
+                          <span className="text-muted-foreground">
+                            {selectedRadiologyIds.length > 0 ? `${selectedRadiologyIds.length} selected` : 'Search and select an exam...'}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search X-Ray, Ultrasound..."
+                            value={searchRadiology}
+                            onValueChange={setSearchRadiology}
+                          />
+                          <CommandList className="max-h-72">
+                            <CommandEmpty>No matching exams.</CommandEmpty>
+                            <CommandGroup>
+                              {radiologyExamTypes
+                                .filter((exam: any) => exam.name?.toLowerCase().includes(searchRadiology.toLowerCase()))
+                                .map((exam: any) => {
+                                  const isSelected = selectedRadiologyIds.includes(exam.id);
+                                  return (
+                                    <CommandItem key={exam.id} value={exam.name} onSelect={() => toggleRadiology(exam)}>
+                                      <Check className={cn('mr-2 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                      <span className="truncate">{exam.name}</span>
+                                    </CommandItem>
+                                  );
+                                })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
 
-                      {selectedRadiologyIds.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {selectedRadiologyIds.map(id => {
-                            const exam = radiologyExamTypes.find((e: any) => e.id === id);
-                            if (!exam) return null;
-                            return (
-                              <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                                {exam.name}
-                                <button type="button" onClick={() => toggleRadiology(exam)} className="hover:bg-primary/20 rounded-full p-0.5">
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    {selectedRadiologyIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {selectedRadiologyIds.map(id => {
+                          const exam = radiologyExamTypes.find((e: any) => e.id === id);
+                          if (!exam) return null;
+                          return (
+                            <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                              {exam.name}
+                              <button type="button" onClick={() => toggleRadiology(exam)} className="hover:bg-primary/20 rounded-full p-0.5">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -2455,7 +2483,7 @@ export default function LISTestOrders() {
                   </>
                 )}
 
-                {user?.tenantCode === DPOC_TENANT && selectedRadiologyIds.length > 0 && (
+                {selectedRadiologyIds.length > 0 && (
                   <>
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase mt-4 mb-2 flex justify-between">
                       Selected Radiology
@@ -3006,6 +3034,49 @@ export default function LISTestOrders() {
                           </div>
                         ) : (
                           <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg">No medications prescribed on this visit.</div>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                          <Scan className="w-3.5 h-3.5" /> Radiology ({summaryRadiology.length})
+                        </p>
+                        {summaryRadiology.length > 0 ? (
+                          <div className="space-y-3">
+                            {summaryRadiology.map((r: any) => (
+                              <div key={r.id} className="border rounded-lg overflow-hidden">
+                                <div className="flex justify-between items-center px-3 py-2 bg-muted/30 gap-2">
+                                  <span className="font-medium text-sm truncate">{r.exam_name}</span>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className={cn(
+                                      "text-[10px] font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
+                                      r.status === 'completed' ? "bg-green-100 text-green-800"
+                                        : r.status === 'in_progress' ? "bg-blue-100 text-blue-800"
+                                        : "bg-amber-100 text-amber-800"
+                                    )}>
+                                      {r.status.replace(/_/g, ' ')}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="text-[11px] font-medium text-primary hover:underline whitespace-nowrap"
+                                      onClick={() => navigate(`/radiology/requests/${r.id}`)}
+                                    >
+                                      {r.status === 'completed' ? 'View / Print' : 'Open'}
+                                    </button>
+                                  </div>
+                                </div>
+                                {r.status === 'completed' ? (
+                                  <div className="p-3 text-sm" dangerouslySetInnerHTML={{ __html: r.report_html || '' }} />
+                                ) : (
+                                  <div className="p-3 text-xs text-muted-foreground">
+                                    {r.status === 'in_progress' ? 'Exam confirmed — report not yet filed.' : 'Awaiting confirmation by radiology.'}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg">No radiology requested on this visit.</div>
                         )}
                       </div>
                     </div>

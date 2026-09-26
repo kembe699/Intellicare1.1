@@ -93,12 +93,13 @@ router.post('/requests', authorize('lis.clinical.write'), async (req, res) => {
 
 router.get('/requests', authorize('radiology.read'), async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, order_id } = req.query;
     const replacements = {};
     const branchSQL = branchScope(req, replacements, 'rr');
     let sql = `
       SELECT rr.id, rr.request_number, rr.exam_name, rr.status, rr.urgent, rr.request_date,
-        rr.clinical_indication, rr.doctor_id, rr.requested_by_name,
+        rr.clinical_indication, rr.doctor_id, rr.requested_by_name, rr.report_html,
+        rr.confirmed_by_name, rr.confirmed_at, rr.reported_by_name, rr.reported_at,
         p.participant_number, p.first_name, p.last_name,
         COALESCE(u.display_name, rr.requested_by_name) AS doctor_name
       FROM radiology_requests rr
@@ -107,6 +108,10 @@ router.get('/requests', authorize('radiology.read'), async (req, res) => {
       WHERE 1=1 ${branchSQL}
     `;
     if (status) { sql += ' AND rr.status = :status'; replacements.status = status; }
+    // Visit Summary looks up a visit's radiology by the LIS order it was
+    // requested under — matches the same order_id every request in that
+    // visit shares (see /visits' grouping rule).
+    if (order_id) { sql += ' AND rr.order_id = :orderId'; replacements.orderId = order_id; }
     sql += ' ORDER BY rr.request_date DESC';
     const [rows] = await sequelize.query(sql, { replacements });
     res.json(rows);
