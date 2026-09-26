@@ -116,6 +116,77 @@ router.get('/requests', authorize('radiology.read'), async (req, res) => {
   }
 });
 
+// One row per visit (order_id when the requests came from an LIS order — the
+// normal case — otherwise each order-less request stands alone as its own
+// single-item "visit", via COALESCE(order_id, id) as the group key, so two
+// unrelated order-less requests for the same patient are never merged just
+// because they share no order). Backs the Radiology queue table: a doctor who
+// ordered 3 exams in one visit sees one row with request_count=3, not 3 rows.
+router.get('/visits', authorize('radiology.read'), async (req, res) => {
+  try {
+    const replacements = {};
+    const branchSQL = branchScope(req, replacements, 'rr');
+    const [rows] = await sequelize.query(
+      `SELECT
+         MIN(rr.id) AS id,
+         rr.participant_id,
+         MIN(rr.request_date) AS request_date,
+         COUNT(*) AS request_count,
+         COUNT(*) FILTER (WHERE rr.status = 'pending') AS pending_count,
+         COUNT(*) FILTER (WHERE rr.status = 'in_progress') AS in_progress_count,
+         COUNT(*) FILTER (WHERE rr.status = 'completed') AS completed_count,
+         BOOL_OR(rr.urgent) AS urgent,
+         p.participant_number, p.first_name, p.last_name,
+         MAX(COALESCE(u.display_name, rr.requested_by_name)) AS doctor_name
+       FROM radiology_requests rr
+       JOIN lis_participants p ON p.id = rr.participant_id
+       LEFT JOIN users u ON u.id = rr.doctor_id
+       WHERE 1=1 ${branchSQL}
+       GROUP BY rr.participant_id, COALESCE(rr.order_id, rr.id), p.participant_number, p.first_name, p.last_name
+       ORDER BY MIN(rr.request_date) DESC`,
+      { replacements }
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing radiology visits:', error);
+    res.status(500).json({ error: 'Failed to list radiology visits' });
+  }
+});
+
+// Given any one request's id, resolves and returns every request from the
+// same visit (see /visits above for the grouping rule) — what the detail page
+// actually renders, so a doctor who ordered several exams together can
+// confirm/report/print each one without leaving the page.
+router.get('/requests/:id/visit', authorize('radiology.read'), async (req, res) => {
+  try {
+    const keyReplacements = { id: req.params.id };
+    const keyBranchSQL = branchScope(req, keyReplacements);
+    const [[anchor]] = await sequelize.query(
+      `SELECT participant_id, COALESCE(order_id, id) AS visit_key FROM radiology_requests WHERE id = :id ${keyBranchSQL}`,
+      { replacements: keyReplacements }
+    );
+    if (!anchor) return res.status(404).json({ error: 'Radiology request not found' });
+
+    const replacements = { participantId: anchor.participant_id, visitKey: anchor.visit_key };
+    const branchSQL = branchScope(req, replacements, 'rr');
+    const [rows] = await sequelize.query(
+      `SELECT rr.*, p.participant_number, p.first_name, p.last_name, p.gender, p.date_of_birth,
+         COALESCE(u.display_name, rr.requested_by_name) AS doctor_name
+       FROM radiology_requests rr
+       JOIN lis_participants p ON p.id = rr.participant_id
+       LEFT JOIN users u ON u.id = rr.doctor_id
+       WHERE rr.participant_id = :participantId AND COALESCE(rr.order_id, rr.id) = :visitKey ${branchSQL}
+       ORDER BY rr.request_date ASC`,
+      { replacements }
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Radiology request not found' });
+    res.json({ requests: rows });
+  } catch (error) {
+    console.error('Error fetching radiology visit:', error);
+    res.status(500).json({ error: 'Failed to fetch radiology visit' });
+  }
+});
+
 router.get('/requests/:id', authorize('radiology.read'), async (req, res) => {
   try {
     const replacements = { id: req.params.id };
