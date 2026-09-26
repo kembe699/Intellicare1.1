@@ -235,30 +235,60 @@ export default function RadiologyRequestDetail() {
   if (!requests || requests.length === 0) return <AppLayout><div className="p-12 text-center text-muted-foreground">Radiology request not found</div></AppLayout>;
 
   const patient = requests[0];
+  const initials = `${patient.first_name?.[0] || ''}${patient.last_name?.[0] || ''}`.toUpperCase();
+  const counts = {
+    pending: requests.filter((r) => r.status === 'pending').length,
+    in_progress: requests.filter((r) => r.status === 'in_progress').length,
+    completed: requests.filter((r) => r.status === 'completed').length,
+  };
 
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-        <div className="space-y-5 w-full max-w-4xl mx-auto flex flex-col">
+        <div className="space-y-5 w-full flex flex-col">
           <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 self-start" onClick={() => navigate('/radiology')}>
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Radiology
           </Button>
 
-          <Card className="overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-border bg-muted/30">
-              <h4 className="font-semibold text-sm text-foreground">Visit — {requests.length} exam{requests.length === 1 ? '' : 's'} requested</h4>
-            </div>
-            <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Field label="Patient" value={`${patient.first_name} ${patient.last_name}`} />
-              <Field label="Patient No" value={patient.participant_number} />
-              <Field label="Doctor" value={patient.doctor_name || '—'} />
-              <Field label="Requested" value={new Date(patient.request_date).toLocaleString()} />
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 items-start">
+            {/* LEFT: patient/visit summary — sticky so it stays in view while scrolling a long list of exams */}
+            <div className="lg:sticky lg:top-4 space-y-4">
+              <Card className="overflow-hidden">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-base flex-shrink-0">
+                      {initials || '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <h1 className="text-base font-bold tracking-tight text-foreground truncate">{patient.first_name} {patient.last_name}</h1>
+                      <p className="text-xs text-muted-foreground mt-0.5">{patient.participant_number}</p>
+                    </div>
+                  </div>
 
-          {requests.map((r) => (
-            <RequestCard key={r.id} request={r} canWrite={canWrite} onChanged={fetchVisit} />
-          ))}
+                  <div className="mt-4 pt-4 border-t border-border space-y-3">
+                    <Field label="Doctor" value={patient.doctor_name || '—'} />
+                    <Field label="Requested" value={new Date(patient.request_date).toLocaleString()} />
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">{requests.length} Exam{requests.length === 1 ? '' : 's'} Requested</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {counts.pending > 0 && <StatusBadge status="pending" map={STATUS_TONE} label={`${counts.pending} Pending`} />}
+                      {counts.in_progress > 0 && <StatusBadge status="in_progress" map={STATUS_TONE} label={`${counts.in_progress} In Progress`} />}
+                      {counts.completed > 0 && <StatusBadge status="completed" map={STATUS_TONE} label={`${counts.completed} Completed`} />}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* RIGHT: one card per requested exam — a wide screen shows two side by side instead of one long column */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 min-w-0 items-start">
+              {requests.map((r) => (
+                <RequestCard key={r.id} request={r} canWrite={canWrite} onChanged={fetchVisit} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </AppLayout>

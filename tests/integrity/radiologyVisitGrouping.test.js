@@ -103,7 +103,7 @@ describe('RadiologyRequestDetail.tsx shows every request in the visit, not just 
     expect(cardSrc).toMatch(/useState\(request\.report_html \|\| ''\)/);
   });
 
-  test('a shared patient/visit header is shown once, not duplicated per exam', () => {
-    expect(src).toMatch(/exam\{requests\.length === 1 \? '' : 's'\} requested/);
+  test('a shared patient/visit summary is shown once, not duplicated per exam', () => {
+    expect(src).toMatch(/Exam\{requests\.length === 1 \? '' : 's'\} Requested/);
   });
 });
