@@ -2248,6 +2248,7 @@ export default function LISTestOrders() {
                     )}
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground">Tests &amp; Services</label>
                     <Popover open={testPopoverOpen} onOpenChange={setTestPopoverOpen}>
@@ -2404,6 +2405,7 @@ export default function LISTestOrders() {
                         })}
                       </div>
                     )}
+                  </div>
                   </div>
                 </div>
               )}
