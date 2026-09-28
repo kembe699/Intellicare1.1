@@ -20,6 +20,7 @@ async function main() {
     ['MultiCurrency',     () => require('./migrateMultiCurrency').migrateMultiCurrency()],
     ['Inpatient',         () => require('./migrateInpatientTables').migrateInpatientTables()],
     ['Radiology',         () => require('./migrateRadiologyModule').migrateRadiologyModule()],
+    ['Dhis2Report',       () => require('./migrateDhis2Tables').migrateDhis2Tables()],
     ['Departments',       () => require('./migrateDepartments')()],
     ['PerfIndexes',       () => require('./addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./migrateReportingTables').migrateReportingTables()],

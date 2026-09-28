@@ -789,6 +789,7 @@ async function runBackgroundMigrations() {
     ['MultiCurrency',     () => require('./scripts/migrateMultiCurrency').migrateMultiCurrency()],
     ['Inpatient',         () => require('./scripts/migrateInpatientTables').migrateInpatientTables()],
     ['Radiology',         () => require('./scripts/migrateRadiologyModule').migrateRadiologyModule()],
+    ['Dhis2Report',       () => require('./scripts/migrateDhis2Tables').migrateDhis2Tables()],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],

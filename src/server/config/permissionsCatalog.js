@@ -113,6 +113,9 @@ const CATALOG = [
   ['radiology.read', 'View radiology requests', 'radiology', 'View the radiology request queue and reports', ['admin', 'doctor', 'lab']],
   ['radiology.write', 'Manage radiology requests', 'radiology', 'Confirm a radiology request and file its report', ['admin', 'doctor', 'lab']],
 
+  ['reports.dhis2.view', 'View DHIS2 monthly report', 'reports', 'Compute, review, save, print/export the monthly HMIS facility report', ['admin', 'reports']],
+  ['reports.dhis2.finalize', 'Finalize DHIS2 monthly report', 'reports', 'Lock a DHIS2 report as final and manage its lab/inventory mappings', ['admin']],
+
   ['pharmacy.read', 'View pharmacy data', 'pharmacy', 'Drugs, stock levels, pricing history, reports', ['admin', 'pharmacy', 'doctor']],
   ['pharmacy.write', 'Manage pharmacy operations', 'pharmacy', 'Drugs, dispensing, returns, charges, pricing', ['admin', 'pharmacy']],
   ['pharmacy.prescribe', 'Manage clinical prescriptions', 'pharmacy', 'Patient allergies, prescriptions, interaction checks', ['admin', 'pharmacy', 'doctor']],
