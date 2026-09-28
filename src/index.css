@@ -324,4 +324,31 @@
     background-color: white;
     color: black;
   }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* Keep each DHIS2 section's bordered table intact across a page break —
+     splitting a section mid-table would make the paper form unreadable. */
+  .dhis2-report .dhis2-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .dhis2-report .dhis2-draft::before {
+    content: 'DRAFT';
+    position: fixed;
+    top: 45%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 120px;
+    font-weight: 800;
+    color: rgba(217, 119, 6, 0.15);
+    transform: rotate(-30deg);
+    z-index: 9999;
+    pointer-events: none;
+  }
 }

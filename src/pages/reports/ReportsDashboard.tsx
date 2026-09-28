@@ -7,7 +7,7 @@ import {
   Users, Package, Pill, FlaskConical,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
   TrendingUp, Receipt, LayoutDashboard, ClipboardList, Building2,
-  Stethoscope, BedDouble, Undo2, ShieldCheck,
+  Stethoscope, BedDouble, Undo2, ShieldCheck, FileSpreadsheet,
 } from 'lucide-react';
 
 const REPORT_GROUPS = [
@@ -17,6 +17,7 @@ const REPORT_GROUPS = [
   { label: 'Operations', color: 'text-white' },
   { label: 'Inventory', color: 'text-white' },
   { label: 'Financial', color: 'text-white' },
+  { label: 'Ministry of Health', color: 'text-white' },
   { label: 'Administration', color: 'text-white' },
 ];
 
@@ -33,6 +34,7 @@ const REPORT_CATEGORIES = [
   { id: 'occupancy', label: 'Bed / Ward Occupancy', icon: BedDouble, desc: 'Current occupancy & admissions trend', group: 'Operations' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
   { id: 'income-statement', label: 'Income Statement', icon: TrendingUp, desc: 'Revenue, expenses, net income', group: 'Financial' },
+  { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
   { id: 'audit-summary', label: 'Staff Activity / Audit Log', icon: ShieldCheck, desc: 'Who did what, and when', group: 'Administration' },
 ];
 
