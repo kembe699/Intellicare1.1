@@ -14,7 +14,7 @@ const { extractDiagnosisSegments } = require('../../src/server/scripts/backfillV
 const { MOH_CODE_REMAP } = require('../../src/server/scripts/importIcd10');
 const MOH_DIAGNOSES = require('../../src/server/scripts/icd10MohList');
 
-const { normalizeCodeQuery, expandSynonyms } = __testHelpers;
+const { normalizeCodeQuery, expandSynonyms, buildPrefixTsQuery } = __testHelpers;
 
 const ORDER_FILE = path.join(__dirname, '../../src/server/data/icd10/icd10cm_order_2027.txt.gz');
 const CODES_FILE = path.join(__dirname, '../../src/server/data/icd10/icd10cm_codes_2027.txt.gz');
@@ -86,6 +86,25 @@ describe('chapterForCategory', () => {
 
   test('returns null for a category outside every defined chapter', () => {
     expect(chapterForCategory('')).toBeNull();
+  });
+});
+
+describe('buildPrefixTsQuery — search-as-you-type', () => {
+  test('marks only the last word as a prefix', () => {
+    expect(buildPrefixTsQuery('malaria fal')).toBe('malaria & fal:*');
+  });
+
+  test('a single (possibly partial) word becomes a bare prefix term', () => {
+    expect(buildPrefixTsQuery('malar')).toBe('malar:*');
+  });
+
+  test('ignores punctuation between words', () => {
+    expect(buildPrefixTsQuery('cholera, unspecified')).toBe('cholera & unspecified:*');
+  });
+
+  test('returns null for input with no word characters', () => {
+    expect(buildPrefixTsQuery('...')).toBeNull();
+    expect(buildPrefixTsQuery('')).toBeNull();
   });
 });
 

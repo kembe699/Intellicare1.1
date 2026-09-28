@@ -61,6 +61,29 @@ describe('searchIcd10 — code lookup', () => {
   });
 });
 
+describe('searchIcd10 — search as you type (partial last word)', () => {
+  test('a partial word part-way through "malaria" already finds it', async () => {
+    for (const partial of ['m', 'ma', 'mal', 'malar', 'malari']) {
+      const results = await searchIcd10(sequelize, { q: partial });
+      expect(results.some((r) => r.code === 'B54')).toBe(true);
+    }
+  });
+
+  test('a completed first word plus a partial second word finds a multi-word match before it\'s finished', async () => {
+    // Only the LAST word of a live-typed query can ever be incomplete — the
+    // words before it were necessarily finished to move on to the next one.
+    const results = await searchIcd10(sequelize, { q: 'cholera unspec' });
+    expect(results.some((r) => r.code === 'A00.9')).toBe(true);
+  });
+
+  test('a bare code prefix still resolves live, one keystroke at a time', async () => {
+    for (const partial of ['B', 'B5', 'B54']) {
+      const results = await searchIcd10(sequelize, { q: partial });
+      expect(results.some((r) => r.code === 'B54')).toBe(true);
+    }
+  });
+});
+
 describe('searchIcd10 — text search', () => {
   test('word order does not matter', async () => {
     const a = await searchIcd10(sequelize, { q: 'malaria falciparum' });
