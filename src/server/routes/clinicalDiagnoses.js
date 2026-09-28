@@ -41,6 +41,72 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Admin "Uncoded diagnoses" screen: free-text entries with no ICD-10 code
+// yet, ranked by how often they're actually used (custom visit_diagnoses
+// rows pointing at them) so the highest-value ones to map surface first.
+router.get('/uncoded', authorize('clinical.diagnoses.write'), async (req, res) => {
+  const { sequelize } = req.models;
+  try {
+    const [rows] = await sequelize.query(`
+      SELECT cd.id, cd.diagnosis_text, COUNT(vd.id)::int AS usage_count
+      FROM clinical_diagnoses cd
+      LEFT JOIN visit_diagnoses vd ON vd.custom_diagnosis_id = cd.id AND vd.deleted_at IS NULL
+      WHERE cd.icd_code IS NULL
+      GROUP BY cd.id, cd.diagnosis_text
+      ORDER BY usage_count DESC, cd.diagnosis_text ASC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing uncoded diagnoses:', error);
+    res.status(500).json({ error: 'Failed to list uncoded diagnoses' });
+  }
+});
+
+// Maps a free-text diagnosis to an ICD-10 code going forward. Optionally
+// (apply_to_existing) also rewrites past visit_diagnoses rows that used
+// this custom entry to the coded form — never touches clinical_notes text
+// already saved, since that's an immutable record of what was written at
+// the time.
+router.put('/:id/map', authorize('clinical.diagnoses.write'), async (req, res) => {
+  const { sequelize } = req.models;
+  const { id } = req.params;
+  const { icd_code, icd_description, apply_to_existing } = req.body;
+  if (!icd_code || !icd_description) {
+    return res.status(400).json({ error: 'icd_code and icd_description are required' });
+  }
+  try {
+    const [[diagnosis]] = await sequelize.query(`SELECT id, diagnosis_text FROM clinical_diagnoses WHERE id = :id`, { replacements: { id } });
+    if (!diagnosis) return res.status(404).json({ error: 'Diagnosis not found' });
+
+    await sequelize.query(`UPDATE clinical_diagnoses SET icd_code = :icdCode WHERE id = :id`, { replacements: { id, icdCode: icd_code } });
+
+    let updatedVisits = 0;
+    if (apply_to_existing) {
+      const [result] = await sequelize.query(
+        `UPDATE visit_diagnoses SET icd_code = :icdCode, description = :icdDescription, source = 'icd'
+         WHERE custom_diagnosis_id = :id AND deleted_at IS NULL AND source = 'custom'`,
+        { replacements: { id, icdCode: icd_code, icdDescription: icd_description } }
+      );
+      updatedVisits = result?.rowCount ?? 0;
+    }
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Clinical', action: 'DIAGNOSIS_MAPPED', entity_type: 'ClinicalDiagnosis', entity_id: id,
+        description: `Mapped "${diagnosis.diagnosis_text}" to ICD-10 ${icd_code}${apply_to_existing ? ` (applied to ${updatedVisits} past visit(s))` : ''}`,
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) {}
+
+    res.json({ id, diagnosis_text: diagnosis.diagnosis_text, icd_code, updated_visits: updatedVisits });
+  } catch (error) {
+    console.error('Error mapping diagnosis:', error);
+    res.status(500).json({ error: 'Failed to map diagnosis' });
+  }
+});
+
 router.post('/', authorize('clinical.diagnoses.write'), async (req, res) => {
   const { sequelize } = req.models;
   const { diagnosis_text } = req.body;

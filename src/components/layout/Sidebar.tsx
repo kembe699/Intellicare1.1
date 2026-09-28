@@ -201,6 +201,7 @@ const setupDropdown: NavDropdown = {
     { label: 'Services', href: '/setup/services', icon: Wrench, privilege: 'clinical.services.manage' },
     { label: 'Clinics', href: '/setup/clinics', icon: Stethoscope, privilege: 'pages.setup_clinics.view' },
     { label: 'Facility', href: '/setup/facility', icon: Hospital, privilege: 'pages.setup_facility.view' },
+    { label: 'Uncoded Diagnoses', href: '/setup/diagnosis-coding', icon: ClipboardList, privilege: 'clinical.diagnoses.write' },
     { label: 'Wards', href: '/setup/wards', icon: Building2, privilege: 'pages.setup_wards.view' },
     { label: 'Rooms', href: '/setup/rooms', icon: DoorOpen, privilege: 'pages.setup_rooms.view' },
     { label: 'API Configurations', href: '/setup/api-configurations', icon: Key, privilege: 'setup.api_configurations.manage' },
