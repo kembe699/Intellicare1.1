@@ -624,6 +624,7 @@ app.use('/api/reports-v2/ar-aging', require('./routes/reportARAging'));
 app.use('/api/reports-v2/clinic-performance', require('./routes/reportClinicPerformance'));
 app.use('/api/reports-v2/doctor-performance', require('./routes/reportDoctorPerformance'));
 app.use('/api/reports-v2/occupancy', require('./routes/reportOccupancy'));
+app.use('/api/reports-v2/dhis2', require('./routes/reportDhis2'));
 app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));
 app.use('/api/reports-v2/audit-summary', require('./routes/reportAuditSummary'));
 app.use('/api/ledger-accounts', ledgerAccountsRouter);
