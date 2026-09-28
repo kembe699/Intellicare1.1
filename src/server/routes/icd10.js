@@ -101,6 +101,18 @@ async function searchIcd10(sequelize, { q, limit = 30, branchId = null } = {}) {
   const prefixTsQuery = buildPrefixTsQuery(textQuery);
   const tsQueryString = prefixTsQuery || textQuery.trim().split(/\s+/).filter(Boolean).join(' & ') || '';
 
+  // Three independent, each-individually-index-backed branches, UNIONed
+  // together, rather than one query with all three conditions OR'd in a
+  // single WHERE. Postgres happily uses idx_icd10_code_nodot /
+  // idx_icd10_search_vector / idx_icd10_desc_trgm for each condition ALONE
+  // (~1-2ms each, confirmed via EXPLAIN ANALYZE), but once they're combined
+  // with OR under the full multi-key ORDER BY (priority/usage/billable/
+  // ts_rank) and the usage LEFT JOIN, the planner gives up on combining
+  // three different index scans and falls back to a full sequential scan —
+  // 140ms+ for a common word like "acute", which is exactly what made the
+  // picker feel heavy. Each branch here stays simple enough to keep its own
+  // index and its own small LIMIT, so the final re-rank below only ever
+  // sorts a couple hundred candidate rows, not the whole matching set.
   const [rows] = await sequelize.query(
     `WITH usage AS (
        SELECT icd_code, COUNT(*)::int AS usage_count
@@ -108,24 +120,49 @@ async function searchIcd10(sequelize, { q, limit = 30, branchId = null } = {}) {
        WHERE icd_code IS NOT NULL AND deleted_at IS NULL
          ${branchId ? 'AND branch_id = :branchId' : ''}
        GROUP BY icd_code
+     ),
+     candidates AS (
+       -- Split in two rather than one ORDER BY is_priority DESC, code_nodot
+       -- pass: for a broad prefix (a bare "B" matches thousands of codes)
+       -- sorting the whole matching set by is_priority first stops the
+       -- pattern index from serving the LIMIT directly and forces a slow
+       -- full sort. The priority-flagged half is tiny (~60 rows total
+       -- across the whole table) and index-backed via idx_icd10_priority,
+       -- so it's cheap regardless, and the plain half stays a fast
+       -- straight-index-order scan.
+       (SELECT code, code_nodot, description, category_code, chapter, block, is_billable, is_priority
+        FROM public.icd10_codes
+        WHERE source = :source AND version = :version AND :codeQuery <> '' AND code_nodot LIKE :codePrefix AND is_priority = true
+        LIMIT 20)
+       UNION
+       (SELECT code, code_nodot, description, category_code, chapter, block, is_billable, is_priority
+        FROM public.icd10_codes
+        WHERE source = :source AND version = :version AND :codeQuery <> '' AND code_nodot LIKE :codePrefix
+        ORDER BY code_nodot ASC
+        LIMIT 50)
+       UNION
+       (SELECT code, code_nodot, description, category_code, chapter, block, is_billable, is_priority
+        FROM public.icd10_codes
+        WHERE source = :source AND version = :version AND :tsQueryString <> '' AND search_vector @@ to_tsquery('english', :tsQueryString)
+        ORDER BY is_priority DESC, ts_rank(search_vector, to_tsquery('english', :tsQueryString)) DESC
+        LIMIT 100)
+       UNION
+       (SELECT code, code_nodot, description, category_code, chapter, block, is_billable, is_priority
+        FROM public.icd10_codes
+        WHERE source = :source AND version = :version AND description ILIKE :fuzzyLike
+        LIMIT 50)
      )
      SELECT c.code, c.code_nodot, c.description, c.category_code, c.chapter, c.block,
             c.is_billable, c.is_priority, COALESCE(u.usage_count, 0) AS usage_count
-     FROM public.icd10_codes c
+     FROM candidates c
      LEFT JOIN usage u ON u.icd_code = c.code
-     WHERE c.source = :source AND c.version = :version
-       AND (
-         (:codeQuery <> '' AND c.code_nodot ILIKE :codePrefix)
-         OR (:tsQueryString <> '' AND c.search_vector @@ to_tsquery('english', :tsQueryString))
-         OR c.description ILIKE :fuzzyLike
-       )
      ORDER BY
        (c.code_nodot = :codeQuery) DESC,
        c.is_priority DESC,
        COALESCE(u.usage_count, 0) DESC,
        (:codeQuery <> '' AND c.code_nodot LIKE :codePrefix) DESC,
        c.is_billable DESC,
-       (CASE WHEN :tsQueryString <> '' THEN ts_rank(c.search_vector, to_tsquery('english', :tsQueryString)) ELSE 0 END) DESC,
+       (CASE WHEN :tsQueryString <> '' THEN ts_rank(to_tsvector('english', c.description), to_tsquery('english', :tsQueryString)) ELSE 0 END) DESC,
        c.code_nodot ASC
      LIMIT :limit`,
     {

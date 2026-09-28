@@ -79,6 +79,13 @@ async function migrateIcd10Table(db = platformSequelize) {
 
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_icd10_code_nodot ON public.icd10_codes (code_nodot)',
+    // This database's collation is en_US.utf8, not C — a plain btree index
+    // (above) is NOT used for LIKE/ILIKE prefix matching under that
+    // collation, so `code_nodot LIKE 'B16%'` was a full sequential scan
+    // (confirmed via EXPLAIN ANALYZE: ~70ms on 98k rows, the dominant cost
+    // behind the picker feeling slow on every search). varchar_pattern_ops
+    // indexes prefix matching independent of collation.
+    'CREATE INDEX IF NOT EXISTS idx_icd10_code_nodot_pattern ON public.icd10_codes (code_nodot varchar_pattern_ops)',
     'CREATE INDEX IF NOT EXISTS idx_icd10_category ON public.icd10_codes (category_code)',
     'CREATE INDEX IF NOT EXISTS idx_icd10_priority ON public.icd10_codes (is_priority) WHERE is_priority = true',
     'CREATE INDEX IF NOT EXISTS idx_icd10_search_vector ON public.icd10_codes USING GIN (search_vector)',
