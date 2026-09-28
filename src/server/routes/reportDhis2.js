@@ -190,6 +190,16 @@ function isNegatedMatch(text, matchStart, matchEnd, negationWords, windowChars) 
   return negationWords.some((w) => before.includes(w.toLowerCase()) || after.includes(w.toLowerCase()));
 }
 
+// Matches an ICD-10-coded diagnosis (from visit_diagnoses.icd_code, added by
+// the feature/icd10-diagnoses picker) directly against each row's icd10
+// list — no keyword/negation matching involved, since a coded diagnosis is
+// already authoritative. Returns the row id, or null (-> "other") if the
+// code isn't one of the configured Section B codes.
+function matchDiagnosisRowByCode(icdCode, rows) {
+  const row = rows.find((r) => (r.icd10 || []).includes(icdCode));
+  return row ? row.id : null;
+}
+
 // Returns the matched row's id, or null if nothing (non-negated) matched.
 // ICD-10 codes are checked first (a no-op today — lis_test_orders carries no
 // structured diagnosis code field yet — kept so a future structured field
@@ -266,6 +276,26 @@ async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
     }
   }
 
+  // ── ICD-10 coded diagnoses (feature/icd10-diagnoses) ──
+  // A visit with rows here uses them exclusively (coded rows matched by
+  // code, uncoded/custom rows by keyword — never both for the same item).
+  // A visit with NO rows here (never touched the coded picker, or predates
+  // it and hasn't been backfilled) falls back to parsing clinical_notes
+  // exactly as before, so nothing already relying on the free-text path
+  // silently stops working.
+  const visitDiagnosesByOrder = new Map();
+  if (orderIds.length > 0) {
+    const [vdRows] = await sequelize.query(
+      `SELECT order_id, icd_code, description, source FROM visit_diagnoses
+       WHERE order_id IN (:orderIds) AND deleted_at IS NULL`,
+      { replacements: { orderIds } }
+    );
+    for (const row of vdRows) {
+      if (!visitDiagnosesByOrder.has(row.order_id)) visitDiagnosesByOrder.set(row.order_id, []);
+      visitDiagnosesByOrder.get(row.order_id).push(row);
+    }
+  }
+
   // ── Section B ──
   const bRows = {};
   for (const row of bSection.rows) {
@@ -273,20 +303,37 @@ async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
     bRows[row.id] = emptyAgeSexRow();
   }
   let noDiagnosisCount = 0;
+  let codedDiagnosisCount = 0;
+  let totalDiagnosisCount = 0;
   const negationWords = bSection.negationWords || formDefinition.negationWords;
   const negationWindow = bSection.negationWindowChars || formDefinition.negationWindowChars;
   const matchableRows = bSection.rows.filter((r) => !r.isTotal && !r.isMeta && !r.isMalariaClinicalFallback);
 
   for (const o of periodOrders) {
-    const segments = extractDiagnosisSegments(o.clinical_notes);
-    if (segments.length === 0) {
+    const codedItems = visitDiagnosesByOrder.get(o.order_id);
+    // items: [{ text, icdCode }] — icdCode set only for a genuinely coded
+    // (source: 'icd') entry, never for a custom one even if it happens to
+    // have been mapped to a code later (that mapping only rewrites future
+    // rows going forward — see clinicalDiagnoses.js's /:id/map).
+    const items = codedItems && codedItems.length > 0
+      ? codedItems.map((d) => ({ text: d.description, icdCode: d.source === 'icd' ? d.icd_code : null }))
+      : extractDiagnosisSegments(o.clinical_notes).map((text) => ({ text, icdCode: null }));
+
+    if (items.length === 0) {
       noDiagnosisCount += 1;
       bucketInto(bRows.no_diagnosis, calcAgeYears(o.date_of_birth, o.created_at), o.gender);
       continue;
     }
     const age = calcAgeYears(o.date_of_birth, o.created_at);
-    for (const seg of segments) {
-      let rowId = matchDiagnosisRow(seg, matchableRows, negationWords, negationWindow, null) || 'other';
+    for (const item of items) {
+      totalDiagnosisCount += 1;
+      let rowId;
+      if (item.icdCode) {
+        codedDiagnosisCount += 1;
+        rowId = matchDiagnosisRowByCode(item.icdCode, matchableRows) || 'other';
+      } else {
+        rowId = matchDiagnosisRow(item.text, matchableRows, negationWords, negationWindow, null) || 'other';
+      }
       if (rowId === 'malaria_confirmed' && !confirmedMalariaOrderIds.has(o.order_id)) {
         rowId = malariaRow.malariaClinicalFallbackRowId || 'malaria_clinical';
       }
@@ -311,6 +358,8 @@ async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
   // visit can carry several diagnoses and re-attendances get diagnosed too).
   const visitsWithDiagnosis = periodOrders.length - noDiagnosisCount;
 
+  const pctCoded = totalDiagnosisCount > 0 ? Number(((codedDiagnosisCount / totalDiagnosisCount) * 100).toFixed(1)) : null;
+
   return {
     sectionA,
     sectionB: bRows,
@@ -319,6 +368,9 @@ async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
       visitsWithDiagnosis,
       totalAttendance: sectionA.total.total,
       warningText: bSection.warningText,
+      codedDiagnosisCount,
+      totalDiagnosisCount,
+      pctCoded,
     },
   };
 }
@@ -567,6 +619,9 @@ async function computeFullReport(req, clinicId, branchId, period) {
   const malariaTestsPositive = (sectionC.malaria_rdt?.positive || 0) + (sectionC.malaria_microscopy?.positive || 0);
   if (Math.abs(malariaConfirmed - malariaTestsPositive) > Math.max(3, malariaTestsPositive * 0.3)) {
     warnings.push(`Malaria (confirmed) (${malariaConfirmed}) is notably different from positive malaria tests (${malariaTestsPositive}) — review before submitting.`);
+  }
+  if (diagnosisReview.pctCoded != null) {
+    warnings.push(`${diagnosisReview.pctCoded}% of this month's diagnoses were ICD-10 coded (${diagnosisReview.codedDiagnosisCount}/${diagnosisReview.totalDiagnosisCount}); the rest were matched from free text or custom diagnoses.`);
   }
 
   return {
