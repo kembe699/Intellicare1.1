@@ -18,6 +18,7 @@
 const { getSequelize, query, closeConnection, uuid } = require('../setup/testDb');
 const tenantContext = require('../../src/server/tenantContext');
 const { migrateDhis2Tables } = require('../../src/server/scripts/migrateDhis2Tables');
+const { migrateVisitDiagnosesTable } = require('../../src/server/scripts/migrateVisitDiagnosesTable');
 
 const PERIOD = '2031-06';
 const BRANCH_A = 900001;
@@ -34,6 +35,11 @@ beforeAll(async () => {
   const sequelize = getSequelize();
   testConn = { sequelize, models: {} };
   await migrateDhis2Tables(sequelize);
+  // computeAttendanceAndMorbidity now checks visit_diagnoses first (see
+  // feature/icd10-diagnoses) before falling back to free-text clinical_notes
+  // parsing — every seeded order below has no visit_diagnoses rows, so this
+  // just needs the table to exist for that (empty) lookup to succeed.
+  await migrateVisitDiagnosesTable(sequelize);
 
   // Required after the tenant DB is confirmed up. Its own top-level
   // `require('../models')` still resolves outside any request (falls back

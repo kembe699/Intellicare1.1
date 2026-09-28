@@ -610,6 +610,76 @@ router.put('/orders/:id/close', authorize('lis.clinical.write'), async (req, res
 });
 
 // ==========================================
+// 1b. Visit Diagnoses (ICD-10 coded, or free-text "custom")
+// ==========================================
+// Business rules live in services/visitDiagnosesService.js (duplicate
+// checks, closed-visit rule, primary auto-reassignment, the clinical_notes
+// "Diagnosis: ..." append) so they're directly testable without Express.
+const visitDiagnosesService = require('../services/visitDiagnosesService');
+
+router.get('/orders/:id/diagnoses', authorize('lis.clinical.read'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { id } = req.params;
+  try {
+    if (!(await orderExists(db, id))) return res.status(404).json({ success: false, error: 'Order not found' });
+    res.json(await visitDiagnosesService.listVisitDiagnoses(db, id));
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+router.post('/orders/:id/diagnoses', authorize('lis.clinical.write'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { id } = req.params;
+  const { icd_code, icd_source, icd_version, description, custom_diagnosis_id } = req.body;
+  try {
+    const result = await visitDiagnosesService.addVisitDiagnosis(db, {
+      orderId: id, icdCode: icd_code, icdSource: icd_source, icdVersion: icd_version,
+      description, customDiagnosisId: custom_diagnosis_id, userId: req.user?.id, fallbackBranchId: getCreateBranchId(req),
+    });
+    if (result.status >= 400) return res.status(result.status).json({ success: false, error: result.error });
+    res.status(201).json(result.diagnosis);
+  } catch (error) {
+    console.error('Error adding visit diagnosis:', error);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+router.put('/orders/:id/diagnoses/:diagnosisId/primary', authorize('lis.clinical.write'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { id, diagnosisId } = req.params;
+  try {
+    const result = await visitDiagnosesService.setPrimaryDiagnosis(db, { orderId: id, diagnosisId });
+    if (result.status >= 400) return res.status(result.status).json({ success: false, error: result.error });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+router.delete('/orders/:id/diagnoses/:diagnosisId', authorize('lis.clinical.write'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { id, diagnosisId } = req.params;
+  try {
+    const result = await visitDiagnosesService.removeVisitDiagnosis(db, { orderId: id, diagnosisId, userId: req.user?.id });
+    if (result.status >= 400) return res.status(result.status).json({ success: false, error: result.error });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Clinical', action: 'DIAGNOSIS_REMOVED', entity_type: 'VisitDiagnosis', entity_id: diagnosisId,
+        description: `Removed diagnosis "${result.removed.description}" from visit ${id}`, ip_address: req.ip, status: 'success',
+      });
+    } catch (e) {}
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+// ==========================================
 // 2. Test Orders
 // ==========================================
 router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {

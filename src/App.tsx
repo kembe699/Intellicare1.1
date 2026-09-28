@@ -57,6 +57,7 @@ const ApiConfigurations = lazyWithRetry(() => import('./pages/setup/ApiConfigura
 const Security = lazyWithRetry(() => import('./pages/setup/Security'));
 const Approvals = lazyWithRetry(() => import('./pages/setup/Approvals'));
 const FacilitySetup = lazyWithRetry(() => import('./pages/setup/FacilitySetup'));
+const UncodedDiagnoses = lazyWithRetry(() => import('./pages/setup/UncodedDiagnoses'));
 const AccountingCashTransfer = lazyWithRetry(() => import('./pages/accounting/CashTransfer'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
@@ -455,6 +456,11 @@ const AppRoutes = () => {
       <Route path="/setup/facility" element={
         <ProtectedRoute requiredPrivilege="pages.setup_facility.view">
           <FacilitySetup />
+        </ProtectedRoute>
+      } />
+      <Route path="/setup/diagnosis-coding" element={
+        <ProtectedRoute requiredPrivilege="clinical.diagnoses.write">
+          <UncodedDiagnoses />
         </ProtectedRoute>
       } />
       <Route path="/setup/security" element={

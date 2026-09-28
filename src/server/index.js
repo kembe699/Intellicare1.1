@@ -559,6 +559,7 @@ const clinicalInsightsRouter = require('./routes/clinicalInsights');
 const patientReferralsRouter = require('./routes/patientReferrals');
 const chiefComplaintsRouter = require('./routes/chiefComplaints');
 const clinicalDiagnosesRouter = require('./routes/clinicalDiagnoses');
+const icd10Router = require('./routes/icd10');
 
 // Import lab routes
 const labRequestsRouter = require('./routes/labRequests');
@@ -703,6 +704,7 @@ app.use('/api/lis/orders', clinicalInsightsRouter);
 app.use('/api/patient-referrals', patientReferralsRouter);
 app.use('/api/chief-complaints', chiefComplaintsRouter);
 app.use('/api/clinical-diagnoses', clinicalDiagnosesRouter);
+app.use('/api/icd10', icd10Router);
 
 // Health check endpoint — also used by keep-alive cron job to prevent Render cold starts
 app.get('/health', (req, res) => {
@@ -791,6 +793,8 @@ async function runBackgroundMigrations() {
     ['Inpatient',         () => require('./scripts/migrateInpatientTables').migrateInpatientTables()],
     ['Radiology',         () => require('./scripts/migrateRadiologyModule').migrateRadiologyModule()],
     ['Dhis2Report',       () => require('./scripts/migrateDhis2Tables').migrateDhis2Tables()],
+    ['Icd10Reference',    () => require('./scripts/importIcd10').migrateAndImportIcd10()],
+    ['VisitDiagnoses',    () => require('./scripts/migrateVisitDiagnosesTable').migrateVisitDiagnosesTable()],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],

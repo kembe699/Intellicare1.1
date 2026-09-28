@@ -18,6 +18,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -178,12 +179,6 @@ export default function LISTestOrders() {
   const [summaryResultsLoading, setSummaryResultsLoading] = useState(false);
   const [summaryRadiology, setSummaryRadiology] = useState<any[]>([]);
   const [closingVisit, setClosingVisit] = useState(false);
-  const [visitDiagnosis, setVisitDiagnosis] = useState('');
-  const [savingDiagnosis, setSavingDiagnosis] = useState(false);
-  const [availableDiagnoses, setAvailableDiagnoses] = useState<any[]>([]);
-  const [diagnosisSearch, setDiagnosisSearch] = useState('');
-  const [savingNewDiagnosis, setSavingNewDiagnosis] = useState(false);
-  const [diagnosisPopoverOpen, setDiagnosisPopoverOpen] = useState(false);
   const [showAdmitRequestModal, setShowAdmitRequestModal] = useState(false);
   const [admitReason, setAdmitReason] = useState('');
   const [admitDiagnosis, setAdmitDiagnosis] = useState('');
@@ -234,7 +229,6 @@ export default function LISTestOrders() {
       fetchLabTests();
       fetchServices();
       fetchChiefComplaints();
-      fetchDiagnoses();
       if (pharmacyDrugs.length === 0) fetchPharmacyDrugs();
       fetchRadiologyExamTypes();
       const interval = setInterval(fetchQueue, 3000);
@@ -586,46 +580,6 @@ export default function LISTestOrders() {
     }
   };
 
-  const handleSaveDiagnosis = async () => {
-    if (!selectedSummary) return;
-    if (selectedSummary.status === 'closed') { toast.error('This visit is closed — start a new visit to add a diagnosis.'); return; }
-    const newDiagnosis = visitDiagnosis.trim();
-    if (!newDiagnosis) { toast.error('Please enter a diagnosis'); return; }
-
-    const alreadyRecorded = getDiagnosesFromNotes(selectedSummary.clinical_notes)
-      .some(d => d.toLowerCase() === newDiagnosis.toLowerCase());
-    if (alreadyRecorded) {
-      toast.error(`"${newDiagnosis}" is already recorded for this visit`);
-      return;
-    }
-
-    setSavingDiagnosis(true);
-    try {
-      const updatedNotes = selectedSummary.clinical_notes
-        ? `${selectedSummary.clinical_notes}\n\nDiagnosis: ${newDiagnosis}`
-        : `Diagnosis: ${newDiagnosis}`;
-      
-      const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ clinical_notes: updatedNotes })
-      });
-      if (res.ok) {
-        toast.success('Diagnosis saved');
-        setSelectedSummary({ ...selectedSummary, clinical_notes: updatedNotes });
-        setAllVisitSummaries(prev => prev.map(s => s.order_id === selectedSummary.order_id ? { ...s, clinical_notes: updatedNotes } : s));
-        setVisitDiagnosis('');
-      } else {
-        toast.error('Failed to save diagnosis');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setSavingDiagnosis(false);
-    }
-  };
-
   const handleCloseVisit = async () => {
     if (!selectedSummary) return;
     if (!confirm('Close this visit? This marks the encounter as complete.')) return;
@@ -734,9 +688,10 @@ export default function LISTestOrders() {
   };
 
   // The doctor already records a diagnosis for the visit (saved into
-  // clinical_notes as "Diagnosis: ..." by handleSaveDiagnosis) — Request
-  // Admission used to make them retype it from scratch. Pull the most
-  // recently saved one straight out of clinical_notes instead.
+  // clinical_notes as "Diagnosis: ..." by DiagnosisPicker, either coded
+  // "<code> - <description>" or free-text) — the admission-request flow
+  // below used to make them retype it from scratch. Pull the most recently
+  // saved one straight out of clinical_notes instead.
   const extractDiagnosisFromNotes = (notes?: string | null): string => {
     if (!notes) return '';
     const idx = notes.lastIndexOf('Diagnosis:');
@@ -744,10 +699,10 @@ export default function LISTestOrders() {
     return notes.slice(idx + 'Diagnosis:'.length).trim();
   };
 
-  // Every "Diagnosis: X" entry saved by handleSaveDiagnosis, in the order they were
-  // added — used both to render them as a proper list instead of one run-on paragraph,
-  // and to check for duplicates before saving a new one. De-duped case-insensitively so
-  // visits saved before that duplicate-check existed still display cleanly.
+  // Every "Diagnosis: X" entry appended by DiagnosisPicker, in the order they
+  // were added — used to render them as a proper list instead of one run-on
+  // paragraph. De-duped case-insensitively so visits saved before that
+  // duplicate-check existed still display cleanly.
   const getDiagnosesFromNotes = (notes?: string | null): string[] => {
     const all = (notes || '').split('Diagnosis:').slice(1).map(s => s.trim()).filter(Boolean);
     const seen = new Set<string>();
@@ -1434,15 +1389,6 @@ export default function LISTestOrders() {
   const handleSchemeChange = (schemeId: string) => {
     setSelectedSchemeId(schemeId);
     if (schemeId) fetchSchemeCatalog(schemeId); else setSchemePriceByName({});
-  };
-
-  const fetchDiagnoses = async () => {
-    try {
-      const res = await authFetch('/api/clinical-diagnoses', { credentials: 'include' });
-      if (res.ok) setAvailableDiagnoses(await res.json());
-    } catch (e) {
-      console.error('Failed to fetch diagnoses', e);
-    }
   };
 
   const fetchChiefComplaints = async () => {
@@ -3095,81 +3041,14 @@ export default function LISTestOrders() {
                       {/* Diagnosis Section */}
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
-                          <Activity className="w-3.5 h-3.5" /> Add Diagnosis
+                          <Activity className="w-3.5 h-3.5" /> Diagnoses
                         </p>
-                        <div className="border rounded-lg p-3 space-y-2.5 bg-card">
-                          <Popover open={diagnosisPopoverOpen} onOpenChange={setDiagnosisPopoverOpen}>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-between font-normal h-auto py-2 min-h-[40px] whitespace-normal text-left" disabled={savingDiagnosis}>
-                                {visitDiagnosis ? visitDiagnosis : <span className="text-muted-foreground">Select or type diagnosis...</span>}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 flex-none" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[350px] p-0" align="start">
-                              <Command>
-                                <CommandInput 
-                                  placeholder="Search diagnosis..." 
-                                  value={diagnosisSearch}
-                                  onValueChange={setDiagnosisSearch}
-                                />
-                                <CommandList>
-                                  <CommandEmpty className="py-2 px-4 text-sm text-center">
-                                    <p className="text-muted-foreground mb-2">No matches found.</p>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="w-full"
-                                      disabled={savingNewDiagnosis || !diagnosisSearch.trim()}
-                                      onClick={async () => {
-                                        if (!diagnosisSearch.trim()) return;
-                                        setSavingNewDiagnosis(true);
-                                        try {
-                                          const res = await authFetch('/api/clinical-diagnoses', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            credentials: 'include',
-                                            body: JSON.stringify({ diagnosis_text: diagnosisSearch.trim() })
-                                          });
-                                          if (res.ok) {
-                                            const created = await res.json();
-                                            setAvailableDiagnoses(prev => [...prev, created].sort((a, b) => a.diagnosis_text.localeCompare(b.diagnosis_text)));
-                                            setVisitDiagnosis(created.diagnosis_text);
-                                            setDiagnosisPopoverOpen(false);
-                                          }
-                                        } catch (e) {
-                                          toast.error('Failed to add diagnosis');
-                                        } finally {
-                                          setSavingNewDiagnosis(false);
-                                        }
-                                      }}
-                                    >
-                                      {savingNewDiagnosis ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-2" />}
-                                      Add "{diagnosisSearch}"
-                                    </Button>
-                                  </CommandEmpty>
-                                  <CommandGroup>
-                                    {availableDiagnoses.map((d) => (
-                                      <CommandItem
-                                        key={d.id}
-                                        value={d.diagnosis_text}
-                                        onSelect={(val) => {
-                                          setVisitDiagnosis(d.diagnosis_text);
-                                          setDiagnosisPopoverOpen(false);
-                                        }}
-                                      >
-                                        <Check className={cn("mr-2 h-4 w-4", visitDiagnosis === d.diagnosis_text ? "opacity-100" : "opacity-0")} />
-                                        {d.diagnosis_text}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                          <Button type="button" variant="outline" size="sm" className="w-full" onClick={handleSaveDiagnosis} disabled={savingDiagnosis || !visitDiagnosis.trim()}>
-                            {savingDiagnosis ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-2" />}
-                            Save Diagnosis
-                          </Button>
+                        <div className="border rounded-lg p-3 bg-card">
+                          <DiagnosisPicker
+                            orderId={selectedSummary.order_id}
+                            readOnly={selectedSummary.status === 'closed'}
+                            onNotesUpdated={refreshSelectedSummary}
+                          />
                         </div>
                       </div>
 
