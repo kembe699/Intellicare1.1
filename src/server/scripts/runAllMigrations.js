@@ -21,6 +21,8 @@ async function main() {
     ['Inpatient',         () => require('./migrateInpatientTables').migrateInpatientTables()],
     ['Radiology',         () => require('./migrateRadiologyModule').migrateRadiologyModule()],
     ['Dhis2Report',       () => require('./migrateDhis2Tables').migrateDhis2Tables()],
+    ['Icd10Reference',    () => require('./importIcd10').migrateAndImportIcd10()],
+    ['VisitDiagnoses',    () => require('./migrateVisitDiagnosesTable').migrateVisitDiagnosesTable()],
     ['Departments',       () => require('./migrateDepartments')()],
     ['PerfIndexes',       () => require('./addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./migrateReportingTables').migrateReportingTables()],
