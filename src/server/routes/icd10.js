@@ -37,6 +37,21 @@ function expandSynonyms(text) {
   });
 }
 
+// Builds a prefix-matching tsquery string so search-as-you-type actually
+// works: plainto_tsquery/websearch_to_tsquery require each word to be
+// COMPLETE before it can match a stemmed lexeme, so typing "malar" (on the
+// way to "malaria") matched nothing until the last letter landed. Every
+// word but the last is used as-is; the last (possibly still-being-typed)
+// word gets a `:*` prefix marker, matching any lexeme that starts with it.
+// Words are split on anything non-alphanumeric, so the built string can
+// only ever contain safe tokens, spaces, `&` and one trailing `:*` — never
+// raw user input that could break tsquery syntax.
+function buildPrefixTsQuery(text) {
+  const words = String(text || '').split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  if (words.length === 0) return null;
+  return words.map((w, i) => (i === words.length - 1 ? `${w}:*` : w)).join(' & ');
+}
+
 // "Common in South Sudan" — the MoH priority list, for the picker's default
 // (empty-query) view.
 async function getPriorityList(sequelize) {
@@ -79,6 +94,12 @@ async function searchIcd10(sequelize, { q, limit = 30, branchId = null } = {}) {
 
   const codeQuery = normalizeCodeQuery(query);
   const textQuery = expandSynonyms(query);
+  // Falls back to plainto_tsquery's own (non-prefix) parse of the text when
+  // the query is nothing but punctuation — to_tsquery still needs SOME
+  // syntactically valid string, and this keeps the ranking's ts_rank call
+  // safe even in that edge case.
+  const prefixTsQuery = buildPrefixTsQuery(textQuery);
+  const tsQueryString = prefixTsQuery || textQuery.trim().split(/\s+/).filter(Boolean).join(' & ') || '';
 
   const [rows] = await sequelize.query(
     `WITH usage AS (
@@ -95,7 +116,7 @@ async function searchIcd10(sequelize, { q, limit = 30, branchId = null } = {}) {
      WHERE c.source = :source AND c.version = :version
        AND (
          (:codeQuery <> '' AND c.code_nodot ILIKE :codePrefix)
-         OR c.search_vector @@ plainto_tsquery('english', :textQuery)
+         OR (:tsQueryString <> '' AND c.search_vector @@ to_tsquery('english', :tsQueryString))
          OR c.description ILIKE :fuzzyLike
        )
      ORDER BY
@@ -104,14 +125,14 @@ async function searchIcd10(sequelize, { q, limit = 30, branchId = null } = {}) {
        COALESCE(u.usage_count, 0) DESC,
        (:codeQuery <> '' AND c.code_nodot LIKE :codePrefix) DESC,
        c.is_billable DESC,
-       ts_rank(c.search_vector, plainto_tsquery('english', :textQuery)) DESC,
+       (CASE WHEN :tsQueryString <> '' THEN ts_rank(c.search_vector, to_tsquery('english', :tsQueryString)) ELSE 0 END) DESC,
        c.code_nodot ASC
      LIMIT :limit`,
     {
       replacements: {
         source: SOURCE, version: VERSION,
         codeQuery, codePrefix: `${codeQuery}%`,
-        textQuery, fuzzyLike: `%${query}%`,
+        tsQueryString, fuzzyLike: `%${query}%`,
         branchId, limit,
       },
     }
@@ -179,5 +200,5 @@ module.exports = router;
 // Pure/async helpers exposed for unit + integration testing only — the
 // routes above call these same functions directly.
 module.exports.__testHelpers = {
-  normalizeCodeQuery, expandSynonyms, searchIcd10, getPriorityList, getRecentList, getIcd10ByCode,
+  normalizeCodeQuery, expandSynonyms, buildPrefixTsQuery, searchIcd10, getPriorityList, getRecentList, getIcd10ByCode,
 };
