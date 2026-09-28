@@ -281,6 +281,7 @@ async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
     const segments = extractDiagnosisSegments(o.clinical_notes);
     if (segments.length === 0) {
       noDiagnosisCount += 1;
+      bucketInto(bRows.no_diagnosis, calcAgeYears(o.date_of_birth, o.created_at), o.gender);
       continue;
     }
     const age = calcAgeYears(o.date_of_birth, o.created_at);
@@ -293,8 +294,14 @@ async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
       bucketInto(bRows[rowId], age, o.gender);
     }
   }
+  // "No diagnosis recorded" is shown for reference (age/sex breakdown of
+  // undiagnosed visits) but is not itself a morbidity case, so it is
+  // excluded from the Total row below — otherwise an undiagnosed visit
+  // would inflate the very "total diagnosed cases" figure it represents
+  // the absence of.
   const bTotal = emptyAgeSexRow();
   for (const key of Object.keys(bRows)) {
+    if (key === 'no_diagnosis') continue;
     for (const col of ['u5m', 'u5f', 'ge5m', 'ge5f', 'unknown', 'total']) bTotal[col] += bRows[key][col];
   }
   bRows.total = bTotal;
@@ -982,3 +989,16 @@ router.get('/:id/export.xlsx', authorize('reports.dhis2.view'), async (req, res)
 });
 
 module.exports = router;
+
+// Pure helpers exposed for unit testing only (age/sex bucketing, the
+// diagnosis keyword matcher, lab-test grouping) — never used by the routes
+// above, which call the module-local functions directly. Attached to the
+// router function object so `require('./reportDhis2')` still resolves to a
+// usable Express router everywhere else.
+module.exports.__testHelpers = {
+  calcAgeYears, getAgeBandId, getSexBucket, bucketInto, emptyAgeSexRow,
+  extractDiagnosisSegments, isNegatedMatch, matchDiagnosisRow,
+  matchLabTestRow, isPositiveResult, pad2, getPeriodBounds, defaultPeriod,
+  resolveEffectiveBranchId, branchScope,
+  computeAttendanceAndMorbidity, computeLaboratory,
+};
