@@ -135,8 +135,9 @@ export async function buildDhis2Pdf(
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(7.5);
   doc.setTextColor(...BRAND.amber);
-  doc.text('Estimated from free-text diagnoses. Review before submitting.', margin, y);
-  y += 14;
+  const bWarningLines: string[] = doc.splitTextToSize(definition.sections.B.warningText || '', pageWidth - margin * 2);
+  doc.text(bWarningLines, margin, y);
+  y += bWarningLines.length * 9 + 5;
 
   // ── Section C ──
   sectionTitle(`C. ${definition.sections.C.title}`);

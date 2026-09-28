@@ -63,7 +63,7 @@ const SECTIONS = {
     title: 'Outpatient Morbidity (New Cases)',
     type: 'morbidity',
     columns: AGE_SEX_COLUMNS,
-    warningText: 'Estimated from free-text diagnoses. Review before submitting.',
+    warningText: 'Coded from ICD-10 diagnoses where the visit has one; matched by keyword from free-text/custom diagnoses otherwise. Review before submitting.',
     negationWords: NEGATION_WORDS,
     negationWindowChars: NEGATION_WINDOW_CHARS,
     rows: [
