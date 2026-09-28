@@ -3,7 +3,6 @@ const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
-const { getCreateBranchId } = require('../middleware/branchFilter');
 const formDefinition = require('../config/dhis2FormDefinition');
 const ExcelJS = require('exceljs');
 
@@ -48,13 +47,38 @@ const ExcelJS = require('exceljs');
 // Same inline branch-scoping convention as reportOccupancy.js/hr.js — named
 // :params mixed with other named params in the same query, which
 // branchFilter.js's own getBranchConditionSQL (positional `?`) can't do.
-function branchScope(req, replacements, alias = '') {
+// overrideBranchId, when passed (not undefined), takes priority over the
+// ambient req.branchContext — needed because this report has its OWN branch
+// selector (any branch an admin picks to view/compute/save), independent of
+// whatever the global TopBar switcher happens to be set to. null explicitly
+// means "no filter" (admin viewing "All Branches"); omitting the argument
+// falls back to the normal ambient-session behavior every other route uses.
+function branchScope(req, replacements, alias = '', overrideBranchId) {
+  if (overrideBranchId !== undefined) {
+    if (overrideBranchId == null) return '';
+    replacements.branchId = overrideBranchId;
+    const col = alias ? `${alias}.branch_id` : 'branch_id';
+    return ` AND ${col} = :branchId`;
+  }
   if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
   const branchId = req.branchContext?.branchId || req.user?.branchId;
   if (!branchId) return '';
   replacements.branchId = branchId;
   const col = alias ? `${alias}.branch_id` : 'branch_id';
   return ` AND ${col} = :branchId`;
+}
+
+// Resolves which branch a compute/save operation should run against. A
+// non-admin's branch is never overridable by a query/body param — always
+// their own ambient branch. An admin's explicit branch_id (from this
+// report's own selector) wins; otherwise falls back to the TopBar
+// switcher's ambient scope, or null for "All Branches" (view/export only).
+function resolveEffectiveBranchId(req, requestedBranchId) {
+  if (req.user?.role !== 'admin') {
+    return req.branchContext?.branchId || req.user?.branchId || null;
+  }
+  if (requestedBranchId != null && requestedBranchId !== '') return parseInt(requestedBranchId, 10);
+  return req.branchContext?.adminScoped ? req.branchContext.branchId : null;
 }
 
 // ── Date/period helpers ──────────────────────────────────────────────────
@@ -190,7 +214,7 @@ function matchDiagnosisRow(segmentText, rows, negationWords, windowChars, struct
 
 // ── Section computations ─────────────────────────────────────────────────
 
-async function computeAttendanceAndMorbidity(req, clinicId, period) {
+async function computeAttendanceAndMorbidity(req, clinicId, branchId, period) {
   const { periodStart, periodEnd, year } = getPeriodBounds(period);
   const yearStart = `${year}-01-01`;
   const periodStartTs = `${periodStart} 00:00:00`;
@@ -201,7 +225,7 @@ async function computeAttendanceAndMorbidity(req, clinicId, period) {
   // January — a visit's own order_id is all Section B's malaria-confirmation
   // check and the lab join need, so it's carried through.
   const ordersRepl = { clinicId, yearStart, periodEndTs };
-  const branchSql = branchScope(req, ordersRepl, 'o');
+  const branchSql = branchScope(req, ordersRepl, 'o', branchId);
   const [yearOrders] = await sequelize.query(
     `SELECT o.id AS order_id, o.participant_id, o.created_at, o.clinical_notes,
        p.date_of_birth, p.gender
@@ -230,7 +254,7 @@ async function computeAttendanceAndMorbidity(req, clinicId, period) {
 
   // ── Malaria confirmation lookup (shared with Section C) ──
   const orderIds = periodOrders.map((o) => o.order_id);
-  const specimenRows = orderIds.length > 0 ? await fetchApprovedSpecimenResults(req, orderIds) : [];
+  const specimenRows = orderIds.length > 0 ? await fetchApprovedSpecimenResults(req, orderIds, branchId) : [];
   const confirmedMalariaOrderIds = new Set();
   const bSection = formDefinition.sections.B;
   const malariaRow = bSection.rows.find((r) => r.id === 'malaria_confirmed');
@@ -296,9 +320,9 @@ async function computeAttendanceAndMorbidity(req, clinicId, period) {
 // specimen (not by lis_results analyte row) so a specimen with several
 // analytes (confirmed live: a single BFFM specimen has separate "BFFM" /
 // "SPECIES" / "Density" analyte rows) counts once, not three times.
-async function fetchApprovedSpecimenResults(req, orderIds) {
+async function fetchApprovedSpecimenResults(req, orderIds, branchId) {
   const replacements = { orderIds };
-  const branchSql = branchScope(req, replacements, 'o');
+  const branchSql = branchScope(req, replacements, 'o', branchId);
   const [rows] = await sequelize.query(
     `SELECT s.id AS specimen_id, s.test_code, s.test_name, s.order_id,
        array_agg(DISTINCT lower(r.value)) AS approved_values
@@ -326,10 +350,10 @@ function isPositiveResult(approvedValues, labRow) {
   return (approvedValues || []).some((v) => positives.some((p) => (v || '').includes(p)));
 }
 
-async function computeLaboratory(req, clinicId, period) {
+async function computeLaboratory(req, clinicId, branchId, period) {
   const { periodStart, periodEnd } = getPeriodBounds(period);
   const replacements = { clinicId, periodStart: `${periodStart} 00:00:00`, periodEnd: `${periodEnd} 23:59:59` };
-  const branchSql = branchScope(req, replacements, 'o');
+  const branchSql = branchScope(req, replacements, 'o', branchId);
   const [specimenRows] = await sequelize.query(
     `SELECT s.id AS specimen_id, s.test_code, s.test_name,
        array_agg(DISTINCT lower(r.value)) AS approved_values
@@ -360,13 +384,13 @@ async function computeLaboratory(req, clinicId, period) {
   return cRows;
 }
 
-async function computeInpatient(req, clinicId, period) {
+async function computeInpatient(req, clinicId, branchId, period) {
   const { periodStart, periodEnd } = getPeriodBounds(period);
   const periodStartTs = `${periodStart} 00:00:00`;
   const periodEndTs = `${periodEnd} 23:59:59`;
 
   const admRepl = { clinicId, periodStartTs, periodEndTs };
-  const branchSqlAdm = branchScope(req, admRepl);
+  const branchSqlAdm = branchScope(req, admRepl, '', branchId);
   const [[admRow]] = await sequelize.query(
     `SELECT COUNT(*) AS cnt FROM inpatient_admissions
      WHERE clinic_id = :clinicId AND admission_date >= :periodStartTs AND admission_date <= :periodEndTs ${branchSqlAdm}`,
@@ -374,7 +398,7 @@ async function computeInpatient(req, clinicId, period) {
   );
 
   const dischRepl = { clinicId, periodStartTs, periodEndTs };
-  const branchSqlDisch = branchScope(req, dischRepl);
+  const branchSqlDisch = branchScope(req, dischRepl, '', branchId);
   const [[dischRow]] = await sequelize.query(
     `SELECT
        COUNT(*) AS discharges,
@@ -389,7 +413,7 @@ async function computeInpatient(req, clinicId, period) {
   // month's own boundaries. An admission with no discharge yet is still
   // "in" through the end of the month.
   const bedDaysRepl = { clinicId, periodStartTs, periodEndTs };
-  const branchSqlBedDays = branchScope(req, bedDaysRepl);
+  const branchSqlBedDays = branchScope(req, bedDaysRepl, '', branchId);
   const [[bedDaysRow]] = await sequelize.query(
     `SELECT COALESCE(SUM(
        EXTRACT(EPOCH FROM (
@@ -466,7 +490,7 @@ async function computeTracerDrugs(req, clinicId, branchId, period) {
     }
 
     const txnRepl = { itemId, periodStart, periodEnd, branchId: branchId || 0 };
-    const branchSqlTxn = branchScope(req, txnRepl);
+    const branchSqlTxn = branchScope(req, txnRepl, '', branchId);
     const [txns] = await sequelize.query(
       `SELECT transaction_date, transaction_type, quantity_change
        FROM inventory_transactions
@@ -517,9 +541,9 @@ async function writeStockSnapshots(req, branchId, period, tracerDrugsFinal) {
 
 // Assembles every section's computed values for a period+branch. Read-only.
 async function computeFullReport(req, clinicId, branchId, period) {
-  const { sectionA, sectionB, diagnosisReview } = await computeAttendanceAndMorbidity(req, clinicId, period);
-  const sectionC = await computeLaboratory(req, clinicId, period);
-  const sectionF = await computeInpatient(req, clinicId, period);
+  const { sectionA, sectionB, diagnosisReview } = await computeAttendanceAndMorbidity(req, clinicId, branchId, period);
+  const sectionC = await computeLaboratory(req, clinicId, branchId, period);
+  const sectionF = await computeInpatient(req, clinicId, branchId, period);
   const sectionG = await computeTracerDrugs(req, clinicId, branchId, period);
 
   const warnings = [];
@@ -556,7 +580,7 @@ router.get('/compute', authorize('reports.dhis2.view'), async (req, res) => {
   try {
     const period = req.query.period || defaultPeriod();
     const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
-    const branchId = req.query.branch_id ? parseInt(req.query.branch_id, 10) : getCreateBranchId(req);
+    const branchId = resolveEffectiveBranchId(req, req.query.branch_id);
     const result = await computeFullReport(req, clinicId, branchId, period);
     res.json(result);
   } catch (error) {
@@ -603,8 +627,10 @@ router.post('/', authorize('reports.dhis2.view'), async (req, res) => {
     if (!period) return res.status(400).json({ error: 'period is required' });
 
     // A report always belongs to one facility — "All Branches" is
-    // view/export only, never a saveable draft.
-    const branchId = req.body.branch_id ? parseInt(req.body.branch_id, 10) : getCreateBranchId(req);
+    // view/export only, never a saveable draft. A non-admin can never
+    // override their own branch here regardless of what's sent (see
+    // resolveEffectiveBranchId) — only an admin's explicit choice is honored.
+    const branchId = resolveEffectiveBranchId(req, req.body.branch_id);
     if (!branchId) {
       return res.status(400).json({ error: 'A specific branch is required to save a report — "All Branches" is view/export only.' });
     }

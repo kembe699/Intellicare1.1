@@ -106,6 +106,7 @@ const RptARAging = lazyWithRetry(() => import('./pages/reports/ARAgingReport'));
 const RptClinicPerformance = lazyWithRetry(() => import('./pages/reports/ClinicPerformanceReport'));
 const RptDoctorPerformance = lazyWithRetry(() => import('./pages/reports/DoctorPerformanceReport'));
 const RptOccupancy = lazyWithRetry(() => import('./pages/reports/OccupancyReport'));
+const RptDhis2 = lazyWithRetry(() => import('./pages/reports/Dhis2Report'));
 const RptCancelledTransactions = lazyWithRetry(() => import('./pages/reports/CancelledTransactionsReport'));
 const RptAuditSummary = lazyWithRetry(() => import('./pages/reports/AuditSummaryReport'));
 const WardsManagement = lazyWithRetry(() => import('./pages/inpatient/WardsManagement'));
@@ -418,6 +419,7 @@ const AppRoutes = () => {
         <Route path="clinic-performance" element={<RptClinicPerformance />} />
         <Route path="doctor-performance" element={<RptDoctorPerformance />} />
         <Route path="occupancy" element={<RptOccupancy />} />
+        <Route path="dhis2" element={<RptDhis2 />} />
         <Route path="cancelled-transactions" element={<RptCancelledTransactions />} />
         <Route path="audit-summary" element={<RptAuditSummary />} />
       </Route>
