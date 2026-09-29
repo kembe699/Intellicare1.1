@@ -41,11 +41,17 @@ async function resolveReceivableAccount(clinicId, schemeId, transaction) {
 // transaction (no more internal t2/best-effort swallowing). Every call site
 // below now posts inside the same transaction as the invoice/payment write
 // it belongs to.
-async function postInvoiceJournalEntry({ clinicId, branchId, amount, debitAccount, creditAccount, reference, description, userId, transaction, entryDate }) {
+async function postInvoiceJournalEntry({ clinicId, branchId, amount, currency, debitAccount, creditAccount, reference, description, userId, transaction, entryDate }) {
   if (!debitAccount || !creditAccount || !(amount > 0)) return null;
   const today = entryDate || new Date().toISOString().split('T')[0];
   return sharedPostJournalEntry({
-    clinicId, branchId, transaction, entryDate: today, description, reference, currency: BASE_CURRENCY,
+    // C2: this used to hardcode BASE_CURRENCY and every caller below skipped
+    // posting entirely for a foreign-currency invoice ("ledger is SSP-only")
+    // rather than convert — a real gap, not just a silent-1:1 bug, but the
+    // same underlying problem: a foreign-currency invoice never reached the
+    // ledger at all. Now converts properly via the shared helper, same as
+    // every other posting path.
+    clinicId, branchId, transaction, entryDate: today, description, reference, currency: currency || BASE_CURRENCY,
     lines: [
       { accountId: debitAccount.id, debit: amount, description },
       { accountId: creditAccount.id, credit: amount, description },
@@ -162,21 +168,16 @@ router.post('/', authorize('invoices.write'), async (req, res) => {
     // Only a standalone invoice (no bill_id) represents genuinely new receivable/revenue —
     // a bill_id-linked one already posted its receivable back when the bill itself was
     // created (AccountingService.createGLFromPatientBill), so posting again here would
-    // double it. The GL only ever posts in the base currency (SSP) — same rule this app
-    // already applies everywhere else to scheme/insurance amounts, since there's no FX-rate
-    // conversion step at posting time; a foreign-currency standalone claim is skipped here
-    // rather than posted at the wrong magnitude.
-    if (!bill_id && (currency || BASE_CURRENCY) === BASE_CURRENCY) {
+    // double it.
+    if (!bill_id) {
       const clinicIdNum = clinic_id || 1;
       const receivableAccount = await resolveReceivableAccount(clinicIdNum, scheme_id, t);
       const revenueAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicIdNum, account_code: '4100', is_active: true }, transaction: t });
       await postInvoiceJournalEntry({
-        clinicId: clinicIdNum, amount: parsedAmount, debitAccount: receivableAccount, creditAccount: revenueAccount,
+        clinicId: clinicIdNum, amount: parsedAmount, currency, debitAccount: receivableAccount, creditAccount: revenueAccount,
         reference: `INV-${id}`, description: `Invoice ${invoiceNumber} — ${patient_name || patient_id}`,
         userId: req.user?.userId, branchId: getCreateBranchId(req), transaction: t,
       });
-    } else if (!bill_id) {
-      console.log(`Note: invoice ${invoiceNumber} is in ${currency} — skipping GL posting (ledger is SSP-only)`);
     }
 
     await t.commit();
@@ -266,18 +267,16 @@ router.post('/:id/payments', authorize('invoices.write'), async (req, res) => {
     }
 
     // N2: posted before commit, in the same transaction as the payment/bill update.
-    if ((invoice.currency || BASE_CURRENCY) === BASE_CURRENCY) {
+    {
       const clinicIdNum = invoice.clinic_id || 1;
       const method = (req.body.payment_method || 'cash').toLowerCase();
       const cashOrBank = await resolveCashOrBankAccount(clinicIdNum, method, t);
       const receivableAccount = await resolveReceivableAccount(clinicIdNum, invoice.scheme_id, t);
       await postInvoiceJournalEntry({
-        clinicId: clinicIdNum, amount: payAmt, debitAccount: cashOrBank, creditAccount: receivableAccount,
+        clinicId: clinicIdNum, amount: payAmt, currency: invoice.currency, debitAccount: cashOrBank, creditAccount: receivableAccount,
         reference: `INV-${req.params.id}`, description: `Invoice payment — ${invoice.invoice_number} (${method})`,
         userId: req.user?.userId, branchId: getCreateBranchId(req), transaction: t,
       });
-    } else {
-      console.log(`Note: invoice ${invoice.invoice_number} payment is in ${invoice.currency} — skipping GL posting (ledger is SSP-only)`);
     }
 
     await t.commit();
@@ -333,17 +332,15 @@ router.put('/:id/mark-paid', authorize('invoices.write'), async (req, res) => {
       }
     }
 
-    if (bal > 0 && (inv[0].currency || BASE_CURRENCY) === BASE_CURRENCY) {
+    if (bal > 0) {
       const clinicIdNum = inv[0].clinic_id || 1;
       const cashOrBank = await resolveCashOrBankAccount(clinicIdNum, 'cash', t);
       const receivableAccount = await resolveReceivableAccount(clinicIdNum, inv[0].scheme_id, t);
       await postInvoiceJournalEntry({
-        clinicId: clinicIdNum, amount: bal, debitAccount: cashOrBank, creditAccount: receivableAccount,
+        clinicId: clinicIdNum, amount: bal, currency: inv[0].currency, debitAccount: cashOrBank, creditAccount: receivableAccount,
         reference: `INV-${req.params.id}`, description: `Invoice marked paid — ${inv[0].invoice_number}`,
         userId: req.user?.userId, branchId: getCreateBranchId(req), transaction: t,
       });
-    } else if (bal > 0) {
-      console.log(`Note: invoice ${inv[0].invoice_number} is in ${inv[0].currency} — skipping GL posting (ledger is SSP-only)`);
     }
 
     await t.commit();
