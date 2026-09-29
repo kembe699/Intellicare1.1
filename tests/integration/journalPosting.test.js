@@ -180,3 +180,60 @@ describe('postJournalEntry — atomicity (N2)', () => {
     expect(totalDebit).toBe(parseFloat(je.base_total_debit));
   });
 });
+
+describe('postJournalEntry — C6 rounding absorption', () => {
+  let ugxRateId;
+  const UGX_RATE = 4507.777; // deliberately not a round number, to force per-line rounding drift
+
+  beforeAll(async () => {
+    ugxRateId = uuidv4();
+    await sequelize.query(
+      `INSERT INTO exchange_rates (id, clinic_id, from_currency, to_currency, rate, effective_date, is_active)
+       VALUES (:id, :c, 'UGX', 'SSP', :rate, '2025-01-01', true)`,
+      { replacements: { id: ugxRateId, c: TEST_CLINIC_ID, rate: UGX_RATE } }
+    );
+  });
+
+  afterAll(async () => {
+    await sequelize.query(`DELETE FROM exchange_rates WHERE id = :id`, { replacements: { id: ugxRateId } });
+  });
+
+  test('multiple lines converted at a non-round rate still foot exactly to the entry totals', async () => {
+    const je = await withTenant(async () => {
+      const t = await sequelize.transaction();
+      // Three debit lines that do NOT divide evenly — independent per-line
+      // rounding at UGX_RATE would very likely drift from the summed total.
+      const created = await postJournalEntry({
+        clinicId: TEST_CLINIC_ID, transaction: t, entryDate: '2026-01-01', currency: 'UGX',
+        description: 'JPTEST-rounding', reference: 'JPTEST-REF-ROUNDING',
+        lines: [
+          { accountId: cashAccountId, debit: 33.33, description: 'JPTEST line 1' },
+          { accountId: cashAccountId, debit: 33.33, description: 'JPTEST line 2' },
+          { accountId: cashAccountId, debit: 33.34, description: 'JPTEST line 3' },
+          { accountId: receivableAccountId, credit: 100.00, description: 'JPTEST credit' },
+        ],
+        userId: 'test-system',
+      });
+      await t.commit();
+      return created;
+    });
+
+    const [lines] = await sequelize.query(
+      `SELECT base_debit_amount, base_credit_amount FROM journal_entry_lines WHERE je_id = :id`,
+      { replacements: { id: je.id } }
+    );
+    const sumBaseDebit = lines.reduce((s, l) => s + parseFloat(l.base_debit_amount), 0);
+    const sumBaseCredit = lines.reduce((s, l) => s + parseFloat(l.base_credit_amount), 0);
+
+    // The whole point of C6: these must be EXACT, not just "close".
+    expect(Math.round(sumBaseDebit * 100) / 100).toBe(parseFloat(je.base_total_debit));
+    expect(Math.round(sumBaseCredit * 100) / 100).toBe(parseFloat(je.base_total_credit));
+    expect(parseFloat(je.base_total_debit)).toBe(parseFloat(je.base_total_credit));
+
+    const [ledgerRows] = await sequelize.query(`SELECT debit_amount, credit_amount FROM account_ledger WHERE reference_number = :n`, { replacements: { n: je.je_number } });
+    const ledgerDebit = ledgerRows.reduce((s, r) => s + parseFloat(r.debit_amount), 0);
+    const ledgerCredit = ledgerRows.reduce((s, r) => s + parseFloat(r.credit_amount), 0);
+    expect(Math.round(ledgerDebit * 100) / 100).toBe(parseFloat(je.base_total_debit));
+    expect(Math.round(ledgerCredit * 100) / 100).toBe(parseFloat(je.base_total_credit));
+  });
+});

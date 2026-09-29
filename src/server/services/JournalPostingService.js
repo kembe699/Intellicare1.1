@@ -20,9 +20,10 @@
 // business logic, not something a generic helper should guess at. Callers
 // resolve their own accounts and pass resolved account IDs in `lines`.
 //
-// Per-line currency rounding here mirrors AccountingService.createGLEntry's
-// CURRENT behavior (each line converted independently) — Phase 3 (C6) fixes
-// the rounding-absorption gap in both places together, not just one.
+// C6: the last line on each side (debit/credit) absorbs whatever per-line
+// currency rounding drifted by, so line items always foot to the entry's own
+// base_total_debit/base_total_credit exactly — same treatment as
+// AccountingService.createGLEntry, not a separate, differently-rounded copy.
 const { sequelize, JournalEntries, JournalEntryLines, AccountLedger } = require('../models');
 const CurrencyService = require('./CurrencyService');
 const AccountingService = require('./AccountingService');
@@ -38,6 +39,8 @@ const { getNextDocumentNumber } = require('./DocumentNumberService');
  * @param {string} [params.narration]
  * @param {string} [params.reference] - e.g. `RCP-<id>`, `CT-<id>` — used to find this entry again for a reversal.
  * @param {string} [params.currency] - transaction currency; defaults to the clinic's base currency.
+ * @param {number} [params.exchangeRate] - explicit rate override (e.g. C1/C5: reverse at the
+ *   ORIGINAL entry's rate, not whatever today's rate happens to be) — skips the rate lookup entirely.
  * @param {Array<{accountId: string, debit?: number, credit?: number, description?: string}>} params.lines
  * @param {string} [params.userId]
  * @param {string} [params.sourceModule]
@@ -45,7 +48,7 @@ const { getNextDocumentNumber } = require('./DocumentNumberService');
  */
 async function postJournalEntry({
   clinicId, branchId, transaction, entryDate, description, narration, reference,
-  currency, lines, userId, sourceModule = 'billing',
+  currency, exchangeRate: exchangeRateOverride, lines, userId, sourceModule = 'billing',
 }) {
   if (!transaction) throw new Error('postJournalEntry requires an open transaction');
   if (!clinicId) throw new Error('postJournalEntry requires clinicId');
@@ -64,8 +67,10 @@ async function postJournalEntry({
   const txnCurrency = currency || baseCurrency;
   const exchangeRate = txnCurrency === baseCurrency
     ? 1.0
-    : await AccountingService.getExchangeRate(clinicId, txnCurrency, baseCurrency, entryDate);
+    : (exchangeRateOverride != null ? parseFloat(exchangeRateOverride) : await AccountingService.getExchangeRate(clinicId, txnCurrency, baseCurrency, entryDate));
   const convert = (amt) => AccountingService.convertAmount(amt, exchangeRate);
+  const baseTotalDebit = convert(totalDebit);
+  const baseTotalCredit = convert(totalCredit);
 
   const jeNumber = await getNextDocumentNumber('JE', clinicId, transaction, { date: entryDate });
 
@@ -73,25 +78,42 @@ async function postJournalEntry({
     clinic_id: clinicId, je_number: jeNumber, entry_date: entryDate, description,
     narration: narration || reference, reference, transaction_currency: txnCurrency, base_currency: baseCurrency,
     exchange_rate: exchangeRate, total_debit: totalDebit, total_credit: totalCredit,
-    base_total_debit: convert(totalDebit), base_total_credit: convert(totalCredit),
+    base_total_debit: baseTotalDebit, base_total_credit: baseTotalCredit,
     status: 'posted', created_by: userId || 'system', posted_by: userId || 'system', posted_date: new Date(),
     branch_id: branchId || null,
   }, { transaction });
 
-  const lineRows = lines.map((line) => ({
-    je_id: je.id, account_id: line.accountId,
-    debit_amount: line.debit || 0, credit_amount: line.credit || 0,
-    base_debit_amount: convert(line.debit || 0), base_credit_amount: convert(line.credit || 0),
-    description: line.description || description,
-    branch_id: branchId || null,
-  }));
-  const ledgerRows = lines.map((line) => ({
-    clinic_id: clinicId, account_id: line.accountId, transaction_date: entryDate,
-    debit_amount: convert(line.debit || 0), credit_amount: convert(line.credit || 0),
-    reference_number: jeNumber, description: line.description || description,
-    is_posted: true, posted_date: new Date(), source_module: sourceModule,
-    branch_id: branchId || null,
-  }));
+  // C6: the last line on each side absorbs the per-line rounding remainder —
+  // see the module-level comment.
+  const lastDebitIndex = lines.map((l) => parseFloat(l.debit) || 0).reduce((lastIdx, v, i) => (v > 0 ? i : lastIdx), -1);
+  const lastCreditIndex = lines.map((l) => parseFloat(l.credit) || 0).reduce((lastIdx, v, i) => (v > 0 ? i : lastIdx), -1);
+  let runningBaseDebit = 0;
+  let runningBaseCredit = 0;
+  const lineRows = [];
+  const ledgerRows = [];
+  lines.forEach((line, i) => {
+    let baseDebit = convert(line.debit || 0);
+    let baseCredit = convert(line.credit || 0);
+    if (i === lastDebitIndex) baseDebit = Number((baseTotalDebit - runningBaseDebit).toFixed(2));
+    if (i === lastCreditIndex) baseCredit = Number((baseTotalCredit - runningBaseCredit).toFixed(2));
+    runningBaseDebit += baseDebit;
+    runningBaseCredit += baseCredit;
+
+    lineRows.push({
+      je_id: je.id, account_id: line.accountId,
+      debit_amount: line.debit || 0, credit_amount: line.credit || 0,
+      base_debit_amount: baseDebit, base_credit_amount: baseCredit,
+      description: line.description || description,
+      branch_id: branchId || null,
+    });
+    ledgerRows.push({
+      clinic_id: clinicId, account_id: line.accountId, transaction_date: entryDate,
+      debit_amount: baseDebit, credit_amount: baseCredit,
+      reference_number: jeNumber, description: line.description || description,
+      is_posted: true, posted_date: new Date(), source_module: sourceModule,
+      branch_id: branchId || null,
+    });
+  });
 
   await JournalEntryLines.bulkCreate(lineRows, { transaction });
   await AccountLedger.bulkCreate(ledgerRows, { transaction });

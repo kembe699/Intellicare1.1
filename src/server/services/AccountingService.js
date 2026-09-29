@@ -163,11 +163,31 @@ class AccountingService {
         posted_date: draft ? null : new Date()
       }, { transaction });
       
-      // Create line items with base currency amounts
+      // Create line items with base currency amounts.
+      //
+      // C6: converting each line independently can leave base debits and
+      // base credits a cent or two apart even though the transaction-currency
+      // amounts balance exactly — convertAmount rounds every line on its
+      // own, and rounding several lines independently does not generally sum
+      // to the same total as rounding the sum once. The entry's own
+      // base_total_debit/base_total_credit (computed from the TOTALS above,
+      // not from summing per-line roundings) are already correct — the last
+      // line on each side is made to absorb whatever the per-line rounding
+      // drifted by, so the line items always foot to the entry's own totals
+      // exactly, not just approximately.
+      const lastDebitIndex = lineItems.map((l) => parseFloat(l.debit_amount) || 0).reduce((lastIdx, v, i) => (v > 0 ? i : lastIdx), -1);
+      const lastCreditIndex = lineItems.map((l) => parseFloat(l.credit_amount) || 0).reduce((lastIdx, v, i) => (v > 0 ? i : lastIdx), -1);
+      let runningBaseDebit = 0;
+      let runningBaseCredit = 0;
       const createdLineItems = [];
-      for (const lineItem of lineItems) {
-        const baseDebit = this.convertAmount(lineItem.debit_amount || 0, exchangeRate);
-        const baseCredit = this.convertAmount(lineItem.credit_amount || 0, exchangeRate);
+      for (let i = 0; i < lineItems.length; i++) {
+        const lineItem = lineItems[i];
+        let baseDebit = this.convertAmount(lineItem.debit_amount || 0, exchangeRate);
+        let baseCredit = this.convertAmount(lineItem.credit_amount || 0, exchangeRate);
+        if (i === lastDebitIndex) baseDebit = Number((baseTotalDebits - runningBaseDebit).toFixed(2));
+        if (i === lastCreditIndex) baseCredit = Number((baseTotalCredits - runningBaseCredit).toFixed(2));
+        runningBaseDebit += baseDebit;
+        runningBaseCredit += baseCredit;
 
         const glLineItem = await GLLineItems.create({
           gl_id: glEntry.id,
