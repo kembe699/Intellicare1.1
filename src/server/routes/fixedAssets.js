@@ -100,6 +100,29 @@ router.put('/categories/:id', authorize('assets.write'), async (req, res) => {
   }
 });
 
+// A category can only be deleted once nothing points at it — fixed_assets.name/
+// nature reporting joins on it with an INNER JOIN, so deleting a category still
+// in use would make its assets vanish from the register and every report
+// instead of erroring. Use PUT is_active=false to retire a category that
+// already has assets on it.
+router.delete('/categories/:id', authorize('assets.write'), async (req, res) => {
+  const { sequelize } = req.models;
+  const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
+  try {
+    const [[existing]] = await sequelize.query(`SELECT id FROM asset_categories WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
+    if (!existing) return res.status(404).json({ error: 'Category not found' });
+    const [[{ count }]] = await sequelize.query(`SELECT COUNT(*)::int AS count FROM fixed_assets WHERE category_id = :id`, { replacements: { id: req.params.id } });
+    if (count > 0) {
+      return res.status(400).json({ error: `${count} asset${count === 1 ? '' : 's'} still use this category — deactivate it instead, or reassign ${count === 1 ? 'that asset' : 'those assets'} first.` });
+    }
+    await sequelize.query(`DELETE FROM asset_categories WHERE id = :id`, { replacements: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting asset category:', error);
+    res.status(500).json({ error: 'Failed to delete asset category' });
+  }
+});
+
 // ── Assets ──────────────────────────────────────────────────────────────
 
 router.get('/', authorize('assets.view'), async (req, res) => {

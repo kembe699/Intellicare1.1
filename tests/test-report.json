@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-09-29T13:03:53.904Z",
+  "timestamp": "2026-09-29T13:26:13.388Z",
   "totalTests": 13,
   "passed": 13,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 2205,
+  "duration": 1825,
   "success": false,
   "modules": [
     {
@@ -15,7 +15,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2159
+      "duration": 1777
     }
   ],
   "errors": [],

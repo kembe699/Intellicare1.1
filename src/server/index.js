@@ -796,7 +796,17 @@ async function runBackgroundMigrations() {
     ['Dhis2Report',       () => require('./scripts/migrateDhis2Tables').migrateDhis2Tables()],
     ['Icd10Reference',    () => require('./scripts/importIcd10').migrateAndImportIcd10()],
     ['VisitDiagnoses',    () => require('./scripts/migrateVisitDiagnosesTable').migrateVisitDiagnosesTable()],
-    ['FixedAssets',       () => require('./scripts/migrateFixedAssetsTables').migrateFixedAssetsTables()],
+    // Every other step here only ever touches the default/tenant_template
+    // connection, which is why real tenants (dpoc/demo/gudele/nationmc) needed
+    // runFixedAssetsMigrationEverywhere.js run by hand after this module shipped
+    // — and why production kept 500ing on "column acquisition_currency does not
+    // exist" after the currency columns were added on top of it. Looping this
+    // one across every real tenant (migrateAcrossTenants already exists for
+    // exactly this) means a fresh deploy self-heals every tenant automatically
+    // instead of relying on someone remembering the manual script.
+    ['FixedAssets',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateFixedAssetsTables').migrateFixedAssetsTables, 'Fixed Assets'
+    )],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],
