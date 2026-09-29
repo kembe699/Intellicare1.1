@@ -177,6 +177,20 @@ async function migrateTheatreTables(db = sequelize) {
     }
   }
 
+  // T1: lets a procedure's fee be captured at scheduling time and billed to
+  // the patient once the operation completes (TheatreService.completeOperation)
+  // — added after the table's initial creation, so existing rows get these as
+  // NULL/false rather than needing a retype like the TIMESTAMPTZ columns above.
+  const theatreOperationFeeColumns = [
+    'ADD COLUMN IF NOT EXISTS procedure_fee NUMERIC(15,2)',
+    "ADD COLUMN IF NOT EXISTS fee_currency VARCHAR(3) NOT NULL DEFAULT 'SSP'",
+    'ADD COLUMN IF NOT EXISTS bill_id CHAR(36)',
+    'ADD COLUMN IF NOT EXISTS billed_at TIMESTAMPTZ',
+  ];
+  for (const clause of theatreOperationFeeColumns) {
+    try { await db.query(`ALTER TABLE theatre_operations ${clause}`); } catch (err) { console.error(`Could not add theatre_operations column (${clause}):`, err.message); }
+  }
+
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_clinic ON theatre_requests (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_status ON theatre_requests (status)',
