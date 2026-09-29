@@ -761,79 +761,17 @@ class AccountingService {
     return delta;
   }
 
-  /**
-   * Create GL entry from payment receipt
-   * @param {Object} receiptData - Payment receipt data
-   * @param {string} userId - User creating the entry
-   */
-  async createGLFromPayment(receiptData, userId) {
-    try {
-      // Get accounts for payment
-      const cashAccount = await this.getAccountByCode(receiptData.clinic_id, '1100'); // Cash
-      const receivablesAccount = await this.getAccountByCode(receiptData.clinic_id, '1200'); // Accounts Receivable
-      
-      if (!cashAccount || !receivablesAccount) {
-        throw new Error('Required accounts not found for payment processing');
-      }
-      
-      const glData = {
-        clinic_id: receiptData.clinic_id,
-        transaction_date: receiptData.payment_date || new Date(),
-        transaction_type: 'payment_receipt',
-        description: `Payment Receipt - ${receiptData.receipt_number}`,
-        reference_id: receiptData.id,
-        reference_module: 'payment_receipt'
-      };
-      
-      const lineItems = [
-        {
-          account_id: cashAccount.id,
-          debit_amount: receiptData.amount_paid,
-          credit_amount: 0,
-          description: `Cash received from ${receiptData.patient_name}`
-        },
-        {
-          account_id: receivablesAccount.id,
-          debit_amount: 0,
-          credit_amount: receiptData.amount_paid,
-          description: `Payment against receivable - ${receiptData.patient_name}`
-        }
-      ];
-      
-      const glEntry = await this.createGLEntry(glData, lineItems, userId);
-      
-      // Update patient receivables
-      await PatientReceivables.update({
-        amount_paid: sequelize.literal(`amount_paid + ${receiptData.amount_paid}`),
-        amount_due: sequelize.literal(`amount_due - ${receiptData.amount_paid}`),
-        last_payment_date: receiptData.payment_date,
-        status: sequelize.literal(`CASE 
-          WHEN amount_due - ${receiptData.amount_paid} <= 0 THEN 'paid' 
-          ELSE 'partial' 
-        END`)
-      }, {
-        where: { 
-          bill_id: receiptData.bill_id,
-          clinic_id: receiptData.clinic_id
-        }
-      });
+  // N4: createGLFromPayment removed — confirmed unused (its one caller,
+  // BillingIntegrationService.handlePaymentReceipt, was itself never called
+  // from anywhere else, so both were dead). It was also wrong: it hardcoded
+  // account_code '1200' (Patient AR) regardless of receiptData.scheme_id, so
+  // an insurance/scheme bill's payment would have credited the wrong
+  // receivable (1200 instead of 1210 Insurance Receivables) had anything
+  // ever called it. Real payment posting now goes through
+  // JournalPostingService.postJournalEntry, which every live payment path
+  // (patientBills.js, patientDeposits.js, receipts.js, invoices.js,
+  // cashier.js, cash-transfers.js) already uses.
 
-      // A receipt's entry needs posting too, or cash collected never reaches the
-      // cash account on any report. This one runs outside a transaction of its
-      // own, so it can post immediately.
-      try {
-        await this.postGLEntry(glEntry.id, userId);
-      } catch (postError) {
-        console.error(`GL entry ${glEntry.id} for receipt ${receiptData.receipt_number} was created but not posted:`, postError.message);
-      }
-
-      return glEntry;
-      
-    } catch (error) {
-      throw error;
-    }
-  }
-  
   /**
    * Get account by account code
    * @param {number} clinicId - Clinic ID

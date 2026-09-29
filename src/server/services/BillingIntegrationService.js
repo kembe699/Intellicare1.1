@@ -99,31 +99,11 @@ class BillingIntegrationService {
     }
   }
   
-  /**
-   * Handle payment receipt - create GL entries
-   * @param {Object} receiptData - Payment receipt data
-   * @param {string} userId - User processing the payment
-   */
-  async handlePaymentReceipt(receiptData, userId) {
-    try {
-      console.log('Creating accounting entries for payment receipt:', receiptData.receipt_number);
-      
-      // Create GL entry for the payment (Debit Cash, Credit Receivables)
-      const glEntry = await AccountingService.createGLFromPayment(receiptData, userId);
-      
-      // Post the GL entry immediately for payment processing
-      await AccountingService.postGLEntry(glEntry.id, userId);
-      
-      console.log(`GL entry ${glEntry.gl_number} created and posted for receipt ${receiptData.receipt_number}`);
-      
-      return glEntry;
-    } catch (error) {
-      console.error('Error creating accounting entries for payment:', error);
-      // Don't throw error to prevent payment processing from failing
-      return null;
-    }
-  }
-  
+  // N4: handlePaymentReceipt removed — confirmed unused (nothing outside
+  // this file ever called it), and its only dependency,
+  // AccountingService.createGLFromPayment, was removed alongside it for the
+  // same reason. See AccountingService.js's own comment at that spot.
+
   /**
    * Handle lab request billing - create GL entries
    * @param {Object} labRequestData - Lab request data

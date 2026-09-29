@@ -9,7 +9,7 @@ const router = express.Router();
 const { CashierShift, Receipt, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
-const { getNextDocumentNumber } = require('../services/DocumentNumberService');
+const { postJournalEntry } = require('../services/JournalPostingService');
 
 // Sequelize's DataTypes.JSON auto-parse depends on the MySQL wire protocol reporting the
 // column as JSON-typed, but MariaDB (common on shared hosts) stores JSON columns as plain
@@ -452,7 +452,7 @@ router.post('/close-shift/:shiftId', authorize('cashier.write'), async (req, res
 router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
   try {
     const { shift_id, amount, to_account_id, notes } = req.body;
-    const { ChartOfAccounts, AccountLedger, JournalEntries, JournalEntryLines, sequelize: seq } = require('../models');
+    const { ChartOfAccounts, AccountLedger, sequelize: seq } = require('../models');
 
     if (!to_account_id || !amount || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: 'to_account_id and a positive amount are required' });
@@ -536,38 +536,18 @@ router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
 
     const t = await seq.transaction();
     try {
-      const jeNumber = await getNextDocumentNumber('JE', clinic_id, t);
       const glBranchId = getCreateBranchId(req);
-      const je = await JournalEntries.create({
-        clinic_id,
-        je_number: jeNumber,
-        entry_date: today,
+      const je = await postJournalEntry({
+        clinicId: clinic_id, branchId: glBranchId, transaction: t, entryDate: today,
         description: `Cash Transfer: ${cashAtHandAccount.account_name} → ${toAccount.account_name}`,
         narration: notes || 'Cash transfer from shift',
         reference: `SHIFT-${shift_id || 'manual'}`,
-        transaction_currency: 'SSP',
-        base_currency: 'SSP',
-        exchange_rate: 1.0,
-        total_debit: amt,
-        total_credit: amt,
-        base_total_debit: amt,
-        base_total_credit: amt,
-        status: 'posted',
-        created_by: 'system',
-        posted_by: 'system',
-        posted_date: new Date(),
-        branch_id: glBranchId
-      }, { transaction: t });
-
-      await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: toAccount.id,          debit_amount: amt, credit_amount: 0,   base_debit_amount: amt, base_credit_amount: 0,   description: `Transfer from ${cashAtHandAccount.account_name}`, branch_id: glBranchId },
-        { je_id: je.id, account_id: cashAtHandAccount.id,  debit_amount: 0,   credit_amount: amt, base_debit_amount: 0,   base_credit_amount: amt, description: `Transfer to ${toAccount.account_name}`,          branch_id: glBranchId }
-      ], { transaction: t });
-
-      await AccountLedger.bulkCreate([
-        { clinic_id, account_id: toAccount.id,         transaction_date: today, debit_amount: amt, credit_amount: 0,   reference_number: jeNumber, description: `Cash Transfer from ${cashAtHandAccount.account_name}`, is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId },
-        { clinic_id, account_id: cashAtHandAccount.id, transaction_date: today, debit_amount: 0,   credit_amount: amt, reference_number: jeNumber, description: `Cash Transfer to ${toAccount.account_name}`,          is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId }
-      ], { transaction: t });
+        lines: [
+          { accountId: toAccount.id, debit: amt, description: `Transfer from ${cashAtHandAccount.account_name}` },
+          { accountId: cashAtHandAccount.id, credit: amt, description: `Transfer to ${toAccount.account_name}` },
+        ],
+        userId: 'system', sourceModule: 'cash_transfer',
+      });
 
       await t.commit();
 
@@ -576,7 +556,7 @@ router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
         from_account: cashAtHandAccount.account_name,
         to_account: toAccount.account_name,
         amount: amt,
-        je_number: jeNumber
+        je_number: je.je_number
       });
     } catch (err) {
       await t.rollback();

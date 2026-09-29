@@ -11,7 +11,7 @@ const { normalizeServices } = require('../utils/normalizeServices');
 const AccountingService = require('../services/AccountingService');
 const { authorize } = require('../middleware/authorize');
 const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } = require('./patientDeposits');
-const { getNextDocumentNumber } = require('../services/DocumentNumberService');
+const { postJournalEntry } = require('../services/JournalPostingService');
 
 // Read access is intentionally broad — every clinical/financial-facing role needs to look
 // up a patient's bill (a doctor checking it's settled, pharmacy/lab billing against it,
@@ -1618,15 +1618,16 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     
     await Receipt.create(receiptData, { transaction: t });
 
-    // Commits the locked bill update + receipt together, releasing the row lock so the
-    // next queued payment (if any) can proceed. Everything after this point (GL posting,
-    // receivables sync, audit log) is already-established best-effort/non-blocking side
-    // effects that read the now-committed bill state.
-    await t.commit();
-
-    // Post payment to Chart of Accounts (AccountLedger) so balances stay accurate
-    try {
-      const { ChartOfAccounts, AccountLedger, JournalEntries, JournalEntryLines, sequelize: seq } = require('../models');
+    // N2: the payment's GL posting now happens BEFORE this commit, in the
+    // SAME transaction as the bill update + receipt — it used to run after
+    // this commit, in its own separate transaction, fire-and-forget-adjacent
+    // and swallowed as "non-fatal" on failure. That is exactly how a payment
+    // could be taken with the cashier's screen showing success while nothing
+    // reached the ledger (see the comment further down — this happened for
+    // real, 150 receipts once). A posting failure now fails the whole
+    // payment instead.
+    {
+      const { ChartOfAccounts } = require('../models');
       const { Op: COAOp } = require('sequelize');
       const payAmt = parseFloat(paymentData.amount || 0);
       if (payAmt > 0) {
@@ -1654,22 +1655,22 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
           // below is not: a clinic can rename "Cash" without this silently
           // drifting back to whatever sorts first.
           debitAccount = await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_code: '1100', is_active: true }
+            where: { clinic_id: clinicId, account_code: '1100', is_active: true }, transaction: t
           }) || await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: 'cash' } }
+            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: 'cash' } }, transaction: t
           }) || await ChartOfAccounts.findOne({
             // Falls back toward cash-in-hand, then to sort order, only if there is
             // no account that reads as plain "Cash" at all.
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%hand%' } },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           }) || await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%' } },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           });
         } else if (method === 'card') {
           debitAccount = await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, is_bank_account: true, is_active: true },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           });
         } else if (method === 'deposit') {
           // No new cash is coming in right now — it already came in when the deposit was
@@ -1677,16 +1678,16 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
           // reduces "Patient Deposits Held" as this bill's receivable clears, same credit
           // side (1200 AR) as every other payment method below.
           debitAccount = await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_code: '2150', is_active: true }
+            where: { clinic_id: clinicId, account_code: '2150', is_active: true }, transaction: t
           });
         } else {
           // mobile_money / bank_transfer / insurance — post to main bank or cash
           debitAccount = await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, is_bank_account: true, is_active: true },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           }) || await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           });
         }
 
@@ -1695,112 +1696,60 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         // AccountingService.createGLFromPatientBill), 1200 Accounts Receivable otherwise.
         const receivableCode = currentBill.scheme_id ? '1210' : '1200';
         const creditAccount = await ChartOfAccounts.findOne({
-          where: { clinic_id: clinicId, account_code: receivableCode, is_active: true }
+          where: { clinic_id: clinicId, account_code: receivableCode, is_active: true }, transaction: t
         }) || await ChartOfAccounts.findOne({
-          where: { clinic_id: clinicId, account_code: '1200', is_active: true }
+          where: { clinic_id: clinicId, account_code: '1200', is_active: true }, transaction: t
         }) || await ChartOfAccounts.findOne({
           where: { clinic_id: clinicId, account_type: 'asset', account_name: { [COAOp.iLike]: '%receivable%' }, is_active: true },
-          order: [['account_code', 'ASC']]
+          order: [['account_code', 'ASC']], transaction: t
         });
 
         if (!debitAccount || !creditAccount) {
-          // Do not fall through quietly. This block is best-effort inside a
-          // try/catch, so an unresolved account used to mean the payment cleared
-          // no receivable and reached no cash account while the cashier's screen
-          // showed the money — 150 receipts went that way once and were only
-          // found by totals disagreeing weeks later.
+          // N2: this used to log an audit trail and let the payment through
+          // anyway ("non-fatal") — that is exactly how a payment could be
+          // taken with the cashier's screen showing success while nothing
+          // reached the ledger (this happened for real: 150 receipts once,
+          // found only when totals disagreed weeks later). Now it fails the
+          // whole payment instead, rolling back the receipt and bill update
+          // together with it.
           const missing = [
             !debitAccount && `no account to debit for a ${method} payment`,
             !creditAccount && `no receivable account (${receivableCode}) to credit`,
           ].filter(Boolean).join('; ');
-          console.error(`Payment on bill ${currentBill.bill_number}: not posted to the ledger — ${missing}`);
-          const rr = require('./reports');
-          await rr.logAudit({
-            req,
-            module: 'Billing',
-            action: 'PAYMENT_POSTING_FAILED',
-            entity_type: 'PatientBill',
-            entity_id: currentBill.id,
-            description: `Payment of ${paymentData.amount} on bill ${currentBill.bill_number} was recorded but did not reach the ledger — ${missing}. The receipt exists and the cash was taken; the accounts need this posting added.`,
-            new_values: { bill_number: currentBill.bill_number, amount: paymentData.amount, method, reason: missing },
-            status: 'failure',
-          }).catch(() => {});
+          throw new Error(`Cannot post this payment to the ledger — ${missing}. Set up the missing account in Chart of Accounts first.`);
         }
 
-        if (debitAccount && creditAccount) {
-          // Scheme-priced bills (e.g. insurance schemes billing in USD) carry their own
-          // currency on bill_currency. This JE is built by hand (not via
-          // AccountingService.createGLEntry), so unlike the bill-creation/discount/
-          // write-off/credit-note/claim-payment paths, nothing converts payAmt to base
-          // currency unless it's done explicitly here — previously this posted the raw
-          // foreign-currency number straight into the SSP ledger unconverted.
-          let baseCurrencyCode = 'SSP';
-          try {
-            const [baseCurrencyRows] = await seq.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
-            if (baseCurrencyRows[0]?.code) baseCurrencyCode = baseCurrencyRows[0].code;
-          } catch (baseCurrErr) { /* fall back to SSP */ }
-          const billCurrency = currentBill.bill_currency || baseCurrencyCode;
-          let rateNow = 1.0;
-          if (billCurrency !== baseCurrencyCode) {
-            try {
-              rateNow = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrencyCode, today);
-            } catch (rateErr) {
-              console.warn(`No ${billCurrency}->${baseCurrencyCode} rate for ${today}, posting payment at 1:1 — ledger will be understated:`, rateErr.message);
-            }
-          }
-          const baseAmt = AccountingService.convertAmount(payAmt, rateNow);
+        // Scheme-priced bills (e.g. insurance schemes billing in USD) carry their
+        // own currency on bill_currency — postJournalEntry converts to base
+        // currency the same way AccountingService.createGLEntry does, and throws
+        // (failing this whole payment, per N2) rather than silently posting 1:1
+        // if no exchange rate exists for billCurrency on this date.
+        const billCurrency = currentBill.bill_currency || undefined;
 
-          const t2 = await seq.transaction();
-          try {
-            const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
-            const je = await JournalEntries.create({
-              clinic_id: clinicId,
-              je_number: jeNumber,
-              entry_date: today,
-              description: `Payment: Bill ${billId} (${method})`,
-              narration: `Receipt ${receiptNumber}`,
-              reference: `RCP-${receiptId}`,
-              transaction_currency: billCurrency,
-              base_currency: baseCurrencyCode,
-              exchange_rate: rateNow,
-              total_debit: payAmt,
-              total_credit: payAmt,
-              base_total_debit: baseAmt,
-              base_total_credit: baseAmt,
-              status: 'posted',
-              created_by: userId || 'system',
-              posted_by: userId || 'system',
-              posted_date: new Date()
-            }, { transaction: t2 });
-
-            // Revenue was already recognized when the bill was created (Dr Receivable /
-            // Cr Revenue, in AccountingService.createGLFromPatientBill) — this entry only
-            // clears that receivable as cash/bank comes in, it doesn't book new revenue.
-            // Labeling the credit line "Revenue from bill X" mislabeled what the account
-            // activity actually shows for anyone reading the ledger.
-            await JournalEntryLines.bulkCreate([
-              { je_id: je.id, account_id: debitAccount.id,  debit_amount: payAmt, credit_amount: 0,      base_debit_amount: baseAmt, base_credit_amount: 0,      description: `Payment received (${method})` },
-              { je_id: je.id, account_id: creditAccount.id, debit_amount: 0,      credit_amount: payAmt, base_debit_amount: 0,      base_credit_amount: baseAmt, description: `Receivable cleared - bill ${billId}` }
-            ], { transaction: t2 });
-
-            // AccountLedger (what General Ledger/trial balance reports read from) is
-            // always base-currency — must use baseAmt here, never the raw payAmt.
-            await AccountLedger.bulkCreate([
-              { clinic_id: clinicId, account_id: debitAccount.id,  transaction_date: today, debit_amount: baseAmt, credit_amount: 0,      reference_number: jeNumber, description: `Payment received (${method}) - ${receiptNumber}`, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-              { clinic_id: clinicId, account_id: creditAccount.id, transaction_date: today, debit_amount: 0,      credit_amount: baseAmt, reference_number: jeNumber, description: `Receivable cleared - bill ${billId} - ${receiptNumber}`,    is_posted: true, posted_date: new Date(), source_module: 'billing' }
-            ], { transaction: t2 });
-
-            await t2.commit();
-            console.log(`Payment posted to Chart of Accounts: ${jeNumber} (${debitAccount.account_name} / ${creditAccount.account_name})`);
-          } catch (jeErr) {
-            await t2.rollback();
-            console.warn('Non-fatal: failed to post payment to CoA:', jeErr.message);
-          }
-        }
+        await postJournalEntry({
+          clinicId, branchId: currentBill.branch_id || getCreateBranchId(req), transaction: t,
+          entryDate: today, currency: billCurrency,
+          description: `Payment: Bill ${billId} (${method})`,
+          narration: `Receipt ${receiptNumber}`,
+          reference: `RCP-${receiptId}`,
+          // Revenue was already recognized when the bill was created (Dr Receivable /
+          // Cr Revenue, in AccountingService.createGLFromPatientBill) — this entry only
+          // clears that receivable as cash/bank comes in, it doesn't book new revenue.
+          lines: [
+            { accountId: debitAccount.id, debit: payAmt, description: `Payment received (${method})` },
+            { accountId: creditAccount.id, credit: payAmt, description: `Receivable cleared - bill ${billId}` },
+          ],
+          userId,
+        });
       }
-    } catch (coaErr) {
-      console.warn('Non-fatal: CoA payment posting skipped:', coaErr.message);
     }
+
+    // Commits the locked bill update + receipt + payment GL entry together,
+    // releasing the row lock so the next queued payment (if any) can
+    // proceed. Everything after this point (receivables sync, audit log,
+    // dispensing) is already-established best-effort/non-blocking side
+    // effects that read the now-committed bill state.
+    await t.commit();
 
     // Sync the receivables ledger row for this bill so aging/receivables reports reflect the payment.
     try {

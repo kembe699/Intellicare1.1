@@ -13,7 +13,7 @@ const BillingIntegrationService = require('../services/BillingIntegrationService
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { adjustDepositBalance, BASE_CURRENCY } = require('./patientDeposits');
-const { getNextDocumentNumber } = require('../services/DocumentNumberService');
+const { postJournalEntry } = require('../services/JournalPostingService');
 
 // receipts.paid_services/service_details are JSON columns, but this host's MariaDB
 // stores JSON as LONGTEXT under the hood (same issue documented in lisModule.js's
@@ -36,38 +36,23 @@ function serializeReceipt(receipt) {
 // balance that receipt.js's own bill-reversal logic above already put back (Debit 1200),
 // and needs the matching Credit 2150 to bring "Patient Deposits Held" back up by the same
 // amount adjustDepositBalance() just restored on the ledger side.
-async function reverseDepositUsageGL({ clinicId, amount, reference, description, userId }) {
-  try {
-    const arAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1200', is_active: true } });
-    const depositsHeld = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '2150', is_active: true } });
-    if (!arAccount || !depositsHeld) return;
-    const today = new Date().toISOString().split('T')[0];
-
-    const t2 = await sequelize.transaction();
-    try {
-      const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
-      const je = await JournalEntries.create({
-        clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
-        narration: reference, reference, transaction_currency: BASE_CURRENCY, base_currency: BASE_CURRENCY,
-        exchange_rate: 1.0, total_debit: amount, total_credit: amount, base_total_debit: amount, base_total_credit: amount,
-        status: 'posted', created_by: userId || 'system', posted_by: userId || 'system', posted_date: new Date(),
-      }, { transaction: t2 });
-      await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: arAccount.id, debit_amount: amount, credit_amount: 0, base_debit_amount: amount, base_credit_amount: 0, description },
-        { je_id: je.id, account_id: depositsHeld.id, debit_amount: 0, credit_amount: amount, base_debit_amount: 0, base_credit_amount: amount, description },
-      ], { transaction: t2 });
-      await AccountLedger.bulkCreate([
-        { clinic_id: clinicId, account_id: arAccount.id, transaction_date: today, debit_amount: amount, credit_amount: 0, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-        { clinic_id: clinicId, account_id: depositsHeld.id, transaction_date: today, debit_amount: 0, credit_amount: amount, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-      ], { transaction: t2 });
-      await t2.commit();
-    } catch (jeErr) {
-      await t2.rollback();
-      console.warn('Non-fatal: failed to post deposit-reversal GL:', jeErr.message);
-    }
-  } catch (coaErr) {
-    console.warn('Non-fatal: deposit-reversal GL posting skipped:', coaErr.message);
+// N2: requires the caller's own transaction and throws on failure — see
+// postDepositGL's own comment in patientDeposits.js for why.
+async function reverseDepositUsageGL({ clinicId, branchId, amount, currency, reference, description, userId, transaction, entryDate }) {
+  const arAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1200', is_active: true }, transaction });
+  const depositsHeld = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '2150', is_active: true }, transaction });
+  if (!arAccount || !depositsHeld) {
+    throw new Error('Cannot reverse this deposit-funded payment — the receivable (1200) or Patient Deposits Held (2150) account is missing.');
   }
+  const today = entryDate || new Date().toISOString().split('T')[0];
+  return postJournalEntry({
+    clinicId, branchId, transaction, entryDate: today, description, reference, currency,
+    lines: [
+      { accountId: arAccount.id, debit: amount, description },
+      { accountId: depositsHeld.id, credit: amount, description },
+    ],
+    userId,
+  });
 }
 
 // Reverses the GL/JE posting made for a payment when its receipt is voided/refunded.
@@ -77,87 +62,70 @@ async function reverseDepositUsageGL({ clinicId, amount, reference, description,
 // Deposit-funded receipts are NOT handled here — restoreDepositForVoidedReceipt /
 // reverseDepositUsageGL already reverse those on their own, separate account (2150
 // Patient Deposits Held), and running both would double-reverse the receivable.
-async function reversePaymentGL({ clinicId, billId, amount, paymentMethod, reference, description, userId }) {
-  try {
-    const method = (paymentMethod || 'cash').toLowerCase();
-    if (method === 'deposit' || amount <= 0) return;
+// N2: requires the caller's own transaction and throws on failure (see
+// postDepositGL). C1 (Phase 3) still hardcodes 'SSP'/1:1 here — left
+// unchanged in this commit, fixed together with the other currency items.
+async function reversePaymentGL({ clinicId, branchId, billId, amount, paymentMethod, reference, description, userId, transaction, entryDate }) {
+  const method = (paymentMethod || 'cash').toLowerCase();
+  if (method === 'deposit' || amount <= 0) return null;
 
-    // Find the account this specific payment actually debited, rather than
-    // re-deriving "the current default cash account".
-    //
-    // Which account cash collections prefer has changed over time — from Cash at
-    // Hand to Cash, and it could change again — so re-deriving it here for an
-    // old receipt would reverse the wrong account: crediting back an account the
-    // original payment never touched, and leaving the one it did touch
-    // permanently overstated. The original journal entry is right there, tagged
-    // with this receipt's own reference, so this uses that instead.
-    let originalDebitAccount = null;
-    const originalJE = reference
-      ? await JournalEntries.findOne({ where: { clinic_id: clinicId, reference } })
-      : null;
-    if (originalJE) {
-      const originalLine = await JournalEntryLines.findOne({
-        where: { je_id: originalJE.id, debit_amount: { [Op.gt]: 0 } },
-      });
-      if (originalLine) {
-        originalDebitAccount = await ChartOfAccounts.findByPk(originalLine.account_id);
-      }
+  // Find the account this specific payment actually debited, rather than
+  // re-deriving "the current default cash account".
+  //
+  // Which account cash collections prefer has changed over time — from Cash at
+  // Hand to Cash, and it could change again — so re-deriving it here for an
+  // old receipt would reverse the wrong account: crediting back an account the
+  // original payment never touched, and leaving the one it did touch
+  // permanently overstated. The original journal entry is right there, tagged
+  // with this receipt's own reference, so this uses that instead.
+  let originalDebitAccount = null;
+  const originalJE = reference
+    ? await JournalEntries.findOne({ where: { clinic_id: clinicId, reference }, transaction })
+    : null;
+  if (originalJE) {
+    const originalLine = await JournalEntryLines.findOne({
+      where: { je_id: originalJE.id, debit_amount: { [Op.gt]: 0 } }, transaction,
+    });
+    if (originalLine) {
+      originalDebitAccount = await ChartOfAccounts.findByPk(originalLine.account_id, { transaction });
     }
-
-    // No original entry to go on — a receipt from before this posting method
-    // existed, or one whose posting failed at the time. Fall back to today's
-    // preference, same as a forward payment would resolve.
-    if (!originalDebitAccount) {
-      if (method === 'cash') {
-        originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1100', is_active: true } })
-          || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: 'cash' } } })
-          || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } }, order: [['account_code', 'ASC']] });
-      } else {
-        // card, mobile_money, bank_transfer, insurance — all posted to the main bank account originally
-        originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, is_bank_account: true, is_active: true }, order: [['account_code', 'ASC']] })
-          || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true }, order: [['account_code', 'ASC']] });
-      }
-    }
-
-    const bill = billId ? await PatientBill.findByPk(billId) : null;
-    const receivableCode = bill?.scheme_id ? '1210' : '1200';
-    const receivableAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: receivableCode, is_active: true } })
-      || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1200', is_active: true } });
-
-    if (!originalDebitAccount || !receivableAccount) {
-      console.warn(`Non-fatal: could not reverse payment GL for voided receipt — missing account for clinic ${clinicId}`);
-      return;
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-
-    const t2 = await sequelize.transaction();
-    try {
-      const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
-      const je = await JournalEntries.create({
-        clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
-        narration: reference, reference, transaction_currency: 'SSP', base_currency: 'SSP',
-        exchange_rate: 1.0, total_debit: amount, total_credit: amount, base_total_debit: amount, base_total_credit: amount,
-        status: 'posted', created_by: userId || 'system', posted_by: userId || 'system', posted_date: new Date(),
-      }, { transaction: t2 });
-      // Reversal of the original Dr [cash/bank] / Cr [receivable]: the receivable
-      // goes back up, the cash/bank it was never actually kept in goes back down.
-      await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: receivableAccount.id, debit_amount: amount, credit_amount: 0, base_debit_amount: amount, base_credit_amount: 0, description },
-        { je_id: je.id, account_id: originalDebitAccount.id, debit_amount: 0, credit_amount: amount, base_debit_amount: 0, base_credit_amount: amount, description },
-      ], { transaction: t2 });
-      await AccountLedger.bulkCreate([
-        { clinic_id: clinicId, account_id: receivableAccount.id, transaction_date: today, debit_amount: amount, credit_amount: 0, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-        { clinic_id: clinicId, account_id: originalDebitAccount.id, transaction_date: today, debit_amount: 0, credit_amount: amount, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-      ], { transaction: t2 });
-      await t2.commit();
-    } catch (jeErr) {
-      await t2.rollback();
-      console.warn('Non-fatal: failed to post payment-reversal GL:', jeErr.message);
-    }
-  } catch (coaErr) {
-    console.warn('Non-fatal: payment-reversal GL posting skipped:', coaErr.message);
   }
+
+  // No original entry to go on — a receipt from before this posting method
+  // existed, or one whose posting failed at the time. Fall back to today's
+  // preference, same as a forward payment would resolve.
+  if (!originalDebitAccount) {
+    if (method === 'cash') {
+      originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1100', is_active: true }, transaction })
+        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: 'cash' } }, transaction })
+        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } }, order: [['account_code', 'ASC']], transaction });
+    } else {
+      // card, mobile_money, bank_transfer, insurance — all posted to the main bank account originally
+      originalDebitAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, is_bank_account: true, is_active: true }, order: [['account_code', 'ASC']], transaction })
+        || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_type: 'asset', is_active: true }, order: [['account_code', 'ASC']], transaction });
+    }
+  }
+
+  const bill = billId ? await PatientBill.findByPk(billId, { transaction }) : null;
+  const receivableCode = bill?.scheme_id ? '1210' : '1200';
+  const receivableAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: receivableCode, is_active: true }, transaction })
+    || await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1200', is_active: true }, transaction });
+
+  if (!originalDebitAccount || !receivableAccount) {
+    throw new Error(`Cannot reverse this payment — missing ${!originalDebitAccount ? 'the original payment' : 'the receivable'} account for clinic ${clinicId}.`);
+  }
+
+  const today = entryDate || new Date().toISOString().split('T')[0];
+  return postJournalEntry({
+    clinicId, branchId, transaction, entryDate: today, description, reference,
+    // Reversal of the original Dr [cash/bank] / Cr [receivable]: the receivable
+    // goes back up, the cash/bank it was never actually kept in goes back down.
+    lines: [
+      { accountId: receivableAccount.id, debit: amount, description },
+      { accountId: originalDebitAccount.id, credit: amount, description },
+    ],
+    userId,
+  });
 }
 
 // Best-effort: restores a patient's deposit balance when a receipt that was paid via
@@ -165,31 +133,28 @@ async function reversePaymentGL({ clinicId, billId, amount, paymentMethod, refer
 // patient's spendable balance with no way to use it again, even though the bill it paid
 // is (by the reversal logic above) no longer considered paid. Mirrors
 // restoreInventoryForVoidedServices's own best-effort, own-transaction style.
-async function restoreDepositForVoidedReceipt(receipt, reason, processedBy) {
+// N2: shares the caller's transaction — the deposit-balance restore and its
+// GL reversal used to be two separate best-effort transactions, either of
+// which could silently fail while the receipt status changed anyway.
+async function restoreDepositForVoidedReceipt(receipt, reason, processedBy, transaction) {
   if (receipt.payment_method !== 'deposit') return;
   const amount = parseFloat(receipt.payment_amount) || 0;
   if (amount <= 0) return;
-  const bill = receipt.bill_id ? await PatientBill.findByPk(receipt.bill_id) : null;
+  const bill = receipt.bill_id ? await PatientBill.findByPk(receipt.bill_id, { transaction }) : null;
   const currency = bill?.bill_currency || BASE_CURRENCY;
 
-  const t = await sequelize.transaction();
-  try {
-    await adjustDepositBalance(t, {
-      patientId: receipt.patient_id, patientName: receipt.patient_name, clinicId: receipt.clinic_id,
-      branchId: receipt.branch_id, currency, type: 'usage_reversal', amount,
-      billId: receipt.bill_id, reversedReceiptId: receipt.id,
-      notes: reason || 'Deposit payment reversed', createdBy: processedBy,
-    });
-    await t.commit();
-  } catch (e) {
-    await t.rollback();
-    console.warn('Non-fatal: failed to restore deposit balance for voided receipt:', e.message);
-    return;
-  }
+  await adjustDepositBalance(transaction, {
+    patientId: receipt.patient_id, patientName: receipt.patient_name, clinicId: receipt.clinic_id,
+    branchId: receipt.branch_id, currency, type: 'usage_reversal', amount,
+    billId: receipt.bill_id, reversedReceiptId: receipt.id,
+    notes: reason || 'Deposit payment reversed', createdBy: processedBy,
+  });
 
-  reverseDepositUsageGL({
-    clinicId: receipt.clinic_id, amount, reference: `RCP-${receipt.id}`,
-    description: `Deposit payment reversed — receipt ${receipt.receipt_number}`, userId: processedBy,
+  await reverseDepositUsageGL({
+    clinicId: receipt.clinic_id, branchId: receipt.branch_id, amount, currency,
+    reference: `RCP-${receipt.id}`,
+    description: `Deposit payment reversed — receipt ${receipt.receipt_number}`,
+    userId: processedBy, transaction,
   });
 }
 
@@ -397,10 +362,20 @@ router.get('/clinic/:clinicId/date-range', async (req, res) => {
 
 // Update receipt status (void/refund)
 router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) => {
+  // N2: the receipt/bill status change and the GL reversal it implies now
+  // commit or roll back together — previously each reversal step opened (or
+  // skipped) its own separate transaction, called fire-and-forget after the
+  // receipt had already been updated, and swallowed failures as "non-fatal".
+  // That let a receipt end up "voided" with the bill still showing paid, or
+  // the ledger still showing cash received for a payment the UI said was
+  // reversed. Row locking (SELECT ... FOR UPDATE, so a second concurrent
+  // void is impossible) and folding restoreInventoryForVoidedServices into
+  // this same transaction are B2's job in Phase 4, not done here.
+  let t;
   try {
     const { receiptId } = req.params;
     const { status, reason } = req.body;
-    
+
     if (!['active', 'voided', 'refunded'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
@@ -413,21 +388,24 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     }
 
     const previousStatus = receipt.status;
-    const updatedReceipt = await receipt.update({ 
+    let reversedServices = [];
+    let billForInventoryRestore = null;
+
+    t = await sequelize.transaction();
+    const updatedReceipt = await receipt.update({
       status,
       notes: reason ? `${status.charAt(0).toUpperCase() + status.slice(1)}: ${reason}` : undefined,
       updated_at: new Date()
-    });
+    }, { transaction: t });
 
     // If changing from active to voided/refunded, reverse the payment on the bill
     if (previousStatus === 'active' && ['voided', 'refunded'].includes(status) && receipt.bill_id) {
-      const bill = await PatientBill.findByPk(receipt.bill_id);
+      const bill = await PatientBill.findByPk(receipt.bill_id, { transaction: t });
       if (bill) {
         // Deep clone the array so Sequelize detects the mutation
         let updatedServices = JSON.parse(JSON.stringify(normalizeServices(bill.services)));
-        
+
         // Reverse paid status for specific services
-        const reversedServices = [];
         if (receipt.paid_services && Array.isArray(receipt.paid_services)) {
           receipt.paid_services.forEach(idx => {
             const index = parseInt(idx, 10);
@@ -443,7 +421,7 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
         const receiptAmount = parseFloat(receipt.payment_amount) || 0;
         let newPaidAmount = Math.max(0, parseFloat(bill.paid_amount) - receiptAmount);
         let newBalanceAmount = parseFloat(bill.total_amount) - newPaidAmount;
-        
+
         let newBillStatus = bill.status;
         if (newBalanceAmount > 0) {
           newBillStatus = newPaidAmount > 0 ? 'partial' : 'pending';
@@ -457,18 +435,16 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
           balance_amount: newBalanceAmount,
           status: newBillStatus,
           updated_at: new Date()
-        });
+        }, { transaction: t });
 
-        if (reversedServices.length > 0) {
-          await restoreInventoryForVoidedServices(bill, reversedServices, reason, req.user?.displayName || req.user?.email);
-        }
+        if (reversedServices.length > 0) billForInventoryRestore = bill;
       }
     }
 
     // Same active → voided/refunded transition, but independent of whether a bill_id/bill
     // was found above — a deposit receipt reversal only ever needs the receipt itself.
     if (previousStatus === 'active' && ['voided', 'refunded'].includes(status)) {
-      await restoreDepositForVoidedReceipt(receipt, reason, req.user?.displayName || req.user?.email);
+      await restoreDepositForVoidedReceipt(receipt, reason, req.user?.displayName || req.user?.email, t);
 
       // Reverse the GL entry the original payment posted (cash/card/mobile/bank/insurance —
       // everything restoreDepositForVoidedReceipt's own reversal doesn't already cover).
@@ -477,13 +453,25 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
       // just reversed.
       await reversePaymentGL({
         clinicId: receipt.clinic_id,
+        branchId: receipt.branch_id,
         billId: receipt.bill_id,
         amount: parseFloat(receipt.payment_amount) || 0,
         paymentMethod: receipt.payment_method,
         reference: `RCP-${receipt.id}`,
         description: `Receipt ${status} — ${receipt.receipt_number}${reason ? ` (${reason})` : ''}`,
         userId: req.user?.displayName || req.user?.email,
+        transaction: t,
       });
+    }
+
+    await t.commit();
+
+    // Best-effort, outside the transaction — stock/audit are not accounting
+    // postings and are not what N2 covers (B2 in Phase 4 folds stock restore
+    // into the same transaction as the rest).
+    if (billForInventoryRestore) {
+      await restoreInventoryForVoidedServices(billForInventoryRestore, reversedServices, reason, req.user?.displayName || req.user?.email).catch((e) =>
+        console.error(`Receipt ${receipt.receipt_number}: status changed but inventory restore failed —`, e.message));
     }
 
     if (previousStatus !== status) {
@@ -505,8 +493,9 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
       receipt: updatedReceipt
     });
   } catch (error) {
+    if (t && !t.finished) await t.rollback().catch(() => {});
     console.error('Error updating receipt status:', error);
-    res.status(500).json({ error: 'Failed to update receipt status' });
+    res.status(error.message?.startsWith('Cannot reverse') ? 400 : 500).json({ error: error.message || 'Failed to update receipt status' });
   }
 });
 
