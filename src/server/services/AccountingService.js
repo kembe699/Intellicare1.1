@@ -69,7 +69,14 @@ class AccountingService {
 
     if (inverseRate) return 1.0 / parseFloat(inverseRate.rate);
 
-    throw new Error(`No exchange rate found for ${fromCurrency} to ${toCurrency} on ${dateStr}`);
+    // C4: this used to be caught by callers and silently treated as 1:1 —
+    // posting a USD payment as if it were the same number of SSP, understating
+    // (or overstating) the ledger with no visible sign anything was wrong.
+    // Every real caller now lets this propagate and fails the whole posting
+    // instead (see JournalPostingService.postJournalEntry, which never
+    // catches it) — the message says exactly what to do about it, since this
+    // is the error a cashier will actually see.
+    throw new Error(`No exchange rate found for ${fromCurrency} to ${toCurrency} on ${dateStr} — add today's ${fromCurrency}→${toCurrency} rate in Accounting > Exchange Rates before recording this.`);
   }
 
   /**

@@ -68,6 +68,23 @@ afterAll(async () => {
   } catch (e) { console.warn('journalPosting cleanup failed (non-fatal):', e.message); }
 });
 
+describe('C4: postJournalEntry blocks rather than defaulting to 1:1 when no rate exists', () => {
+  test('a currency with no configured exchange rate fails the posting, not a silent 1:1', async () => {
+    await withTenant(async () => {
+      const t = await sequelize.transaction();
+      await expect(postJournalEntry({
+        clinicId: TEST_CLINIC_ID, transaction: t, entryDate: '2026-01-01', currency: 'GBP', // no GBP rate configured anywhere in this test's fixtures
+        description: 'JPTEST-no-rate',
+        lines: [{ accountId: cashAccountId, debit: 50 }, { accountId: receivableAccountId, credit: 50 }],
+      })).rejects.toThrow(/No exchange rate found for GBP to SSP.*add today's GBP.*rate/);
+      await t.rollback();
+    });
+
+    const [rows] = await sequelize.query(`SELECT id FROM journal_entries WHERE description = 'JPTEST-no-rate'`);
+    expect(rows).toHaveLength(0); // nothing was posted at a wrong/guessed rate
+  });
+});
+
 describe('postJournalEntry — contract', () => {
   test('throws without an open transaction', async () => {
     await expect(postJournalEntry({
