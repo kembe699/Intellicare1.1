@@ -63,8 +63,7 @@ async function reverseDepositUsageGL({ clinicId, branchId, amount, currency, ref
 // reverseDepositUsageGL already reverse those on their own, separate account (2150
 // Patient Deposits Held), and running both would double-reverse the receivable.
 // N2: requires the caller's own transaction and throws on failure (see
-// postDepositGL). C1 (Phase 3) still hardcodes 'SSP'/1:1 here — left
-// unchanged in this commit, fixed together with the other currency items.
+// postDepositGL).
 async function reversePaymentGL({ clinicId, branchId, billId, amount, paymentMethod, reference, description, userId, transaction, entryDate }) {
   const method = (paymentMethod || 'cash').toLowerCase();
   if (method === 'deposit' || amount <= 0) return null;
@@ -115,9 +114,20 @@ async function reversePaymentGL({ clinicId, branchId, billId, amount, paymentMet
     throw new Error(`Cannot reverse this payment — missing ${!originalDebitAccount ? 'the original payment' : 'the receivable'} account for clinic ${clinicId}.`);
   }
 
+  // C1: reverse at the ORIGINAL entry's currency and rate, not today's — this
+  // used to hardcode 'SSP'/1:1, so voiding a USD payment reversed only the
+  // raw USD number as if it were the same number of SSP. originalJE (found
+  // above by this receipt's own RCP-<id> reference) is the source of truth
+  // for what was actually posted; only a receipt with no traceable original
+  // entry (pre-dating this posting method) falls back to the bill's own
+  // currency at today's rate.
+  const reversalCurrency = originalJE?.transaction_currency || bill?.bill_currency;
+  const reversalRate = originalJE?.transaction_currency ? parseFloat(originalJE.exchange_rate) : undefined;
+
   const today = entryDate || new Date().toISOString().split('T')[0];
   return postJournalEntry({
     clinicId, branchId, transaction, entryDate: today, description, reference,
+    currency: reversalCurrency, exchangeRate: reversalRate,
     // Reversal of the original Dr [cash/bank] / Cr [receivable]: the receivable
     // goes back up, the cash/bank it was never actually kept in goes back down.
     lines: [
@@ -611,3 +621,7 @@ router.get('/clinic/:clinicId/stats', async (req, res) => {
 });
 
 module.exports = router;
+// Exported for tests only (receiptReversalCurrency.test.js — C1): asserting
+// the reversal picks up the ORIGINAL entry's currency/rate needs to call
+// this directly rather than through the HTTP surface.
+module.exports.reversePaymentGL = reversePaymentGL;
