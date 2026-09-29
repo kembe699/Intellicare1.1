@@ -1700,8 +1700,14 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
       notes: paymentData.notes,
       from_lease: paymentData.from_lease || false,
       lease_details: paymentData.lease_details,
-      cashier_name: req.body.cashierName || req.body.cashier_name || 'System',
-      cashier_id: req.body.cashierId || req.body.cashier_id || null,
+      // B4: cashier attribution comes from the AUTHENTICATED session (req.user,
+      // already verified above against an open CashierShift), never from the
+      // request body — a client-supplied cashierId/cashierName let anyone
+      // recording a payment attribute it to a different cashier than whoever
+      // actually holds the open shift and typed it in, breaking reconciliation
+      // and audit trail for the person it was actually attributed to.
+      cashier_name: req.user?.displayName || req.user?.email || 'System',
+      cashier_id: userId,
       status: 'active'
     };
     
@@ -1928,7 +1934,7 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     try {
       const rr = require('./reports');
       await rr.logAudit({ req,
-        clinic_id: updatedBill?.clinic_id, user_id: req.body.cashierId || req.user?.id, user_name: req.body.cashierName || req.user?.displayName, user_role: req.user?.role,
+        clinic_id: updatedBill?.clinic_id, user_id: userId, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Billing', action: 'PAYMENT_RECORDED', entity_type: 'PatientBill', entity_id: billId,
         description: `Payment of ${paymentData.amount} (${paymentData.payment_method}) recorded on bill ${updatedBill?.bill_number} — receipt ${receiptNumber}`,
         new_values: { amount: paymentData.amount, method: paymentData.payment_method, receipt_number: receiptNumber },
@@ -1999,8 +2005,8 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         notes: paymentData.notes,
         from_lease: paymentData.from_lease,
         lease_details: paymentData.lease_details,
-        cashier_name: paymentData.cashier_name,
-        cashier_id: paymentData.cashier_id,
+        cashier_name: req.user?.displayName || req.user?.email || 'System',
+        cashier_id: userId,
         paid_services: paymentData.partialLineSplit ? [paymentData.partialLineSplit.index] : (paymentData.paidServiceIndexes || []),
         service_details: serviceDetails
       }
