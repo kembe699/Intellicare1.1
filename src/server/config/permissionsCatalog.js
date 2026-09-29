@@ -50,6 +50,9 @@ const CATALOG = [
   ['accounting.journal_entries.approve', 'Approve/reject journal entries', 'accounting', 'Approve or reject a submitted journal entry', ['admin', 'finance_manager']],
   ['fx.write', 'Manage FX settings', 'accounting', 'Currency conversion, revaluation, FX report settings', ['admin', 'accountant', 'finance_manager']],
   ['ledger_accounts.write', 'Manage ledger accounts', 'accounting', 'Create/edit/delete ledger accounts', ['admin', 'accountant', 'finance_manager']],
+  ['assets.view', 'View fixed assets', 'accounting', 'Asset register, categories, depreciation and reports (read)', ['admin', 'accountant', 'finance_manager', 'auditor']],
+  ['assets.write', 'Manage fixed assets', 'accounting', 'Register/edit assets and categories, run depreciation, revalue', ['admin', 'accountant', 'finance_manager']],
+  ['assets.dispose', 'Dispose of fixed assets', 'accounting', 'Record an asset disposal and its gain/loss posting', ['admin', 'finance_manager']],
 
   ['billing.write', 'Manage billing adjustments', 'billing', 'Bill line items, discounts, write-offs, credit notes, insurance claims on a bill', ['admin', 'reception', 'doctor', 'finance_manager', 'accountant']],
   ['bills.read', 'View patient bills', 'billing', 'View bills, receipts, search', ['admin', 'reception', 'doctor', 'cashier', 'finance_manager', 'accountant', 'auditor', 'pharmacy', 'lab']],
