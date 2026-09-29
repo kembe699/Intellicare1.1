@@ -9,6 +9,7 @@ const router = express.Router();
 const { CashierShift, Receipt, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 
 // Sequelize's DataTypes.JSON auto-parse depends on the MySQL wire protocol reporting the
 // column as JSON-typed, but MariaDB (common on shared hosts) stores JSON columns as plain
@@ -533,17 +534,9 @@ router.post('/transfer-cash', authorize('cashier.write'), async (req, res) => {
       });
     }
 
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const lastJE = await JournalEntries.findOne({
-      where: { clinic_id, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-      order: [['je_number', 'DESC']]
-    });
-    const jeSeq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-    const jeNumber = `JE-${year}${month}-${String(jeSeq).padStart(4, '0')}`;
-
     const t = await seq.transaction();
     try {
+      const jeNumber = await getNextDocumentNumber('JE', clinic_id, t);
       const glBranchId = getCreateBranchId(req);
       const je = await JournalEntries.create({
         clinic_id,

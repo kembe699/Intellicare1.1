@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const { authorize } = require('../middleware/authorize');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 
 const BASE_CURRENCY = 'SSP';
 // Same roles as BILLS_FINANCIAL_ACTION in patientBills.js — recording a payment/deposit
@@ -202,15 +203,10 @@ async function resolveCashOrBankAccount(clinicId, method) {
   });
 }
 
-async function generateJENumber(clinicId) {
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, '0');
-  const lastJE = await JournalEntries.findOne({
-    where: { clinic_id: clinicId, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-    order: [['je_number', 'DESC']]
-  });
-  const seq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-  return `JE-${year}${month}-${String(seq).padStart(4, '0')}`;
+// N1: superseded — see DocumentNumberService.getNextDocumentNumber. Kept only
+// because invoices.js still imports the name; it now just delegates.
+async function generateJENumber(clinicId, transaction) {
+  return getNextDocumentNumber('JE', clinicId, transaction);
 }
 
 // direction: 'in' = deposit taken (Dr Cash/Bank, Cr 2150), 'out' = refund paid (Dr 2150, Cr Cash/Bank)
@@ -224,11 +220,11 @@ async function postDepositGL({ clinicId, amount, method, direction, reference, d
     }
     const debitAccount = direction === 'in' ? cashOrBank : depositsHeld;
     const creditAccount = direction === 'in' ? depositsHeld : cashOrBank;
-    const jeNumber = await generateJENumber(clinicId);
     const today = new Date().toISOString().split('T')[0];
 
     const t2 = await sequelize.transaction();
     try {
+      const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
       const je = await JournalEntries.create({
         clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
         narration: reference, reference, transaction_currency: BASE_CURRENCY, base_currency: BASE_CURRENCY,

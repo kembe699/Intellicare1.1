@@ -39,10 +39,10 @@ async function resolveReceivableAccount(clinicId, schemeId) {
 async function postJournalEntry({ clinicId, amount, debitAccount, creditAccount, reference, description, userId, branchId }) {
   try {
     if (!debitAccount || !creditAccount || !(amount > 0)) return;
-    const jeNumber = await generateJENumber(clinicId);
     const today = new Date().toISOString().split('T')[0];
     const t2 = await sequelize.transaction();
     try {
+      const jeNumber = await generateJENumber(clinicId, t2);
       const je = await JournalEntries.create({
         clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
         narration: reference, reference, transaction_currency: BASE_CURRENCY, base_currency: BASE_CURRENCY,

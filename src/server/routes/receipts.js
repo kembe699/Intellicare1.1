@@ -13,6 +13,7 @@ const BillingIntegrationService = require('../services/BillingIntegrationService
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { adjustDepositBalance, BASE_CURRENCY } = require('./patientDeposits');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 
 // receipts.paid_services/service_details are JSON columns, but this host's MariaDB
 // stores JSON as LONGTEXT under the hood (same issue documented in lisModule.js's
@@ -40,18 +41,11 @@ async function reverseDepositUsageGL({ clinicId, amount, reference, description,
     const arAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '1200', is_active: true } });
     const depositsHeld = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '2150', is_active: true } });
     if (!arAccount || !depositsHeld) return;
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const lastJE = await JournalEntries.findOne({
-      where: { clinic_id: clinicId, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-      order: [['je_number', 'DESC']]
-    });
-    const jeSeq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-    const jeNumber = `JE-${year}${month}-${String(jeSeq).padStart(4, '0')}`;
     const today = new Date().toISOString().split('T')[0];
 
     const t2 = await sequelize.transaction();
     try {
+      const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
       const je = await JournalEntries.create({
         clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
         narration: reference, reference, transaction_currency: BASE_CURRENCY, base_currency: BASE_CURRENCY,
@@ -135,18 +129,11 @@ async function reversePaymentGL({ clinicId, billId, amount, paymentMethod, refer
       return;
     }
 
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const lastJE = await JournalEntries.findOne({
-      where: { clinic_id: clinicId, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-      order: [['je_number', 'DESC']]
-    });
-    const jeSeq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-    const jeNumber = `JE-${year}${month}-${String(jeSeq).padStart(4, '0')}`;
     const today = new Date().toISOString().split('T')[0];
 
     const t2 = await sequelize.transaction();
     try {
+      const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
       const je = await JournalEntries.create({
         clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
         narration: reference, reference, transaction_currency: 'SSP', base_currency: 'SSP',

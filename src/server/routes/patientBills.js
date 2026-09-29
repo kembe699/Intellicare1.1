@@ -11,6 +11,7 @@ const { normalizeServices } = require('../utils/normalizeServices');
 const AccountingService = require('../services/AccountingService');
 const { authorize } = require('../middleware/authorize');
 const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } = require('./patientDeposits');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 
 // Read access is intentionally broad — every clinical/financial-facing role needs to look
 // up a patient's bill (a doctor checking it's settled, pharmacy/lab billing against it,
@@ -1727,16 +1728,6 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         }
 
         if (debitAccount && creditAccount) {
-          // Generate JE number
-          const year = new Date().getFullYear();
-          const month = String(new Date().getMonth() + 1).padStart(2, '0');
-          const lastJE = await JournalEntries.findOne({
-            where: { clinic_id: clinicId, je_number: { [COAOp.like]: `JE-${year}${month}-%` } },
-            order: [['je_number', 'DESC']]
-          });
-          const jeSeq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-          const jeNumber = `JE-${year}${month}-${String(jeSeq).padStart(4, '0')}`;
-
           // Scheme-priced bills (e.g. insurance schemes billing in USD) carry their own
           // currency on bill_currency. This JE is built by hand (not via
           // AccountingService.createGLEntry), so unlike the bill-creation/discount/
@@ -1761,6 +1752,7 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
 
           const t2 = await seq.transaction();
           try {
+            const jeNumber = await getNextDocumentNumber('JE', clinicId, t2);
             const je = await JournalEntries.create({
               clinic_id: clinicId,
               je_number: jeNumber,

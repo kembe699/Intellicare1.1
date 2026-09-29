@@ -5,9 +5,9 @@ const { authorize } = require('../middleware/authorize');
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /accounting/cash-transfer, so the API enforces what the client already assumes.
 const router = express.Router();
-const { Op } = require('sequelize');
 const { LedgerAccount } = require('../models');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 
 // Note: this file previously also defined a `postToChartOfAccounts` helper
 // that duplicated the POST / route's own inline posting logic below, with the
@@ -85,18 +85,9 @@ router.post('/', authorize('cash_transfers.write'), async (req, res) => {
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'SSP';
 
-    // Generate JE number
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const lastJE = await JournalEntries.findOne({
-      where: { clinic_id, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-      order: [['je_number', 'DESC']]
-    });
-    const seq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-    const jeNumber = `JE-${year}${month}-${String(seq).padStart(4, '0')}`;
-
     const t = await sequelize.transaction();
     try {
+      const jeNumber = await getNextDocumentNumber('JE', clinic_id, t);
       // Record the transfer history. cash_transfers.created_by is an INT (the user's id),
       // unlike journal_entries.created_by below which is a free-text varchar — the literal
       // string 'system' used to be passed here too and MySQL rejected it outright
