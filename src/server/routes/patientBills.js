@@ -674,6 +674,16 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     // the same visit_id. Resolve + lock the active bill the same visit-scoped way every
     // other writer does (see billingResolver.js); if one exists, merge into it instead
     // of creating a second one.
+    //
+    // The bill row AND its accounting entries are one atomic transaction — a real ACID
+    // operation, not "create the bill, then best-effort post the ledger afterward". The
+    // old two-step version let a bill commit while its GL posting failed for any reason
+    // (a missing chart-of-accounts entry, a transient connection drop), leaving a bill
+    // that fully exists with nothing posted for it in the ledger; the income statement
+    // then fell short of the cashier's own totals with nothing on screen looking wrong.
+    // Now either both the bill and its ledger entry commit, or neither does — a failure
+    // here surfaces as this request failing (see the retry below and the route's own
+    // catch), not as a silent gap somebody has to notice days later.
     const attemptCreateOrMerge = async () => {
       const createTxn = await sequelize.transaction();
       try {
@@ -698,12 +708,29 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
           result = existingBill;
           isNew = false;
           console.log('An active bill already existed for this visit — merged into', result.bill_number, 'instead of creating a duplicate');
+
+          // Accounting entries post the bill's total_amount as fresh revenue — only
+          // correct for an actual new bill. A merge into an existing bill posts just
+          // the newly-merged portion instead, the same way add-services does.
+          const mergedTotal = parseFloat(billData.total_amount || 0);
+          if (mergedTotal > 0) {
+            await AccountingService.createGLTopUpForPatientBill(
+              { id: result.id, clinic_id: result.clinic_id, scheme_id: result.scheme_id, bill_number: result.bill_number, patient_name: result.patient_name, bill_currency: billData.bill_currency },
+              parsedServices.filter(s => !s.isVoided),
+              mergedTotal,
+              billData.created_by,
+              createTxn,
+            );
+          }
         } else {
           result = await PatientBill.create(billData, { transaction: createTxn });
           isNew = true;
           console.log('Patient bill created successfully:', result.id);
+
+          await BillingIntegrationService.handleBillCreation(result.toJSON(), billData.created_by, createTxn);
         }
         await createTxn.commit();
+        console.log(isNew ? 'Accounting entries created for bill:' : 'Accounting entries topped up for bill:', result.bill_number);
         return { bill: result, wasNewBill: isNew };
       } catch (e) {
         if (!createTxn.finished) await createTxn.rollback().catch(() => {});
@@ -711,76 +738,30 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
       }
     };
 
-    let bill, wasNewBill;
-    try {
-      ({ bill, wasNewBill } = await attemptCreateOrMerge());
-    } catch (e) {
-      // Two connections racing to be the first to create a bill for a visit that has
-      // none yet can legitimately deadlock against each other's gap locks on the
-      // not-yet-existing visit_id row (confirmed by firing concurrent creates against
-      // this endpoint) — MySQL detects it and aborts one side rather than corrupting
-      // data. Retrying once, now that the other side has committed, finds the bill it
-      // just created and merges into it instead of surfacing a 500 to whichever request
-      // lost the race.
-      if (e.original?.code === 'ER_LOCK_DEADLOCK' || e.name === 'SequelizeUniqueConstraintError' || e.original?.code === 'ER_DUP_ENTRY') {
-        ({ bill, wasNewBill } = await attemptCreateOrMerge());
-      } else {
+    // A failure anywhere inside attemptCreateOrMerge (the bill write, the lock, or the
+    // ledger posting) aborts that whole transaction — Postgres cannot resume a
+    // transaction after a failed statement, so a retry has to start over from a fresh
+    // one, not resume mid-way. Two distinct reasons a fresh attempt can succeed where
+    // the first didn't:
+    //  - a deadlock/unique-constraint clash from two requests racing to bill the same
+    //    not-yet-existing visit (existing behavior, unchanged);
+    //  - a transient connection/pool issue (new: previously only the ledger-posting
+    //    half of this flow retried transient failures in isolation; now that it's one
+    //    transaction, the whole attempt needs to retry together).
+    const attemptWithDeadlockRetry = async () => {
+      try {
+        return await attemptCreateOrMerge();
+      } catch (e) {
+        if (e.original?.code === 'ER_LOCK_DEADLOCK' || e.name === 'SequelizeUniqueConstraintError' || e.original?.code === 'ER_DUP_ENTRY') {
+          return await attemptCreateOrMerge();
+        }
         throw e;
       }
-    }
+    };
 
-    // Accounting entries post the bill's total_amount as fresh revenue — only correct
-    // for an actual new bill. A merge into an existing bill posts just the newly-merged
-    // portion instead, the same way add-services does (see createGLTopUpForPatientBill).
-    if (!wasNewBill) {
-      const mergedTotal = parseFloat(billData.total_amount || 0);
-      if (mergedTotal > 0) {
-        try {
-          await AccountingService.createGLTopUpForPatientBill(
-            { id: bill.id, clinic_id: bill.clinic_id, scheme_id: bill.scheme_id, bill_number: bill.bill_number, patient_name: bill.patient_name, bill_currency: billData.bill_currency },
-            parsedServices.filter(s => !s.isVoided),
-            mergedTotal,
-            billData.created_by,
-          );
-        } catch (glErr) {
-          console.error(`GL top-up posting failed for merged bill ${bill.bill_number} (added ${mergedTotal}) — needs manual reconciliation:`, glErr.message);
-        }
-      }
-    }
-    if (wasNewBill) {
-      // handleBillCreation catches its own errors internally and resolves to null on
-      // failure rather than rejecting — a try/catch around this call never actually
-      // triggers. Checking the return value is the only way to know the GL entry for
-      // this bill's revenue/receivable never got created (a bill fully exists with
-      // nothing posted for it in the ledger, and nothing else here would ever
-      // surface that).
-      const glEntry = await BillingIntegrationService.handleBillCreation(bill.toJSON(), billData.created_by);
-      if (glEntry) {
-        console.log('Accounting entries created for bill:', bill.bill_number);
-      } else {
-        console.error('GL posting failed for bill (bill created, no accounting entry exists):', bill.bill_number);
-        // Try once more through the reconciler, which derives what should have
-        // been posted from the bill itself. Previously this branch only wrote an
-        // audit line, so the bill stayed missing from the ledger until somebody
-        // noticed the day did not add up.
-        try {
-          const recovered = await AccountingService.syncBillRevenueToGL(bill.id, req.user?.id || 'system');
-          if (recovered) console.log(`Bill ${bill.bill_number}: revenue recovered by reconciliation after the initial posting failed.`);
-        } catch (syncErr) {
-          console.error(`Bill ${bill.bill_number}: recovery posting also failed —`, syncErr.message);
-        }
-        try {
-          const rr = require('./reports');
-          await rr.logAudit({ req,
-            clinic_id: billData.clinic_id, user_id: req.user?.id, user_name: billData.created_by || req.user?.displayName, user_role: req.user?.role,
-            module: 'Billing', action: 'GL_POSTING_FAILED', entity_type: 'PatientBill', entity_id: bill.id,
-            description: `Bill ${bill.bill_number} was created but its accounting entry failed to post — total ${billData.total_amount} is not reflected in the ledger and needs manual reconciliation. Reason: ${BillingIntegrationService.lastBillPostingError || 'not recorded'}`,
-            new_values: { bill_number: bill.bill_number, total_amount: bill.total_amount, reason: BillingIntegrationService.lastBillPostingError || null },
-            ip_address: req.ip, status: 'failure',
-          });
-        } catch (e) {}
-      }
-    }
+    const { bill, wasNewBill } = await BillingIntegrationService.withTransientRetry(
+      attemptWithDeadlockRetry, `bill creation/merge for ${billData.patient_name}`
+    );
 
     // Create lab requests if bill contains lab tests
     try {

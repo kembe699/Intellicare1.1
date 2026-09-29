@@ -302,8 +302,16 @@ class AccountingService {
    * Create GL entry from patient bill
    * @param {Object} billData - Patient bill data
    * @param {string} userId - User creating the entry
+   * @param {import('sequelize').Transaction} [externalTransaction] - When given, the
+   *   GL entry and its receivable row become part of THIS transaction instead of
+   *   their own — the caller (patientBills.js) includes the PatientBill row itself
+   *   in the same transaction, so the bill and its ledger entry either both commit
+   *   or neither does. See the real production gap this closes: a bill could commit
+   *   while its GL posting failed for any reason, and the income statement fell
+   *   short of the cashier's own totals with nothing looking wrong until someone
+   *   noticed the day didn't add up (ledgerSweeper.js's docstring has the full story).
    */
-  async createGLFromPatientBill(billData, userId) {
+  async createGLFromPatientBill(billData, userId, externalTransaction = null) {
     try {
       const receivablesAccount = await this.getReceivableAccount(billData.clinic_id, billData.scheme_id);
       const defaultRevenueAccount = await this.getAccountByCode(billData.clinic_id, '4100'); // Patient Services Revenue (fallback)
@@ -404,7 +412,14 @@ class AccountingService {
       // whose GL entry committed but whose receivable record failed to write would show
       // correctly in the ledger while silently vanishing from receivables/aging reports
       // (and vice versa). Sharing one transaction makes that impossible.
-      const receivablesTransaction = await sequelize.transaction();
+      //
+      // ownsTransaction is false when the caller (patientBills.js) supplied its own
+      // transaction — the one that also holds the PatientBill row itself. In that case
+      // this function neither commits/rolls back nor posts separately: createGLEntry
+      // already posts within the shared transaction (see its own docstring), and the
+      // caller commits everything together once this returns.
+      const ownsTransaction = !externalTransaction;
+      const receivablesTransaction = externalTransaction || await sequelize.transaction();
       let glEntry;
       try {
         glEntry = await this.createGLEntry(glData, lineItems, userId, receivablesTransaction);
@@ -425,27 +440,26 @@ class AccountingService {
           gl_entry_id: glEntry.id
         }, { transaction: receivablesTransaction });
 
-        await receivablesTransaction.commit();
+        if (ownsTransaction) await receivablesTransaction.commit();
       } catch (innerError) {
-        await receivablesTransaction.rollback();
+        if (ownsTransaction) await receivablesTransaction.rollback();
         throw innerError;
       }
 
-      // Post it.
-      //
-      // createGLEntry writes the entry as a draft and its account_ledger rows
-      // with is_posted = false; only postGLEntry flips them. Nothing here ever
-      // called it, so every patient bill's revenue sat unposted — and the income
-      // statement counts posted rows only, so it showed a fraction of what had
-      // actually been billed while the cashier's own totals showed the real
-      // money. Posting happens after the commit above, because postGLEntry opens
-      // its own transaction and cannot see rows that are still uncommitted.
-      // Non-fatal: the bill and its ledger rows already exist and are correct,
-      // so a failure here must be visible and repairable, not a lost bill.
-      try {
-        await this.postGLEntry(glEntry.id, userId);
-      } catch (postError) {
-        console.error(`GL entry ${glEntry.id} for bill ${billData.bill_number} was created but not posted:`, postError.message);
+      // Legacy self-transacting path only (no externalTransaction supplied): confirm
+      // the entry posted. createGLEntry already posts by default within the
+      // transaction just committed above, so this is normally a fast no-op
+      // (postGLEntry returns immediately for an already-posted entry) — kept as a
+      // last-resort safety net for this path specifically. Skipped entirely when
+      // the caller supplied its own transaction: that transaction has not committed
+      // yet, so a fresh query here would not find the row at all, and posting
+      // already happened atomically as part of it regardless.
+      if (ownsTransaction) {
+        try {
+          await this.postGLEntry(glEntry.id, userId);
+        } catch (postError) {
+          console.error(`GL entry ${glEntry.id} for bill ${billData.bill_number} was created but not posted:`, postError.message);
+        }
       }
 
       return glEntry;
@@ -470,8 +484,12 @@ class AccountingService {
    * @param {Array} addedServices - Just the newly-added service lines (not the whole bill)
    * @param {number} addedAmount - Sum of addedServices, in bill_currency — the exact delta being posted
    * @param {string} userId
+   * @param {import('sequelize').Transaction} [externalTransaction] - When given (the
+   *   merge-into-existing-bill path in patientBills.js), this top-up joins the same
+   *   transaction as the bill row update itself, for the same atomicity reason as
+   *   createGLFromPatientBill above.
    */
-  async createGLTopUpForPatientBill(bill, addedServices, addedAmount, userId) {
+  async createGLTopUpForPatientBill(bill, addedServices, addedAmount, userId, externalTransaction = null) {
     if (!addedAmount || addedAmount <= 0) return null;
 
     const receivablesAccount = await this.getReceivableAccount(bill.clinic_id, bill.scheme_id);
@@ -538,7 +556,8 @@ class AccountingService {
       ...revenueLineItems,
     ];
 
-    const txn = await sequelize.transaction();
+    const ownsTransaction = !externalTransaction;
+    const txn = externalTransaction || await sequelize.transaction();
     try {
       const glEntry = await this.createGLEntry(glData, lineItems, userId, txn);
 
@@ -553,23 +572,25 @@ class AccountingService {
         status: sequelize.literal(`CASE WHEN status = 'paid' THEN 'partial' ELSE status END`),
       }, { where: { bill_id: bill.id }, transaction: txn });
 
-      await txn.commit();
-      if (affected === 0) {
-        console.warn(`No PatientReceivables row found for bill ${bill.bill_number} — GL posted for the added ${addedAmount}, but the Receivables/Aging report won't reflect it until reconciled.`);
-      }
-
-      // Posted after the commit, for the same reason as bill creation: the
-      // income statement only counts posted ledger rows, and postGLEntry runs
-      // in its own transaction so it cannot see uncommitted ones.
-      try {
-        await this.postGLEntry(glEntry.id, userId);
-      } catch (postError) {
-        console.error(`GL entry ${glEntry.id} for items added to bill ${bill.bill_number} was created but not posted:`, postError.message);
+      if (ownsTransaction) {
+        await txn.commit();
+        if (affected === 0) {
+          console.warn(`No PatientReceivables row found for bill ${bill.bill_number} — GL posted for the added ${addedAmount}, but the Receivables/Aging report won't reflect it until reconciled.`);
+        }
+        // Legacy self-transacting path only — see createGLFromPatientBill's own
+        // comment on why this is skipped when the caller supplies a transaction.
+        try {
+          await this.postGLEntry(glEntry.id, userId);
+        } catch (postError) {
+          console.error(`GL entry ${glEntry.id} for items added to bill ${bill.bill_number} was created but not posted:`, postError.message);
+        }
+      } else if (affected === 0) {
+        console.warn(`No PatientReceivables row found for bill ${bill.bill_number} — GL will post for the added ${addedAmount} once the caller's transaction commits, but the Receivables/Aging report won't reflect it until reconciled.`);
       }
 
       return glEntry;
     } catch (error) {
-      if (!txn.finished) await txn.rollback().catch(() => {});
+      if (ownsTransaction && !txn.finished) await txn.rollback().catch(() => {});
       throw error;
     }
   }

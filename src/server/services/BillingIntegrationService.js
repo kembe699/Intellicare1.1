@@ -47,11 +47,27 @@ class BillingIntegrationService {
    * Handle patient bill creation - create GL entries
    * @param {Object} billData - Patient bill data
    * @param {string} userId - User creating the bill
+   * @param {import('sequelize').Transaction} [externalTransaction] - When given
+   *   (patientBills.js's bill-creation flow), the GL entry joins the SAME
+   *   transaction as the PatientBill row itself — a real ACID operation: the bill
+   *   and its ledger entry either both commit or neither does. A failure here is
+   *   rethrown, not swallowed, and NOT retried in isolation: a failed statement
+   *   poisons the whole transaction in Postgres, so only the caller — starting a
+   *   fresh transaction from scratch — can meaningfully retry. See
+   *   patientBills.js's outer withTransientRetry for that.
    */
-  async handleBillCreation(billData, userId) {
+  async handleBillCreation(billData, userId, externalTransaction = null) {
+    if (externalTransaction) {
+      return AccountingService.createGLFromPatientBill(billData, userId, externalTransaction);
+    }
     try {
       console.log('Creating accounting entries for patient bill:', billData.bill_number);
 
+      // Legacy self-transacting path (no externalTransaction supplied) — kept for
+      // any other caller (e.g. syncExistingBills below) that posts a bill's GL
+      // entry well after the bill itself already committed, where true atomicity
+      // with the bill row is no longer possible anyway.
+      //
       // Retry a transient failure rather than dropping the entry on the floor.
       // A busy moment — a connection briefly unavailable, a dropped socket — is
       // not a reason for a bill's revenue to go unrecorded, and the ledger
@@ -340,3 +356,8 @@ class BillingIntegrationService {
 }
 
 module.exports = new BillingIntegrationService();
+// Exposed so patientBills.js can wrap its own atomic bill-creation transaction
+// (bill + GL together) in the same transient-retry logic, at the outer level
+// where a fresh transaction can actually be started from scratch.
+module.exports.withTransientRetry = withTransientRetry;
+module.exports.isTransient = isTransient;
