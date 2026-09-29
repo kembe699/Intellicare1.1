@@ -58,7 +58,12 @@ const Security = lazyWithRetry(() => import('./pages/setup/Security'));
 const Approvals = lazyWithRetry(() => import('./pages/setup/Approvals'));
 const FacilitySetup = lazyWithRetry(() => import('./pages/setup/FacilitySetup'));
 const UncodedDiagnoses = lazyWithRetry(() => import('./pages/setup/UncodedDiagnoses'));
-const FixedAssets = lazyWithRetry(() => import('./pages/accounting/FixedAssets'));
+const FixedAssetsLayout = lazyWithRetry(() => import('./pages/accounting/FixedAssetsLayout'));
+const FixedAssetsRegister = lazyWithRetry(() => import('./pages/accounting/FixedAssetsRegister'));
+const FixedAssetNew = lazyWithRetry(() => import('./pages/accounting/FixedAssetNew'));
+const FixedAssetDetail = lazyWithRetry(() => import('./pages/accounting/FixedAssetDetail'));
+const FixedAssetsDepreciation = lazyWithRetry(() => import('./pages/accounting/FixedAssetsDepreciation'));
+const FixedAssetsReports = lazyWithRetry(() => import('./pages/accounting/FixedAssetsReports'));
 const AccountingCashTransfer = lazyWithRetry(() => import('./pages/accounting/CashTransfer'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
@@ -598,9 +603,16 @@ const AppRoutes = () => {
       } />
       <Route path="/accounting/fixed-assets" element={
         <ProtectedRoute requiredPrivilege="assets.view">
-          <FixedAssets />
+          <FixedAssetsLayout />
         </ProtectedRoute>
-      } />
+      }>
+        <Route index element={<Navigate to="register" replace />} />
+        <Route path="register" element={<FixedAssetsRegister />} />
+        <Route path="register/new" element={<FixedAssetNew />} />
+        <Route path="register/:id" element={<FixedAssetDetail />} />
+        <Route path="depreciation" element={<FixedAssetsDepreciation />} />
+        <Route path="reports" element={<FixedAssetsReports />} />
+      </Route>
       <Route path="/accounting/exchange-rates" element={
         <ProtectedRoute requiredPrivilege="accounting.rates.write">
           <ExchangeRatesPage />

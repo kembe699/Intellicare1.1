@@ -110,10 +110,12 @@ router.get('/', authorize('assets.view'), async (req, res) => {
     const branchSql = branchScope(req, replacements, 'fa');
     let sql = `
       SELECT fa.*, ac.name AS category_name, ac.nature AS category_nature,
-             e.first_name AS assignee_first_name, e.last_name AS assignee_last_name
+             e.first_name AS assignee_first_name, e.last_name AS assignee_last_name,
+             u.display_name AS registered_by_name
       FROM fixed_assets fa
       JOIN asset_categories ac ON ac.id = fa.category_id
       LEFT JOIN employees e ON e.id = fa.assigned_to_employee_id
+      LEFT JOIN users u ON fa.created_by ~ '^[0-9]+$' AND u.id = fa.created_by::integer
       WHERE fa.clinic_id = :clinicId ${branchSql}`;
     if (req.query.status) { sql += ' AND fa.status = :status'; replacements.status = req.query.status; }
     if (req.query.category_id) { sql += ' AND fa.category_id = :categoryId'; replacements.categoryId = req.query.category_id; }
@@ -136,10 +138,12 @@ router.get('/:id', authorize('assets.view'), async (req, res) => {
     const branchSql = branchScope(req, replacements, 'fa');
     const [[asset]] = await sequelize.query(
       `SELECT fa.*, ac.name AS category_name, ac.nature AS category_nature,
-              e.first_name AS assignee_first_name, e.last_name AS assignee_last_name
+              e.first_name AS assignee_first_name, e.last_name AS assignee_last_name,
+              u.display_name AS registered_by_name
        FROM fixed_assets fa
        JOIN asset_categories ac ON ac.id = fa.category_id
        LEFT JOIN employees e ON e.id = fa.assigned_to_employee_id
+       LEFT JOIN users u ON fa.created_by ~ '^[0-9]+$' AND u.id = fa.created_by::integer
        WHERE fa.id = :id AND fa.clinic_id = :clinicId ${branchSql}`,
       { replacements }
     );

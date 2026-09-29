@@ -90,6 +90,27 @@ async function migrateFixedAssetsTables(db = sequelize) {
     )
   `);
 
+  // acquisition_cost/salvage_value/current_value/accumulated_depreciation stay in the
+  // clinic's base currency (consistent with chart_of_accounts/general_ledger, which are
+  // base-currency only) — acquisition_currency + acquisition_cost_original just record
+  // what was actually entered, for display, the same way patient bills keep bill_currency
+  // alongside a base-currency total.
+  const currencyColumns = [
+    ['acquisition_currency', "ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS acquisition_currency VARCHAR(10)"],
+    ['acquisition_cost_original', "ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS acquisition_cost_original NUMERIC(15,2)"],
+    ['acquisition_exchange_rate', "ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS acquisition_exchange_rate NUMERIC(18,6)"],
+  ];
+  for (const [label, sql] of currencyColumns) {
+    try { await db.query(sql); } catch (err) { console.error(`Could not add column ${label}:`, err.message); }
+  }
+  // Backfill existing rows so old assets still display a currency instead of blank.
+  await db.query(`
+    UPDATE fixed_assets SET acquisition_currency = COALESCE(acquisition_currency, (SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1), 'USD'),
+                             acquisition_cost_original = COALESCE(acquisition_cost_original, acquisition_cost),
+                             acquisition_exchange_rate = COALESCE(acquisition_exchange_rate, 1)
+    WHERE acquisition_currency IS NULL
+  `).catch((err) => console.error('Could not backfill acquisition currency columns:', err.message));
+
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_asset_categories_clinic ON asset_categories (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_fixed_assets_clinic ON fixed_assets (clinic_id)',

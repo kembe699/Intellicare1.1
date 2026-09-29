@@ -153,7 +153,7 @@ const accountingDropdown: NavDropdown = {
     { label: 'Journal Entries', href: '/accounting/journal-entries', icon: ClipboardList, privilege: 'accounting.write' },
     { label: 'Receivables', href: '/accounting/receivables', icon: PiggyBank, privilege: 'accounting.read' },
     { label: 'Financial Reports', href: '/accounting/reports', icon: TrendingUp, privilege: 'accounting.read' },
-    { label: 'Fixed Assets', href: '/accounting/fixed-assets', icon: Building2, privilege: 'assets.view' },
+    { label: 'Fixed Assets', href: '/accounting/fixed-assets/register', icon: Building2, privilege: 'assets.view' },
     { label: 'Exchange Rates', href: '/accounting/exchange-rates', icon: ArrowRightLeft, privilege: 'accounting.rates.write' },
     { label: 'Cash Transfer', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },
     { label: 'Billing Management', href: '/billing-management', icon: FileSpreadsheet, privilege: 'billing.write' },

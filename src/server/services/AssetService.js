@@ -1,6 +1,7 @@
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const AccountingService = require('./AccountingService');
+const CurrencyService = require('./CurrencyService');
 
 /**
  * Fixed asset register, depreciation and disposal/revaluation — the GL side
@@ -42,6 +43,7 @@ class AssetService {
       clinic_id: clinicId, branch_id: branchId, name, category_id: categoryId, description,
       serial_number: serialNumber, location, assigned_to_employee_id: assignedToEmployeeId,
       acquisition_date: acquisitionDate, acquisition_cost: acquisitionCostRaw,
+      acquisition_currency: acquisitionCurrencyRaw,
       salvage_value: salvageValueRaw, useful_life_years: usefulLifeYearsRaw,
       payment_account_code: paymentAccountCode, notes,
     } = data;
@@ -50,11 +52,24 @@ class AssetService {
     if (!name || !name.trim()) throw new Error('name is required');
     if (!categoryId) throw new Error('category_id is required');
     if (!acquisitionDate) throw new Error('acquisition_date is required');
-    const acquisitionCost = parseFloat(acquisitionCostRaw);
-    if (!(acquisitionCost > 0)) throw new Error('acquisition_cost must be a positive number');
+    const acquisitionCostOriginal = parseFloat(acquisitionCostRaw);
+    if (!(acquisitionCostOriginal > 0)) throw new Error('acquisition_cost must be a positive number');
 
     const category = await this.getCategory(clinicId, categoryId);
     if (!category) throw new Error('Asset category not found');
+
+    // acquisition_cost is always stored/used in the clinic's base currency (matching
+    // chart_of_accounts/general_ledger and every downstream depreciation/disposal
+    // calculation) — acquisition_currency/acquisition_cost_original just record what
+    // was actually entered, the same way patient bills keep bill_currency alongside a
+    // base-currency total.
+    const baseCurrencyData = await CurrencyService.getBaseCurrency();
+    const baseCurrency = baseCurrencyData.code;
+    const acquisitionCurrency = acquisitionCurrencyRaw || baseCurrency;
+    const exchangeRate = acquisitionCurrency === baseCurrency
+      ? 1
+      : await AccountingService.getExchangeRate(clinicId, acquisitionCurrency, baseCurrency, acquisitionDate);
+    const acquisitionCost = AccountingService.convertAmount(acquisitionCostOriginal, exchangeRate);
 
     const nature = category.nature;
     const usefulLifeYears = usefulLifeYearsRaw != null ? parseInt(usefulLifeYearsRaw, 10) : category.default_useful_life_years;
@@ -93,10 +108,12 @@ class AssetService {
             description: `Asset acquired - ${assetCode} - ${name}`,
             reference_id: assetId,
             reference_module: 'fixed_asset_acquisition',
+            transaction_currency: acquisitionCurrency,
+            exchange_rate: exchangeRate,
           },
           [
-            { account_id: assetAccount.id, debit_amount: acquisitionCost, credit_amount: 0, description: `Asset - ${name}` },
-            { account_id: paymentAccount.id, debit_amount: 0, credit_amount: acquisitionCost, description: `Payment for asset - ${name}` },
+            { account_id: assetAccount.id, debit_amount: acquisitionCostOriginal, credit_amount: 0, description: `Asset - ${name}` },
+            { account_id: paymentAccount.id, debit_amount: 0, credit_amount: acquisitionCostOriginal, description: `Payment for asset - ${name}` },
           ],
           userId,
           transaction
@@ -107,18 +124,21 @@ class AssetService {
       await sequelize.query(
         `INSERT INTO fixed_assets (
            id, clinic_id, branch_id, asset_code, name, category_id, description, serial_number, location,
-           assigned_to_employee_id, nature, acquisition_date, acquisition_cost, salvage_value, useful_life_years,
+           assigned_to_employee_id, nature, acquisition_date, acquisition_cost, acquisition_currency,
+           acquisition_cost_original, acquisition_exchange_rate, salvage_value, useful_life_years,
            depreciation_method, accumulated_depreciation, current_value, status, acquisition_gl_entry_id, notes, created_by
          ) VALUES (
            :id, :clinicId, :branchId, :assetCode, :name, :categoryId, :description, :serialNumber, :location,
-           :assignedTo, :nature, :acquisitionDate, :acquisitionCost, :salvageValue, :usefulLifeYears,
+           :assignedTo, :nature, :acquisitionDate, :acquisitionCost, :acquisitionCurrency,
+           :acquisitionCostOriginal, :exchangeRate, :salvageValue, :usefulLifeYears,
            :method, 0, :currentValue, 'active', :glEntryId, :notes, :createdBy
          )`,
         {
           replacements: {
             id: assetId, clinicId, branchId: branchId || null, assetCode, name: name.trim(), categoryId,
             description: description || null, serialNumber: serialNumber || null, location: location || null,
-            assignedTo: assignedToEmployeeId || null, nature, acquisitionDate, acquisitionCost, salvageValue,
+            assignedTo: assignedToEmployeeId || null, nature, acquisitionDate, acquisitionCost, acquisitionCurrency,
+            acquisitionCostOriginal, exchangeRate, salvageValue,
             usefulLifeYears: usefulLifeYears || null, method: nature === 'depreciating' ? (category.default_depreciation_method || 'straight_line') : 'none',
             currentValue: acquisitionCost, glEntryId, notes: notes || null, createdBy: userId || null,
           },
@@ -134,10 +154,15 @@ class AssetService {
     }
   }
 
+  // created_by is stored as text (it also holds non-numeric values in tests/seed
+  // scripts), so the join guards with a regex before casting to users.id (integer)
+  // instead of letting a non-numeric value blow up the query.
   async getAsset(clinicId, assetId) {
     const [[asset]] = await sequelize.query(
-      `SELECT fa.*, ac.name AS category_name, ac.nature AS category_nature
-       FROM fixed_assets fa JOIN asset_categories ac ON ac.id = fa.category_id
+      `SELECT fa.*, ac.name AS category_name, ac.nature AS category_nature, u.display_name AS registered_by_name
+       FROM fixed_assets fa
+       JOIN asset_categories ac ON ac.id = fa.category_id
+       LEFT JOIN users u ON fa.created_by ~ '^[0-9]+$' AND u.id = fa.created_by::integer
        WHERE fa.id = :id AND fa.clinic_id = :clinicId`,
       { replacements: { id: assetId, clinicId } }
     );
