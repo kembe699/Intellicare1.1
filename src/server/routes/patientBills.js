@@ -1293,6 +1293,8 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
             description: `Voided item on ${bill.bill_number}`,
             reference_id: billId,
             reference_module: 'bill_item_void',
+            transaction_currency: voidCurrency,
+            exchange_rate: voidRate,
           }, lineItems, req.user?.id || 'system');
           await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
         } else {
@@ -1741,22 +1743,84 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         // (failing this whole payment, per N2) rather than silently posting 1:1
         // if no exchange rate exists for billCurrency on this date.
         const billCurrency = currentBill.bill_currency || undefined;
+        const { code: baseCurrencyCode } = await require('../services/CurrencyService').getBaseCurrency();
 
-        await postJournalEntry({
-          clinicId, branchId: currentBill.branch_id || getCreateBranchId(req), transaction: t,
-          entryDate: today, currency: billCurrency,
-          description: `Payment: Bill ${billId} (${method})`,
-          narration: `Receipt ${receiptNumber}`,
-          reference: `RCP-${receiptId}`,
-          // Revenue was already recognized when the bill was created (Dr Receivable /
-          // Cr Revenue, in AccountingService.createGLFromPatientBill) — this entry only
-          // clears that receivable as cash/bank comes in, it doesn't book new revenue.
-          lines: [
-            { accountId: debitAccount.id, debit: payAmt, description: `Payment received (${method})` },
-            { accountId: creditAccount.id, credit: payAmt, description: `Receivable cleared - bill ${billId}` },
-          ],
-          userId,
-        });
+        if (billCurrency && billCurrency !== baseCurrencyCode) {
+          // C3: the receivable this payment is clearing was booked (at bill
+          // creation, in AccountingService.createGLFromPatientBill) at whatever
+          // exchange rate applied on the bill date. Cash collected now is almost
+          // never converted at that same rate — re-converting payAmt at TODAY's
+          // rate and crediting the receivable for that number (what
+          // postJournalEntry would do) leaves a residue on 1200/1210 for this
+          // bill even once it is fully paid off in bill_currency terms. Instead:
+          // clear the receivable for exactly the ORIGINAL booked base-currency
+          // share (so it nets to zero), convert the actual cash received at
+          // today's rate, and post the difference as a realized FX gain/loss to
+          // account 5610 — the same mechanism already used for supplier-bill FX
+          // settlement in daily-expenses.js.
+          const { GeneralLedger: GLForBooking } = require('../models');
+          const originalBillGL = await GLForBooking.findOne({
+            where: { clinic_id: clinicId, reference_id: billId, reference_module: 'patient_billing' },
+            order: [['created_at', 'ASC']],
+            transaction: t,
+          });
+          if (!originalBillGL || !originalBillGL.exchange_rate) {
+            throw new Error(`Cannot post this ${billCurrency} payment — no original billing GL entry with an exchange rate was found for bill ${billId}.`);
+          }
+
+          const bookedRate = parseFloat(originalBillGL.exchange_rate);
+          const totalBillAmount = parseFloat(currentBill.total_amount) || payAmt;
+          const bookedBase = parseFloat(originalBillGL.base_total_debit) || AccountingService.convertAmount(totalBillAmount, bookedRate);
+          const bookedShare = totalBillAmount > 0
+            ? Math.round(bookedBase * (payAmt / totalBillAmount) * 100) / 100
+            : AccountingService.convertAmount(payAmt, bookedRate);
+
+          const todaysRate = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrencyCode, today);
+          const paymentBaseAmount = AccountingService.convertAmount(payAmt, todaysRate);
+          const fxDelta = Math.round((paymentBaseAmount - bookedShare) * 100) / 100; // >0 gain, <0 loss
+
+          const lineItems = [
+            { account_id: debitAccount.id, debit_amount: paymentBaseAmount, credit_amount: 0, description: `Payment received (${method}) — ${billCurrency} ${payAmt} @ ${todaysRate}` },
+            { account_id: creditAccount.id, debit_amount: 0, credit_amount: bookedShare, description: `Receivable cleared - bill ${billId} (booked @ ${bookedRate})` },
+          ];
+          if (Math.abs(fxDelta) > 0.01) {
+            const fxAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '5610', is_active: true }, transaction: t });
+            if (!fxAccount) {
+              throw new Error(`Cannot post this payment — a realized FX ${fxDelta > 0 ? 'gain' : 'loss'} of ${Math.abs(fxDelta)} ${baseCurrencyCode} has no home (account 5610, Foreign Exchange Gain/Loss, not found for this clinic). Set it up in Chart of Accounts first.`);
+            }
+            lineItems.push(fxDelta > 0
+              ? { account_id: fxAccount.id, debit_amount: 0, credit_amount: fxDelta, description: `FX gain — bill ${billId} payment` }
+              : { account_id: fxAccount.id, debit_amount: -fxDelta, credit_amount: 0, description: `FX loss — bill ${billId} payment` });
+          }
+
+          // transaction_currency is intentionally left unset (defaults to base
+          // currency, rate 1.0) — every line above is already a base-currency
+          // amount, so no further conversion should happen.
+          await AccountingService.createGLEntry({
+            clinic_id: clinicId,
+            transaction_date: today,
+            transaction_type: 'patient_bill_payment',
+            description: `Payment: Bill ${billId} (${method})`,
+            reference_id: String(billId),
+            reference_module: 'patient_bill_payment',
+          }, lineItems, userId, t);
+        } else {
+          await postJournalEntry({
+            clinicId, branchId: currentBill.branch_id || getCreateBranchId(req), transaction: t,
+            entryDate: today, currency: billCurrency,
+            description: `Payment: Bill ${billId} (${method})`,
+            narration: `Receipt ${receiptNumber}`,
+            reference: `RCP-${receiptId}`,
+            // Revenue was already recognized when the bill was created (Dr Receivable /
+            // Cr Revenue, in AccountingService.createGLFromPatientBill) — this entry only
+            // clears that receivable as cash/bank comes in, it doesn't book new revenue.
+            lines: [
+              { accountId: debitAccount.id, debit: payAmt, description: `Payment received (${method})` },
+              { accountId: creditAccount.id, credit: payAmt, description: `Receivable cleared - bill ${billId}` },
+            ],
+            userId,
+          });
+        }
       }
     }
 
