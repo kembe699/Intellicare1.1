@@ -131,7 +131,7 @@ export default function FixedAssetNew() {
   const payableAccounts = accounts.filter((a) => a.account_type === 'liability' && /payable/i.test(a.account_name));
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4">
       <PageHeader
         icon={<Building2 />}
         title="Register a Fixed Asset"
@@ -143,98 +143,104 @@ export default function FixedAssetNew() {
         }
       />
 
-      <Card>
-        <CardContent className="p-5">
-          <SectionHeader icon={Info} title="Basic Information" subtitle="What the asset is and which category it belongs to" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Name" span2>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ultrasound Machine - GE Voluson" />
-            </Field>
-            <Field label="Category">
-              <Combobox
-                options={activeCategories.map((c) => ({ value: c.id, label: `${c.name} (${NATURE_LABEL[c.nature]})` }))}
-                value={categoryId} onChange={setCategoryId} placeholder="Select category..." searchPlaceholder="Search categories..."
-              />
-            </Field>
-            <Field label="Serial Number">
-              <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Optional" />
-            </Field>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <SectionHeader icon={MapPinned} title="Location & Assignment" subtitle="Where it's kept and who's responsible for it" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Location">
-              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Ward 3 Store" />
-            </Field>
-            <Field label="Assigned To (optional)">
-              <Combobox
-                options={[{ value: '', label: 'Not assigned' }, ...employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))]}
-                value={assignedTo} onChange={setAssignedTo} placeholder="Not assigned" searchPlaceholder="Search employees..."
-              />
-            </Field>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <SectionHeader icon={CalendarClock} title="Acquisition & Depreciation" subtitle="Cost, currency, and how the asset loses value over time" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Acquisition Date">
-              <Input type="date" value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
-            </Field>
-            <Field label="Acquisition Cost">
-              <div className="flex gap-2">
-                <Input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} className="flex-1" />
-                <Combobox
-                  options={currencies.map((c) => ({ value: c.code, label: c.code }))}
-                  value={currencyCode} onChange={setCurrencyCode} placeholder="Currency" searchPlaceholder="Search..."
-                  className="w-28 shrink-0"
-                />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-5">
+              <SectionHeader icon={Info} title="Basic Information" subtitle="What the asset is and which category it belongs to" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Name" span2>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ultrasound Machine - GE Voluson" />
+                </Field>
+                <Field label="Category">
+                  <Combobox
+                    options={activeCategories.map((c) => ({ value: c.id, label: `${c.name} (${NATURE_LABEL[c.nature]})` }))}
+                    value={categoryId} onChange={setCategoryId} placeholder="Select category..." searchPlaceholder="Search categories..."
+                  />
+                </Field>
+                <Field label="Serial Number">
+                  <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Optional" />
+                </Field>
               </div>
-            </Field>
-            {isDepreciating && (
-              <>
-                <Field label="Useful Life (years)">
-                  <Input type="number" min="1" value={usefulLife} onChange={(e) => setUsefulLife(e.target.value)} placeholder={category?.default_useful_life_years ? String(category.default_useful_life_years) : ''} />
-                </Field>
-                <Field label="Salvage Value (optional)">
-                  <Input type="number" min="0" step="0.01" value={salvageValue} onChange={(e) => setSalvageValue(e.target.value)} placeholder="Defaults from category" />
-                </Field>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardContent className="p-5">
-          <SectionHeader icon={Landmark} title="Funding Source" subtitle="Where the money for this purchase came from" />
-          <label className="flex items-center gap-2 text-sm cursor-pointer mb-3">
-            <input type="checkbox" checked={postToGl} onChange={(e) => setPostToGl(e.target.checked)} className="rounded border-input" />
-            Post this acquisition to the General Ledger now
-          </label>
-          {postToGl ? (
-            <Combobox
-              options={[...cashAccounts, ...payableAccounts].map((a) => ({ value: a.account_code, label: `${a.account_code} — ${a.account_name}` }))}
-              value={paymentAccountCode} onChange={setPaymentAccountCode} placeholder="Paid from / owed to which account?" searchPlaceholder="Search accounts..."
-            />
-          ) : (
-            <p className="text-xs text-muted-foreground">Use this for assets the facility already owned before this module existed — nothing to post twice for.</p>
-          )}
-        </CardContent>
-      </Card>
+          <Card>
+            <CardContent className="p-5">
+              <SectionHeader icon={MapPinned} title="Location & Assignment" subtitle="Where it's kept and who's responsible for it" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Location">
+                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Ward 3 Store" />
+                </Field>
+                <Field label="Assigned To (optional)">
+                  <Combobox
+                    options={[{ value: '', label: 'Not assigned' }, ...employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))]}
+                    value={assignedTo} onChange={setAssignedTo} placeholder="Not assigned" searchPlaceholder="Search employees..."
+                  />
+                </Field>
+              </div>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardContent className="p-5">
-          <SectionHeader icon={FileText} title="Notes" />
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional notes or description" />
-        </CardContent>
-      </Card>
+          <Card>
+            <CardContent className="p-5">
+              <SectionHeader icon={FileText} title="Notes" />
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional notes or description" />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-5">
+              <SectionHeader icon={CalendarClock} title="Acquisition & Depreciation" subtitle="Cost, currency, and how the asset loses value over time" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Acquisition Date">
+                  <Input type="date" value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+                </Field>
+                <Field label="Acquisition Cost">
+                  <div className="flex gap-2">
+                    <Input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} className="flex-1" />
+                    <Combobox
+                      options={currencies.map((c) => ({ value: c.code, label: c.code }))}
+                      value={currencyCode} onChange={setCurrencyCode} placeholder="Currency" searchPlaceholder="Search..."
+                      className="w-28 shrink-0"
+                    />
+                  </div>
+                </Field>
+                {isDepreciating && (
+                  <>
+                    <Field label="Useful Life (years)">
+                      <Input type="number" min="1" value={usefulLife} onChange={(e) => setUsefulLife(e.target.value)} placeholder={category?.default_useful_life_years ? String(category.default_useful_life_years) : ''} />
+                    </Field>
+                    <Field label="Salvage Value (optional)">
+                      <Input type="number" min="0" step="0.01" value={salvageValue} onChange={(e) => setSalvageValue(e.target.value)} placeholder="Defaults from category" />
+                    </Field>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5">
+              <SectionHeader icon={Landmark} title="Funding Source" subtitle="Where the money for this purchase came from" />
+              <label className="flex items-center gap-2 text-sm cursor-pointer mb-3">
+                <input type="checkbox" checked={postToGl} onChange={(e) => setPostToGl(e.target.checked)} className="rounded border-input" />
+                Post this acquisition to the General Ledger now
+              </label>
+              {postToGl ? (
+                <Combobox
+                  options={[...cashAccounts, ...payableAccounts].map((a) => ({ value: a.account_code, label: `${a.account_code} — ${a.account_name}` }))}
+                  value={paymentAccountCode} onChange={setPaymentAccountCode} placeholder="Paid from / owed to which account?" searchPlaceholder="Search accounts..."
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Use this for assets the facility already owned before this module existed — nothing to post twice for.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <div className="flex justify-end gap-2 pb-2">
         <Button variant="outline" onClick={() => navigate('/accounting/fixed-assets/register')}>Cancel</Button>

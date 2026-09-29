@@ -53,7 +53,9 @@ import {
   Bell,
   HandCoins,
   CalendarDays,
-  HelpCircle
+  HelpCircle,
+  Scissors,
+  CalendarClock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -185,6 +187,16 @@ const lisDropdown: NavDropdown = {
   ]
 };
 
+const theatreDropdown: NavDropdown = {
+  label: 'Theatre / OR',
+  icon: Scissors,
+  items: [
+    { label: 'Operation Requests', href: '/theatre/requests', icon: ClipboardList, privilege: 'theatre.view' },
+    { label: 'Operations Board', href: '/theatre/operations', icon: CalendarClock, privilege: 'theatre.view' },
+    { label: 'Theatre Rooms', href: '/theatre/rooms', icon: DoorOpen, privilege: 'theatre.write' },
+  ]
+};
+
 const inpatientDropdown: NavDropdown = {
   label: 'Inpatient',
   icon: BedDouble,
@@ -234,6 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const [accountingOpen, setAccountingOpen] = useState(location.pathname.startsWith('/accounting') || location.pathname.startsWith('/scheme-management') || location.pathname.startsWith('/cashier/shift'));
   const [inventoryOpen, setInventoryOpen] = useState(location.pathname.startsWith('/inventory'));
   const [lisOpen, setLisOpen] = useState(lisDropdown.items.some(item => location.pathname.startsWith(item.href)));
+  const [theatreOpen, setTheatreOpen] = useState(theatreDropdown.items.some(item => location.pathname.startsWith(item.href)));
   const [inpatientOpen, setInpatientOpen] = useState(location.pathname.startsWith('/inpatient'));
   const [pendingRxCount, setPendingRxCount] = useState(0);
 
@@ -321,12 +334,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const showAccounting = dropdownVisible(accountingDropdown);
   const showInventory = dropdownVisible(inventoryDropdown);
   const showInpatient = dropdownVisible(inpatientDropdown);
+  const showTheatre = dropdownVisible(theatreDropdown);
   const hasNavLink = (href: string) => filteredNavItems.some(i => i.href === href);
 
   // A section label (e.g. "CLINICAL WORKFLOW") should never render on its own with nothing
   // visible underneath it — that reads as "you almost have access" to a role that has none.
   // Each flag mirrors exactly the set of items rendered under that heading below.
-  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || hasNavLink('/triage') || showInpatient || showLIS || showPharmacy);
+  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || hasNavLink('/triage') || showInpatient || showTheatre || showLIS || showPharmacy);
   const showBillingFinanceSection = !!(showPatientsBill || showAccounting);
   const showSupplyChainSection = !!(showInventory || showProcurement);
   const showAnalyticsAdminSection = !!(hasNavLink('/reports') || showSetup);
@@ -473,6 +487,44 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                           {inpatientDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
+                            return (
+                              <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                  isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                                )}
+                              >
+                                <Icon className="w-4 h-4" /><span>{item.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 4.5 Theatre / OR */}
+                  {showTheatre && (
+                    <div className="pt-0.5">
+                      <button
+                        onClick={() => setTheatreOpen(!theatreOpen)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          theatreDropdown.items.some(item => location.pathname.startsWith(item.href))
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Scissors className="w-4 h-4" />
+                          <span className="font-medium leading-none">{theatreDropdown.label}</span>
+                        </div>
+                        <ChevronDown className={cn("w-4 h-4 transition-transform", theatreOpen && "rotate-180")} />
+                      </button>
+                      {theatreOpen && (
+                        <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
+                          {theatreDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname.startsWith(item.href);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",

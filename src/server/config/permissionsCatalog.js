@@ -92,6 +92,9 @@ const CATALOG = [
   ['inpatient.ancillary.write', 'Order inpatient lab/radiology', 'inpatient', 'Lab/radiology requests for an inpatient', ['admin', 'doctor', 'lab']],
   ['inpatient.medications.manage', 'View/administer inpatient medications', 'inpatient', 'View/edit inpatient prescriptions and drug administrations', ['admin', 'doctor', 'pharmacy']],
 
+  ['theatre.view', 'View theatre/OR', 'theatre', 'Operation requests, rooms, schedule, and operation detail (read)', ['admin', 'doctor', 'nurse']],
+  ['theatre.write', 'Manage theatre/OR', 'theatre', 'Create requests, schedule/start/complete operations, checklists, vitals, rooms', ['admin', 'doctor', 'nurse']],
+
   ['inventory.read', 'View inventory', 'inventory', 'Items, batches, transactions, valuation, reports', ['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement']],
   ['inventory.write', 'Manage inventory', 'inventory', 'Items, locations, batches, adjustments, physical counts', ['admin', 'pharmacy', 'procurement']],
   ['inventory.adjustments.approve', 'Approve inventory adjustments', 'inventory', 'Approve/reject a stock adjustment', ['admin', 'finance_manager', 'procurement']],

@@ -24,6 +24,7 @@ async function main() {
     ['Icd10Reference',    () => require('./importIcd10').migrateAndImportIcd10()],
     ['VisitDiagnoses',    () => require('./migrateVisitDiagnosesTable').migrateVisitDiagnosesTable()],
     ['FixedAssets',       () => require('./migrateFixedAssetsTables').migrateFixedAssetsTables()],
+    ['Theatre',           () => require('./migrateTheatreTables').migrateTheatreTables()],
     ['Departments',       () => require('./migrateDepartments')()],
     ['PerfIndexes',       () => require('./addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./migrateReportingTables').migrateReportingTables()],

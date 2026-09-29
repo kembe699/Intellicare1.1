@@ -1,0 +1,196 @@
+const { sequelize } = require('../models');
+const { v4: uuidv4 } = require('uuid');
+
+// Operating Theatre / OR module.
+//
+// theatre_rooms: physical ORs, one clinic can have several.
+//
+// theatre_requests: a request from any department/ward for a patient to go to
+// theatre — the intake queue. Scheduling one creates a theatre_operations row.
+//
+// theatre_operations: one row per actual operation, from scheduling through
+// pre-op/in-progress/completed. patient_id is polymorphic — a patient can be
+// identified either in `patients` (inpatient/reception identity) or
+// `lis_participants` (the live OPD identity) — same dual-identity shape
+// inpatient_admissions already uses (LEFT JOIN both, COALESCE the fields),
+// not a strict FK to either table.
+//
+// theatre_checklist_items: WHO Surgical Safety Checklist-style items, seeded
+// per operation across three phases (pre_op / intra_op / post_op) so staff
+// can tick them off; a custom item can also be added per operation.
+//
+// theatre_vitals: vitals readings taken during any phase of an operation —
+// separate from the LIS/nursing vitals JSON blobs elsewhere in the app
+// because an operation can have several readings over its course, not one.
+async function migrateTheatreTables(db = sequelize) {
+  console.log('\n=== Theatre / OR Module Migration ===\n');
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_rooms (
+      id CHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      branch_id INTEGER,
+      name VARCHAR(100) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'available',
+      notes TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT chk_theatre_room_status CHECK (status IN ('available', 'in_use', 'cleaning', 'maintenance'))
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_requests (
+      id CHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      branch_id INTEGER,
+      patient_id CHAR(36) NOT NULL,
+      requested_by VARCHAR(36),
+      requesting_department VARCHAR(150),
+      procedure_name VARCHAR(255) NOT NULL,
+      diagnosis TEXT,
+      priority VARCHAR(20) NOT NULL DEFAULT 'routine',
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      notes TEXT,
+      cancelled_reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT chk_theatre_request_priority CHECK (priority IN ('routine', 'urgent', 'emergency')),
+      CONSTRAINT chk_theatre_request_status CHECK (status IN ('pending', 'scheduled', 'cancelled'))
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_operations (
+      id CHAR(36) PRIMARY KEY,
+      clinic_id INTEGER NOT NULL,
+      branch_id INTEGER,
+      request_id CHAR(36),
+      patient_id CHAR(36) NOT NULL,
+      theatre_room_id CHAR(36),
+      procedure_name VARCHAR(255) NOT NULL,
+      surgeon_employee_id CHAR(36),
+      anesthetist_employee_id CHAR(36),
+      scrub_nurse_employee_id CHAR(36),
+      scheduled_at TIMESTAMPTZ,
+      status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
+      started_at TIMESTAMPTZ,
+      ended_at TIMESTAMPTZ,
+      duration_minutes INTEGER,
+      outcome VARCHAR(20),
+      outcome_notes TEXT,
+      cause_of_death TEXT,
+      created_by VARCHAR(36),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT chk_theatre_operation_status CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
+      CONSTRAINT chk_theatre_operation_outcome CHECK (outcome IS NULL OR outcome IN ('successful', 'complication', 'death', 'aborted'))
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_checklist_items (
+      id CHAR(36) PRIMARY KEY,
+      operation_id CHAR(36) NOT NULL,
+      phase VARCHAR(20) NOT NULL,
+      item_text VARCHAR(500) NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_checked BOOLEAN NOT NULL DEFAULT false,
+      checked_by VARCHAR(36),
+      checked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT chk_theatre_checklist_phase CHECK (phase IN ('pre_op', 'intra_op', 'post_op'))
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_vitals (
+      id CHAR(36) PRIMARY KEY,
+      operation_id CHAR(36) NOT NULL,
+      phase VARCHAR(20) NOT NULL,
+      recorded_by VARCHAR(36),
+      recorded_at TIMESTAMPTZ DEFAULT NOW(),
+      blood_pressure VARCHAR(20),
+      pulse INTEGER,
+      temperature NUMERIC(4,1),
+      respiratory_rate INTEGER,
+      spo2 INTEGER,
+      notes TEXT,
+      CONSTRAINT chk_theatre_vitals_phase CHECK (phase IN ('pre_op', 'intra_op', 'post_op'))
+    )
+  `);
+
+  // Safety net for a schema created before this file used TIMESTAMPTZ: a plain
+  // TIMESTAMP column stores NOW() as a naive local wall-clock value (this
+  // deployment's session timezone is UTC+3), which a JS Date then reads back
+  // as if it WERE UTC — silently shifting every started_at/ended_at read by a
+  // fixed 3 hours and making every operation's computed duration_minutes
+  // wrong by exactly that offset. Caught by direct testing before this ever
+  // reached production. CREATE TABLE IF NOT EXISTS above won't retype an
+  // existing column, so re-assert TIMESTAMPTZ explicitly — a no-op once the
+  // column already is one.
+  const timestamptzColumns = [
+    ['theatre_rooms', ['created_at', 'updated_at']],
+    ['theatre_requests', ['created_at', 'updated_at']],
+    ['theatre_operations', ['scheduled_at', 'started_at', 'ended_at', 'created_at', 'updated_at']],
+    ['theatre_checklist_items', ['checked_at', 'created_at']],
+    ['theatre_vitals', ['recorded_at']],
+  ];
+  for (const [table, columns] of timestamptzColumns) {
+    for (const column of columns) {
+      try { await db.query(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE TIMESTAMPTZ`); } catch (err) { console.error(`Could not retype ${table}.${column}:`, err.message); }
+    }
+  }
+
+  const indexes = [
+    'CREATE INDEX IF NOT EXISTS idx_theatre_rooms_clinic ON theatre_rooms (clinic_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_requests_clinic ON theatre_requests (clinic_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_requests_status ON theatre_requests (status)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_requests_branch ON theatre_requests (branch_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operations_clinic ON theatre_operations (clinic_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operations_status ON theatre_operations (status)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operations_branch ON theatre_operations (branch_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operations_room ON theatre_operations (theatre_room_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operations_request ON theatre_operations (request_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_checklist_operation ON theatre_checklist_items (operation_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_vitals_operation ON theatre_vitals (operation_id)',
+  ];
+  for (const idx of indexes) {
+    try { await db.query(idx); } catch (err) { console.error('Index creation failed:', err.message); }
+  }
+
+  console.log('  ✅ theatre_rooms / theatre_requests / theatre_operations / theatre_checklist_items / theatre_vitals ready');
+  console.log('\n=== Theatre Migration Complete ===\n');
+}
+
+// WHO Surgical Safety Checklist, adapted — seeded onto every new operation by
+// TheatreService.scheduleOperation, not here (this file only owns tables).
+const CHECKLIST_TEMPLATE = {
+  pre_op: [
+    'Patient identity, procedure, and surgical site confirmed',
+    'Surgical site marked (if applicable)',
+    'Informed consent confirmed',
+    'Anaesthesia safety check completed',
+    'Pulse oximeter on patient and functioning',
+    'Known allergies confirmed',
+    'Difficult airway or aspiration risk assessed',
+    'Risk of blood loss ≥500ml assessed — IV access/fluids planned',
+  ],
+  intra_op: [
+    'All team members introduced by name and role',
+    'Surgeon, anaesthetist and nurse verbally confirm patient, site and procedure',
+    'Anticipated critical events reviewed',
+    'Antibiotic prophylaxis given within the last 60 minutes (if indicated)',
+    'Essential imaging displayed (if applicable)',
+  ],
+  post_op: [
+    'Procedure performed recorded',
+    'Instrument, sponge and needle counts confirmed correct',
+    'Specimens labeled correctly (if applicable)',
+    'Equipment problems addressed',
+    'Key concerns for recovery and management reviewed',
+  ],
+};
+
+module.exports = { migrateTheatreTables, CHECKLIST_TEMPLATE };

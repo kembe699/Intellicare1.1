@@ -121,6 +121,12 @@ const RoomsManagement = lazyWithRetry(() => import('./pages/inpatient/RoomsManag
 const Admissions = lazyWithRetry(() => import('./pages/inpatient/Admissions'));
 const AdmittedPatients = lazyWithRetry(() => import('./pages/inpatient/AdmittedPatients'));
 const PatientDetails = lazyWithRetry(() => import('./pages/inpatient/PatientDetails'));
+const TheatreRequests = lazyWithRetry(() => import('./pages/theatre/TheatreRequests'));
+const TheatreRequestNew = lazyWithRetry(() => import('./pages/theatre/TheatreRequestNew'));
+const TheatreOperations = lazyWithRetry(() => import('./pages/theatre/TheatreOperations'));
+const TheatreOperationNew = lazyWithRetry(() => import('./pages/theatre/TheatreOperationNew'));
+const TheatreOperationDetail = lazyWithRetry(() => import('./pages/theatre/TheatreOperationDetail'));
+const TheatreRooms = lazyWithRetry(() => import('./pages/theatre/TheatreRooms'));
 const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 
 const queryClient = new QueryClient({
@@ -687,6 +693,37 @@ const AppRoutes = () => {
       <Route path="/inpatient/patient/:id" element={
         <ProtectedRoute requiredPrivilege={['inpatient.admissions.write', 'inpatient.medications.manage', 'inpatient.ancillary.write']}>
           <PatientDetails />
+        </ProtectedRoute>
+      } />
+      <Route path="/theatre" element={<Navigate to="/theatre/requests" replace />} />
+      <Route path="/theatre/requests" element={
+        <ProtectedRoute requiredPrivilege="theatre.view">
+          <TheatreRequests />
+        </ProtectedRoute>
+      } />
+      <Route path="/theatre/requests/new" element={
+        <ProtectedRoute requiredPrivilege="theatre.write">
+          <TheatreRequestNew />
+        </ProtectedRoute>
+      } />
+      <Route path="/theatre/operations" element={
+        <ProtectedRoute requiredPrivilege="theatre.view">
+          <TheatreOperations />
+        </ProtectedRoute>
+      } />
+      <Route path="/theatre/operations/new" element={
+        <ProtectedRoute requiredPrivilege="theatre.write">
+          <TheatreOperationNew />
+        </ProtectedRoute>
+      } />
+      <Route path="/theatre/operations/:id" element={
+        <ProtectedRoute requiredPrivilege="theatre.view">
+          <TheatreOperationDetail />
+        </ProtectedRoute>
+      } />
+      <Route path="/theatre/rooms" element={
+        <ProtectedRoute requiredPrivilege="theatre.write">
+          <TheatreRooms />
         </ProtectedRoute>
       } />
       <Route path="/profile" element={

@@ -627,6 +627,7 @@ app.use('/api/reports-v2/doctor-performance', require('./routes/reportDoctorPerf
 app.use('/api/reports-v2/occupancy', require('./routes/reportOccupancy'));
 app.use('/api/reports-v2/dhis2', require('./routes/reportDhis2'));
 app.use('/api/fixed-assets', require('./routes/fixedAssets'));
+app.use('/api/theatre', require('./routes/theatre'));
 app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));
 app.use('/api/reports-v2/audit-summary', require('./routes/reportAuditSummary'));
 app.use('/api/ledger-accounts', ledgerAccountsRouter);
@@ -806,6 +807,9 @@ async function runBackgroundMigrations() {
     // instead of relying on someone remembering the manual script.
     ['FixedAssets',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/migrateFixedAssetsTables').migrateFixedAssetsTables, 'Fixed Assets'
+    )],
+    ['Theatre',           () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateTheatreTables').migrateTheatreTables, 'Theatre'
     )],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
