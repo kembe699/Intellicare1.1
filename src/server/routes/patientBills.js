@@ -1727,7 +1727,15 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
       const payAmt = parseFloat(paymentData.amount || 0);
       if (payAmt > 0) {
         const clinicId = currentBill.clinic_id || 1;
-        const today = new Date().toISOString().split('T')[0];
+        // B6: post on the payment's OWN date, not the server's "now" — this used
+        // to always post as of today regardless of what payment_date the cashier
+        // actually entered (a backdated end-of-day reconciliation, or a payment
+        // taken just after local midnight when the server's UTC clock still
+        // reads the previous day), so the ledger's date disagreed with the
+        // receipt's own printed date and could land revenue in the wrong
+        // accounting period. payment_date is already validated as required
+        // above and is what the receipt itself is dated with (line ~1660).
+        const today = String(paymentData.payment_date).split('T')[0];
 
         // Choose debit account based on payment method
         let debitAccount = null;
