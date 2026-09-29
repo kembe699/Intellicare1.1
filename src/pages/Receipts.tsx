@@ -43,7 +43,12 @@ interface Receipt {
   lease_details?: string;
   cashier_name?: string;
   cashier_id?: string;
-  status: 'active' | 'voided' | 'refunded';
+  // B5: 'pending_void'/'pending_refund' — a void/refund request awaiting a
+  // second person's approval (see /:receiptId/approve-void, /reject-void on
+  // the backend). Approving/rejecting those is not yet exposed here; a
+  // pending receipt still shows correctly, it just can't be actioned from
+  // this page until that follow-up UI lands.
+  status: 'active' | 'voided' | 'refunded' | 'pending_void' | 'pending_refund';
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +60,8 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'voided', label: 'Voided' },
   { value: 'refunded', label: 'Refunded' },
+  { value: 'pending_void', label: 'Pending Void' },
+  { value: 'pending_refund', label: 'Pending Refund' },
 ];
 
 const METHOD_FILTER_OPTIONS = [
@@ -66,15 +73,25 @@ const METHOD_FILTER_OPTIONS = [
   { value: 'insurance', label: 'Insurance' },
 ];
 
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Active',
+  voided: 'Voided',
+  refunded: 'Refunded',
+  pending_void: 'Pending Void',
+  pending_refund: 'Pending Refund',
+};
+
 const statusBadge = (status: Receipt['status']) => {
   const map: Record<string, string> = {
     active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     voided: 'bg-red-50 text-red-700 border-red-200',
     refunded: 'bg-amber-50 text-amber-700 border-amber-200',
+    pending_void: 'bg-orange-50 text-orange-700 border-orange-200',
+    pending_refund: 'bg-orange-50 text-orange-700 border-orange-200',
   };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-      {status}
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+      {STATUS_LABELS[status] || status}
     </span>
   );
 };
@@ -161,7 +178,10 @@ export default function Receipts() {
         body: JSON.stringify({ status: 'voided', reason: cancellationReason }),
       });
       if (res.ok) {
-        toast.success('Receipt cancelled successfully');
+        const result = await res.json();
+        // B5: a requester without approval authority gets a pending request,
+        // not an immediate void — say so, rather than claiming it's done.
+        toast.success(result.pendingApproval ? 'Void request submitted for approval' : 'Receipt cancelled successfully');
         setShowCancelModal(false);
         setCancellationReason('');
         setSelectedReceipt(null);

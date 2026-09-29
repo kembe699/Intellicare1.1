@@ -14,6 +14,7 @@ const { getBranchCondition, getCreateBranchId } = require('../middleware/branchF
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { adjustDepositBalance, BASE_CURRENCY } = require('./patientDeposits');
 const { postJournalEntry } = require('../services/JournalPostingService');
+const { requireApprovalPermission, userHasApprovalPermission } = require('../middleware/requireApprovalPermission');
 
 // receipts.paid_services/service_details are JSON columns, but this host's MariaDB
 // stores JSON as LONGTEXT under the hood (same issue documented in lisModule.js's
@@ -371,6 +372,84 @@ router.get('/clinic/:clinicId/date-range', async (req, res) => {
 });
 
 // Update receipt status (void/refund)
+// B5: the actual reversal (bill balance/services, deposit, GL) that an
+// active -> voided/refunded transition implies — extracted so the immediate
+// path (a requester who already holds receipt_void_approve) and the separate
+// /approve-void endpoint (someone else approving a pending request) run the
+// exact same logic rather than two copies that could drift apart.
+async function applyVoidReversal(receipt, status, reason, req, t) {
+  let reversedServices = [];
+  let billForInventoryRestore = null;
+
+  if (receipt.bill_id) {
+    const bill = await PatientBill.findByPk(receipt.bill_id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (bill) {
+      // Deep clone the array so Sequelize detects the mutation
+      let updatedServices = JSON.parse(JSON.stringify(normalizeServices(bill.services)));
+
+      // Reverse paid status for specific services
+      if (receipt.paid_services && Array.isArray(receipt.paid_services)) {
+        receipt.paid_services.forEach(idx => {
+          const index = parseInt(idx, 10);
+          if (updatedServices[index] && updatedServices[index].paid) {
+            reversedServices.push(updatedServices[index]);
+            updatedServices[index].paid = false;
+            delete updatedServices[index].paidAt;
+            delete updatedServices[index].status;
+          }
+        });
+      }
+
+      const receiptAmount = parseFloat(receipt.payment_amount) || 0;
+      let newPaidAmount = Math.max(0, parseFloat(bill.paid_amount) - receiptAmount);
+      let newBalanceAmount = parseFloat(bill.total_amount) - newPaidAmount;
+
+      let newBillStatus = bill.status;
+      if (newBalanceAmount > 0) {
+        newBillStatus = newPaidAmount > 0 ? 'partial' : 'pending';
+      } else {
+        newBillStatus = 'paid';
+      }
+
+      await bill.update({
+        services: updatedServices,
+        paid_amount: newPaidAmount,
+        balance_amount: newBalanceAmount,
+        status: newBillStatus,
+        updated_at: new Date()
+      }, { transaction: t });
+
+      if (reversedServices.length > 0) billForInventoryRestore = bill;
+    }
+  }
+
+  // Independent of whether a bill_id/bill was found above — a deposit
+  // receipt reversal only ever needs the receipt itself.
+  await restoreDepositForVoidedReceipt(receipt, reason, req.user?.displayName || req.user?.email, t);
+
+  // Reverse the GL entry the original payment posted (cash/card/mobile/bank/insurance —
+  // everything restoreDepositForVoidedReceipt's own reversal doesn't already cover).
+  // Without this, voiding a receipt fixed the bill's balance but left the ledger showing
+  // cash/bank received and the receivable cleared, permanently, for a payment that was
+  // just reversed.
+  await reversePaymentGL({
+    clinicId: receipt.clinic_id,
+    branchId: receipt.branch_id,
+    billId: receipt.bill_id,
+    amount: parseFloat(receipt.payment_amount) || 0,
+    paymentMethod: receipt.payment_method,
+    reference: `RCP-${receipt.id}`,
+    description: `Receipt ${status} — ${receipt.receipt_number}${reason ? ` (${reason})` : ''}`,
+    userId: req.user?.displayName || req.user?.email,
+    transaction: t,
+  });
+
+  return { reversedServices, billForInventoryRestore };
+}
+
+const PENDING_FOR = { voided: 'pending_void', refunded: 'pending_refund' };
+const TARGET_FOR_PENDING = { pending_void: 'voided', pending_refund: 'refunded' };
+
 router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) => {
   // N2: the receipt/bill status change and the GL reversal it implies now
   // commit or roll back together — previously each reversal step opened (or
@@ -378,9 +457,7 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
   // receipt had already been updated, and swallowed failures as "non-fatal".
   // That let a receipt end up "voided" with the bill still showing paid, or
   // the ledger still showing cash received for a payment the UI said was
-  // reversed. Row locking (SELECT ... FOR UPDATE, so a second concurrent
-  // void is impossible) and folding restoreInventoryForVoidedServices into
-  // this same transaction are B2's job in Phase 4, not done here.
+  // reversed.
   let t;
   try {
     const { receiptId } = req.params;
@@ -389,96 +466,104 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     if (!['active', 'voided', 'refunded'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
-    const receipt = await Receipt.findByPk(receiptId);
+
+    // B2: the receipt row (and, below, the bill row) are locked for the rest
+    // of this handler — without this, two concurrent void/refund requests for
+    // the SAME receipt (a double-click, or two staff acting on the same
+    // payment within the same second) both read previousStatus === 'active',
+    // both pass the B3 terminal-state guard, and both run the reversal below:
+    // the bill's balance gets decremented twice and reversePaymentGL posts
+    // the GL reversal twice for one real payment. A concurrent request now
+    // blocks on this lock and re-reads the just-committed status once it's
+    // this call's turn, so the second one correctly hits the B3 guard instead.
+    t = await sequelize.transaction();
+    const receipt = await Receipt.findByPk(receiptId, { transaction: t, lock: t.LOCK.UPDATE });
     if (!receipt) {
+      await t.rollback();
       return res.status(404).json({ error: 'Receipt not found' });
     }
     if (!BranchQueryFilter.canAccessRecord(receipt, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+      await t.rollback();
       return res.status(403).json({ error: 'Access denied to this receipt' });
     }
 
     const previousStatus = receipt.status;
-    let reversedServices = [];
-    let billForInventoryRestore = null;
 
-    t = await sequelize.transaction();
+    // B3: voided/refunded/pending_void/pending_refund are all terminal from
+    // THIS endpoint's point of view. The only reversal logic here runs on an
+    // active -> voided/refunded transition; nothing here undoes THAT
+    // reversal, so flipping a voided/refunded receipt back to active (or
+    // across to the other terminal state) would silently update just the
+    // status column while the bill balance, services, deposit and GL entries
+    // stay reversed. A pending_void/pending_refund receipt can only be moved
+    // forward through /approve-void or /reject-void below — not by calling
+    // this endpoint again, which would let a requester skip approval by
+    // simply re-submitting. A genuine correction needs a new receipt, not
+    // resurrecting this one.
+    if (previousStatus !== 'active' && status !== previousStatus) {
+      await t.rollback();
+      const humanStatus = previousStatus.startsWith('pending_')
+        ? `awaiting approval (${previousStatus})`
+        : `already ${previousStatus}`;
+      return res.status(400).json({ error: `This receipt is ${humanStatus} and cannot be changed to ${status}. ${previousStatus.startsWith('pending_') ? 'Use approve-void/reject-void.' : 'Record a new receipt instead.'}` });
+    }
+
+    // B5: an active -> voided/refunded request needs a second person's
+    // sign-off before the reversal actually happens — a cashier could
+    // otherwise void/refund their own payment unilaterally, with no record
+    // that anyone but them ever looked at it. Someone who already holds
+    // receipt_void_approve (which every admin does, per
+    // requireApprovalPermission's own admin-bypass rule) can still act
+    // immediately, exactly as before this fix — this only adds a gate for
+    // everyone else, it does not remove the ability for an authorized person
+    // to void/refund in one step.
+    if (previousStatus === 'active' && ['voided', 'refunded'].includes(status)) {
+      const canActImmediately = await userHasApprovalPermission(req, 'receipt_void_approve');
+      if (!canActImmediately) {
+        const pendingStatus = PENDING_FOR[status];
+        const updatedReceipt = await receipt.update({
+          status: pendingStatus,
+          notes: reason ? `Requested ${status}: ${reason}` : `Requested ${status}`,
+          updated_at: new Date(),
+        }, { transaction: t });
+        await t.commit();
+
+        try {
+          const rr = require('./reports');
+          await rr.logAudit({ req,
+            clinic_id: receipt.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+            module: 'Billing', action: 'RECEIPT_VOID_REQUESTED',
+            entity_type: 'Receipt', entity_id: receiptId,
+            description: `${req.user?.displayName || req.user?.email || 'A user'} requested ${status} on receipt ${receipt.receipt_number} (${receipt.payment_amount}) — awaiting approval${reason ? `: ${reason}` : ''}`,
+            old_values: { status: previousStatus }, new_values: { status: pendingStatus, reason: reason || null },
+            ip_address: req.ip, status: 'success',
+          });
+        } catch (e) {}
+
+        return res.json({
+          message: `Void/refund request submitted for approval`,
+          pendingApproval: true,
+          receipt: updatedReceipt,
+        });
+      }
+    }
+
     const updatedReceipt = await receipt.update({
       status,
       notes: reason ? `${status.charAt(0).toUpperCase() + status.slice(1)}: ${reason}` : undefined,
       updated_at: new Date()
     }, { transaction: t });
 
-    // If changing from active to voided/refunded, reverse the payment on the bill
-    if (previousStatus === 'active' && ['voided', 'refunded'].includes(status) && receipt.bill_id) {
-      const bill = await PatientBill.findByPk(receipt.bill_id, { transaction: t });
-      if (bill) {
-        // Deep clone the array so Sequelize detects the mutation
-        let updatedServices = JSON.parse(JSON.stringify(normalizeServices(bill.services)));
-
-        // Reverse paid status for specific services
-        if (receipt.paid_services && Array.isArray(receipt.paid_services)) {
-          receipt.paid_services.forEach(idx => {
-            const index = parseInt(idx, 10);
-            if (updatedServices[index] && updatedServices[index].paid) {
-              reversedServices.push(updatedServices[index]);
-              updatedServices[index].paid = false;
-              delete updatedServices[index].paidAt;
-              delete updatedServices[index].status;
-            }
-          });
-        }
-
-        const receiptAmount = parseFloat(receipt.payment_amount) || 0;
-        let newPaidAmount = Math.max(0, parseFloat(bill.paid_amount) - receiptAmount);
-        let newBalanceAmount = parseFloat(bill.total_amount) - newPaidAmount;
-
-        let newBillStatus = bill.status;
-        if (newBalanceAmount > 0) {
-          newBillStatus = newPaidAmount > 0 ? 'partial' : 'pending';
-        } else {
-          newBillStatus = 'paid';
-        }
-
-        await bill.update({
-          services: updatedServices,
-          paid_amount: newPaidAmount,
-          balance_amount: newBalanceAmount,
-          status: newBillStatus,
-          updated_at: new Date()
-        }, { transaction: t });
-
-        if (reversedServices.length > 0) billForInventoryRestore = bill;
-      }
-    }
-
-    // Same active → voided/refunded transition, but independent of whether a bill_id/bill
-    // was found above — a deposit receipt reversal only ever needs the receipt itself.
+    let reversedServices = [];
+    let billForInventoryRestore = null;
     if (previousStatus === 'active' && ['voided', 'refunded'].includes(status)) {
-      await restoreDepositForVoidedReceipt(receipt, reason, req.user?.displayName || req.user?.email, t);
-
-      // Reverse the GL entry the original payment posted (cash/card/mobile/bank/insurance —
-      // everything restoreDepositForVoidedReceipt's own reversal doesn't already cover).
-      // Without this, voiding a receipt fixed the bill's balance but left the ledger showing
-      // cash/bank received and the receivable cleared, permanently, for a payment that was
-      // just reversed.
-      await reversePaymentGL({
-        clinicId: receipt.clinic_id,
-        branchId: receipt.branch_id,
-        billId: receipt.bill_id,
-        amount: parseFloat(receipt.payment_amount) || 0,
-        paymentMethod: receipt.payment_method,
-        reference: `RCP-${receipt.id}`,
-        description: `Receipt ${status} — ${receipt.receipt_number}${reason ? ` (${reason})` : ''}`,
-        userId: req.user?.displayName || req.user?.email,
-        transaction: t,
-      });
+      ({ reversedServices, billForInventoryRestore } = await applyVoidReversal(receipt, status, reason, req, t));
     }
 
     await t.commit();
 
     // Best-effort, outside the transaction — stock/audit are not accounting
-    // postings and are not what N2 covers (B2 in Phase 4 folds stock restore
-    // into the same transaction as the rest).
+    // postings and are not what N2 covers.
     if (billForInventoryRestore) {
       await restoreInventoryForVoidedServices(billForInventoryRestore, reversedServices, reason, req.user?.displayName || req.user?.email).catch((e) =>
         console.error(`Receipt ${receipt.receipt_number}: status changed but inventory restore failed —`, e.message));
@@ -506,6 +591,119 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     if (t && !t.finished) await t.rollback().catch(() => {});
     console.error('Error updating receipt status:', error);
     res.status(error.message?.startsWith('Cannot reverse') ? 400 : 500).json({ error: error.message || 'Failed to update receipt status' });
+  }
+});
+
+// B5: approve a pending void/refund request — the second person's sign-off.
+// Runs the exact same reversal applyVoidReversal above runs for an
+// immediately-privileged requester, just triggered by whoever approves it
+// instead of whoever requested it.
+router.post('/:receiptId/approve-void', requireApprovalPermission('receipt_void_approve'), async (req, res) => {
+  let t;
+  try {
+    const { receiptId } = req.params;
+    const { reason } = req.body;
+
+    t = await sequelize.transaction();
+    const receipt = await Receipt.findByPk(receiptId, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!receipt) {
+      await t.rollback();
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+    if (!BranchQueryFilter.canAccessRecord(receipt, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+      await t.rollback();
+      return res.status(403).json({ error: 'Access denied to this receipt' });
+    }
+
+    const targetStatus = TARGET_FOR_PENDING[receipt.status];
+    if (!targetStatus) {
+      await t.rollback();
+      return res.status(400).json({ error: `This receipt has no pending void/refund request to approve (current status: ${receipt.status}).` });
+    }
+
+    const updatedReceipt = await receipt.update({
+      status: targetStatus,
+      notes: reason ? `Approved — ${targetStatus}: ${reason}` : `Approved — ${targetStatus}`,
+      updated_at: new Date(),
+    }, { transaction: t });
+
+    const { reversedServices, billForInventoryRestore } = await applyVoidReversal(receipt, targetStatus, reason, req, t);
+    await t.commit();
+
+    if (billForInventoryRestore) {
+      await restoreInventoryForVoidedServices(billForInventoryRestore, reversedServices, reason, req.user?.displayName || req.user?.email).catch((e) =>
+        console.error(`Receipt ${receipt.receipt_number}: approved but inventory restore failed —`, e.message));
+    }
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        clinic_id: receipt.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Billing', action: 'RECEIPT_VOID_APPROVED',
+        entity_type: 'Receipt', entity_id: receiptId,
+        description: `${req.user?.displayName || req.user?.email || 'A user'} approved ${targetStatus} on receipt ${receipt.receipt_number} (${receipt.payment_amount})${reason ? ` — ${reason}` : ''}`,
+        old_values: { status: receipt.status }, new_values: { status: targetStatus, reason: reason || null },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) {}
+
+    res.json({ message: `Receipt ${targetStatus} successfully`, receipt: updatedReceipt });
+  } catch (error) {
+    if (t && !t.finished) await t.rollback().catch(() => {});
+    console.error('Error approving receipt void/refund:', error);
+    res.status(error.message?.startsWith('Cannot reverse') ? 400 : 500).json({ error: error.message || 'Failed to approve void/refund' });
+  }
+});
+
+// B5: reject a pending void/refund request — back to active, no reversal
+// applied (none was ever applied while pending).
+router.post('/:receiptId/reject-void', requireApprovalPermission('receipt_void_approve'), async (req, res) => {
+  let t;
+  try {
+    const { receiptId } = req.params;
+    const { reason } = req.body;
+
+    t = await sequelize.transaction();
+    const receipt = await Receipt.findByPk(receiptId, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!receipt) {
+      await t.rollback();
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+    if (!BranchQueryFilter.canAccessRecord(receipt, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+      await t.rollback();
+      return res.status(403).json({ error: 'Access denied to this receipt' });
+    }
+
+    if (!TARGET_FOR_PENDING[receipt.status]) {
+      await t.rollback();
+      return res.status(400).json({ error: `This receipt has no pending void/refund request to reject (current status: ${receipt.status}).` });
+    }
+
+    const previousStatus = receipt.status;
+    const updatedReceipt = await receipt.update({
+      status: 'active',
+      notes: reason ? `Void/refund request rejected: ${reason}` : 'Void/refund request rejected',
+      updated_at: new Date(),
+    }, { transaction: t });
+    await t.commit();
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        clinic_id: receipt.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Billing', action: 'RECEIPT_VOID_REJECTED',
+        entity_type: 'Receipt', entity_id: receiptId,
+        description: `${req.user?.displayName || req.user?.email || 'A user'} rejected the ${previousStatus} request on receipt ${receipt.receipt_number} (${receipt.payment_amount})${reason ? ` — ${reason}` : ''}`,
+        old_values: { status: previousStatus }, new_values: { status: 'active', reason: reason || null },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) {}
+
+    res.json({ message: 'Void/refund request rejected', receipt: updatedReceipt });
+  } catch (error) {
+    if (t && !t.finished) await t.rollback().catch(() => {});
+    console.error('Error rejecting receipt void/refund:', error);
+    res.status(500).json({ error: error.message || 'Failed to reject void/refund' });
   }
 });
 
