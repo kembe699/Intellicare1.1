@@ -21,6 +21,11 @@ import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 interface ServiceLine {
+  // Stable per-line id, assigned server-side once and never regenerated — lets
+  // void/payment actions identify a specific line even if the array's order or
+  // length has changed since this bill was fetched. Absent on a line that
+  // predates this (self-heals on the next write to the bill).
+  line_id?: string;
   serviceName: string;
   quantity: number;
   unitPrice: number;
@@ -413,11 +418,13 @@ export default function BillDetails() {
     if (!confirm('Void this line item? It will be removed from the bill total.')) return;
     setVoidingIndex(index);
     try {
+      // B1: lineId identifies the exact line clicked; serviceIndex is sent only
+      // as a fallback for a line that predates B1 and has no id yet.
       const res = await authFetch(`/api/patient-bills/${bill.id}/void-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ serviceIndex: index }),
+        body: JSON.stringify({ serviceIndex: index, lineId: bill.services[index]?.line_id }),
       });
       if (res.ok) {
         toast.success('Item voided/removed');
@@ -616,12 +623,13 @@ export default function BillDetails() {
       // client-side rather than guessed at.
       const selectedTotal = bill.services.reduce((sum, s, i) => selectedItems.has(i) ? sum + amt(s.totalPrice) : sum, 0);
       let paidServiceIndexes: number[] | undefined;
-      let partialLineSplit: { index: number; paidAmount: number } | undefined;
+      let partialLineSplit: { index: number; lineId?: string; paidAmount: number } | undefined;
       if (selectedItems.size > 0) {
         if (amount >= selectedTotal - 0.01) {
           paidServiceIndexes = Array.from(selectedItems);
         } else if (selectedItems.size === 1) {
-          partialLineSplit = { index: Array.from(selectedItems)[0], paidAmount: amount };
+          const idx = Array.from(selectedItems)[0];
+          partialLineSplit = { index: idx, lineId: bill.services[idx]?.line_id, paidAmount: amount };
         } else {
           toast.error('This amount doesn\'t cover everything selected. Select just the one item you\'re partially paying, or enter the full amount for everything checked.');
           setPaying(false);
@@ -630,6 +638,13 @@ export default function BillDetails() {
       } else if (isFullPayment) {
         paidServiceIndexes = bill.services.reduce((acc: number[], s, i) => { if (isPayableLine(s)) acc.push(i); return acc; }, []);
       }
+      // B1: resolved against the SAME bill.services this render selected from,
+      // so a line's id always matches what the user actually checked, even if
+      // the backend's own array has shifted by the time this request lands
+      // (see normalizeServices.js's ensureLineIds for the full rationale).
+      // Sent alongside the index fields — the backend prefers the id and only
+      // falls back to the index for bills/older clients without one.
+      const paidLineIds = paidServiceIndexes?.map((i) => bill.services[i]?.line_id).filter(Boolean);
 
       const res = await authFetch(`/api/patient-bills/${bill.id}/payments`, {
         method: 'POST',
@@ -638,7 +653,7 @@ export default function BillDetails() {
         body: JSON.stringify({
           amount, payment_method: paymentForm.method, payment_date: paymentForm.date,
           notes, cashierName: user?.displayName, cashierId: user?.uid,
-          paidServiceIndexes, partialLineSplit,
+          paidServiceIndexes, paidLineIds, partialLineSplit,
         }),
       });
       if (res.ok) {

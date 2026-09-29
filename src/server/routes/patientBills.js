@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const BillingIntegrationService = require('../services/BillingIntegrationService');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
-const { normalizeServices } = require('../utils/normalizeServices');
+const { normalizeServices, ensureLineIds } = require('../utils/normalizeServices');
 const AccountingService = require('../services/AccountingService');
 const { authorize } = require('../middleware/authorize');
 const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } = require('./patientDeposits');
@@ -593,7 +593,10 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     billData.balance_amount = (billData.total_amount || 0) - (billData.paid_amount || 0);
     
     // Apply scheme prices if patient has a scheme
-    let parsedServices = normalizeServices(billData.services);
+    // B1: every line gets a stable id here, before scheme pricing/merging/anything
+    // else touches it — see ensureLineIds's own docstring for why array position
+    // alone is not a safe way to identify "which line" later (void-item, payment).
+    let parsedServices = ensureLineIds(normalizeServices(billData.services));
 
     // Frontend already blocks a typed negative quantity, but that's bypassable
     // via a direct API call — a negative quantity/price produces a negative
@@ -694,7 +697,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
 
         let result, isNew;
         if (existingBill) {
-          const existingServices = normalizeServices(existingBill.services);
+          const existingServices = ensureLineIds(normalizeServices(existingBill.services));
           const mergedServices = [...existingServices, ...parsedServices];
           const newTotal = parseFloat(existingBill.total_amount) + parseFloat(billData.total_amount || 0);
           const paid = parseFloat(existingBill.paid_amount);
@@ -909,7 +912,8 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     if (!billPeek) {
       return res.status(404).json({ error: 'Bill not found' });
     }
-    const schemeResult = await applySchemePrice(billPeek.patient_id, services, billPeek.scheme_id, req);
+    // B1: give every newly-added line a stable id, same as bill creation.
+    const schemeResult = await applySchemePrice(billPeek.patient_id, ensureLineIds(services), billPeek.scheme_id, req);
     let pricedServices = schemeResult.services;
 
     // Locking the row for the rest of this handler closes the "lost update" race: without
@@ -929,8 +933,10 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
       return res.status(403).json({ error: 'Access denied to this patient bill' });
     }
 
-    // Parse existing services
-    const existingServices = normalizeServices(bill.services);
+    // Parse existing services. ensureLineIds self-heals a bill created before
+    // B1 the moment it's next written to, same as normalizeServices already
+    // self-heals the old double-encoding bug on every write.
+    const existingServices = ensureLineIds(normalizeServices(bill.services));
 
     // A bill is either wholly cash or wholly scheme-priced — once created, later
     // additions inherit whatever mode the bill was created under (bill.scheme_id)
@@ -1124,10 +1130,10 @@ router.put('/:billId', authorize('bills.financial_action'), async (req, res) => 
 router.post('/:billId/void-item', authorize('bills.financial_action'), async (req, res) => {
   try {
     const { billId } = req.params;
-    const { serviceIndex, reason } = req.body;
+    const { serviceIndex, lineId, reason } = req.body;
 
-    if (serviceIndex === undefined || serviceIndex === null || isNaN(parseInt(serviceIndex))) {
-      return res.status(400).json({ error: 'serviceIndex is required' });
+    if (!lineId && (serviceIndex === undefined || serviceIndex === null || isNaN(parseInt(serviceIndex)))) {
+      return res.status(400).json({ error: 'lineId (or serviceIndex) is required' });
     }
 
     const bill = await PatientBill.findByPk(billId);
@@ -1138,9 +1144,15 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
       return res.status(403).json({ error: 'Access denied to this patient bill' });
     }
 
-    const services = normalizeServices(bill.services);
-    const index = parseInt(serviceIndex);
-    const item = services[index];
+    // B1: lineId identifies the exact line the user clicked, immune to the
+    // array shifting underneath it (another void's splice, a concurrent
+    // add-services) between when the page fetched this bill and when this
+    // request lands. serviceIndex (array position) is kept only for older
+    // frontend builds and bills whose lines predate B1 and have no id yet —
+    // ensureLineIds heals those the moment this write happens.
+    const services = ensureLineIds(normalizeServices(bill.services));
+    const index = lineId ? services.findIndex((s) => s.line_id === lineId) : parseInt(serviceIndex);
+    const item = index >= 0 ? services[index] : undefined;
     if (!item) {
       return res.status(404).json({ error: 'Line item not found on this bill' });
     }
@@ -1516,7 +1528,66 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     // normalizeServices() — even when paidServiceIndexes is empty — so every payment
     // self-heals any pre-existing multi-encoded services on this bill instead of just
     // passing the raw (possibly still-corrupted) value straight back through.
-    let updatedServices = normalizeServices(currentBill.services);
+    let updatedServices = ensureLineIds(normalizeServices(currentBill.services));
+
+    // B1: paidLineIds/partialLineSplit.lineId identify lines by their stable id
+    // rather than array position — the page that built this request fetched the
+    // bill, and possibly rendered it, before this handler took the row lock
+    // above; if another request voided or added a line on this same bill in
+    // that window, "index 3" from that stale fetch may no longer be the line
+    // the user actually selected. Resolving by id against updatedServices (read
+    // just now, under the lock) and rewriting paymentData in place means every
+    // index-based branch below — including the receipt/response building
+    // further down — keeps working unchanged, now pointed at the right line
+    // regardless of what shifted underneath it. Falls back to whatever index
+    // was sent when no id is present (older frontend builds, or a bill whose
+    // lines had no id before this request healed them).
+    if (paymentData.paidLineIds && paymentData.paidLineIds.length > 0) {
+      paymentData.paidServiceIndexes = paymentData.paidLineIds
+        .map((id) => updatedServices.findIndex((s) => s.line_id === id))
+        .filter((idx) => idx >= 0);
+    }
+    if (paymentData.partialLineSplit && paymentData.partialLineSplit.lineId) {
+      const resolvedIdx = updatedServices.findIndex((s) => s.line_id === paymentData.partialLineSplit.lineId);
+      if (resolvedIdx >= 0) paymentData.partialLineSplit.index = resolvedIdx;
+    }
+
+    // B8: paidServiceIndexes used to be trusted blindly — every listed index got
+    // flipped to paid:true no matter what paymentAmountNum actually was, so a
+    // request paying 100 while listing three lines worth 50,000 would mark all
+    // three fully settled, permanently misrepresenting what was actually
+    // collected against them (the bill's own total_amount/balance_amount stay
+    // correct either way, since those come from paymentAmountNum directly, but
+    // the per-line paid flags — what the receipt and "still payable" filters
+    // read — would be wrong). The frontend already computes this same check
+    // before sending (selectedTotal vs amount in BillDetails.tsx/PatientsBill
+    // .tsx); this is the server no longer trusting that a client did.
+    if (paymentData.paidServiceIndexes && paymentData.paidServiceIndexes.length > 0) {
+      let selectedTotal = 0;
+      for (const indexStr of paymentData.paidServiceIndexes) {
+        const line = updatedServices[parseInt(indexStr, 10)];
+        if (!line) {
+          await t.rollback();
+          return res.status(400).json({ error: `paidServiceIndexes references a line that doesn't exist on this bill (index ${indexStr}).` });
+        }
+        if (line.isVoided) {
+          await t.rollback();
+          return res.status(400).json({ error: `Cannot pay "${line.serviceName || line.name || 'a line'}" — it has been voided.` });
+        }
+        if (line.paid) {
+          await t.rollback();
+          return res.status(400).json({ error: `"${line.serviceName || line.name || 'A line'}" is already fully paid.` });
+        }
+        selectedTotal += parseFloat(line.totalPrice) || 0;
+      }
+      if (paymentAmountNum < selectedTotal - 0.01) {
+        await t.rollback();
+        return res.status(400).json({
+          error: `This payment (${paymentAmountNum}) doesn't cover everything selected (${selectedTotal}). Select fewer items, or pay the full amount for everything checked.`,
+        });
+      }
+    }
+
     // A payment that only covers part of one specific line (e.g. 20,000 of a 520,000,
     // 26-day bed charge) splits that line into a paid portion sized to what was actually
     // collected + a still-open remainder for the rest — instead of the old behavior of

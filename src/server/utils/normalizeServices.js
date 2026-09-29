@@ -33,4 +33,19 @@ function normalizeServices(value) {
   return Array.isArray(v) ? [...v] : [];
 }
 
-module.exports = { normalizeServices };
+// B1: a bill's services array has no stable identity of its own — every
+// caller (void-item, payment) used to identify "which line" by array
+// position. Voiding an unpaid line does services.splice(index, 1), which
+// shifts every later index; a payment submitted from a page that fetched the
+// bill a moment before someone else voided/added a line would then mark the
+// WRONG line as paid, silently, because "index 3" no longer means the same
+// item. line_id is assigned once, here, and never regenerated for a line
+// that already has one — callers must persist whatever this returns (it does
+// not mutate the array Sequelize already has cached, same rule as
+// normalizeServices itself) so the id sticks across every future read.
+function ensureLineIds(services) {
+  const { randomUUID } = require('crypto');
+  return services.map((s) => (s && s.line_id) ? s : { ...s, line_id: randomUUID() });
+}
+
+module.exports = { normalizeServices, ensureLineIds };
