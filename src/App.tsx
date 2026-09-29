@@ -58,6 +58,7 @@ const Security = lazyWithRetry(() => import('./pages/setup/Security'));
 const Approvals = lazyWithRetry(() => import('./pages/setup/Approvals'));
 const FacilitySetup = lazyWithRetry(() => import('./pages/setup/FacilitySetup'));
 const UncodedDiagnoses = lazyWithRetry(() => import('./pages/setup/UncodedDiagnoses'));
+const FixedAssets = lazyWithRetry(() => import('./pages/accounting/FixedAssets'));
 const AccountingCashTransfer = lazyWithRetry(() => import('./pages/accounting/CashTransfer'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
@@ -593,6 +594,11 @@ const AppRoutes = () => {
       <Route path="/accounting/reports" element={
         <ProtectedRoute requiredPrivilege="accounting.read">
           <FinancialReports />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/fixed-assets" element={
+        <ProtectedRoute requiredPrivilege="assets.view">
+          <FixedAssets />
         </ProtectedRoute>
       } />
       <Route path="/accounting/exchange-rates" element={
