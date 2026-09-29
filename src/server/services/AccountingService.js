@@ -204,6 +204,14 @@ class AccountingService {
         // Create account ledger entries in BASE currency for reporting
         await AccountLedger.create({
           clinic_id: glData.clinic_id,
+          // B7: account_ledger.branch_id is what branch-scoped reports actually
+          // filter on (see reportIncomeStatement.js's branchScope(), which
+          // queries account_ledger directly) — general_ledger/gl_line_items have
+          // no branch_id column at all, so this was the one place a missing
+          // value actually mattered. Every entry used to post with no branch_id
+          // whatsoever regardless of what the caller resolved, so a branch's own
+          // income statement never saw its own patient billing revenue at all.
+          branch_id: glData.branch_id || null,
           account_id: lineItem.account_id,
           transaction_id: glEntry.id,
           transaction_date: glData.transaction_date,
@@ -342,6 +350,12 @@ class AccountingService {
 
       const glData = {
         clinic_id: billData.clinic_id,
+        // B7: without this, every patient bill's revenue posted with no
+        // branch_id at all — a branch-scoped income statement (or the
+        // branch-filtered account_ledger/gl_line_items any report reads)
+        // could never show this entry, regardless of which branch actually
+        // billed it.
+        branch_id: billData.branch_id || null,
         transaction_date: billData.bill_date || new Date(),
         transaction_type: 'patient_billing',
         description: `Patient Bill - ${billData.bill_number}`,
@@ -511,6 +525,7 @@ class AccountingService {
 
     const glData = {
       clinic_id: bill.clinic_id,
+      branch_id: bill.branch_id || null, // B7 — see createGLFromPatientBill's identical comment
       transaction_date: new Date(),
       transaction_type: 'patient_billing',
       description: `Patient Bill - ${bill.bill_number} (items added)`,

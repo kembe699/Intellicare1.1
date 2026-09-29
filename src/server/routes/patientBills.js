@@ -719,7 +719,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
           const mergedTotal = parseFloat(billData.total_amount || 0);
           if (mergedTotal > 0) {
             await AccountingService.createGLTopUpForPatientBill(
-              { id: result.id, clinic_id: result.clinic_id, scheme_id: result.scheme_id, bill_number: result.bill_number, patient_name: result.patient_name, bill_currency: billData.bill_currency },
+              { id: result.id, clinic_id: result.clinic_id, branch_id: result.branch_id, scheme_id: result.scheme_id, bill_number: result.bill_number, patient_name: result.patient_name, bill_currency: billData.bill_currency },
               parsedServices.filter(s => !s.isVoided),
               mergedTotal,
               billData.created_by,
@@ -1009,7 +1009,7 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     if (newServicesTotal > 0) {
       try {
         await AccountingService.createGLTopUpForPatientBill(
-          { id: bill.id, clinic_id: bill.clinic_id, scheme_id: updatePayload.scheme_id ?? bill.scheme_id, bill_number: bill.bill_number, patient_name: bill.patient_name, bill_currency: updatePayload.bill_currency },
+          { id: bill.id, clinic_id: bill.clinic_id, branch_id: bill.branch_id, scheme_id: updatePayload.scheme_id ?? bill.scheme_id, bill_number: bill.bill_number, patient_name: bill.patient_name, bill_currency: updatePayload.bill_currency },
           pricedServices.filter(s => !s.isVoided),
           newServicesTotal,
           req.user?.displayName || req.user?.id,
@@ -1300,6 +1300,10 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
 
           const glEntry = await AccountingService.createGLEntry({
             clinic_id: clinicIdForVoid,
+            // B7: without this, a voided item's reversal posted with no
+            // branch_id at all — a branch-scoped income statement would show
+            // the original revenue but never see it reversed.
+            branch_id: bill.branch_id || getCreateBranchId(req),
             transaction_date: new Date().toISOString().split('T')[0],
             transaction_type: 'bill_item_void',
             description: `Voided item on ${bill.bill_number}`,
@@ -1883,6 +1887,7 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
           // amount, so no further conversion should happen.
           await AccountingService.createGLEntry({
             clinic_id: clinicId,
+            branch_id: currentBill.branch_id || getCreateBranchId(req), // B7
             transaction_date: today,
             transaction_type: 'patient_bill_payment',
             description: `Payment: Bill ${billId} (${method})`,
