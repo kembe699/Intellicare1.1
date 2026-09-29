@@ -1270,6 +1270,22 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
             }
           }
 
+          // C5: post in the bill's own currency, at the ORIGINAL bill's rate —
+          // this used to omit transaction_currency entirely, so createGLEntry
+          // defaulted to base currency and posted the raw foreign-currency
+          // voidedAmount (item.totalPrice is priced in bill_currency, same as
+          // every other line on this bill) as if it were that many base-currency
+          // units. The original bill-creation entry (AccountingService.
+          // createGLFromPatientBill, reference_module 'patient_billing') is the
+          // source of truth for what rate was actually used.
+          const { GeneralLedger: GLForVoid } = require('../models');
+          const originalBillGL = await GLForVoid.findOne({
+            where: { clinic_id: clinicIdForVoid, reference_id: billId, reference_module: 'patient_billing' },
+            order: [['created_at', 'ASC']],
+          });
+          const voidCurrency = bill.bill_currency || originalBillGL?.transaction_currency;
+          const voidRate = originalBillGL ? parseFloat(originalBillGL.exchange_rate) : undefined;
+
           const glEntry = await AccountingService.createGLEntry({
             clinic_id: clinicIdForVoid,
             transaction_date: new Date().toISOString().split('T')[0],
