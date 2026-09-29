@@ -122,11 +122,9 @@ const Admissions = lazyWithRetry(() => import('./pages/inpatient/Admissions'));
 const AdmittedPatients = lazyWithRetry(() => import('./pages/inpatient/AdmittedPatients'));
 const PatientDetails = lazyWithRetry(() => import('./pages/inpatient/PatientDetails'));
 const TheatreRequests = lazyWithRetry(() => import('./pages/theatre/TheatreRequests'));
-const TheatreRequestNew = lazyWithRetry(() => import('./pages/theatre/TheatreRequestNew'));
 const TheatreOperations = lazyWithRetry(() => import('./pages/theatre/TheatreOperations'));
 const TheatreOperationNew = lazyWithRetry(() => import('./pages/theatre/TheatreOperationNew'));
 const TheatreOperationDetail = lazyWithRetry(() => import('./pages/theatre/TheatreOperationDetail'));
-const TheatreRooms = lazyWithRetry(() => import('./pages/theatre/TheatreRooms'));
 const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 
 const queryClient = new QueryClient({
@@ -701,11 +699,8 @@ const AppRoutes = () => {
           <TheatreRequests />
         </ProtectedRoute>
       } />
-      <Route path="/theatre/requests/new" element={
-        <ProtectedRoute requiredPrivilege="theatre.write">
-          <TheatreRequestNew />
-        </ProtectedRoute>
-      } />
+      {/* New requests are now submitted inline at the top of /theatre/requests, not a separate page. */}
+      <Route path="/theatre/requests/new" element={<Navigate to="/theatre/requests" replace />} />
       <Route path="/theatre/operations" element={
         <ProtectedRoute requiredPrivilege="theatre.view">
           <TheatreOperations />
@@ -721,11 +716,9 @@ const AppRoutes = () => {
           <TheatreOperationDetail />
         </ProtectedRoute>
       } />
-      <Route path="/theatre/rooms" element={
-        <ProtectedRoute requiredPrivilege="theatre.write">
-          <TheatreRooms />
-        </ProtectedRoute>
-      } />
+      {/* OR rooms are managed at /setup/rooms (tagged room_type = 'or'), not
+          a separate Theatre page — redirect rather than 404 for any old link. */}
+      <Route path="/theatre/rooms" element={<Navigate to="/setup/rooms" replace />} />
       <Route path="/profile" element={
         <ProtectedRoute>
           <Profile />

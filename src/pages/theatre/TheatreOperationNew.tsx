@@ -105,7 +105,7 @@ export default function TheatreOperationNew() {
 
   return (
     <AppLayout>
-      <div className="space-y-4 max-w-2xl">
+      <div className="space-y-4">
         <PageHeader
           icon={<CalendarClock />}
           title="Schedule Operation"
@@ -117,63 +117,70 @@ export default function TheatreOperationNew() {
           }
         />
 
-        <Card>
-          <CardContent className="p-5 space-y-4">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Patient</label>
-              {loadingRequest ? (
-                <p className="text-sm text-muted-foreground">Loading request...</p>
-              ) : selectedPatient ? (
-                <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30">
-                  <div className="text-sm">
-                    <span className="font-medium">{selectedPatient.first_name} {selectedPatient.last_name}</span>
-                    {selectedPatient.code && <span className="text-muted-foreground ml-2">{selectedPatient.code}</span>}
-                  </div>
-                  {!requestId && (
-                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setSelectedPatient(null); setPatientSearch(''); }}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-8" placeholder="Search patient by name or ID..." value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)} />
-                  {patientSearch.length >= 2 && (
-                    <div className="mt-1 border rounded-md max-h-56 overflow-y-auto bg-card shadow-sm">
-                      {isFetching ? (
-                        <p className="text-sm text-muted-foreground px-3 py-2">Searching...</p>
-                      ) : patientResults.length === 0 ? (
-                        <p className="text-sm text-muted-foreground px-3 py-2">No patients found.</p>
-                      ) : patientResults.map((p: PatientOption) => (
-                        <button key={`${p.source}-${p.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between" onClick={() => setSelectedPatient(p)}>
-                          <span>{p.first_name} {p.last_name}</span>
-                          <span className="text-xs text-muted-foreground">{p.code}</span>
-                        </button>
-                      ))}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Patient</label>
+                {loadingRequest ? (
+                  <p className="text-sm text-muted-foreground">Loading request...</p>
+                ) : selectedPatient ? (
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30">
+                    <div className="text-sm">
+                      <span className="font-medium">{selectedPatient.first_name} {selectedPatient.last_name}</span>
+                      {selectedPatient.code && <span className="text-muted-foreground ml-2">{selectedPatient.code}</span>}
                     </div>
-                  )}
+                    {!requestId && (
+                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setSelectedPatient(null); setPatientSearch(''); }}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-8" placeholder="Search patient by name or ID..." value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)} />
+                    {patientSearch.length >= 2 && (
+                      <div className="mt-1 border rounded-md max-h-56 overflow-y-auto bg-card shadow-sm">
+                        {isFetching ? (
+                          <p className="text-sm text-muted-foreground px-3 py-2">Searching...</p>
+                        ) : patientResults.length === 0 ? (
+                          <p className="text-sm text-muted-foreground px-3 py-2">No patients found.</p>
+                        ) : patientResults.map((p: PatientOption) => (
+                          <button key={`${p.source}-${p.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between" onClick={() => setSelectedPatient(p)}>
+                            <span>{p.first_name} {p.last_name}</span>
+                            <span className="text-xs text-muted-foreground">{p.code}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Procedure</label>
+                <Input value={procedureName} onChange={(e) => setProcedureName(e.target.value)} placeholder="e.g. Appendectomy" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Theatre Room</label>
+                  <Combobox
+                    options={rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.status.replace('_', ' ')})` }))}
+                    value={roomId} onChange={setRoomId} placeholder="Select room..." searchPlaceholder="Search..."
+                  />
                 </div>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Procedure</label>
-              <Input value={procedureName} onChange={(e) => setProcedureName(e.target.value)} placeholder="e.g. Appendectomy" />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Theatre Room</label>
-                <Combobox
-                  options={rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.status.replace('_', ' ')})` }))}
-                  value={roomId} onChange={setRoomId} placeholder="Select room..." searchPlaceholder="Search..."
-                />
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Scheduled Date/Time</label>
+                  <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Scheduled Date/Time</label>
-                <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
-              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1.5">Surgeon</label>
                 <Combobox
@@ -188,16 +195,16 @@ export default function TheatreOperationNew() {
                   value={anesthetistId} onChange={setAnesthetistId} placeholder="Select anaesthetist..." searchPlaceholder="Search employees..."
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1.5">Scrub Nurse</label>
                 <Combobox
                   options={employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))}
                   value={nurseId} onChange={setNurseId} placeholder="Select nurse..." searchPlaceholder="Search employees..."
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => navigate('/theatre/operations')}>Cancel</Button>

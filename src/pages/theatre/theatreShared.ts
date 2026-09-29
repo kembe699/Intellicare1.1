@@ -2,8 +2,17 @@ export interface PatientOption {
   id: string; code: string; first_name: string; last_name: string; gender: string | null; date_of_birth: string | null; source: 'patients' | 'lis_participants';
 }
 
+// A room tagged room_type = 'or' in the general rooms table (managed at
+// /setup/rooms), with its OR-specific live status joined in.
 export interface TheatreRoom {
-  id: string; name: string; status: 'available' | 'in_use' | 'cleaning' | 'maintenance'; notes: string | null; is_active: boolean;
+  id: string; name: string; status: 'available' | 'in_use' | 'cleaning' | 'maintenance';
+}
+
+export interface StockLocation { id: string; location_code: string; location_name: string; location_type: string; }
+export interface StockItemOption { id: string; item_name: string; item_code: string; unit_of_measure: string | null; available_quantity: number; }
+export interface OperationItemUsage {
+  id: string; item_id: string; item_name: string; location_id: string | null; location_name: string | null;
+  quantity: string; unit_of_measure: string | null; dispensed_by: string | null; dispensed_at: string; notes: string | null;
 }
 
 export interface TheatreRequest {
@@ -35,7 +44,7 @@ export interface TheatreOperation {
   scheduled_at: string | null; status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   started_at: string | null; ended_at: string | null; duration_minutes: number | null;
   outcome: 'successful' | 'complication' | 'death' | 'aborted' | null; outcome_notes: string | null; cause_of_death: string | null;
-  checklist: ChecklistItem[]; vitals: VitalsEntry[];
+  checklist: ChecklistItem[]; vitals: VitalsEntry[]; items: OperationItemUsage[];
 }
 
 export const PRIORITY_BADGE: Record<string, 'danger' | 'warning' | 'neutral'> = { emergency: 'danger', urgent: 'warning', routine: 'neutral' };

@@ -49,14 +49,25 @@ router.get('/patients/search', authorize('theatre.view'), async (req, res) => {
 });
 
 // ── Rooms ───────────────────────────────────────────────────────────────
+// Rooms are added/edited at /setup/rooms (the general rooms table, tagged
+// room_type = 'or') — not here. This just lists the OR-tagged ones with
+// their live status, and start/complete/cancel (in TheatreService) update
+// that status as an operation moves through the room.
 
 router.get('/rooms', authorize('theatre.view'), async (req, res) => {
   const { sequelize } = req.models;
   const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
   try {
     const replacements = { clinicId };
-    const branchSql = branchScope(req, replacements);
-    const [rows] = await sequelize.query(`SELECT * FROM theatre_rooms WHERE clinic_id = :clinicId ${branchSql} ORDER BY name`, { replacements });
+    const branchSql = branchScope(req, replacements, 'r');
+    const [rows] = await sequelize.query(
+      `SELECT r.id, r.room_number AS name, COALESCE(trs.status, 'available') AS status
+       FROM rooms r
+       LEFT JOIN theatre_room_status trs ON trs.room_id = r.id
+       WHERE r.clinic_id = :clinicId AND r.room_type = 'or' AND r.is_active = true ${branchSql}
+       ORDER BY r.room_number`,
+      { replacements }
+    );
     res.json(rows);
   } catch (error) {
     console.error('Error listing theatre rooms:', error);
@@ -64,45 +75,60 @@ router.get('/rooms', authorize('theatre.view'), async (req, res) => {
   }
 });
 
-router.post('/rooms', authorize('theatre.write'), async (req, res) => {
+// ── Inventory (drugs/consumables/blood used during an operation) ────────
+// Proxies stock_locations/inventory_items rather than requiring
+// inventory.read/inventory.write — a nurse/doctor with theatre.write
+// shouldn't need full inventory-management access just to pick a location
+// and search what's on its shelf.
+
+router.get('/locations', authorize('theatre.write'), async (req, res) => {
   const { sequelize } = req.models;
-  const { v4: uuidv4 } = require('uuid');
-  const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
-  const { name, notes } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
+  const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
   try {
-    const id = uuidv4();
-    await sequelize.query(
-      `INSERT INTO theatre_rooms (id, clinic_id, branch_id, name, notes) VALUES (:id, :clinicId, :branchId, :name, :notes)`,
-      { replacements: { id, clinicId, branchId: req.body.branch_id || getCreateBranchId(req), name: name.trim(), notes: notes || null } }
+    const [rows] = await sequelize.query(
+      `SELECT id, location_code, location_name, location_type FROM stock_locations WHERE clinic_id = :clinicId AND is_active = true ORDER BY location_name`,
+      { replacements: { clinicId } }
     );
-    const [[created]] = await sequelize.query(`SELECT * FROM theatre_rooms WHERE id = :id`, { replacements: { id } });
-    res.status(201).json(created);
+    res.json(rows);
   } catch (error) {
-    console.error('Error creating theatre room:', error);
-    res.status(500).json({ error: 'Failed to create theatre room' });
+    console.error('Error listing locations for theatre:', error);
+    res.status(500).json({ error: 'Failed to list locations' });
   }
 });
 
-router.put('/rooms/:id', authorize('theatre.write'), async (req, res) => {
+router.get('/items/search', authorize('theatre.write'), async (req, res) => {
   const { sequelize } = req.models;
-  const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
-  const { name, status, notes, is_active: isActive } = req.body;
-  if (status && !['available', 'in_use', 'cleaning', 'maintenance'].includes(status)) {
-    return res.status(400).json({ error: 'status must be available, in_use, cleaning, or maintenance' });
-  }
+  const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
+  const { location_id: locationId, q } = req.query;
+  if (!locationId) return res.status(400).json({ error: 'location_id is required' });
   try {
-    const [[existing]] = await sequelize.query(`SELECT id FROM theatre_rooms WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
-    if (!existing) return res.status(404).json({ error: 'Room not found' });
-    await sequelize.query(
-      `UPDATE theatre_rooms SET name = COALESCE(:name, name), status = COALESCE(:status, status), notes = COALESCE(:notes, notes), is_active = COALESCE(:isActive, is_active), updated_at = NOW() WHERE id = :id`,
-      { replacements: { id: req.params.id, name: name || null, status: status || null, notes: notes != null ? notes : null, isActive: isActive != null ? isActive : null } }
-    );
-    const [[updated]] = await sequelize.query(`SELECT * FROM theatre_rooms WHERE id = :id`, { replacements: { id: req.params.id } });
-    res.json(updated);
+    const replacements = { clinicId, locationId };
+    let sql = `
+      SELECT i.id, i.item_name, i.item_code, i.unit_of_measure,
+             COALESCE(loc.quantity_on_hand, 0) AS available_quantity
+      FROM inventory_items i
+      LEFT JOIN stock_by_location loc ON loc.item_id = i.id AND loc.location_id = :locationId
+      WHERE i.clinic_id = :clinicId AND i.is_active = true
+        AND EXISTS (SELECT 1 FROM stock_by_location sbl WHERE sbl.item_id = i.id AND sbl.location_id = :locationId AND sbl.quantity_on_hand > 0)`;
+    if (q && q.trim()) { sql += ' AND (i.item_name ILIKE :q OR i.item_code ILIKE :q)'; replacements.q = `%${q.trim()}%`; }
+    sql += ' ORDER BY i.item_name LIMIT 30';
+    const [rows] = await sequelize.query(sql, { replacements });
+    res.json(rows);
   } catch (error) {
-    console.error('Error updating theatre room:', error);
-    res.status(500).json({ error: 'Failed to update theatre room' });
+    console.error('Error searching items for theatre:', error);
+    res.status(500).json({ error: 'Failed to search items' });
+  }
+});
+
+router.post('/operations/:id/items', authorize('theatre.write'), async (req, res) => {
+  try {
+    const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
+    const usage = await TheatreService.recordItemUsage(clinicId, req.params.id, req.body, req.user?.id);
+    await logAudit(req, { action: 'ITEM_USED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Used ${usage.quantity} ${usage.unit_of_measure || ''} of ${usage.item_name}`, new_values: usage });
+    res.status(201).json(usage);
+  } catch (error) {
+    console.error('Error recording item usage for theatre operation:', error);
+    res.status(400).json({ error: error.message || 'Failed to record item usage' });
   }
 });
 
@@ -169,11 +195,11 @@ router.get('/operations', authorize('theatre.view'), async (req, res) => {
     let sql = `
       SELECT t.*, COALESCE(p.first_name, lp.first_name) AS patient_first_name, COALESCE(p.last_name, lp.last_name) AS patient_last_name,
              COALESCE(p.patient_id, lp.participant_number) AS patient_code,
-             r.name AS room_name, s.first_name AS surgeon_first_name, s.last_name AS surgeon_last_name
+             r.room_number AS room_name, s.first_name AS surgeon_first_name, s.last_name AS surgeon_last_name
       FROM theatre_operations t
       LEFT JOIN patients p ON p.id = t.patient_id
       LEFT JOIN lis_participants lp ON lp.id = t.patient_id
-      LEFT JOIN theatre_rooms r ON r.id = t.theatre_room_id
+      LEFT JOIN rooms r ON r.id = t.theatre_room_id
       LEFT JOIN employees s ON s.id = t.surgeon_employee_id
       WHERE t.clinic_id = :clinicId ${branchSql}`;
     if (req.query.status) { sql += ' AND t.status = :status'; replacements.status = req.query.status; }

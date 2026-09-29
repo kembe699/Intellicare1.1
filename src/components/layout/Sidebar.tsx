@@ -187,13 +187,14 @@ const lisDropdown: NavDropdown = {
   ]
 };
 
+// OR rooms are just rooms tagged room_type = 'or', added/edited at
+// /setup/rooms (already in the Setup dropdown) — not a separate place here.
 const theatreDropdown: NavDropdown = {
   label: 'Theatre / OR',
   icon: Scissors,
   items: [
     { label: 'Operation Requests', href: '/theatre/requests', icon: ClipboardList, privilege: 'theatre.view' },
     { label: 'Operations Board', href: '/theatre/operations', icon: CalendarClock, privilege: 'theatre.view' },
-    { label: 'Theatre Rooms', href: '/theatre/rooms', icon: DoorOpen, privilege: 'theatre.write' },
   ]
 };
 

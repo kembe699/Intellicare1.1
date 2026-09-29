@@ -3,7 +3,17 @@ const { v4: uuidv4 } = require('uuid');
 
 // Operating Theatre / OR module.
 //
-// theatre_rooms: physical ORs, one clinic can have several.
+// Rooms are NOT owned here — an OR is just a row in the general `rooms`
+// table (src/server/scripts/migrateInpatientTables.js) tagged
+// room_type = 'or', added/edited from the existing /setup/rooms page like
+// any ward or consultation room, rather than a second parallel place to
+// register rooms. theatre_room_status is a small side table keyed by
+// rooms.id that holds only the OR-specific live status (available/in_use/
+// cleaning/maintenance) a ward room has no use for — everything else about
+// the room (name, branch, active flag) is read straight from `rooms`.
+// An early version of this module did keep its own theatre_rooms table;
+// it never shipped to production, so it's dropped outright here rather than
+// migrated.
 //
 // theatre_requests: a request from any department/ward for a patient to go to
 // theatre — the intake queue. Scheduling one creates a theatre_operations row.
@@ -13,7 +23,8 @@ const { v4: uuidv4 } = require('uuid');
 // identified either in `patients` (inpatient/reception identity) or
 // `lis_participants` (the live OPD identity) — same dual-identity shape
 // inpatient_admissions already uses (LEFT JOIN both, COALESCE the fields),
-// not a strict FK to either table.
+// not a strict FK to either table. theatre_room_id is likewise unconstrained,
+// pointing at `rooms.id`.
 //
 // theatre_checklist_items: WHO Surgical Safety Checklist-style items, seeded
 // per operation across three phases (pre_op / intra_op / post_op) so staff
@@ -22,21 +33,25 @@ const { v4: uuidv4 } = require('uuid');
 // theatre_vitals: vitals readings taken during any phase of an operation —
 // separate from the LIS/nursing vitals JSON blobs elsewhere in the app
 // because an operation can have several readings over its course, not one.
+//
+// theatre_operation_items: drugs/consumables/blood used during an operation.
+// Deducting stock and recording who/when/how much reuses the existing
+// inventory_batches/batch_usage_history machinery (the same tables
+// POST /api/inventory/batches/:id/use writes) rather than inventing a
+// parallel stock ledger — this table is just the operation's own itemized
+// view of that usage (denormalized item/location names included, so the
+// operation report still reads correctly even if an item is later renamed).
 async function migrateTheatreTables(db = sequelize) {
   console.log('\n=== Theatre / OR Module Migration ===\n');
 
+  try { await db.query('DROP TABLE IF EXISTS theatre_rooms'); } catch (err) { console.error('Could not drop theatre_rooms:', err.message); }
+
   await db.query(`
-    CREATE TABLE IF NOT EXISTS theatre_rooms (
-      id CHAR(36) PRIMARY KEY,
-      clinic_id INTEGER NOT NULL,
-      branch_id INTEGER,
-      name VARCHAR(100) NOT NULL,
+    CREATE TABLE IF NOT EXISTS theatre_room_status (
+      room_id CHAR(36) PRIMARY KEY,
       status VARCHAR(20) NOT NULL DEFAULT 'available',
-      notes TEXT,
-      is_active BOOLEAN NOT NULL DEFAULT true,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
-      CONSTRAINT chk_theatre_room_status CHECK (status IN ('available', 'in_use', 'cleaning', 'maintenance'))
+      CONSTRAINT chk_theatre_room_status_value CHECK (status IN ('available', 'in_use', 'cleaning', 'maintenance'))
     )
   `);
 
@@ -121,6 +136,24 @@ async function migrateTheatreTables(db = sequelize) {
     )
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_operation_items (
+      id CHAR(36) PRIMARY KEY,
+      operation_id CHAR(36) NOT NULL,
+      item_id CHAR(36) NOT NULL,
+      item_name VARCHAR(255) NOT NULL,
+      batch_id CHAR(36),
+      location_id CHAR(36),
+      location_name VARCHAR(255),
+      quantity NUMERIC(12,2) NOT NULL,
+      unit_of_measure VARCHAR(50),
+      dispensed_by VARCHAR(36),
+      dispensed_at TIMESTAMPTZ DEFAULT NOW(),
+      notes TEXT,
+      CONSTRAINT chk_theatre_operation_items_qty CHECK (quantity > 0)
+    )
+  `);
+
   // Safety net for a schema created before this file used TIMESTAMPTZ: a plain
   // TIMESTAMP column stores NOW() as a naive local wall-clock value (this
   // deployment's session timezone is UTC+3), which a JS Date then reads back
@@ -131,11 +164,12 @@ async function migrateTheatreTables(db = sequelize) {
   // existing column, so re-assert TIMESTAMPTZ explicitly — a no-op once the
   // column already is one.
   const timestamptzColumns = [
-    ['theatre_rooms', ['created_at', 'updated_at']],
+    ['theatre_room_status', ['updated_at']],
     ['theatre_requests', ['created_at', 'updated_at']],
     ['theatre_operations', ['scheduled_at', 'started_at', 'ended_at', 'created_at', 'updated_at']],
     ['theatre_checklist_items', ['checked_at', 'created_at']],
     ['theatre_vitals', ['recorded_at']],
+    ['theatre_operation_items', ['dispensed_at']],
   ];
   for (const [table, columns] of timestamptzColumns) {
     for (const column of columns) {
@@ -144,7 +178,6 @@ async function migrateTheatreTables(db = sequelize) {
   }
 
   const indexes = [
-    'CREATE INDEX IF NOT EXISTS idx_theatre_rooms_clinic ON theatre_rooms (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_clinic ON theatre_requests (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_status ON theatre_requests (status)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_branch ON theatre_requests (branch_id)',
@@ -155,12 +188,13 @@ async function migrateTheatreTables(db = sequelize) {
     'CREATE INDEX IF NOT EXISTS idx_theatre_operations_request ON theatre_operations (request_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_checklist_operation ON theatre_checklist_items (operation_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_vitals_operation ON theatre_vitals (operation_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operation_items_operation ON theatre_operation_items (operation_id)',
   ];
   for (const idx of indexes) {
     try { await db.query(idx); } catch (err) { console.error('Index creation failed:', err.message); }
   }
 
-  console.log('  ✅ theatre_rooms / theatre_requests / theatre_operations / theatre_checklist_items / theatre_vitals ready');
+  console.log('  ✅ theatre_room_status / theatre_requests / theatre_operations / theatre_checklist_items / theatre_vitals / theatre_operation_items ready');
   console.log('\n=== Theatre Migration Complete ===\n');
 }
 

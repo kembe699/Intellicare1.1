@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,12 +14,12 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Loader2, Scissors, Play, Square, XCircle, User, MapPin,
-  Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning,
+  Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe,
 } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
   TheatreOperation, PHASE_LABEL, STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE,
-  patientName, formatDuration,
+  patientName, formatDuration, StockLocation, StockItemOption,
 } from './theatreShared';
 
 function useElapsedTimer(startedAt: string | null, running: boolean) {
@@ -61,10 +62,39 @@ export default function TheatreOperationDetail() {
 
   const [patientVisits, setPatientVisits] = useState<any[] | null>(null);
 
+  const [locations, setLocations] = useState<StockLocation[]>([]);
+  const [locationId, setLocationId] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
+  const [selectedItem, setSelectedItem] = useState<StockItemOption | null>(null);
+  const [itemQty, setItemQty] = useState('');
+  const [itemNotes, setItemNotes] = useState('');
+  const [recordingItem, setRecordingItem] = useState(false);
+
   const timer = useElapsedTimer(operation?.started_at || null, operation?.status === 'in_progress');
 
-  const fetchOperation = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    authFetch('/api/theatre/locations', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setLocations)
+      .catch(() => setLocations([]));
+  }, []);
+
+  const { data: itemResults = [], isFetching: searchingItems } = useQuery({
+    queryKey: ['theatre-item-search', locationId, itemSearch],
+    queryFn: async () => {
+      if (!locationId) return [] as StockItemOption[];
+      const res = await authFetch(`/api/theatre/items/search?location_id=${locationId}&q=${encodeURIComponent(itemSearch)}`, { credentials: 'include' });
+      return res.ok ? res.json() : [];
+    },
+    enabled: !!locationId,
+  });
+
+  // showLoading is only true for the initial mount fetch — every subsequent
+  // refresh (after starting/completing/toggling a checklist item/recording
+  // vitals) fetches silently in the background, so acting on the page never
+  // flashes the whole thing back to a full-page spinner.
+  const fetchOperation = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await authFetch(`/api/theatre/operations/${id}`, { credentials: 'include' });
       if (res.ok) {
@@ -83,11 +113,11 @@ export default function TheatreOperationDetail() {
     } catch {
       toast.error('Failed to load operation');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { fetchOperation(); }, [fetchOperation]);
+  useEffect(() => { fetchOperation(true); }, [fetchOperation]);
 
   const handleStart = async () => {
     setBusy(true);
@@ -121,11 +151,19 @@ export default function TheatreOperationDetail() {
   };
 
   const toggleChecklistItem = async (itemId: string, checked: boolean) => {
+    // Optimistic — flip it locally immediately so a click reads as an
+    // instant checkbox toggle, not a page reload; revert if the save fails.
+    setOperation((prev) => prev && { ...prev, checklist: prev.checklist.map((c) => (c.id === itemId ? { ...c, is_checked: checked } : c)) });
     try {
       const res = await authFetch(`/api/theatre/operations/${id}/checklist/${itemId}`, { method: 'PUT', body: JSON.stringify({ checked }) });
-      if (res.ok) fetchOperation();
-      else toast.error('Failed to update checklist item');
-    } catch { toast.error('Network error'); }
+      if (!res.ok) {
+        toast.error('Failed to update checklist item');
+        fetchOperation();
+      }
+    } catch {
+      toast.error('Network error');
+      fetchOperation();
+    }
   };
 
   const addChecklistItem = async () => {
@@ -154,6 +192,33 @@ export default function TheatreOperationDetail() {
         fetchOperation();
       } else toast.error('Failed to record vitals');
     } catch { toast.error('Network error'); }
+  };
+
+  const recordItemUsage = async () => {
+    if (!locationId) { toast.error('Pick a storage location'); return; }
+    if (!selectedItem) { toast.error('Search for and select an item'); return; }
+    const qty = parseFloat(itemQty);
+    if (!(qty > 0)) { toast.error('Enter a quantity greater than 0'); return; }
+
+    setRecordingItem(true);
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ location_id: locationId, item_id: selectedItem.id, quantity: qty, notes: itemNotes || null }),
+      });
+      if (res.ok) {
+        toast.success(`${qty} ${selectedItem.unit_of_measure || ''} of ${selectedItem.item_name} recorded`);
+        setSelectedItem(null); setItemSearch(''); setItemQty(''); setItemNotes('');
+        fetchOperation();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to record item usage');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setRecordingItem(false);
+    }
   };
 
   const fi = () => ({ name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo });
@@ -195,11 +260,17 @@ export default function TheatreOperationDetail() {
           operation.vitals.map((v) => ({ cells: [new Date(v.recorded_at).toLocaleString(), PHASE_LABEL[v.phase], v.blood_pressure || '—', v.pulse ?? '—', v.temperature ?? '—', v.respiratory_rate ?? '—', v.spo2 ?? '—'] }))
         )
       : '';
+    const itemsBody = operation.items.length > 0
+      ? `<div class="ic-section-title">Drugs, Consumables & Blood Used</div>` + docTemplate.buildTable(
+          [{ label: 'Time' }, { label: 'Item' }, { label: 'Qty', align: 'right' }, { label: 'From' }, { label: 'Notes' }],
+          operation.items.map((it) => ({ cells: [new Date(it.dispensed_at).toLocaleString(), it.item_name, `${it.quantity} ${it.unit_of_measure || ''}`, it.location_name || '—', it.notes || '—'] }))
+        )
+      : '';
 
     return docTemplate.buildDocument({
       docType: 'OPERATION REPORT', docNumber: operation.id.slice(0, 8).toUpperCase(),
       status: operation.status, date: operation.started_at || operation.scheduled_at || new Date(),
-      bodyHTML: infoBody + summary + outcomeBody + checklistBody + vitalsBody,
+      bodyHTML: infoBody + summary + outcomeBody + checklistBody + vitalsBody + itemsBody,
       facilityInfo: fi(), branchInfo: bi(),
     });
   };
@@ -383,6 +454,76 @@ export default function TheatreOperationDetail() {
                           <td className="py-1.5">{v.temperature ?? '—'}</td>
                           <td className="py-1.5">{v.respiratory_rate ?? '—'}</td>
                           <td className="py-1.5">{v.spo2 ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm">Drugs, Consumables & Blood Used</h4></div>
+              <CardContent className="p-4 space-y-3">
+                {canWrite && (
+                  <div className="space-y-2">
+                    <Combobox
+                      options={locations.map((l) => ({ value: l.id, label: `${l.location_name} (${l.location_type})` }))}
+                      value={locationId} onChange={(v) => { setLocationId(v); setSelectedItem(null); setItemSearch(''); }}
+                      placeholder="Storage location..." searchPlaceholder="Search locations..." className="h-9"
+                    />
+                    {locationId && (
+                      selectedItem ? (
+                        <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30 text-sm">
+                          <div>
+                            <span className="font-medium">{selectedItem.item_name}</span>
+                            <span className="text-muted-foreground ml-2">{selectedItem.available_quantity} {selectedItem.unit_of_measure} available</span>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => { setSelectedItem(null); setItemSearch(''); }}>×</Button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Input placeholder="Search items at this location..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} className="h-9 text-sm" />
+                          {itemSearch.length >= 1 && (
+                            <div className="mt-1 border rounded-md max-h-44 overflow-y-auto bg-card shadow-sm">
+                              {searchingItems ? (
+                                <p className="text-sm text-muted-foreground px-3 py-2">Searching...</p>
+                              ) : itemResults.length === 0 ? (
+                                <p className="text-sm text-muted-foreground px-3 py-2">No matching items with stock here.</p>
+                              ) : itemResults.map((it: StockItemOption) => (
+                                <button key={it.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between" onClick={() => setSelectedItem(it)}>
+                                  <span>{it.item_name}</span>
+                                  <span className="text-xs text-muted-foreground">{it.available_quantity} {it.unit_of_measure}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    )}
+                    {selectedItem && (
+                      <div className="flex gap-2">
+                        <Input placeholder="Quantity" type="number" min="0" step="0.01" value={itemQty} onChange={(e) => setItemQty(e.target.value)} className="h-9 text-sm w-28" />
+                        <Input placeholder="Notes (optional)" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} className="h-9 text-sm flex-1" />
+                        <Button size="sm" onClick={recordItemUsage} disabled={recordingItem} className="gap-1.5">
+                          {recordingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Syringe className="h-3.5 w-3.5" />} Use
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {operation.items.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nothing recorded as used yet.</p>
+                ) : (
+                  <table className="w-full text-sm border-collapse">
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">Item</th><th className="text-right py-1.5">Qty</th><th className="text-left py-1.5">From</th></tr></thead>
+                    <tbody>
+                      {operation.items.map((it) => (
+                        <tr key={it.id} className="border-b border-border/50">
+                          <td className="py-1.5">{new Date(it.dispensed_at).toLocaleTimeString()}</td>
+                          <td className="py-1.5">{it.item_name}</td>
+                          <td className="py-1.5 text-right font-mono">{it.quantity} {it.unit_of_measure}</td>
+                          <td className="py-1.5">{it.location_name || '—'}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -16,7 +16,9 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 const ROOM_TYPES = [
   { value: 'consultation', label: 'Consultation Room' },
   { value: 'ward', label: 'Ward' },
+  { value: 'or', label: 'Operating Theatre (OR)' },
 ];
+const ROOM_TYPE_LABEL: Record<string, string> = { ward: 'Ward', consultation: 'Consultation Room', or: 'Operating Theatre' };
 
 const BED_STATUSES = ['available', 'occupied', 'maintenance', 'reserved'];
 
@@ -30,6 +32,7 @@ const bedStatusToneMap: Record<string, StatusBadgeTone> = {
 const roomTypeToneMap: Record<string, StatusBadgeTone> = {
   ward: 'primary',
   consultation: 'info',
+  or: 'success',
 };
 
 export default function RoomsManagement() {
@@ -216,7 +219,7 @@ export default function RoomsManagement() {
             { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
             {
               key: 'room_type', header: 'Type', sortable: true,
-              render: (v) => <StatusBadge status={v} map={roomTypeToneMap} label={v === 'ward' ? 'Ward' : 'Consultation Room'} />,
+              render: (v) => <StatusBadge status={v} map={roomTypeToneMap} label={ROOM_TYPE_LABEL[v] || v} />,
             },
             { key: 'capacity', header: 'Capacity', render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
             {
@@ -378,11 +381,11 @@ export default function RoomsManagement() {
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Ward</span>
-                  <span className="font-medium text-sm">{selectedRoom.ward_name || 'N/A (Consultation Room)'}</span>
+                  <span className="font-medium text-sm">{selectedRoom.ward_name || 'N/A'}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Type</span>
-                  <span>{selectedRoom.room_type === 'ward' ? 'Ward' : 'Consultation Room'}</span>
+                  <span>{ROOM_TYPE_LABEL[selectedRoom.room_type] || selectedRoom.room_type}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Capacity</span>

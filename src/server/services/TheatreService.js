@@ -131,13 +131,13 @@ class TheatreService {
   async getOperation(clinicId, id) {
     const [[op]] = await sequelize.query(
       `SELECT t.*, ${PATIENT_FIELDS},
-              r.name AS room_name,
+              r.room_number AS room_name,
               s.first_name AS surgeon_first_name, s.last_name AS surgeon_last_name,
               a.first_name AS anesthetist_first_name, a.last_name AS anesthetist_last_name,
               n.first_name AS nurse_first_name, n.last_name AS nurse_last_name
        FROM theatre_operations t
        ${PATIENT_JOIN}
-       LEFT JOIN theatre_rooms r ON r.id = t.theatre_room_id
+       LEFT JOIN rooms r ON r.id = t.theatre_room_id
        LEFT JOIN employees s ON s.id = t.surgeon_employee_id
        LEFT JOIN employees a ON a.id = t.anesthetist_employee_id
        LEFT JOIN employees n ON n.id = t.scrub_nurse_employee_id
@@ -147,7 +147,19 @@ class TheatreService {
     if (!op) return null;
     const [checklist] = await sequelize.query(`SELECT * FROM theatre_checklist_items WHERE operation_id = :id ORDER BY phase, sort_order`, { replacements: { id } });
     const [vitals] = await sequelize.query(`SELECT * FROM theatre_vitals WHERE operation_id = :id ORDER BY recorded_at DESC`, { replacements: { id } });
-    return { ...op, checklist, vitals };
+    const [items] = await sequelize.query(`SELECT * FROM theatre_operation_items WHERE operation_id = :id ORDER BY dispensed_at DESC`, { replacements: { id } });
+    return { ...op, checklist, vitals, items };
+  }
+
+  // room_id points at the general `rooms` table (room_type = 'or'), managed
+  // from /setup/rooms — this side table only tracks the OR-specific live
+  // status a ward room has no use for.
+  async _setRoomStatus(roomId, status, transaction) {
+    await sequelize.query(
+      `INSERT INTO theatre_room_status (room_id, status, updated_at) VALUES (:roomId, :status, NOW())
+       ON CONFLICT (room_id) DO UPDATE SET status = :status, updated_at = NOW()`,
+      { replacements: { roomId, status }, transaction }
+    );
   }
 
   async startOperation(clinicId, id, userId) {
@@ -162,7 +174,7 @@ class TheatreService {
         { replacements: { id }, transaction }
       );
       if (op.theatre_room_id) {
-        await sequelize.query(`UPDATE theatre_rooms SET status = 'in_use', updated_at = NOW() WHERE id = :id`, { replacements: { id: op.theatre_room_id }, transaction });
+        await this._setRoomStatus(op.theatre_room_id, 'in_use', transaction);
       }
       await transaction.commit();
       return this.getOperation(clinicId, id);
@@ -191,7 +203,7 @@ class TheatreService {
         { replacements: { id, endedAt, duration: durationMinutes, outcome, outcomeNotes: outcomeNotes || null, causeOfDeath: causeOfDeath || null }, transaction }
       );
       if (op.theatre_room_id) {
-        await sequelize.query(`UPDATE theatre_rooms SET status = 'cleaning', updated_at = NOW() WHERE id = :id`, { replacements: { id: op.theatre_room_id }, transaction });
+        await this._setRoomStatus(op.theatre_room_id, 'cleaning', transaction);
       }
       await transaction.commit();
       return this.getOperation(clinicId, id);
@@ -210,7 +222,9 @@ class TheatreService {
     try {
       await sequelize.query(`UPDATE theatre_operations SET status = 'cancelled', outcome_notes = :reason, updated_at = NOW() WHERE id = :id`, { replacements: { id, reason: reason || null }, transaction });
       if (op.theatre_room_id) {
-        await sequelize.query(`UPDATE theatre_rooms SET status = 'available', updated_at = NOW() WHERE id = :id AND status = 'in_use'`, { replacements: { id: op.theatre_room_id }, transaction });
+        // Only clears it if the room is currently marked in_use by this
+        // operation — never overwrites a room independently in maintenance/cleaning.
+        await sequelize.query(`UPDATE theatre_room_status SET status = 'available', updated_at = NOW() WHERE room_id = :id AND status = 'in_use'`, { replacements: { id: op.theatre_room_id }, transaction });
       }
       await transaction.commit();
       return this.getOperation(clinicId, id);
@@ -255,6 +269,69 @@ class TheatreService {
     );
     const [[created]] = await sequelize.query(`SELECT * FROM theatre_vitals WHERE id = :id`, { replacements: { id } });
     return created;
+  }
+
+  // ── Items used (drugs, consumables, blood) ───────────────────────────────
+  // Deducts real stock through the same tables POST /api/inventory/batches/:id/use
+  // writes (inventory_batches.quantity_used, inventory_items.quantity_on_hand,
+  // stock_by_location, batch_usage_history) — not a parallel ledger — so this
+  // usage shows up in the item's own transaction history too. Picks the
+  // batch with the nearest expiry at that location (FEFO) automatically;
+  // the requested quantity must fit in a single batch — a theatre nurse
+  // isn't expected to reconcile a split across two half-empty boxes.
+  async recordItemUsage(clinicId, operationId, { location_id: locationId, item_id: itemId, quantity, notes }, userId) {
+    const qty = parseFloat(quantity);
+    if (!locationId) throw new Error('location_id is required');
+    if (!itemId) throw new Error('item_id is required');
+    if (!(qty > 0)) throw new Error('quantity must be a positive number');
+
+    const [[op]] = await sequelize.query(`SELECT id FROM theatre_operations WHERE id = :operationId AND clinic_id = :clinicId`, { replacements: { operationId, clinicId } });
+    if (!op) throw new Error('Operation not found');
+
+    const [[item]] = await sequelize.query(`SELECT id, item_name, unit_of_measure FROM inventory_items WHERE id = :itemId AND clinic_id = :clinicId`, { replacements: { itemId, clinicId } });
+    if (!item) throw new Error('Item not found');
+
+    const [[location]] = await sequelize.query(`SELECT id, location_name FROM stock_locations WHERE id = :locationId AND clinic_id = :clinicId`, { replacements: { locationId, clinicId } });
+    if (!location) throw new Error('Location not found');
+
+    const transaction = await sequelize.transaction();
+    try {
+      const [[batch]] = await sequelize.query(
+        `SELECT *, (quantity_received - quantity_used) AS available FROM inventory_batches
+         WHERE item_id = :itemId AND location_id = :locationId AND status IN ('active', 'partial_use')
+           AND (quantity_received - quantity_used) >= :qty
+         ORDER BY expiry_date ASC NULLS LAST LIMIT 1`,
+        { replacements: { itemId, locationId, qty }, transaction }
+      );
+      if (!batch) throw new Error(`Not enough "${item.item_name}" available at ${location.location_name} to cover ${qty} ${item.unit_of_measure || 'unit(s)'}`);
+
+      const newUsed = parseFloat(batch.quantity_used) + qty;
+      const newStatus = newUsed >= parseFloat(batch.quantity_received) ? 'exhausted' : 'partial_use';
+      await sequelize.query(`UPDATE inventory_batches SET quantity_used = :newUsed, status = :status WHERE id = :id`, { replacements: { newUsed, status: newStatus, id: batch.id }, transaction });
+
+      await sequelize.query(
+        `INSERT INTO batch_usage_history (id, batch_id, usage_date, quantity_used, usage_type, reference_id, reference_type, used_by, notes)
+         VALUES (:id, :batchId, CURRENT_DATE, :qty, 'theatre_use', :operationId, 'theatre_operation', :userId, :notes)`,
+        { replacements: { id: uuidv4(), batchId: batch.id, qty, operationId, userId: userId || null, notes: notes || null }, transaction }
+      );
+
+      await sequelize.query(`UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :itemId`, { replacements: { qty, itemId }, transaction });
+      await sequelize.query(`UPDATE stock_by_location SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE item_id = :itemId AND location_id = :locationId`, { replacements: { qty, itemId, locationId }, transaction });
+
+      const usageId = uuidv4();
+      await sequelize.query(
+        `INSERT INTO theatre_operation_items (id, operation_id, item_id, item_name, batch_id, location_id, location_name, quantity, unit_of_measure, dispensed_by, notes)
+         VALUES (:id, :operationId, :itemId, :itemName, :batchId, :locationId, :locationName, :qty, :uom, :userId, :notes)`,
+        { replacements: { id: usageId, operationId, itemId, itemName: item.item_name, batchId: batch.id, locationId, locationName: location.location_name, qty, uom: item.unit_of_measure || null, userId: userId || null, notes: notes || null }, transaction }
+      );
+
+      await transaction.commit();
+      const [[created]] = await sequelize.query(`SELECT * FROM theatre_operation_items WHERE id = :id`, { replacements: { id: usageId } });
+      return created;
+    } catch (error) {
+      if (!transaction.finished) await transaction.rollback().catch(() => {});
+      throw error;
+    }
   }
 }
 

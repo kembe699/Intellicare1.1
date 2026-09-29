@@ -9,7 +9,7 @@ import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { MapPin, Edit, Search, Eye, RefreshCw, Warehouse, X, Check, Loader2, Package, Beaker, Pill, Stethoscope } from 'lucide-react';
+import { MapPin, Edit, Search, Eye, RefreshCw, Warehouse, X, Check, Loader2, Package, Beaker, Pill, Stethoscope, Scissors } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 interface StockLocation {
@@ -24,7 +24,7 @@ interface StockLocation {
   total_stock: number;
 }
 
-const LOCATION_TYPES = ['warehouse', 'pharmacy', 'laboratory', 'clinic', 'storage'];
+const LOCATION_TYPES = ['warehouse', 'pharmacy', 'laboratory', 'clinic', 'storage', 'theatre'];
 const LOCATION_TYPE_OPTIONS = LOCATION_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }));
 
 const TypeIcon = ({ type, className = "w-6 h-6" }: { type: string, className?: string }) => {
@@ -34,6 +34,7 @@ const TypeIcon = ({ type, className = "w-6 h-6" }: { type: string, className?: s
     case 'laboratory': return <Beaker className={className} />;
     case 'clinic': return <Stethoscope className={className} />;
     case 'storage': return <Package className={className} />;
+    case 'theatre': return <Scissors className={className} />;
     default: return <Package className={className} />;
   }
 };
