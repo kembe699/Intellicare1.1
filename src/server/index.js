@@ -626,6 +626,7 @@ app.use('/api/reports-v2/clinic-performance', require('./routes/reportClinicPerf
 app.use('/api/reports-v2/doctor-performance', require('./routes/reportDoctorPerformance'));
 app.use('/api/reports-v2/occupancy', require('./routes/reportOccupancy'));
 app.use('/api/reports-v2/dhis2', require('./routes/reportDhis2'));
+app.use('/api/fixed-assets', require('./routes/fixedAssets'));
 app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));
 app.use('/api/reports-v2/audit-summary', require('./routes/reportAuditSummary'));
 app.use('/api/ledger-accounts', ledgerAccountsRouter);
@@ -795,6 +796,7 @@ async function runBackgroundMigrations() {
     ['Dhis2Report',       () => require('./scripts/migrateDhis2Tables').migrateDhis2Tables()],
     ['Icd10Reference',    () => require('./scripts/importIcd10').migrateAndImportIcd10()],
     ['VisitDiagnoses',    () => require('./scripts/migrateVisitDiagnosesTable').migrateVisitDiagnosesTable()],
+    ['FixedAssets',       () => require('./scripts/migrateFixedAssetsTables').migrateFixedAssetsTables()],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],
