@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   ClipboardCheck, Plus, RefreshCw, Eye, CheckCircle, XCircle, AlertTriangle,
   ClipboardList, X, Check, Loader2,
@@ -43,6 +44,7 @@ export default function PhysicalCounts() {
   const { user } = useAuth();
   const { fmt } = useCurrency();
   const clinicId = user?.clinic || 1;
+  const { prompt, promptDialog } = usePromptDialog();
 
   const [activeMode, setActiveMode] = useState<'counts' | 'adjustments'>('counts');
   const [counts, setCounts] = useState<any[]>([]);
@@ -245,7 +247,7 @@ export default function PhysicalCounts() {
   // a success toast — matching every other handler here that throws on a non-OK response.
   const rejectAdjustment = async (id: string) => {
     if (processingAdj) return;
-    const reason = prompt('Rejection reason:');
+    const reason = await prompt({ title: 'Rejection reason' });
     if (!reason) return;
     setProcessingAdj({ id, action: 'reject' });
     try {
@@ -265,6 +267,7 @@ export default function PhysicalCounts() {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1600px] mx-auto w-full flex flex-col">
         <div className="flex justify-between items-start">

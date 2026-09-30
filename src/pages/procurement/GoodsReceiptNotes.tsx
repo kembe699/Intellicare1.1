@@ -20,6 +20,7 @@ import * as docTemplate from '@/utils/documentTemplate';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   Package, Plus, Eye, Search, RefreshCw, CheckCircle, XCircle,
   ClipboardCheck, Truck, AlertTriangle, FileText, Loader2, Download, FileSpreadsheet
@@ -88,6 +89,7 @@ interface StoreLocation {
 
 const GoodsReceiptNotes: React.FC = () => {
   const { user } = useAuth();
+  const { prompt, promptDialog } = usePromptDialog();
   const [grns, setGrns] = useState<GRN[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -406,7 +408,7 @@ const GoodsReceiptNotes: React.FC = () => {
 
   const rejectGRN = async (id: string) => {
     if (processing?.id === id) return;
-    const notes = prompt('Reason for rejection:');
+    const notes = await prompt({ title: 'Reason for rejection' });
     if (!notes) return;
     setProcessing({ id, action: 'reject' });
     try {
@@ -427,7 +429,7 @@ const GoodsReceiptNotes: React.FC = () => {
 
   const inspectGRN = async (id: string) => {
     if (processing?.id === id) return;
-    const notes = prompt('Inspection notes (optional):') || '';
+    const notes = (await prompt({ title: 'Inspection notes', required: false })) || '';
     setProcessing({ id, action: 'inspect' });
     try {
       const res = await authFetch(`/api/procurement/goods-receipt-notes/${id}/inspect`, {
@@ -447,6 +449,7 @@ const GoodsReceiptNotes: React.FC = () => {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader

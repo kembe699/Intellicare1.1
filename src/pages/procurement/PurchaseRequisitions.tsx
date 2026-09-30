@@ -19,6 +19,7 @@ import { AttachmentField } from '@/components/procurement/AttachmentField';
 import { uploadProcurementAttachments } from '@/api/procurementAttachments';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList, Plus, Edit, Search, Eye, RefreshCw, Send,
@@ -129,6 +130,7 @@ const PurchaseRequisitions: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency, fmt } = useCurrency();
+  const { prompt, promptDialog } = usePromptDialog();
   const [prs, setPrs] = useState<PR[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -497,7 +499,7 @@ const PurchaseRequisitions: React.FC = () => {
 
   const rejectPR = async (id: string) => {
     if (processing?.id === id) return;
-    const reason = prompt('Reason for rejection:');
+    const reason = await prompt({ title: 'Reason for rejection' });
     if (!reason) return;
     setProcessing({ id, action: 'reject' });
     try {
@@ -664,6 +666,7 @@ const PurchaseRequisitions: React.FC = () => {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader

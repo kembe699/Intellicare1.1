@@ -14,6 +14,7 @@ import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Building2, Edit, Search, Star, RefreshCw, CheckCircle, Ban, Eye, Truck, Loader2, X, Check, FileSpreadsheet } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -94,6 +95,7 @@ const emptyForm = (currencyCode: string) => ({
 const SuppliersManagement: React.FC = () => {
   const { user } = useAuth();
   const { currency, fmt } = useCurrency();
+  const { prompt, promptDialog } = usePromptDialog();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,7 +246,7 @@ const SuppliersManagement: React.FC = () => {
 
   const toggleHold = async (s: Supplier) => {
     if (holdingId === s.id) return;
-    const reason = s.on_hold ? '' : prompt('Reason for placing on hold:');
+    const reason = s.on_hold ? '' : await prompt({ title: 'Reason for placing on hold' });
     if (!s.on_hold && !reason) return;
     setHoldingId(s.id);
     try {
@@ -267,6 +269,7 @@ const SuppliersManagement: React.FC = () => {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader

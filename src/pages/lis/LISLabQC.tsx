@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 
 const DEPARTMENT_OPTIONS = [
   { value: '', label: 'Dept...' },
@@ -29,6 +30,7 @@ const HISTORY_STATUS_OPTIONS = [
 
 export default function LISLabQC() {
   const { user } = useAuth();
+  const { prompt, promptDialog } = usePromptDialog();
   const [specimens, setSpecimens] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [routeDepartments, setRouteDepartments] = useState<Record<string, string>>({});
@@ -71,8 +73,10 @@ export default function LISLabQC() {
   const handleQC = async (id: string, action: 'accepted' | 'rejected') => {
     if (qcProcessingId) return;
 
-    const reason = action === 'rejected' ? prompt('Enter rejection reason (e.g. Hemolyzed, Clotted, Insufficient):') : '';
-    if (action === 'rejected' && !reason) return toast.error('Rejection reason required');
+    const reason = action === 'rejected'
+      ? await prompt({ title: 'Rejection reason', placeholder: 'e.g. Hemolyzed, Clotted, Insufficient' })
+      : '';
+    if (action === 'rejected' && !reason) return; // cancelled — the dialog itself requires non-empty text to confirm
 
     setQcProcessingId(id);
     try {
@@ -208,6 +212,7 @@ export default function LISLabQC() {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
         <PageHeader title="Lab Reception & QC" icon={<ShieldCheck />} className="mb-3" />
