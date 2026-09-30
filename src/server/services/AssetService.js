@@ -46,6 +46,11 @@ class AssetService {
       acquisition_currency: acquisitionCurrencyRaw,
       salvage_value: salvageValueRaw, useful_life_years: usefulLifeYearsRaw,
       payment_account_code: paymentAccountCode, notes,
+      // F1: a legacy asset (one the facility already owned before this module
+      // existed) can be partway through its useful life — captured here so
+      // its depreciation schedule continues from where it really is instead
+      // of restarting at 0.
+      opening_accumulated_depreciation: openingAccumulatedDepreciationRaw,
     } = data;
 
     if (!clinicId) throw new Error('clinic_id is required');
@@ -76,11 +81,26 @@ class AssetService {
     if (nature === 'depreciating' && !(usefulLifeYears > 0)) {
       throw new Error('useful_life_years must be a positive number for a depreciating asset');
     }
+    // F3: an explicit salvage_value is entered in the SAME currency as
+    // acquisition_cost_original (the form that captures both together) — it
+    // needs the same base-currency conversion acquisitionCost already gets,
+    // or a foreign-currency asset's salvage value would be compared against
+    // (and later subtracted from) a base-currency cost while itself still
+    // sitting in the original currency, silently over/under-stating the
+    // depreciable base by the exchange rate's own magnitude. The
+    // percent-of-cost default needs no conversion — it's already derived
+    // from acquisitionCost, which is base-currency.
     const salvageValue = salvageValueRaw != null
-      ? parseFloat(salvageValueRaw)
+      ? AccountingService.convertAmount(salvageValueRaw, exchangeRate)
       : Number((acquisitionCost * (parseFloat(category.default_salvage_percent) || 0) / 100).toFixed(2));
     if (salvageValue < 0 || salvageValue > acquisitionCost) {
       throw new Error('salvage_value must be between 0 and the acquisition cost');
+    }
+    const openingAccumulatedDepreciation = openingAccumulatedDepreciationRaw != null
+      ? AccountingService.convertAmount(openingAccumulatedDepreciationRaw, exchangeRate)
+      : 0;
+    if (openingAccumulatedDepreciation < 0 || openingAccumulatedDepreciation > acquisitionCost - salvageValue) {
+      throw new Error('opening_accumulated_depreciation must be between 0 and (acquisition_cost - salvage_value)');
     }
 
     const transaction = await sequelize.transaction();
@@ -88,12 +108,11 @@ class AssetService {
       const assetId = uuidv4();
       const assetCode = await this.generateAssetCode(clinicId, transaction);
 
+      const assetAccount = category.asset_account_id ? { id: category.asset_account_id } : null;
+      if (!assetAccount) throw new Error(`Asset category "${category.name}" has no asset GL account configured`);
+
       let glEntryId = null;
       if (paymentAccountCode) {
-        const assetAccount = category.asset_account_id
-          ? { id: category.asset_account_id }
-          : null;
-        if (!assetAccount) throw new Error(`Asset category "${category.name}" has no asset GL account configured`);
         const paymentAccount = (await sequelize.query(
           `SELECT id FROM chart_of_accounts WHERE clinic_id = :clinicId AND account_code = :code AND is_active = true`,
           { replacements: { clinicId, code: paymentAccountCode }, transaction }
@@ -119,6 +138,60 @@ class AssetService {
           transaction
         );
         glEntryId = glEntry.id;
+      } else {
+        // F1: a legacy asset (no payment_account_code — nothing was actually
+        // paid through this system) used to post NOTHING at all, so the
+        // balance sheet's Fixed Assets line never matched the sum of
+        // registered assets — the register and the general ledger silently
+        // disagreed from the moment the asset was entered. This posts an
+        // opening-balance entry instead: the asset at its full gross cost,
+        // any opening accumulated depreciation already carried against a
+        // dedicated contra account (so the depreciation schedule and the
+        // ledger both continue from the asset's true starting point, not
+        // zero), and the net book value against Retained Earnings (3200) —
+        // the standard opening-balance treatment for a pre-existing asset
+        // being brought onto the books for the first time, not a new
+        // acquisition and not revenue.
+        const [[openingEquityAccount]] = await sequelize.query(
+          `SELECT id FROM chart_of_accounts WHERE clinic_id = :clinicId AND account_code = '3200' AND is_active = true`,
+          { replacements: { clinicId }, transaction }
+        );
+        if (!openingEquityAccount) throw new Error('Retained Earnings account (3200) is not configured — required to register a legacy asset with no payment account');
+
+        const lineItems = [
+          { account_id: assetAccount.id, debit_amount: acquisitionCost, credit_amount: 0, description: `Opening balance - ${name}` },
+        ];
+        if (openingAccumulatedDepreciation > 0) {
+          const accumAccountId = category.accumulated_depreciation_account_id;
+          if (!accumAccountId) throw new Error(`Asset category "${category.name}" has no accumulated-depreciation GL account configured, but opening_accumulated_depreciation was given`);
+          lineItems.push({ account_id: accumAccountId, debit_amount: 0, credit_amount: openingAccumulatedDepreciation, description: `Opening accumulated depreciation - ${name}` });
+        }
+        lineItems.push({
+          account_id: openingEquityAccount.id, debit_amount: 0,
+          credit_amount: Number((acquisitionCost - openingAccumulatedDepreciation).toFixed(2)),
+          description: `Opening balance (net book value) - ${name}`,
+        });
+
+        // transaction_currency is intentionally left unset (defaults to base
+        // currency, rate 1.0) — every line above (acquisitionCost,
+        // openingAccumulatedDepreciation) is already a base-currency amount
+        // (converted above via exchangeRate), so no further conversion
+        // should happen — passing acquisitionCurrency here as well would
+        // convert them a second time.
+        const glEntry = await AccountingService.createGLEntry(
+          {
+            clinic_id: clinicId,
+            transaction_date: acquisitionDate,
+            transaction_type: 'fixed_asset_opening_balance',
+            description: `Legacy asset opening balance - ${assetCode} - ${name}`,
+            reference_id: assetId,
+            reference_module: 'fixed_asset_acquisition',
+          },
+          lineItems,
+          userId,
+          transaction
+        );
+        glEntryId = glEntry.id;
       }
 
       await sequelize.query(
@@ -131,7 +204,7 @@ class AssetService {
            :id, :clinicId, :branchId, :assetCode, :name, :categoryId, :description, :serialNumber, :location,
            :assignedTo, :nature, :acquisitionDate, :acquisitionCost, :acquisitionCurrency,
            :acquisitionCostOriginal, :exchangeRate, :salvageValue, :usefulLifeYears,
-           :method, 0, :currentValue, 'active', :glEntryId, :notes, :createdBy
+           :method, :openingAccumulatedDepreciation, :currentValue, 'active', :glEntryId, :notes, :createdBy
          )`,
         {
           replacements: {
@@ -140,7 +213,9 @@ class AssetService {
             assignedTo: assignedToEmployeeId || null, nature, acquisitionDate, acquisitionCost, acquisitionCurrency,
             acquisitionCostOriginal, exchangeRate, salvageValue,
             usefulLifeYears: usefulLifeYears || null, method: nature === 'depreciating' ? (category.default_depreciation_method || 'straight_line') : 'none',
-            currentValue: acquisitionCost, glEntryId, notes: notes || null, createdBy: userId || null,
+            openingAccumulatedDepreciation,
+            currentValue: Number((acquisitionCost - openingAccumulatedDepreciation).toFixed(2)),
+            glEntryId, notes: notes || null, createdBy: userId || null,
           },
           transaction,
         }
@@ -156,13 +231,19 @@ class AssetService {
 
   // created_by is stored as text (it also holds non-numeric values in tests/seed
   // scripts), so the join guards with a regex before casting to users.id (integer)
-  // instead of letting a non-numeric value blow up the query.
+  // instead of letting a non-numeric value blow up the query. That guard needs to
+  // be a CASE, not `regex AND u.id = created_by::integer` — Postgres does not
+  // guarantee left-to-right short-circuit evaluation of an AND in a JOIN's ON
+  // clause, so the planner can (and, confirmed live, does) evaluate the cast
+  // before the regex check, blowing up on the very first non-numeric
+  // created_by it sees. A CASE expression's WHEN is evaluated per-row before
+  // its THEN, which Postgres does guarantee.
   async getAsset(clinicId, assetId) {
     const [[asset]] = await sequelize.query(
       `SELECT fa.*, ac.name AS category_name, ac.nature AS category_nature, u.display_name AS registered_by_name
        FROM fixed_assets fa
        JOIN asset_categories ac ON ac.id = fa.category_id
-       LEFT JOIN users u ON fa.created_by ~ '^[0-9]+$' AND u.id = fa.created_by::integer
+       LEFT JOIN users u ON u.id = (CASE WHEN fa.created_by ~ '^[0-9]+$' THEN fa.created_by::integer ELSE NULL END)
        WHERE fa.id = :id AND fa.clinic_id = :clinicId`,
       { replacements: { id: assetId, clinicId } }
     );
@@ -181,6 +262,12 @@ class AssetService {
    */
   async runDepreciation(clinicId, period, userId, branchId = null) {
     if (!/^\d{4}-\d{2}$/.test(period)) throw new Error('period must be in YYYY-MM format');
+    // F5: depreciation is only ever earned by time that has actually passed —
+    // running it for a period that hasn't happened yet would front-load
+    // expense before it's real and let a book-value projection be posted as
+    // if it were fact.
+    const currentPeriod = new Date().toISOString().slice(0, 7);
+    if (period > currentPeriod) throw new Error(`Cannot run depreciation for ${period} — that period hasn't happened yet (current period: ${currentPeriod}).`);
 
     const [assets] = await sequelize.query(
       `SELECT fa.*, ac.depreciation_expense_account_id, ac.accumulated_depreciation_account_id
@@ -292,19 +379,75 @@ class AssetService {
    * proceeds exceed book value, Dr Loss (5910) if they fall short. Cash/bank
    * only moves if proceeds > 0.
    */
-  async disposeAsset(clinicId, assetId, { disposal_date: disposalDate, proceeds: proceedsRaw, reason, payment_account_code: paymentAccountCode }, userId) {
+  async disposeAsset(clinicId, assetId, { disposal_date: disposalDateRaw, proceeds: proceedsRaw, reason, payment_account_code: paymentAccountCode }, userId) {
     const asset = await this.getAsset(clinicId, assetId);
     if (!asset) throw new Error('Asset not found');
     if (asset.status === 'disposed') throw new Error('This asset has already been disposed of');
 
+    const disposalDate = disposalDateRaw || new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    // F5: a disposal is a real, dated financial event — dating it in the
+    // future would remove the asset from the books (and post a gain/loss)
+    // before it's actually happened.
+    if (disposalDate > today) throw new Error(`disposal_date cannot be in the future (${disposalDate})`);
+    // F8: backdating a disposal to before the asset was even acquired, or to
+    // before depreciation that has ALREADY been posted for later periods,
+    // creates a disposal that predates its own accumulated_depreciation —
+    // the asset would be shown as removed from the books before the ledger
+    // says it finished depreciating.
+    if (disposalDate < asset.acquisition_date) {
+      throw new Error(`disposal_date (${disposalDate}) cannot be before this asset's acquisition_date (${asset.acquisition_date})`);
+    }
+    const [[latestDepreciation]] = await sequelize.query(
+      `SELECT period FROM asset_depreciation_entries WHERE asset_id = :assetId ORDER BY period DESC LIMIT 1`,
+      { replacements: { assetId } }
+    );
+    if (latestDepreciation) {
+      const [y, m] = latestDepreciation.period.split('-').map(Number);
+      const periodEnd = new Date(y, m, 0).toISOString().split('T')[0]; // last calendar day of that period
+      if (disposalDate < periodEnd) {
+        throw new Error(`disposal_date (${disposalDate}) cannot be before ${periodEnd}, the end of ${latestDepreciation.period} — depreciation has already been posted for this asset through that date.`);
+      }
+    }
+
     const proceeds = proceedsRaw != null ? parseFloat(proceedsRaw) : 0;
     const cost = parseFloat(asset.acquisition_cost);
     const accumulatedDepreciation = parseFloat(asset.accumulated_depreciation);
-    const bookValue = cost - accumulatedDepreciation;
+    // F2: current_value is the asset's actual, up-to-date carrying amount —
+    // recomputing "cost - accumulated_depreciation" instead silently ignored
+    // any revaluation (revalueAsset adjusts current_value directly and never
+    // touches accumulated_depreciation, since only a non-depreciating asset
+    // can be revalued), so a revalued asset's disposal used to compute
+    // gain/loss — and remove the asset from the books — against a stale,
+    // pre-revaluation figure.
+    const bookValue = parseFloat(asset.current_value);
     const gainOrLoss = Number((proceeds - bookValue).toFixed(2));
+    // What's actually sitting in the asset account for this specific asset:
+    // acquisition_cost for a depreciating asset (revaluation is blocked for
+    // those, so its asset-account balance never moves from cost), or
+    // current_value for a revalued one (revaluation posts straight to the
+    // same asset account, replacing cost's role) — current_value +
+    // accumulated_depreciation is exactly that in both cases.
+    const grossAssetAccountBalance = Number((bookValue + accumulatedDepreciation).toFixed(2));
 
     const transaction = await sequelize.transaction();
     try {
+      // F6: resolve every account this entry needs BEFORE building any line
+      // items, and fail with a specific, actionable message per account —
+      // the old code silently dropped any line whose account lookup
+      // returned null (`lineItems.filter((l) => l.account_id)`), which could
+      // drop the asset-removal line itself and either let a disposal through
+      // with an incomplete entry or fail deep inside createGLEntry with an
+      // opaque "not balanced" error that says nothing about which account
+      // was actually missing.
+      const assetAccountId = await this._categoryAccount(clinicId, asset.category_id, 'asset_account_id', transaction);
+      if (!assetAccountId) throw new Error(`This asset's category has no asset GL account configured — cannot dispose of it until that's set up in Asset Categories.`);
+      let accumDepreciationAccountId = null;
+      if (accumulatedDepreciation > 0) {
+        accumDepreciationAccountId = await this._categoryAccount(clinicId, asset.category_id, 'accumulated_depreciation_account_id', transaction);
+        if (!accumDepreciationAccountId) throw new Error(`This asset's category has no accumulated-depreciation GL account configured — cannot remove its ${accumulatedDepreciation} accumulated depreciation. Set one up in Asset Categories first.`);
+      }
+
       const lineItems = [];
       if (proceeds > 0) {
         if (!paymentAccountCode) throw new Error('payment_account_code is required when disposal proceeds are greater than zero');
@@ -316,29 +459,30 @@ class AssetService {
         lineItems.push({ account_id: paymentAccount.id, debit_amount: proceeds, credit_amount: 0, description: `Disposal proceeds - ${asset.asset_code}` });
       }
       if (accumulatedDepreciation > 0) {
-        lineItems.push({ account_id: asset.category_id ? (await this._categoryAccount(clinicId, asset.category_id, 'accumulated_depreciation_account_id', transaction)) : null, debit_amount: accumulatedDepreciation, credit_amount: 0, description: `Remove accumulated depreciation - ${asset.asset_code}` });
+        lineItems.push({ account_id: accumDepreciationAccountId, debit_amount: accumulatedDepreciation, credit_amount: 0, description: `Remove accumulated depreciation - ${asset.asset_code}` });
       }
-      const assetAccountId = await this._categoryAccount(clinicId, asset.category_id, 'asset_account_id', transaction);
-      lineItems.push({ account_id: assetAccountId, debit_amount: 0, credit_amount: cost, description: `Disposal of asset - ${asset.asset_code}` });
+      lineItems.push({ account_id: assetAccountId, debit_amount: 0, credit_amount: grossAssetAccountBalance, description: `Disposal of asset - ${asset.asset_code}` });
 
       if (gainOrLoss > 0.01) {
         const [[gainAccount]] = await sequelize.query(`SELECT id FROM chart_of_accounts WHERE clinic_id = :clinicId AND account_code = '4900'`, { replacements: { clinicId }, transaction });
-        if (gainAccount) lineItems.push({ account_id: gainAccount.id, debit_amount: 0, credit_amount: gainOrLoss, description: `Gain on disposal - ${asset.asset_code}` });
+        if (!gainAccount) throw new Error(`A gain of ${gainOrLoss} on this disposal has no home — account 4900 (Other Income) is not configured for this clinic.`);
+        lineItems.push({ account_id: gainAccount.id, debit_amount: 0, credit_amount: gainOrLoss, description: `Gain on disposal - ${asset.asset_code}` });
       } else if (gainOrLoss < -0.01) {
         const [[lossAccount]] = await sequelize.query(`SELECT id FROM chart_of_accounts WHERE clinic_id = :clinicId AND account_code = '5910'`, { replacements: { clinicId }, transaction });
-        if (lossAccount) lineItems.push({ account_id: lossAccount.id, debit_amount: Math.abs(gainOrLoss), credit_amount: 0, description: `Loss on disposal - ${asset.asset_code}` });
+        if (!lossAccount) throw new Error(`A loss of ${Math.abs(gainOrLoss)} on this disposal has no home — account 5910 (Loss on Disposal) is not configured for this clinic.`);
+        lineItems.push({ account_id: lossAccount.id, debit_amount: Math.abs(gainOrLoss), credit_amount: 0, description: `Loss on disposal - ${asset.asset_code}` });
       }
 
       const glEntry = await AccountingService.createGLEntry(
         {
           clinic_id: clinicId,
-          transaction_date: disposalDate || new Date(),
+          transaction_date: disposalDate,
           transaction_type: 'fixed_asset_disposal',
           description: `Disposal - ${asset.asset_code} - ${asset.name}`,
           reference_id: assetId,
           reference_module: 'fixed_asset_disposal',
         },
-        lineItems.filter((l) => l.account_id),
+        lineItems,
         userId,
         transaction
       );
@@ -347,7 +491,7 @@ class AssetService {
         `UPDATE fixed_assets SET status = 'disposed', disposal_date = :disposalDate, disposal_proceeds = :proceeds,
            disposal_reason = :reason, current_value = 0, updated_at = NOW()
          WHERE id = :id`,
-        { replacements: { disposalDate: disposalDate || new Date().toISOString().split('T')[0], proceeds, reason: reason || null, id: assetId }, transaction }
+        { replacements: { disposalDate, proceeds, reason: reason || null, id: assetId }, transaction }
       );
 
       await transaction.commit();
