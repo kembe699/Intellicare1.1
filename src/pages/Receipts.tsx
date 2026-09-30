@@ -117,7 +117,7 @@ export default function Receipts() {
 
   // Live bill state for the selected receipt — used to know which line items are
   // already voided (a receipt itself never changes after the fact) and to void one.
-  const [billServices, setBillServices] = useState<Array<{ serviceName: string; quantity?: number; unitPrice?: number; totalPrice: number; isVoided?: boolean }> | null>(null);
+  const [billServices, setBillServices] = useState<Array<{ serviceName: string; quantity?: number; unitPrice?: number; totalPrice: number; isVoided?: boolean; discountLabel?: string | null }> | null>(null);
   const [loadingBill, setLoadingBill] = useState(false);
   const [voidItemIndex, setVoidItemIndex] = useState<number | null>(null);
   const [voidReason, setVoidReason] = useState('');
@@ -255,7 +255,8 @@ export default function Receipts() {
         quantity: bs.quantity || 1,
         unitPrice: bs.unitPrice ?? bs.totalPrice ?? 0,
         totalPrice: bs.totalPrice ?? 0,
-        index: i
+        index: i,
+        discountLabel: bs.discountLabel ?? null,
       })) || []);
 
   return (
