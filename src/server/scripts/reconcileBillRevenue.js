@@ -86,7 +86,7 @@ async function main() {
       -- that way. The health check and the ledger sweeper have always counted
       -- adjustments; this now agrees with them, which is what makes re-running it
       -- safe.
-      SELECT b.id, b.bill_number, b.clinic_id, b.scheme_id,
+      SELECT b.id, b.bill_number, b.clinic_id, b.scheme_id, b.branch_id,
              COALESCE(p.revenue, 0)::float AS posted_revenue,
              COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)::float AS bill_total,
              -- Dated to the void, else the bill. Never "today": dating months of
@@ -211,9 +211,9 @@ async function main() {
           await db.query(`
             INSERT INTO account_ledger (id, clinic_id, account_id, transaction_id, transaction_date,
               debit_amount, credit_amount, reference_number, description, source_module,
-              posted_by, is_posted, posted_date)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'patient_billing','system',TRUE,NOW())`,
-            [uuidv4(), b.clinic_id, l.account_id, glId, b.entry_date, dr, cr, glNumber, description]);
+              posted_by, is_posted, posted_date, branch_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'patient_billing','system',TRUE,NOW(),$10)`,
+            [uuidv4(), b.clinic_id, l.account_id, glId, b.entry_date, dr, cr, glNumber, description, b.branch_id ?? null]);
         }
         // Receivable side, once, mirroring the revenue side.
         const arDr = adding ? magnitude : 0;
@@ -225,9 +225,9 @@ async function main() {
         await db.query(`
           INSERT INTO account_ledger (id, clinic_id, account_id, transaction_id, transaction_date,
             debit_amount, credit_amount, reference_number, description, source_module,
-            posted_by, is_posted, posted_date)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'patient_billing','system',TRUE,NOW())`,
-          [uuidv4(), b.clinic_id, arId, glId, b.entry_date, arDr, arCr, glNumber, description]);
+            posted_by, is_posted, posted_date, branch_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'patient_billing','system',TRUE,NOW(),$10)`,
+          [uuidv4(), b.clinic_id, arId, glId, b.entry_date, arDr, arCr, glNumber, description, b.branch_id ?? null]);
 
         await db.query('COMMIT');
         done++;

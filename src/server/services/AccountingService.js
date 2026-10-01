@@ -201,6 +201,14 @@ class AccountingService {
           reference_number: glData.reference_id,
           description: lineItem.description,
           source_module: glData.reference_module,
+          // Never set before this fix — every account_ledger row had branch_id
+          // NULL regardless of what the caller knew, which silently zeroed every
+          // branch-scoped revenue/expense report (income statement, trial
+          // balance, etc.) for any non-unscoped-admin viewer, while receipts
+          // (which DO carry branch_id) kept showing real totals. See
+          // backfillAccountLedgerBranchId.js for repairing rows already posted
+          // before this fix shipped.
+          branch_id: glData.branch_id ?? null,
           posted_by: userId,
           // Matches the entry above: a posted entry's ledger rows must be posted
           // too, or the reports that read account_ledger will not see them.
@@ -341,6 +349,7 @@ class AccountingService {
         // currency and posts the raw foreign-currency number straight into the SSP
         // ledger unconverted.
         transaction_currency: billData.bill_currency,
+        branch_id: billData.branch_id ?? null,
       };
 
       // Build per-service revenue credit line items
@@ -506,6 +515,7 @@ class AccountingService {
       reference_id: bill.id,
       reference_module: 'patient_billing',
       transaction_currency: bill.bill_currency,
+      branch_id: bill.branch_id ?? null,
     };
 
     // Same classification as bill creation — items added to an existing bill

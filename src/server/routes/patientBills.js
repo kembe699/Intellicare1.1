@@ -1276,6 +1276,7 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
             description: `Voided item on ${bill.bill_number}`,
             reference_id: billId,
             reference_module: 'bill_item_void',
+            branch_id: bill.branch_id ?? null,
           }, lineItems, req.user?.id || 'system');
           await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
         } else {
