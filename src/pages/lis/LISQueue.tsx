@@ -23,6 +23,32 @@ export default function LISQueue() {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const calledOrdersRef = useRef<Map<string, string>>(new Map());
   const isFirstLoadRef = useRef(true);
+  const announcerRef = useRef<HTMLAudioElement | null>(null);
+
+  // Natural-sounding neural voice (see POST /api/lis/queue/announce) instead of
+  // the browser's own speechSynthesis, which is universally synthetic-sounding.
+  // One shared <audio> element, reused across calls, rather than a new Audio()
+  // per announcement — keeps a single, predictable "is something unlocked yet"
+  // state for the browser's autoplay-gesture requirement (see toggleAudio).
+  const playAnnouncement = async (text: string) => {
+    try {
+      const res = await authFetch('/api/lis/queue/announce', {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (!announcerRef.current) announcerRef.current = new Audio();
+      const audio = announcerRef.current;
+      audio.pause();
+      audio.src = url;
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
+    } catch (e) {
+      console.error('Failed to play queue announcement', e);
+    }
+  };
 
   // A single pooled queue — lis_test_orders has no per-terminal/facility scoping column,
   // and clinic_id on the order itself means "which destination clinic/department" (e.g.
@@ -49,7 +75,6 @@ export default function LISQueue() {
 
           // Trigger announcement if audio is enabled and it's not the initial page load
           if (audioEnabled && !isFirstLoadRef.current) {
-            window.speechSynthesis.cancel(); // Clear any stuck utterances
             const doctorStr = p.doctor_name ? `Doctor ${p.doctor_name}` : 'the General Laboratory';
             let announcement = '';
             if (p.room_number && p.doctor_name) {
@@ -59,10 +84,7 @@ export default function LISQueue() {
             } else {
               announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${doctorStr}.`;
             }
-            const utterance = new SpeechSynthesisUtterance(announcement);
-            utterance.rate = 0.85;
-            utterance.pitch = 1;
-            window.speechSynthesis.speak(utterance);
+            playAnnouncement(announcement);
           }
         }
       }
@@ -88,12 +110,12 @@ export default function LISQueue() {
     const nextState = !audioEnabled;
     setAudioEnabled(nextState);
 
-    // Unlock and clear speech synthesis on user interaction
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
-
     if (nextState) {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance('Audio enabled'));
+      // Also serves as the browser's required user-gesture "unlock" for the
+      // shared <audio> element — this click is what makes .play() allowed.
+      playAnnouncement('Audio enabled');
+    } else {
+      announcerRef.current?.pause();
     }
   };
 
