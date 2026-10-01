@@ -867,10 +867,20 @@ router.post('/orders/:id/add-tests', authorize('lis.clinical.write'), async (req
         if (dup) { skipped.push(test.name || test.code); continue; }
       }
       const specimenId = uuidv4();
+      // Stamp the specimen with the LIVE request's branch context, not the
+      // parent order's stored branch_id. Every other specimen-insert in this
+      // file (POST /orders's own test loop) uses getCreateBranchId(req)
+      // unconditionally; this was the one exception, and it's what let a
+      // specimen requested via "Request Another Service" (while the
+      // TopBar was scoped to one branch) silently inherit a DIFFERENT
+      // branch_id from whichever branch the order was originally opened
+      // under — so it showed under "All Branches" but never under the
+      // branch it was actually requested from. Production case: demo
+      // tenant, patient John Korsuk Lasuba / PTN-20261001-6560.
       await db.query(
         `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status, branch_id)
          VALUES (?, ?, ?, ?, ?, ?, 'pending_collection', ?)`,
-        { replacements: [specimenId, id, test.code || null, test.name || null, barcode, test.department || null, order.branch_id || getCreateBranchId(req)], transaction: t }
+        { replacements: [specimenId, id, test.code || null, test.name || null, barcode, test.department || null, getCreateBranchId(req)], transaction: t }
       );
       created++;
     }

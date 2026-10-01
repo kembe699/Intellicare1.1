@@ -79,6 +79,24 @@ describe('getBranchConditionNamed (visit-summaries, lab-dashboard) matches getBr
   });
 });
 
+describe('POST /orders/:id/add-tests stamps specimens with the live branch context, not the parent order\'s stored branch_id', () => {
+  // Third bug on the same production case (demo tenant, John Korsuk Lasuba /
+  // PTN-20261001-6560): fixing the two filtering bugs above still left the
+  // test invisible when the branch switcher was set to the specific branch
+  // ("Gudele") it was requested under — it only showed under "All Branches".
+  // Root cause: this INSERT used `order.branch_id || getCreateBranchId(req)`,
+  // so a test added via "Request Another Service" from an open Visit Summary
+  // inherited whatever branch the order was ORIGINALLY opened under, instead
+  // of the branch actually selected in the TopBar at request time.
+  test('the lis_specimens INSERT inside add-tests uses getCreateBranchId(req) unconditionally, not order.branch_id as a fallback', () => {
+    const fnStart = lisModuleSrc.indexOf("router.post('/orders/:id/add-tests'");
+    const fnEnd = lisModuleSrc.indexOf("router.", fnStart + 1);
+    const fnSrc = lisModuleSrc.slice(fnStart, fnEnd);
+    expect(fnSrc).toMatch(/INSERT INTO lis_specimens[\s\S]*?getCreateBranchId\(req\)\]/);
+    expect(fnSrc).not.toMatch(/order\.branch_id\s*\|\|\s*getCreateBranchId\(req\)/);
+  });
+});
+
 describe('LISCollection.tsx surfaces a failed fetch instead of silently rendering an empty queue', () => {
   test('toasts an error when the pending-queue fetch fails', () => {
     const fnStart = lisCollectionSrc.indexOf('const fetchSpecimens');
