@@ -1361,6 +1361,7 @@ async function recalculateBillTotals(billId, transaction) {
     // Sum line items by category
     const [sums] = await sequelize.query(`
       SELECT
+        COUNT(*) AS item_count,
         COALESCE(SUM(CASE WHEN service_category = 'clinical' AND item_status != 'cancelled' THEN line_total ELSE 0 END), 0) AS clinical,
         COALESCE(SUM(CASE WHEN service_category = 'lab' AND item_status != 'cancelled' THEN line_total ELSE 0 END), 0) AS lab,
         COALESCE(SUM(CASE WHEN service_category = 'pharmacy' AND item_status != 'cancelled' THEN line_total ELSE 0 END), 0) AS pharmacy,
@@ -1373,7 +1374,22 @@ async function recalculateBillTotals(billId, transaction) {
       FROM bill_line_items WHERE bill_id = :billId
     `, { replacements: { billId }, transaction });
 
-    if (sums.length > 0) {
+    // Bills created through the normal flow (POST /patient-bills) store their
+    // charges in patient_bills.services (JSON), never in this bill_line_items
+    // table — nothing in the app copies one into the other. So for virtually
+    // every real bill this query matches zero rows, and COALESCE(SUM(...), 0)
+    // used to turn that into grand_total = 0, which the UPDATE below then
+    // wrote straight into patient_bills.total_amount — zeroing out a bill's
+    // total (with its GL revenue left fully posted, since this function never
+    // syncs to the ledger) the moment anyone hit this route for it. Found in
+    // production (nation tenant) via accountingHealthCheck.js's "each bill's
+    // revenue matches the bill" check turning up 3 bills posted at their full
+    // original GL amount but showing total_amount = 0. Bailing out when there
+    // are no bill_line_items rows avoids repeating that corruption; it does
+    // not fix the underlying disconnect between this table and `services`,
+    // which has no current frontend caller (grepped — nothing calls these
+    // /line-items routes) to justify the larger rewire.
+    if (sums.length > 0 && parseInt(sums[0].item_count, 10) > 0) {
       const s = sums[0];
       const grandTotal = parseFloat(s.grand_total);
 
@@ -1498,3 +1514,4 @@ router.put('/settings/:clinicId', authorize('billing.write'), async (req, res) =
 });
 
 module.exports = router;
+module.exports.recalculateBillTotals = recalculateBillTotals;
