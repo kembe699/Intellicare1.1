@@ -7,13 +7,22 @@ module.exports = (sequelize) => {
       primaryKey: true,
       autoIncrement: true
     },
+    // Found while setting up U6's CI pipeline: this declared UUID with a
+    // references clause to users.id, but users.id (and the real
+    // cashier_shifts.cashier_id column) are both plain INTEGER — Postgres
+    // can't create a UUID column with a foreign key to an INTEGER one, so
+    // this single mismatched definition made sequelize.sync() throw and
+    // silently abort EVERY model's sync in the same call (caught by
+    // runSchemaBootstrap's blanket try/catch as "Model sync skipped"),
+    // taking every other table's freshly-created schema down with it on a
+    // brand new database. Invisible on any existing database, since sync()
+    // never alters a table that already exists (alter: false) — only
+    // exposed when bootstrapping one from nothing. No FK constraint exists
+    // on the real column today, so none is declared here either, rather
+    // than adding one a fresh install would enforce but existing ones don't.
     cashier_id: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      references: {
-        model: 'users',
-        key: 'id'
-      }
+      type: DataTypes.INTEGER,
+      allowNull: false
     },
     cashier_name: {
       type: DataTypes.STRING(255),

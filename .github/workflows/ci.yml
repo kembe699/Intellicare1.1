@@ -1,0 +1,107 @@
+name: CI
+
+# U6: this repo had no CI at all — every check (types, lint, tests, build)
+# only ever ran on whichever developer's machine happened to have a
+# long-lived local Postgres with tenant_template/tenant_test already built
+# up over time. Nothing caught a regression before it reached a PR review.
+#
+# Bootstrapping tenant_template from a genuinely empty database (rather than
+# a database that already has it, which is the only path this repo's own
+# POSTGRES_MIGRATION.md documents) surfaced two real bugs while this workflow
+# was being put together, both fixed alongside it: CashierShift.cashier_id
+# was declared UUID with a foreign key to users.id (INTEGER), which made
+# sequelize.sync() throw and silently abort EVERY model's sync in the same
+# call; and migrateInsuranceClaims.js compared a COUNT(*) result (returned as
+# the string "0") with `!cnt`, which is `false` for the string "0" — the
+# opposite of the intended check. Both are invisible on any database that
+# already has these tables from before, which is every environment that
+# existed prior to this workflow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: intellicare
+          POSTGRES_PASSWORD: intellicare
+          POSTGRES_DB: intellicareoff
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: intellicareoff
+      DB_USER: intellicare
+      DB_PASSWORD: intellicare
+      DB_SSL: 'false'
+      PLATFORM_SCHEMA: public
+      TENANT_SCHEMA_PREFIX: tenant_
+      TENANT_TEMPLATE_SCHEMA: tenant_template
+      DB_SCHEMA: tenant_test
+      # Never a real secret — this job never talks to anything but the
+      # throwaway service container above, and JWT_SECRET only needs to
+      # satisfy validateJwtSecret.js's length check for anything that
+      # imports src/server/index.js indirectly.
+      JWT_SECRET: ci-only-secret-not-used-anywhere-real-0000000000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # tenant_template starts life as one empty schema and is built up from
+      # two independent sources that both have to succeed: the ~30 Sequelize
+      # models (sequelize.sync, via initializeDatabase) and the ~180 tables
+      # only ever created by a raw-SQL migrate*.js script (runAllMigrations.js
+      # runs all of them in the same order index.js's own boot sequence does).
+      # Every existing environment has both already; a truly fresh one, like
+      # this job's service container, needs both run explicitly once.
+      - name: Create tenant_template schema
+        run: |
+          PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+            -c "CREATE SCHEMA IF NOT EXISTS $TENANT_TEMPLATE_SCHEMA;"
+
+      - name: Bootstrap tenant_template (Sequelize models)
+        working-directory: src/server
+        run: node -e "require('./models').initializeDatabase().then(ok => process.exit(ok ? 0 : 1))"
+
+      - name: Bootstrap tenant_template (raw-SQL migrations)
+        working-directory: src/server
+        run: node scripts/runAllMigrations.js
+
+      - name: Build tenant_test (clone of tenant_template + reference data)
+        run: |
+          PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+            -v ON_ERROR_STOP=1 -f scripts/create_test_schema.sql
+
+      - name: Jest (unit, integration, integrity)
+        run: npx jest tests/unit tests/integration tests/integrity --runInBand
+
+      - name: Build frontend
+        run: npm run build
