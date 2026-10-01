@@ -9,10 +9,19 @@ const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/bran
 // below that already build their query with Sequelize's :param replacements object
 // instead of positional `?` — the two placeholder styles can't be mixed within one
 // sequelize.query() call, so a query using :named replacements needs this instead of
-// splicing in the `?`-based helper. Same rules as getBranchConditionSQL: admins are
-// never filtered, and the branch comes from req.branchContext first, req.user as fallback.
+// splicing in the `?`-based helper.
+//
+// Was NOT actually "same rules as getBranchConditionSQL" despite the comment that used
+// to say so: it exempted every admin unconditionally, while the shared helper only
+// exempts an admin who hasn't picked a branch via the TopBar switcher (adminScoped).
+// Once an admin had ever selected a branch there, GET /visit-summaries (which uses this
+// function) kept showing every branch's orders regardless, while GET /specimens/pending
+// (which uses the real shared helper) correctly filtered to just the selected branch —
+// so a test ordered under one branch context showed up in the Visit Summary panel but
+// not in the Collection page's Active Queue for the same admin, same page load, same
+// patient. Found in production (demo tenant, John Korsuk Lasuba / PTN-20261001-6560).
 function getBranchConditionNamed(req, alias, paramName = 'branchId') {
-  if (!req.user || req.user.role === 'admin') return { sql: '', replacements: {} };
+  if (!req.user || (req.user.role === 'admin' && !req.branchContext?.adminScoped)) return { sql: '', replacements: {} };
   const branchId = req.branchContext?.branchId || req.user.branchId || null;
   if (!branchId) return { sql: '', replacements: {} };
   const col = alias ? `${alias}.branch_id` : 'branch_id';
@@ -1561,3 +1570,4 @@ router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) =
 });
 
 module.exports = router;
+module.exports.getBranchConditionNamed = getBranchConditionNamed;
