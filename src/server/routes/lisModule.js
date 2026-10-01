@@ -684,8 +684,8 @@ router.delete('/orders/:id/diagnoses/:diagnosisId', authorize('lis.clinical.writ
 // ==========================================
 router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
   const { sequelize: db } = req.models;
-  const { participant_id, visit_id, doctor_id, clinical_notes, vitals, tests, order_id } = req.body;
-  
+  const { participant_id, visit_id, doctor_id, clinical_notes, vitals, tests, order_id, auto_bill: autoBill, clinic_id: bodyClinicId, branch_id: bodyBranchId } = req.body;
+
   const t = await db.transaction();
   let orderId = order_id;
 
@@ -775,6 +775,35 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
           entity_type: 'LisTestOrder', entity_id: orderId, link: '/lis/orders',
         });
       } catch (e) { /* non-blocking */ }
+    }
+
+    // Billing here is opt-in (auto_bill), not the default for every caller of
+    // this endpoint — LISTestOrders.tsx already bills ordered tests itself,
+    // client-side, right after this call returns (see its billOrderItems);
+    // billing unconditionally here would double-charge every order placed
+    // from that page. Only a caller that passes auto_bill: true (the theatre
+    // page's "Request Lab Test" button) gets billed here instead.
+    if (autoBill && (tests || []).length > 0) {
+      const billableTests = tests.filter((t2) => !skipped.includes(t2.name || t2.code) && parseFloat(t2.price) > 0);
+      if (billableTests.length > 0) {
+        try {
+          const { addLineItemsToBill } = require('../utils/billingResolver');
+          const [[participant]] = await db.query(`SELECT first_name, last_name FROM lis_participants WHERE id = ?`, { replacements: [participant_id] });
+          await addLineItemsToBill({
+            patientId: participant_id,
+            patientName: participant ? `${participant.first_name} ${participant.last_name}`.trim() : 'Patient',
+            clinicId: bodyClinicId || req.user?.clinicId || 1,
+            branchId: bodyBranchId || getCreateBranchId(req),
+            lineItems: billableTests.map((t2) => ({
+              serviceName: t2.name || t2.code, quantity: 1, unitPrice: parseFloat(t2.price), totalPrice: parseFloat(t2.price),
+              revenueCategory: 'laboratory',
+            })),
+            createdBy: req.user?.displayName || req.user?.id || 'system',
+          });
+        } catch (billErr) {
+          console.error(`LIS order ${orderId}: tests ordered, but billing failed —`, billErr.message);
+        }
+      }
     }
 
     res.status(201).json({ success: true, order_id: orderId, message: 'Order and specimens created', skipped_duplicates: skipped });

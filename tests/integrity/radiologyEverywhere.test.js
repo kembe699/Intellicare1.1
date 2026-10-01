@@ -61,8 +61,12 @@ describe('GET /api/radiology/requests supports filtering by order_id for Visit S
   const section = src.slice(src.indexOf("router.get('/requests', authorize"), src.indexOf("router.get('/visits'"));
 
   test('accepts an order_id query param and scopes the WHERE clause with it', () => {
-    expect(section).toMatch(/const \{ status, order_id \} = req\.query;/);
+    expect(section).toMatch(/const \{ status, order_id, participant_id: participantId \} = req\.query;/);
     expect(section).toMatch(/AND rr\.order_id = :orderId/);
+  });
+
+  test('also accepts a participant_id query param, for a patient\'s full radiology history', () => {
+    expect(section).toMatch(/AND rr\.participant_id = :participantId/);
   });
 
   test('also selects report_html and the confirm/report audit fields the visit summary needs to render', () => {

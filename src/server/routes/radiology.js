@@ -48,7 +48,7 @@ router.get('/exam-types', authorize('radiology.read'), async (req, res) => {
 // radiology side actually does: confirm + report.
 router.post('/requests', authorize('lis.clinical.write'), async (req, res) => {
   try {
-    const { participant_id, order_id, items, doctor_id } = req.body;
+    const { participant_id, order_id, items, doctor_id, auto_bill: autoBill } = req.body;
     if (!participant_id) return res.status(400).json({ error: 'participant_id is required' });
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'At least one exam item is required' });
 
@@ -84,6 +84,36 @@ router.post('/requests', authorize('lis.clinical.write'), async (req, res) => {
     }
 
     if (created.length === 0) return res.status(400).json({ error: 'No valid exam items to request' });
+
+    // Opt-in, same convention as /api/lis/orders' auto_bill: radiology
+    // ordered from LISTestOrders.tsx is explicitly NOT billed today ("radiology
+    // billing isn't wired up yet" — see that file's own comment near
+    // selectedRadiologyIds), a real, separate, pre-existing gap this isn't
+    // fixing. Only a caller that passes auto_bill: true (the theatre page)
+    // gets billed here, so every existing caller's behavior is unchanged.
+    if (autoBill) {
+      const billableItems = items.filter((it) => parseFloat(it.price) > 0);
+      if (billableItems.length > 0) {
+        try {
+          const { addLineItemsToBill } = require('../utils/billingResolver');
+          const [[participant]] = await sequelize.query(`SELECT first_name, last_name FROM lis_participants WHERE id = :pid`, { replacements: { pid: participant_id } });
+          await addLineItemsToBill({
+            patientId: participant_id,
+            patientName: participant ? `${participant.first_name} ${participant.last_name}`.trim() : 'Patient',
+            clinicId: req.body.clinic_id || BranchQueryFilter.resolveClinicId(req),
+            branchId: req.body.branch_id || getCreateBranchId(req),
+            lineItems: billableItems.map((it) => ({
+              serviceName: it.exam_name, quantity: 1, unitPrice: parseFloat(it.price), totalPrice: parseFloat(it.price),
+              revenueCategory: 'radiology',
+            })),
+            createdBy: req.user?.displayName || req.user?.id || 'system',
+          });
+        } catch (billErr) {
+          console.error(`Radiology request for participant ${participant_id}: exam(s) requested, but billing failed —`, billErr.message);
+        }
+      }
+    }
+
     res.status(201).json({ requests: created });
   } catch (error) {
     console.error('Error creating radiology request:', error);
@@ -93,7 +123,7 @@ router.post('/requests', authorize('lis.clinical.write'), async (req, res) => {
 
 router.get('/requests', authorize('radiology.read'), async (req, res) => {
   try {
-    const { status, order_id } = req.query;
+    const { status, order_id, participant_id: participantId } = req.query;
     const replacements = {};
     const branchSQL = branchScope(req, replacements, 'rr');
     let sql = `
@@ -112,6 +142,10 @@ router.get('/requests', authorize('radiology.read'), async (req, res) => {
     // requested under — matches the same order_id every request in that
     // visit shares (see /visits' grouping rule).
     if (order_id) { sql += ' AND rr.order_id = :orderId'; replacements.orderId = order_id; }
+    // A patient's full radiology history, including order-less standalone
+    // requests an order_id-only lookup would miss — added for the theatre
+    // operation page's "Radiology" panel.
+    if (participantId) { sql += ' AND rr.participant_id = :participantId'; replacements.participantId = participantId; }
     sql += ' ORDER BY rr.request_date DESC';
     const [rows] = await sequelize.query(sql, { replacements });
     res.json(rows);
