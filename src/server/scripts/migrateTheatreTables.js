@@ -191,6 +191,13 @@ async function migrateTheatreTables(db = sequelize) {
     try { await db.query(`ALTER TABLE theatre_operations ${clause}`); } catch (err) { console.error(`Could not add theatre_operations column (${clause}):`, err.message); }
   }
 
+  // Lets the UI and the printable report distinguish blood from every other
+  // drug/consumable used in an operation, without a separate table — the
+  // value is just a copy of inventory_items.item_category at the moment the
+  // item was recorded, so a later recategorization in Inventory doesn't
+  // silently reclassify history.
+  try { await db.query(`ALTER TABLE theatre_operation_items ADD COLUMN IF NOT EXISTS item_category VARCHAR(100)`); } catch (err) { console.error('Could not add theatre_operation_items.item_category:', err.message); }
+
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_clinic ON theatre_requests (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_status ON theatre_requests (status)',

@@ -52,7 +52,7 @@ interface InventoryItem {
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0);
 
-const CATEGORIES = ['drugs', 'consumables', 'equipment', 'supplies', 'reagents', 'surgical', 'general'];
+const CATEGORIES = ['drugs', 'consumables', 'equipment', 'supplies', 'reagents', 'surgical', 'blood', 'general'];
 const ITEM_TYPES = ['consumable', 'equipment', 'reagent', 'surgical', 'diagnostic'];
 const CATEGORY_OPTIONS = CATEGORIES.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }));
 const STOCK_FILTER_OPTIONS = [

@@ -130,18 +130,22 @@ router.get('/locations', authorize('theatre.write'), async (req, res) => {
 router.get('/items/search', authorize('theatre.write'), async (req, res) => {
   const { sequelize } = req.models;
   const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
-  const { location_id: locationId, q } = req.query;
+  const { location_id: locationId, q, category, exclude_category: excludeCategory } = req.query;
   if (!locationId) return res.status(400).json({ error: 'location_id is required' });
   try {
     const replacements = { clinicId, locationId };
     let sql = `
-      SELECT i.id, i.item_name, i.item_code, i.unit_of_measure,
+      SELECT i.id, i.item_name, i.item_code, i.unit_of_measure, i.item_category,
              COALESCE(loc.quantity_on_hand, 0) AS available_quantity
       FROM inventory_items i
       LEFT JOIN stock_by_location loc ON loc.item_id = i.id AND loc.location_id = :locationId
       WHERE i.clinic_id = :clinicId AND i.is_active = true
         AND EXISTS (SELECT 1 FROM stock_by_location sbl WHERE sbl.item_id = i.id AND sbl.location_id = :locationId AND sbl.quantity_on_hand > 0)`;
     if (q && q.trim()) { sql += ' AND (i.item_name ILIKE :q OR i.item_code ILIKE :q)'; replacements.q = `%${q.trim()}%`; }
+    // Lets the "Blood Used" section search only blood-category items, and
+    // "Drugs & Consumables" exclude them, from this same endpoint.
+    if (category) { sql += ' AND i.item_category = :category'; replacements.category = category; }
+    if (excludeCategory) { sql += ' AND (i.item_category IS DISTINCT FROM :excludeCategory)'; replacements.excludeCategory = excludeCategory; }
     sql += ' ORDER BY i.item_name LIMIT 30';
     const [rows] = await sequelize.query(sql, { replacements });
     res.json(rows);
