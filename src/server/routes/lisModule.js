@@ -1071,7 +1071,17 @@ function markCollectible(specimensForPatient, pool, freeTenant = false) {
   }
 }
 
-router.get('/specimens/pending', authorize('lis.specimen.write'), async (req, res) => {
+// Was gated on lis.specimen.write (admin/lab only) even though this is a pure
+// read — the page that calls it, /lis/collection, only requires lis.results.read
+// at the route level (App.tsx), which also covers doctors. A doctor opening the
+// page to check their own just-ordered test got a silent 403 here (swallowed to
+// an empty array by LISCollection.tsx's fetch, with no error shown), making
+// "No pending collections" look like the test was never created at all. The
+// sibling /specimens/history endpoint right below already uses lis.results.read
+// for the same kind of listing — this now matches it. Writing/collecting a
+// specimen (recording it as collected, entering results) still requires
+// lis.specimen.write at those routes and at the /lis/results-entry page itself.
+router.get('/specimens/pending', authorize('lis.results.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const branchFilter = getBranchConditionSQL(req, 's');

@@ -118,6 +118,12 @@ export default function LISCollection() {
         authFetch('/api/lis/specimens/pending', { credentials: 'include' }),
         authFetch('/api/lis/specimens/history', { credentials: 'include' })
       ]);
+      // Was silently swallowing a non-OK response into an empty array — a 403
+      // (or any other failure) on just the Active Queue call made the whole
+      // queue look empty, with nothing on screen to say a request had actually
+      // failed rather than there genuinely being nothing pending.
+      if (!resPending.ok) toast.error('Could not load the active collection queue — some specimens may not be shown.');
+      if (!resHistory.ok) toast.error('Could not load collection history — some specimens may not be shown.');
       const pendingData = resPending.ok ? await resPending.json() : [];
       const historyData = resHistory.ok ? await resHistory.json() : [];
       const combined = [...pendingData, ...historyData];
