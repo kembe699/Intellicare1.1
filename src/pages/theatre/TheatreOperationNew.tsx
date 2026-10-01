@@ -30,6 +30,7 @@ export default function TheatreOperationNew() {
   const [anesthetistId, setAnesthetistId] = useState('');
   const [nurseId, setNurseId] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [procedureFee, setProcedureFee] = useState('');
   const [saving, setSaving] = useState(false);
 
   const { data: patientResults = [], isFetching } = useQuery({
@@ -86,6 +87,10 @@ export default function TheatreOperationNew() {
           theatre_room_id: roomId || undefined, surgeon_employee_id: surgeonId || undefined,
           anesthetist_employee_id: anesthetistId || undefined, scrub_nurse_employee_id: nurseId || undefined,
           scheduled_at: scheduledAt || undefined,
+          // T1: captured now, while whoever is booking the case knows what it
+          // should cost — billed automatically once the operation completes.
+          // Left blank means "not billed through this module" (covered/charity).
+          procedure_fee: procedureFee ? parseFloat(procedureFee) : undefined,
         }),
       });
       if (res.ok) {
@@ -175,6 +180,10 @@ export default function TheatreOperationNew() {
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Scheduled Date/Time</label>
                   <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Procedure Fee (SSP) — optional</label>
+                <Input type="number" min="0" step="0.01" value={procedureFee} onChange={(e) => setProcedureFee(e.target.value)} placeholder="Leave blank if not billed through Theatre" />
               </div>
             </CardContent>
           </Card>

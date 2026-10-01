@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import { expenseVoucherStatus } from '@/lib/expenseStatus';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Expense {
   id: number; expense_date: string; description: string; amount: string;
@@ -36,6 +37,7 @@ interface UserProfile { id: string; displayName: string; email: string; role: st
 const APPROVAL_LEVELS = ['Approval 1', 'Authorization'];
 
 export default function ExpenseDetail() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -75,7 +77,7 @@ export default function ExpenseDetail() {
 
   const handlePay = async () => {
     if (paying) return;
-    if (!window.confirm('Confirm payment? This will deduct the amount from the selected account.')) return;
+    if (!(await confirm({ description: 'Confirm payment? This will deduct the amount from the selected account.' }))) return;
     setPaying(true);
     try {
       const r = await authFetch(`/api/daily-expenses/${id}/pay`, { method: 'POST' });
@@ -189,6 +191,7 @@ export default function ExpenseDetail() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-5xl mx-auto w-full space-y-6">
 

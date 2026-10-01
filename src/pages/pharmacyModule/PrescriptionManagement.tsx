@@ -16,6 +16,7 @@ import {
   ClipboardList, Plus, Search, X, Pill, Loader2, Ban, RefreshCw, FileSpreadsheet,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const API = '/api/pharmacy-module';
 
@@ -43,6 +44,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function PrescriptionManagement() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const navigate = useNavigate();
   const clinicId = user?.clinic || 1;
@@ -428,7 +430,7 @@ export default function PrescriptionManagement() {
   const handleCancelPrescription = async () => {
     if (cancelling) return;
     if (!selectedRx) return;
-    if (!confirm(`Cancel prescription ${selectedRx.prescription_number}?`)) return;
+    if (!(await confirm({ description: `Cancel prescription ${selectedRx.prescription_number}?` }))) return;
     setCancelling(true);
     try {
       const res = await authFetch(`${API}/prescriptions/${selectedRx.id}/cancel`, {
@@ -478,6 +480,7 @@ export default function PrescriptionManagement() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full flex flex-col">
         <PageHeader title="Prescriptions" icon={<ClipboardList />} />

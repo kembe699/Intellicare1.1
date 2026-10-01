@@ -591,12 +591,13 @@ export default function PatientsBill() {
       const isFullPayment = amount >= parseFloat(selectedBill.balance_amount) - 0.01;
       const selectedTotal = billServices.reduce((sum: number, s: any, i: number) => selectedItems.has(i) ? sum + amt(s.totalPrice) : sum, 0);
       let paidServiceIndexes: number[] | undefined;
-      let partialLineSplit: { index: number; paidAmount: number } | undefined;
+      let partialLineSplit: { index: number; lineId?: string; paidAmount: number } | undefined;
       if (selectedItems.size > 0) {
         if (amount >= selectedTotal - 0.01) {
           paidServiceIndexes = Array.from(selectedItems);
         } else if (selectedItems.size === 1) {
-          partialLineSplit = { index: Array.from(selectedItems)[0], paidAmount: amount };
+          const idx = Array.from(selectedItems)[0];
+          partialLineSplit = { index: idx, lineId: billServices[idx]?.line_id, paidAmount: amount };
         } else {
           toast.error('This amount doesn\'t cover everything selected. Select just the one item you\'re partially paying, or enter the full amount for everything checked.');
           setPaying(false);
@@ -605,6 +606,10 @@ export default function PatientsBill() {
       } else if (isFullPayment) {
         paidServiceIndexes = billServices.reduce((acc: number[], s: any, i: number) => { if (isPayableLine(s)) acc.push(i); return acc; }, []);
       }
+      // B1: resolved against the same billServices this render selected from —
+      // see normalizeServices.js's ensureLineIds for why array position alone
+      // isn't safe to trust by the time this request reaches the server.
+      const paidLineIds = paidServiceIndexes?.map((i) => billServices[i]?.line_id).filter(Boolean);
 
       const res = await authFetch(`/api/patient-bills/${selectedBill.id}/payments`, {
         method: 'POST',
@@ -612,7 +617,7 @@ export default function PatientsBill() {
         credentials: 'include',
         body: JSON.stringify({
           amount, payment_method: paymentForm.method, payment_date: paymentForm.date,
-          notes, cashierName: user?.displayName, cashierId: user?.uid, paidServiceIndexes, partialLineSplit,
+          notes, cashierName: user?.displayName, cashierId: user?.uid, paidServiceIndexes, paidLineIds, partialLineSplit,
         }),
       });
       if (res.ok) {

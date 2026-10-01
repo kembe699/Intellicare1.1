@@ -15,6 +15,7 @@ import {
   X, Check, Loader2, Layers, Calendar, MapPin, Percent, Barcode,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface InventoryItem {
   id: string;
@@ -111,6 +112,7 @@ const emptyForm = (currencyCode: string) => ({
 });
 
 export default function ItemMaster() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { currency } = useCurrency();
   const clinicId = user?.clinic || 1;
@@ -378,7 +380,7 @@ export default function ItemMaster() {
       confirmMsg = `${priceAdjForm.direction === 'increase' ? 'Increase' : 'Decrease'} the selling price of ${scopeLabel} by ${pct}%? This applies immediately and cannot be undone automatically.`;
     }
 
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirm({ description: confirmMsg }))) return;
 
     setApplyingPriceAdj(true);
     try {
@@ -410,6 +412,7 @@ export default function ItemMaster() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1800px] mx-auto w-full flex flex-col">
         <PageHeader title="Item Master" icon={<Package />} className="mb-3" />

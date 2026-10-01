@@ -20,6 +20,7 @@ import { Building2, CheckCircle2, Clock, Copy, CreditCard, Download, FileText, L
 import { toast } from 'sonner';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface QuotationDetail {
   id: number;
@@ -72,6 +73,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 const PlatformQuotationDetail: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [quotation, setQuotation] = useState<QuotationDetail | null>(null);
@@ -256,7 +258,7 @@ const PlatformQuotationDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Delete this draft quotation? This cannot be undone.')) return;
+    if (!(await confirm({ description: 'Delete this draft quotation? This cannot be undone.' }))) return;
     setDeleting(true);
     try {
       const res = await platformFetch(`/quotations/${id}`, { method: 'DELETE' });
@@ -297,6 +299,7 @@ const PlatformQuotationDetail: React.FC = () => {
 
   return (
     <PlatformAppLayout>
+      {confirmDialog}
       <PageHeader
         icon={<FileText />}
         title={quotation.quote_number}

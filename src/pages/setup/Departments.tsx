@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, Briefcase, Search, Settings, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Department {
   id: string;
@@ -26,6 +27,7 @@ interface Department {
 }
 
 const Departments: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +137,7 @@ const Departments: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (deletingId) return;
-    if (!confirm('Are you sure you want to delete this department?')) {
+    if (!(await confirm({ description: 'Are you sure you want to delete this department?', destructive: true }))) {
       return;
     }
 
@@ -168,6 +170,7 @@ const Departments: React.FC = () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full flex flex-col">
         <PageHeader

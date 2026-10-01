@@ -12,6 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   ArrowLeft, Loader2, Scissors, Play, Square, XCircle, User, MapPin,
   Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe,
@@ -45,6 +46,7 @@ export default function TheatreOperationDetail() {
   const { hasPrivilege } = useAuth();
   const canWrite = hasPrivilege('theatre.write');
   const facilityInfo = useFacilityInfo();
+  const { prompt, promptDialog } = usePromptDialog();
 
   const [operation, setOperation] = useState<TheatreOperation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,7 +143,8 @@ export default function TheatreOperationDetail() {
   };
 
   const handleCancel = async () => {
-    const reason = window.prompt('Reason for cancelling this operation?') || '';
+    const reason = await prompt({ title: 'Cancel this operation', description: 'Reason for cancelling this operation?', required: false });
+    if (reason === null) return; // cancelled the dialog itself — don't cancel the operation
     setBusy(true);
     try {
       const res = await authFetch(`/api/theatre/operations/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
@@ -298,6 +301,7 @@ export default function TheatreOperationDetail() {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="space-y-4">
         <PageHeader
           icon={<Scissors />}

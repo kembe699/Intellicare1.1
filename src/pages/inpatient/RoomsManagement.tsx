@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const ROOM_TYPES = [
   { value: 'consultation', label: 'Consultation Room' },
@@ -36,6 +37,7 @@ const roomTypeToneMap: Record<string, StatusBadgeTone> = {
 };
 
 export default function RoomsManagement() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const clinicId = user?.clinic || 1;
   const queryClient = useQueryClient();
@@ -178,6 +180,7 @@ export default function RoomsManagement() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 max-w-6xl mx-auto w-full flex flex-col">
         <PageHeader
@@ -441,9 +444,9 @@ export default function RoomsManagement() {
                                 className="flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
                                 disabled={deleteBedMutation.isPending}
                                 title="Remove bed"
-                                onClick={() => {
+                                onClick={async () => {
                                   if (deleteBedMutation.isPending) return;
-                                  if (confirm('Remove this bed?')) deleteBedMutation.mutate(bed.id);
+                                  if (await confirm({ description: 'Remove this bed?', destructive: true })) deleteBedMutation.mutate(bed.id);
                                 }}
                               >
                                 {deleteBedMutation.isPending && deleteBedMutation.variables === bed.id ? (
@@ -470,9 +473,9 @@ export default function RoomsManagement() {
             <Button
               variant="outline"
               className="border-red-200 text-red-700 hover:bg-red-50"
-              onClick={() => {
+              onClick={async () => {
                 if (deleteRoomMutation.isPending) return;
-                if (selectedRoom) { if (confirm('Delete this room?')) deleteRoomMutation.mutate(selectedRoom.id); }
+                if (selectedRoom) { if (await confirm({ description: 'Delete this room?', destructive: true })) deleteRoomMutation.mutate(selectedRoom.id); }
               }}
               disabled={deleteRoomMutation.isPending}
             >

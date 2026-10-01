@@ -67,12 +67,21 @@ describe('AssetService.createAsset', () => {
     expect(gl.is_posted).toBe(true);
   });
 
-  test('registers an asset without touching the ledger when no payment account is given', async () => {
+  test('F1 (Phase 6): registers a legacy asset (no payment account) with an opening-balance GL entry, not no entry at all', async () => {
+    // Used to post NOTHING when no payment account was given — the asset
+    // register and the general ledger silently disagreed from day one. Now
+    // posts Dr Asset / Cr Retained Earnings for the asset's opening value —
+    // see fixedAssets.test.js's own F1 describe block for the fuller proof
+    // (including the opening-accumulated-depreciation split).
     const asset = await withTenant(() => AssetService.createAsset({
       clinic_id: CLINIC_ID, name: 'AssetTest Opening Balance Chair', category_id: categories['Office Equipment'].id,
       acquisition_date: '2019-01-01', acquisition_cost: 300, useful_life_years: 5,
     }, 'test-system'));
-    expect(asset.acquisition_gl_entry_id).toBeNull();
+    expect(asset.acquisition_gl_entry_id).toBeTruthy();
+
+    const [[gl]] = await sequelize.query('SELECT total_debit, total_credit FROM general_ledger WHERE id = :id', { replacements: { id: asset.acquisition_gl_entry_id } });
+    expect(parseFloat(gl.total_debit)).toBe(300);
+    expect(parseFloat(gl.total_credit)).toBe(300);
   });
 
   test('a genuine posting failure (bad payment account) rolls back the asset row too', async () => {
@@ -118,8 +127,11 @@ describe('AssetService.runDepreciation', () => {
   });
 
   test('computes straight-line monthly depreciation and posts a consolidated, balanced GL entry', async () => {
-    // 1200 / 5 years / 12 months = 20/month
-    const result = await withTenant(() => AssetService.runDepreciation(CLINIC_ID, '2031-01', 'test-system'));
+    // 1200 / 5 years / 12 months = 20/month. F5 (Phase 6) now rejects a
+    // future-dated period, so this runs a period shortly after acquisition
+    // (2020-01-01) rather than the far-future placeholder date this test
+    // used to use to avoid colliding with other fixtures.
+    const result = await withTenant(() => AssetService.runDepreciation(CLINIC_ID, '2020-02', 'test-system'));
     expect(result.assetsDepreciated).toBeGreaterThanOrEqual(1);
 
     const [[row]] = await sequelize.query('SELECT accumulated_depreciation, current_value FROM fixed_assets WHERE id = :id', { replacements: { id: asset.id } });
@@ -131,7 +143,7 @@ describe('AssetService.runDepreciation', () => {
   });
 
   test('running the same period again is a no-op (idempotent)', async () => {
-    const again = await withTenant(() => AssetService.runDepreciation(CLINIC_ID, '2031-01', 'test-system'));
+    const again = await withTenant(() => AssetService.runDepreciation(CLINIC_ID, '2020-02', 'test-system'));
     const [[row]] = await sequelize.query('SELECT accumulated_depreciation FROM fixed_assets WHERE id = :id', { replacements: { id: asset.id } });
     expect(parseFloat(row.accumulated_depreciation)).toBe(20); // unchanged — not 40
     expect(again.assetsDepreciated + 0).toBeLessThanOrEqual(1); // this asset specifically is not re-counted
@@ -141,7 +153,7 @@ describe('AssetService.runDepreciation', () => {
     // Fast-forward: manually set accumulated depreciation to 1 cent below full
     // depreciable base, then run one more period — it must cap, not overshoot.
     await sequelize.query(`UPDATE fixed_assets SET accumulated_depreciation = 1195, current_value = 5 WHERE id = :id`, { replacements: { id: asset.id } });
-    await withTenant(() => AssetService.runDepreciation(CLINIC_ID, '2031-02', 'test-system'));
+    await withTenant(() => AssetService.runDepreciation(CLINIC_ID, '2020-03', 'test-system'));
     const [[row]] = await sequelize.query('SELECT accumulated_depreciation, current_value FROM fixed_assets WHERE id = :id', { replacements: { id: asset.id } });
     expect(parseFloat(row.accumulated_depreciation)).toBe(1200); // capped at cost - salvage, not 1215
     expect(parseFloat(row.current_value)).toBe(0);
@@ -155,7 +167,8 @@ describe('AssetService.disposeAsset', () => {
       acquisition_date: '2020-01-01', acquisition_cost: 1000, salvage_value: 0, useful_life_years: 5,
     }, 'test-system'));
 
-    const result = await withTenant(() => AssetService.disposeAsset(CLINIC_ID, asset.id, { disposal_date: '2031-01-01', proceeds: 300, payment_account_code: '1100', reason: 'Sold' }, 'test-system'));
+    // F5 (Phase 6) now rejects a future-dated disposal — was '2031-01-01'.
+    const result = await withTenant(() => AssetService.disposeAsset(CLINIC_ID, asset.id, { disposal_date: '2024-01-01', proceeds: 300, payment_account_code: '1100', reason: 'Sold' }, 'test-system'));
     expect(result.bookValue).toBe(1000); // no depreciation run yet
     expect(result.gainOrLoss).toBe(-700);
 

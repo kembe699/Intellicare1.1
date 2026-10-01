@@ -52,17 +52,29 @@ describe('the ledger sweeper looks at the bills that are wrong', () => {
 });
 
 describe('generated sequence numbers survive gaps and collisions', () => {
-  test('GL numbers are taken from the highest issued, not from a count', () => {
+  // N1 superseded the fix these two tests originally checked for. "Retry on
+  // collision" (read the highest issued number, catch the unique-violation,
+  // try the next one) turned out to still be racy — two posts started before
+  // either committed could read the same "highest so far" — and the retry
+  // itself could never actually succeed in Postgres anyway: a failed INSERT
+  // aborts the whole transaction, so every query after it in that same
+  // transaction (including the retry) fails immediately with "current
+  // transaction is aborted". The real fix is a counter row locked inside the
+  // same transaction as the entry it numbers — see DocumentNumberService.js
+  // and glNumbering.test.js's own header comment for the full story.
+  test('GL numbers are allocated from a locked counter row, in the same transaction as the entry', () => {
     const accounting = read('src/server/services/AccountingService.js');
-    const fn = accounting.slice(accounting.indexOf('async generateGLNumber'));
-    expect(fn.slice(0, 900)).toMatch(/order: \[\['gl_number', 'DESC'\]\]/);
-    expect(fn.slice(0, 900)).not.toMatch(/COUNT\(\*\)/i);
+    expect(accounting).toMatch(/getNextDocumentNumber\('GL', glData\.clinic_id, transaction/);
+    expect(accounting).not.toMatch(/async generateGLNumber/);
   });
 
-  test('a taken GL number is retried rather than losing the entry', () => {
+  test('collisions are structurally impossible, so there is no retry loop to lose an entry', () => {
     const accounting = read('src/server/services/AccountingService.js');
-    expect(accounting).toMatch(/isUniqueViolation\(err\)/);
-    expect(accounting).toMatch(/NUMBER_ATTEMPTS/);
+    expect(accounting).not.toMatch(/NUMBER_ATTEMPTS/);
+    expect(accounting).not.toMatch(/isUniqueViolation\(err\)/);
+    const docNumberService = read('src/server/services/DocumentNumberService.js');
+    expect(docNumberService).toMatch(/ON CONFLICT \(clinic_id, doc_type, period\)/);
+    expect(docNumberService).toMatch(/requires an open transaction/);
   });
 
   test('dispensing numbers are taken from the highest issued too', () => {

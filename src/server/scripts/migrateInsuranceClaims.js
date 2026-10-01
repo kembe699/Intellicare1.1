@@ -40,31 +40,20 @@ async function migrateInsuranceBatchClaims() {
   // an insurance scheme priced in USD while the clinic's cash catalog is SSP) — without this
   // column, claim_amount was a bare number that every UI assumed was the clinic's base
   // currency, so a $2.00 claim displayed as "SSP 2.00".
+  // Found while setting up U6's CI pipeline against a genuinely fresh
+  // database: COUNT(*) comes back over the wire as the STRING "0" (Postgres
+  // BIGINT, which node-postgres never coerces to a JS number), and `!"0"` is
+  // `false` — the opposite of what this check needs. On every fresh
+  // database this silently skipped adding the column in exactly the case it
+  // exists to handle, and the UPDATE below then failed outright with
+  // "column bc.currency does not exist" instead of ever backfilling it.
   const [claimCurrencyCol] = await sequelize.query(
     `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'insurance_batch_claims' AND column_name = 'currency'`
   );
-  if (!claimCurrencyCol[0].cnt) {
+  if (parseInt(claimCurrencyCol[0].cnt, 10) === 0) {
     await sequelize.query(`ALTER TABLE insurance_batch_claims ADD COLUMN currency VARCHAR(3) NULL`);
     console.log('  insurance_batch_claims.currency added');
   }
-
-  // Backfill claims created before the column existed, from their linked invoices' actual
-  // currency (idempotent — only touches rows still missing it).
-  await sequelize.query(`
-    UPDATE insurance_batch_claims bc
-    SET currency = (
-      SELECT i.currency FROM insurance_batch_claim_items bci
-      JOIN invoices i ON bci.invoice_id = i.id
-      WHERE bci.claim_id = bc.id
-      LIMIT 1
-    )
-    WHERE bc.currency IS NULL
-      AND EXISTS (
-        SELECT 1 FROM insurance_batch_claim_items bci
-        JOIN invoices i ON bci.invoice_id = i.id
-        WHERE bci.claim_id = bc.id
-      )
-  `);
 
   // 2. insurance_batch_claim_items (link table to invoices)
   console.log('2. Creating insurance_batch_claim_items table...');
@@ -85,6 +74,28 @@ async function migrateInsuranceBatchClaims() {
   console.log('  insurance_batch_claim_items table ready');
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_ibci_claim_id ON insurance_batch_claim_items(claim_id)`); } catch(e){}
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_ibci_invoice_id ON insurance_batch_claim_items(invoice_id)`); } catch(e){}
+
+  // Backfill claims created before the currency column existed, from their linked
+  // invoices' actual currency (idempotent — only touches rows still missing it).
+  // Moved here, after insurance_batch_claim_items exists — this used to run between
+  // steps 1 and 2 and reference a table that didn't exist yet, which the (now-fixed)
+  // COUNT/!cnt bug above had been masking: it never actually reached this UPDATE on a
+  // fresh database, because it always skipped adding the currency column first.
+  await sequelize.query(`
+    UPDATE insurance_batch_claims bc
+    SET currency = (
+      SELECT i.currency FROM insurance_batch_claim_items bci
+      JOIN invoices i ON bci.invoice_id = i.id
+      WHERE bci.claim_id = bc.id
+      LIMIT 1
+    )
+    WHERE bc.currency IS NULL
+      AND EXISTS (
+        SELECT 1 FROM insurance_batch_claim_items bci
+        JOIN invoices i ON bci.invoice_id = i.id
+        WHERE bci.claim_id = bc.id
+      )
+  `);
 
   // 3. insurance_batch_claim_status_history
   console.log('3. Creating insurance_batch_claim_status_history table...');

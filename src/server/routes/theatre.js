@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { authorize } = require('../middleware/authorize');
 const TheatreService = require('../services/TheatreService');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 
 // Same inline branch-scoping convention as accounting.js/hr.js/fixedAssets.js.
 function branchScope(req, replacements, alias = '') {
@@ -33,6 +34,36 @@ async function logAudit(req, { action, entity_type: entityType, entity_id: entit
       new_values: newValues, ip_address: req.ip, status: 'success',
     });
   } catch (e) { /* audit logging is best-effort */ }
+}
+
+// T10/T11: TheatreService attaches a real statusCode to what it throws
+// (httpError) — this reads it back instead of every route flattening every
+// failure to one blanket code (writes used to always be 400, reads always
+// 500, so "not found" and "wrong state" and "bad input" were indistinguishable
+// to a client). Falls back to the route's own historical default for an
+// error the service didn't specifically classify.
+function statusFor(error, fallback) {
+  return error?.statusCode || fallback;
+}
+
+// T5: branch isolation. TheatreService's own lookups only ever filtered by
+// clinic_id — a branch-scoped user who knew (or guessed/enumerated) another
+// branch's operation/request id could view or act on it, same class of gap
+// already closed elsewhere in this app (BranchQueryFilter.canAccessRecord).
+// Checked at the route layer, before the service call that would act on it,
+// against a lightweight fetch of just the record's own branch_id.
+async function assertBranchAccess(req, res, table, id) {
+  const { sequelize } = req.models;
+  const [[record]] = await sequelize.query(`SELECT branch_id FROM ${table} WHERE id = :id`, { replacements: { id } });
+  if (!record) {
+    res.status(404).json({ error: `${table === 'theatre_requests' ? 'Request' : 'Operation'} not found` });
+    return false;
+  }
+  if (!BranchQueryFilter.canAccessRecord(record, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+    res.status(403).json({ error: `Access denied to this ${table === 'theatre_requests' ? 'request' : 'operation'}` });
+    return false;
+  }
+  return true;
 }
 
 // ── Patient search ──────────────────────────────────────────────────────
@@ -122,13 +153,14 @@ router.get('/items/search', authorize('theatre.write'), async (req, res) => {
 
 router.post('/operations/:id/items', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
     const usage = await TheatreService.recordItemUsage(clinicId, req.params.id, req.body, req.user?.id);
     await logAudit(req, { action: 'ITEM_USED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Used ${usage.quantity} ${usage.unit_of_measure || ''} of ${usage.item_name}`, new_values: usage });
     res.status(201).json(usage);
   } catch (error) {
     console.error('Error recording item usage for theatre operation:', error);
-    res.status(400).json({ error: error.message || 'Failed to record item usage' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to record item usage' });
   }
 });
 
@@ -168,19 +200,20 @@ router.post('/requests', authorize('theatre.write'), async (req, res) => {
     res.status(201).json(request);
   } catch (error) {
     console.error('Error creating theatre request:', error);
-    res.status(400).json({ error: error.message || 'Failed to create theatre request' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to create theatre request' });
   }
 });
 
 router.post('/requests/:id/cancel', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_requests', req.params.id))) return;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
     const request = await TheatreService.cancelRequest(clinicId, req.params.id, req.body.reason);
     await logAudit(req, { action: 'REQUEST_CANCELLED', entity_type: 'TheatreRequest', entity_id: req.params.id, description: `Theatre request cancelled — ${req.body.reason || ''}` });
     res.json(request);
   } catch (error) {
     console.error('Error cancelling theatre request:', error);
-    res.status(400).json({ error: error.message || 'Failed to cancel request' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to cancel request' });
   }
 });
 
@@ -214,13 +247,14 @@ router.get('/operations', authorize('theatre.view'), async (req, res) => {
 
 router.get('/operations/:id', authorize('theatre.view'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
     const operation = await TheatreService.getOperation(clinicId, req.params.id);
     if (!operation) return res.status(404).json({ error: 'Operation not found' });
     res.json(operation);
   } catch (error) {
     console.error('Error fetching theatre operation:', error);
-    res.status(500).json({ error: 'Failed to fetch operation' });
+    res.status(statusFor(error, 500)).json({ error: 'Failed to fetch operation' });
   }
 });
 
@@ -235,73 +269,100 @@ router.post('/operations', authorize('theatre.write'), async (req, res) => {
     res.status(201).json(operation);
   } catch (error) {
     console.error('Error scheduling theatre operation:', error);
-    res.status(400).json({ error: error.message || 'Failed to schedule operation' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to schedule operation' });
   }
 });
 
 router.post('/operations/:id/start', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
     const operation = await TheatreService.startOperation(clinicId, req.params.id, req.user?.id);
     await logAudit(req, { action: 'OPERATION_STARTED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: 'Operation started' });
     res.json(operation);
   } catch (error) {
     console.error('Error starting theatre operation:', error);
-    res.status(400).json({ error: error.message || 'Failed to start operation' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to start operation' });
   }
 });
 
 router.post('/operations/:id/complete', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
     const operation = await TheatreService.completeOperation(clinicId, req.params.id, req.body, req.user?.id);
     await logAudit(req, { action: 'OPERATION_COMPLETED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Operation completed — outcome: ${req.body.outcome}`, new_values: { outcome: req.body.outcome, duration_minutes: operation.duration_minutes } });
     res.json(operation);
   } catch (error) {
     console.error('Error completing theatre operation:', error);
-    res.status(400).json({ error: error.message || 'Failed to complete operation' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to complete operation' });
   }
 });
 
 router.post('/operations/:id/cancel', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
     const operation = await TheatreService.cancelOperation(clinicId, req.params.id, req.body.reason);
     await logAudit(req, { action: 'OPERATION_CANCELLED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Operation cancelled — ${req.body.reason || ''}` });
     res.json(operation);
   } catch (error) {
     console.error('Error cancelling theatre operation:', error);
-    res.status(400).json({ error: error.message || 'Failed to cancel operation' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to cancel operation' });
   }
 });
 
 router.put('/operations/:id/checklist/:itemId', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const item = await TheatreService.toggleChecklistItem(req.params.id, req.params.itemId, req.body.checked, req.user?.id);
     res.json(item);
   } catch (error) {
     console.error('Error updating checklist item:', error);
-    res.status(400).json({ error: error.message || 'Failed to update checklist item' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to update checklist item' });
   }
 });
 
 router.post('/operations/:id/checklist', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const item = await TheatreService.addChecklistItem(req.params.id, req.body.phase, req.body.item_text);
     res.status(201).json(item);
   } catch (error) {
     console.error('Error adding checklist item:', error);
-    res.status(400).json({ error: error.message || 'Failed to add checklist item' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to add checklist item' });
   }
 });
 
 router.post('/operations/:id/vitals', authorize('theatre.write'), async (req, res) => {
   try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const vitals = await TheatreService.recordVitals(req.params.id, req.body, req.user?.id);
     res.status(201).json(vitals);
   } catch (error) {
     console.error('Error recording vitals:', error);
-    res.status(400).json({ error: error.message || 'Failed to record vitals' });
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to record vitals' });
+  }
+});
+
+// T4: after completeOperation marks a room 'cleaning', nothing ever moved it
+// back to 'available' — the room stayed permanently blocked in the OR board
+// until someone manually fixed the row in the database. This is that missing
+// step: staff mark the room ready once it's actually been cleaned/turned over.
+router.post('/rooms/:id/ready', authorize('theatre.write'), async (req, res) => {
+  try {
+    const { sequelize } = req.models;
+    const [[room]] = await sequelize.query(`SELECT branch_id FROM rooms WHERE id = :id AND room_type = 'or'`, { replacements: { id: req.params.id } });
+    if (!room) return res.status(404).json({ error: 'Theatre room not found' });
+    if (!BranchQueryFilter.canAccessRecord(room, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+      return res.status(403).json({ error: 'Access denied to this room' });
+    }
+    await TheatreService.setRoomReady(req.params.id);
+    await logAudit(req, { action: 'ROOM_MARKED_READY', entity_type: 'TheatreRoom', entity_id: req.params.id, description: 'Room marked ready after cleaning' });
+    res.json({ id: req.params.id, status: 'available' });
+  } catch (error) {
+    console.error('Error marking theatre room ready:', error);
+    res.status(statusFor(error, 500)).json({ error: error.message || 'Failed to mark room ready' });
   }
 });
 

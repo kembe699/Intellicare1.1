@@ -62,6 +62,11 @@ const APPROVAL_TYPES = {
     module: 'Billing',
     description: 'Refund an unused patient deposit balance back to the patient.',
   },
+  receipt_void_approve: {
+    label: 'Receipt Void/Refund Approval',
+    module: 'Billing',
+    description: 'Approve or reject a cashier\'s request to void or refund a receipt.',
+  },
   journal_entry_approve: {
     label: 'Journal Entry Approval',
     module: 'Financial',

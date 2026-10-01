@@ -20,6 +20,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState, StatusBadge } from '@/components/common';
 import { apiFetch } from '@/utils/accountingApi';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const ACTIVE_STATUS_MAP = { active: 'success', inactive: 'neutral' } as const;
 const ADJUSTMENT_STATUS_MAP = { realized: 'success', pending: 'warning' } as const;
@@ -57,6 +58,7 @@ interface ConversionLog {
 }
 
 const ExchangeRates: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -243,7 +245,7 @@ const ExchangeRates: React.FC = () => {
   };
 
   const deactivateCurrency = async (code: string) => {
-    if (!confirm(`Deactivate ${code}?`)) return;
+    if (!(await confirm({ description: `Deactivate ${code}?` }))) return;
     try {
       const res = await apiFetch(`/api/exchange-rates/currencies/${code}`, { method: 'DELETE' });
       if (res.ok) { toast.success(`${code} deactivated`); await loadCurrencies(); }
@@ -252,7 +254,7 @@ const ExchangeRates: React.FC = () => {
   };
 
   const setAsBaseCurrency = async (code: string) => {
-    if (!confirm(`Set ${code} as the base currency? This will change all exchange rate calculations.`)) return;
+    if (!(await confirm({ description: `Set ${code} as the base currency? This will change all exchange rate calculations.` }))) return;
     try {
       setSaving(true);
       const res = await apiFetch(`/api/exchange-rates/currencies/${code}`, {
@@ -290,7 +292,7 @@ const ExchangeRates: React.FC = () => {
   };
 
   const doRevalue = async () => {
-    if (!confirm('Revalue all foreign currency balances at current rates?')) return;
+    if (!(await confirm({ description: 'Revalue all foreign currency balances at current rates?' }))) return;
     try {
       setLoading(true);
       const res = await apiFetch('/api/exchange-rates/revalue', { method: 'POST', body: JSON.stringify({}) });
@@ -346,6 +348,7 @@ const ExchangeRates: React.FC = () => {
   // ─── Render ──────────────────────────────────────────────────
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full flex flex-col">
         <PageHeader

@@ -23,6 +23,7 @@ import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Sear
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface CoAAccount { id: string | number; account_code: string; account_name: string; account_type: string; current_balance?: number; balance?: number; }
 interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
@@ -39,6 +40,7 @@ const EXPENSE_CATEGORIES = ['Doctor Fees','Allowance','Office Supplies','Utiliti
 const PAYMENT_METHODS = ['Cash','Bank Transfer','Cheque','Mobile Money'];
 
 const DailyExpenses: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { fmt, currency } = useCurrency();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -176,7 +178,7 @@ const DailyExpenses: React.FC = () => {
   };
 
   const removeExpense = async (exp: DailyExpense) => {
-    if (!window.confirm(`Remove "${exp.description}" (${fmt(parseFloat(String(exp.amount || 0)))})? This cannot be undone.`)) return;
+    if (!(await confirm({ description: `Remove "${exp.description}" (${fmt(parseFloat(String(exp.amount || 0)))})? This cannot be undone.` }))) return;
     setBusyExpId(exp.id);
     try {
       const r = await authFetch(`/api/daily-expenses/${exp.id}`, { method: 'DELETE' });
@@ -844,6 +846,7 @@ const DailyExpenses: React.FC = () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader

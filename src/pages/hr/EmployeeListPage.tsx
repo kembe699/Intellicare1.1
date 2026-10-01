@@ -15,6 +15,7 @@ import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
 import { Users, Search, Eye, Edit, Ban, CheckCircle, Loader2, X, Check, FileSpreadsheet, Stethoscope, Percent } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 export interface Employee {
   id: string;
@@ -77,6 +78,7 @@ interface Props {
 }
 
 export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singularLabel, subtitle, profileBasePath }) => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { currency } = useCurrency();
   const navigate = useNavigate();
@@ -217,7 +219,7 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
   const toggleTermination = async (e: Employee) => {
     if (busyId === e.id) return;
     const terminating = e.employment_status !== 'terminated';
-    if (terminating && !confirm(`Terminate ${e.first_name} ${e.last_name}? Their salary structure stays on record, but payroll will no longer include them.`)) return;
+    if (terminating && !(await confirm({ description: `Terminate ${e.first_name} ${e.last_name}? Their salary structure stays on record, but payroll will no longer include them.`, destructive: true }))) return;
     setBusyId(e.id);
     try {
       const res = await authFetch(`/api/hr/employees/${e.id}/${terminating ? 'terminate' : 'reactivate'}`, { method: 'POST' });
@@ -324,6 +326,7 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader icon={employmentType === 'consultant' ? <Stethoscope /> : <Users />} title={title} subtitle={subtitle} />

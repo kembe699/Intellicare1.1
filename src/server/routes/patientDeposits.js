@@ -7,6 +7,8 @@ const { v4: uuidv4 } = require('uuid');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const { authorize } = require('../middleware/authorize');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
+const { postJournalEntry } = require('../services/JournalPostingService');
 
 const BASE_CURRENCY = 'SSP';
 // Same roles as BILLS_FINANCIAL_ACTION in patientBills.js — recording a payment/deposit
@@ -177,84 +179,63 @@ async function getDepositBalance(patientId, clinicId, currency = BASE_CURRENCY) 
 }
 
 // ─── GL posting (best-effort, mirrors patientBills.js:1324-1421) ─────────────
-async function resolveCashOrBankAccount(clinicId, method) {
+async function resolveCashOrBankAccount(clinicId, method, transaction) {
   if (method === 'cash') {
     // 1100 (Cash) first, matching patientBills.js's payment posting — a deposit
     // taken in cash lands in the same account a bill payment would.
     return await ChartOfAccounts.findOne({
-      where: { clinic_id: clinicId, account_code: '1100', is_active: true }
+      where: { clinic_id: clinicId, account_code: '1100', is_active: true }, transaction
     }) || await ChartOfAccounts.findOne({
-      where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: 'cash' } }
+      where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: 'cash' } }, transaction
     }) || await ChartOfAccounts.findOne({
       where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%hand%' } },
-      order: [['account_code', 'ASC']]
+      order: [['account_code', 'ASC']], transaction
     }) || await ChartOfAccounts.findOne({
       where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [Op.iLike]: '%cash%' } },
-      order: [['account_code', 'ASC']]
+      order: [['account_code', 'ASC']], transaction
     });
   }
   return await ChartOfAccounts.findOne({
     where: { clinic_id: clinicId, is_bank_account: true, is_active: true },
-    order: [['account_code', 'ASC']]
+    order: [['account_code', 'ASC']], transaction
   }) || await ChartOfAccounts.findOne({
-    where: { clinic_id: clinicId, account_type: 'asset', is_active: true },
+    where: { clinic_id: clinicId, account_type: 'asset', is_active: true }, transaction,
     order: [['account_code', 'ASC']]
   });
 }
 
-async function generateJENumber(clinicId) {
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, '0');
-  const lastJE = await JournalEntries.findOne({
-    where: { clinic_id: clinicId, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-    order: [['je_number', 'DESC']]
-  });
-  const seq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-  return `JE-${year}${month}-${String(seq).padStart(4, '0')}`;
+// N1: superseded — see DocumentNumberService.getNextDocumentNumber. Kept only
+// because invoices.js still imports the name; it now just delegates.
+async function generateJENumber(clinicId, transaction) {
+  return getNextDocumentNumber('JE', clinicId, transaction);
 }
 
 // direction: 'in' = deposit taken (Dr Cash/Bank, Cr 2150), 'out' = refund paid (Dr 2150, Cr Cash/Bank)
-async function postDepositGL({ clinicId, amount, method, direction, reference, description, userId }) {
-  try {
-    const cashOrBank = await resolveCashOrBankAccount(clinicId, (method || 'cash').toLowerCase());
-    const depositsHeld = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '2150', is_active: true } });
-    if (!cashOrBank || !depositsHeld) {
-      console.warn('Non-fatal: skipping deposit GL posting — missing account(s)', { cashOrBank: !!cashOrBank, depositsHeld: !!depositsHeld });
-      return;
-    }
-    const debitAccount = direction === 'in' ? cashOrBank : depositsHeld;
-    const creditAccount = direction === 'in' ? depositsHeld : cashOrBank;
-    const jeNumber = await generateJENumber(clinicId);
-    const today = new Date().toISOString().split('T')[0];
-
-    const t2 = await sequelize.transaction();
-    try {
-      const je = await JournalEntries.create({
-        clinic_id: clinicId, je_number: jeNumber, entry_date: today, description,
-        narration: reference, reference, transaction_currency: BASE_CURRENCY, base_currency: BASE_CURRENCY,
-        exchange_rate: 1.0, total_debit: amount, total_credit: amount, base_total_debit: amount, base_total_credit: amount,
-        status: 'posted', created_by: userId || 'system', posted_by: userId || 'system', posted_date: new Date(),
-      }, { transaction: t2 });
-
-      await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: debitAccount.id, debit_amount: amount, credit_amount: 0, base_debit_amount: amount, base_credit_amount: 0, description },
-        { je_id: je.id, account_id: creditAccount.id, debit_amount: 0, credit_amount: amount, base_debit_amount: 0, base_credit_amount: amount, description },
-      ], { transaction: t2 });
-
-      await AccountLedger.bulkCreate([
-        { clinic_id: clinicId, account_id: debitAccount.id, transaction_date: today, debit_amount: amount, credit_amount: 0, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-        { clinic_id: clinicId, account_id: creditAccount.id, transaction_date: today, debit_amount: 0, credit_amount: amount, reference_number: jeNumber, description, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-      ], { transaction: t2 });
-
-      await t2.commit();
-      console.log(`Deposit GL posted: ${jeNumber} (${debitAccount.account_name} / ${creditAccount.account_name})`);
-    } catch (jeErr) {
-      await t2.rollback();
-      console.warn('Non-fatal: failed to post deposit GL:', jeErr.message);
-    }
-  } catch (coaErr) {
-    console.warn('Non-fatal: deposit GL posting skipped:', coaErr.message);
+//
+// N2: REQUIRES the caller's own open transaction and throws on failure —
+// this used to open its own transaction, get called fire-and-forget (not
+// even awaited) AFTER the deposit/receipt had already committed, and swallow
+// every failure as "non-fatal". That is exactly how a deposit could be taken
+// with nothing posted to the ledger. Now the deposit and its GL entry commit
+// or roll back together, same as bill creation already does.
+async function postDepositGL({ clinicId, branchId, amount, currency, method, direction, reference, description, userId, transaction, entryDate }) {
+  const cashOrBank = await resolveCashOrBankAccount(clinicId, (method || 'cash').toLowerCase(), transaction);
+  const depositsHeld = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '2150', is_active: true }, transaction });
+  if (!cashOrBank || !depositsHeld) {
+    throw new Error(`Cannot post this deposit to the ledger — missing ${!cashOrBank ? 'a cash/bank' : ''}${!cashOrBank && !depositsHeld ? ' and ' : ''}${!depositsHeld ? 'the Patient Deposits Held (2150)' : ''} account. Set it up in Chart of Accounts first.`);
   }
+  const debitAccount = direction === 'in' ? cashOrBank : depositsHeld;
+  const creditAccount = direction === 'in' ? depositsHeld : cashOrBank;
+  const today = entryDate || new Date().toISOString().split('T')[0];
+
+  return postJournalEntry({
+    clinicId, branchId, transaction, entryDate: today, description, reference, currency,
+    lines: [
+      { accountId: debitAccount.id, debit: amount, description },
+      { accountId: creditAccount.id, credit: amount, description },
+    ],
+    userId,
+  });
 }
 
 async function requireOpenShift(req, res) {
@@ -337,13 +318,16 @@ router.post('/', authorize('deposits.write'), async (req, res) => {
       cashier_name: req.user?.displayName || 'System', cashier_id: req.user?.id || null,
     }, { transaction: t });
 
-    await t.commit();
-
-    postDepositGL({
-      clinicId, amount: amountNum, method: payment_method, direction: 'in',
+    // N2: same transaction as the deposit/receipt above — a posting failure
+    // (e.g. missing accounts) now rolls back the whole deposit instead of
+    // silently taking money with nothing reaching the ledger.
+    await postDepositGL({
+      clinicId, branchId, amount: amountNum, currency, method: payment_method, direction: 'in',
       reference: `RCP-${receiptId}`, description: `Patient deposit — ${patient_name || patient_id} (${receiptNumber})`,
-      userId: req.user?.id,
+      userId: req.user?.id, transaction: t,
     });
+
+    await t.commit();
 
     try {
       const rr = require('./reports');
@@ -408,13 +392,14 @@ router.post('/:patientId/refund', requireApprovalPermission('deposit_refund_appr
       cashier_name: req.user?.displayName || 'System', cashier_id: req.user?.id || null,
     }, { transaction: t });
 
-    await t.commit();
-
-    postDepositGL({
-      clinicId, amount: amountNum, method: payment_method, direction: 'out',
+    // N2: same transaction as the refund/receipt above.
+    await postDepositGL({
+      clinicId, branchId, amount: amountNum, currency, method: payment_method, direction: 'out',
       reference: `RCP-${receiptId}`, description: `Deposit refund — ${patient_name || patientId} (${receiptNumber})`,
-      userId: req.user?.id,
+      userId: req.user?.id, transaction: t,
     });
+
+    await t.commit();
 
     try {
       const rr = require('./reports');

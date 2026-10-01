@@ -5,9 +5,9 @@ const { authorize } = require('../middleware/authorize');
 // any role could call them, regardless of what the UI shows. Mirrors the roles
 // App.tsx allows on /accounting/cash-transfer, so the API enforces what the client already assumes.
 const router = express.Router();
-const { Op } = require('sequelize');
 const { LedgerAccount } = require('../models');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
+const { postJournalEntry } = require('../services/JournalPostingService');
 
 // Note: this file previously also defined a `postToChartOfAccounts` helper
 // that duplicated the POST / route's own inline posting logic below, with the
@@ -40,7 +40,7 @@ router.post('/', authorize('cash_transfers.write'), async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: from_account_id, to_account_id, amount' });
     }
 
-    const { ChartOfAccounts, AccountLedger, JournalEntries, JournalEntryLines, CashTransfer, sequelize } = require('../models');
+    const { ChartOfAccounts, AccountLedger, CashTransfer, sequelize } = require('../models');
 
     const [fromAccount, toAccount] = await Promise.all([
       ChartOfAccounts.findByPk(from_account_id),
@@ -85,16 +85,6 @@ router.post('/', authorize('cash_transfers.write'), async (req, res) => {
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'SSP';
 
-    // Generate JE number
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const lastJE = await JournalEntries.findOne({
-      where: { clinic_id, je_number: { [Op.like]: `JE-${year}${month}-%` } },
-      order: [['je_number', 'DESC']]
-    });
-    const seq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-    const jeNumber = `JE-${year}${month}-${String(seq).padStart(4, '0')}`;
-
     const t = await sequelize.transaction();
     try {
       // Record the transfer history. cash_transfers.created_by is an INT (the user's id),
@@ -113,40 +103,20 @@ router.post('/', authorize('cash_transfers.write'), async (req, res) => {
         branch_id: getCreateBranchId(req)
       }, { transaction: t });
 
-      // Create posted journal entry
+      // N2/N3: shared posting helper, same transaction as the transfer record above.
       const glBranchId = getCreateBranchId(req);
-      const je = await JournalEntries.create({
-        clinic_id,
-        je_number: jeNumber,
-        entry_date: today,
+      await postJournalEntry({
+        clinicId: clinic_id, branchId: glBranchId, transaction: t, entryDate: today, currency: baseCurrency,
         description: `Cash Transfer: ${fromAccount.account_name} → ${toAccount.account_name}`,
         narration: notes || 'Cash transfer',
         reference: `CT-${transfer.id}`,
-        transaction_currency: baseCurrency,
-        base_currency: baseCurrency,
-        exchange_rate: 1.0,
-        total_debit: amt,
-        total_credit: amt,
-        base_total_debit: amt,
-        base_total_credit: amt,
-        status: 'posted',
-        created_by: 'system',
-        posted_by: 'system',
-        posted_date: new Date(),
-        branch_id: glBranchId
-      }, { transaction: t });
-
-      // DEBIT destination, CREDIT source
-      await JournalEntryLines.bulkCreate([
-        { je_id: je.id, account_id: toAccount.id,   debit_amount: amt, credit_amount: 0,   base_debit_amount: amt, base_credit_amount: 0,   description: `Transfer from ${fromAccount.account_name}`, branch_id: glBranchId },
-        { je_id: je.id, account_id: fromAccount.id, debit_amount: 0,   credit_amount: amt, base_debit_amount: 0,   base_credit_amount: amt, description: `Transfer to ${toAccount.account_name}`,   branch_id: glBranchId }
-      ], { transaction: t });
-
-      // AccountLedger entries drive current_balance on Chart of Accounts page
-      await AccountLedger.bulkCreate([
-        { clinic_id, account_id: toAccount.id,   transaction_date: today, debit_amount: amt, credit_amount: 0,   reference_number: jeNumber, description: `Cash Transfer from ${fromAccount.account_name}`, is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId },
-        { clinic_id, account_id: fromAccount.id, transaction_date: today, debit_amount: 0,   credit_amount: amt, reference_number: jeNumber, description: `Cash Transfer to ${toAccount.account_name}`,   is_posted: true, posted_date: new Date(), source_module: 'cash_transfer', branch_id: glBranchId }
-      ], { transaction: t });
+        // DEBIT destination, CREDIT source
+        lines: [
+          { accountId: toAccount.id, debit: amt, description: `Transfer from ${fromAccount.account_name}` },
+          { accountId: fromAccount.id, credit: amt, description: `Transfer to ${toAccount.account_name}` },
+        ],
+        userId: 'system', sourceModule: 'cash_transfer',
+      });
 
       await t.commit();
 

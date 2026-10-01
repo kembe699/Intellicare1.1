@@ -113,6 +113,12 @@ async function buildTenantConnection(schemaName) {
   const { ensureInpatientDischargeOutcome } = require('./config/ensureInpatientDischargeOutcome');
   ensureInpatientDischargeOutcome(sequelize).catch(() => {});
 
+  // B5: widens receipts.status's CHECK constraint to allow pending_void/
+  // pending_refund — see ensureReceiptPendingVoidStatus.js and receipts.js's
+  // approval-gated void/refund flow.
+  const { ensureReceiptPendingVoidStatus } = require('./config/ensureReceiptPendingVoidStatus');
+  ensureReceiptPendingVoidStatus(sequelize).catch(() => {});
+
   // Database-level backstop against double-booking a bed — see
   // ensureInpatientBedUniqueness.js and the bed-claim comment in
   // routes/inpatient.js for why this didn't actually exist before.

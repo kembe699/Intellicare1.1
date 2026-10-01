@@ -85,6 +85,45 @@ Note the suite exercises schema and raw SQL, **not** the HTTP layer — the alia
 case-folding bug above passed every test while returning zeros, and was only
 caught by calling the endpoints. Sweep the routes too when changing reports.
 
+### Bootstrapping `tenant_template` from nothing (U6, CI)
+
+The instructions above assume `tenant_template` already exists and is
+populated — true for every environment that predates this repo's original
+MySQL→Postgres migration dump (`pgout/*.sql`, deleted from the repo for
+containing real secrets/PII, but its structure lives on in the schema every
+long-running deployment was seeded from). A genuinely empty database, like
+the one `.github/workflows/ci.yml` starts from, has no such history and
+needs the full sequence run once:
+
+```bash
+psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS tenant_template;"
+cd src/server
+node -e "require('./models').initializeDatabase()"   # ~30 Sequelize models
+node scripts/runAllMigrations.js                      # ~180 raw-SQL-only tables
+cd ..
+psql "$DATABASE_URL" -f scripts/create_test_schema.sql
+```
+
+Putting this sequence together for CI surfaced two real, previously-invisible
+bugs (both fixed): `CashierShift.cashier_id` was declared `UUID` with a
+foreign key to `users.id` (`INTEGER`) — Postgres can't create that, so
+`sequelize.sync()` threw and silently aborted every OTHER model's sync in the
+same call, which a database that already has all its tables would never
+attempt in the first place; and `migrateInsuranceClaims.js` checked
+`!countResult.cnt` where `cnt` is the string `"0"` (a Postgres `COUNT(*)`,
+returned as a string since it's a `BIGINT`) — `!"0"` is `false`, the opposite
+of the intended check, so it never added the column it existed to add on a
+database that didn't already have it another way.
+
+**Known gap, not fully closed by the two fixes above:** a full jest run
+against a database bootstrapped this way does not yet pass 100% clean — some
+tests (both pre-existing ones like `patientReferrals.test.js` and some from
+this review's own later phases) depend on schema state that this sequence
+doesn't yet fully reproduce. Chasing every remaining gap turned out to be a
+larger, separate project than "add CI" itself — tracked as follow-up work,
+not solved here. `ci.yml`'s test step is a real hard gate, not a soft one, so
+it will show these until that follow-up lands.
+
 ## A trap specific to this schema
 
 `lis_test_orders.clinic_id` is a **false cognate**: it holds the *consulting

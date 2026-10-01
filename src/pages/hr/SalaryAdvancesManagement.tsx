@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Wallet, Plus, Loader2, Check, HandCoins } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Advance {
   id: string; advance_number: string; employee_id: string; first_name: string; last_name: string; employee_number: string;
@@ -26,6 +27,7 @@ const STATUS_TONE: Record<string, StatusBadgeTone> = {
 const today = () => new Date().toISOString().split('T')[0];
 
 export default function SalaryAdvancesManagement() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const clinicId = user?.clinic || 1;
   const navigate = useNavigate();
@@ -118,7 +120,7 @@ export default function SalaryAdvancesManagement() {
   };
 
   const handleCancel = async (a: Advance) => {
-    if (!confirm(`Cancel advance ${a.advance_number}?`)) return;
+    if (!(await confirm({ description: `Cancel advance ${a.advance_number}?` }))) return;
     try {
       const res = await authFetch(`/api/hr/salary-advances/${a.id}/cancel`, { method: 'POST' });
       if (res.ok) { toast.success('Advance cancelled'); fetchAdvances(); }
@@ -159,6 +161,7 @@ export default function SalaryAdvancesManagement() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader

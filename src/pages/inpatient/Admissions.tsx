@@ -98,7 +98,7 @@ export default function Admissions() {
         const cRes = await authFetch('/api/hr/consultants/for-doctor-picker');
         if (cRes.ok) {
           const consultants = await cRes.json();
-          const usersById = new Map(allUsers.map((u: any) => [u.id, u]));
+          const usersById = new Map<string, any>(allUsers.map((u: any) => [u.id, u]));
           consultantDoctors = consultants.map((c: any) => {
             const linkedUser = c.user_id ? usersById.get(c.user_id) : null;
             if (linkedUser && !roleDoctors.some((d: any) => d.id === c.user_id)) {

@@ -12,6 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { toast } from 'sonner';
 import { CalendarDays, Plus, Loader2, Check, Search, X } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface LeaveRequest {
   id: string; employee_id: string; first_name: string; last_name: string; employee_number: string;
@@ -26,6 +27,7 @@ const STATUS_TONE: Record<string, StatusBadgeTone> = {
 const today = () => new Date().toISOString().split('T')[0];
 
 export default function LeaveManagement() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [tab, setTab] = useState('requests');
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -129,7 +131,7 @@ export default function LeaveManagement() {
   };
 
   const handleCancel = async (r: LeaveRequest) => {
-    if (!confirm(`Cancel this leave request for ${r.first_name} ${r.last_name}?`)) return;
+    if (!(await confirm({ description: `Cancel this leave request for ${r.first_name} ${r.last_name}?` }))) return;
     try {
       const res = await authFetch(`/api/hr/leave/requests/${r.id}/cancel`, { method: 'POST' });
       if (res.ok) { toast.success('Leave request cancelled'); fetchRequests(); }
@@ -155,6 +157,7 @@ export default function LeaveManagement() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader

@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Combobox } from '@/components/ui/combobox';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Clinic {
   id: string;
@@ -121,6 +122,7 @@ class ServicesApiClient {
 }
 
 const Clinics: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const clinicsApi = new ClinicsApiClient();
   const servicesApi = new ServicesApiClient();
@@ -254,7 +256,7 @@ const Clinics: React.FC = () => {
 
   const handleDelete = async (clinic: Clinic) => {
     if (deletingId) return;
-    if (!confirm(`Are you sure you want to delete "${clinic.name}"?`)) {
+    if (!(await confirm({ description: `Are you sure you want to delete "${clinic.name}"?`, destructive: true }))) {
       return;
     }
 
@@ -279,6 +281,7 @@ const Clinics: React.FC = () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full flex flex-col">
         <PageHeader

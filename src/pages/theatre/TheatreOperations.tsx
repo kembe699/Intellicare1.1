@@ -10,7 +10,7 @@ import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { CalendarClock, Plus } from 'lucide-react';
-import { TheatreOperation, STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE, patientName, formatDuration } from './theatreShared';
+import { TheatreOperation, TheatreRoom, STATUS_BADGE, ROOM_STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE, patientName, formatDuration } from './theatreShared';
 
 export default function TheatreOperations() {
   const navigate = useNavigate();
@@ -18,8 +18,10 @@ export default function TheatreOperations() {
   const canWrite = hasPrivilege('theatre.write');
 
   const [operations, setOperations] = useState<TheatreOperation[]>([]);
+  const [rooms, setRooms] = useState<TheatreRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [markingReady, setMarkingReady] = useState<string | null>(null);
 
   const fetchOperations = useCallback(async () => {
     setLoading(true);
@@ -33,7 +35,36 @@ export default function TheatreOperations() {
     }
   }, [statusFilter]);
 
+  const fetchRooms = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/theatre/rooms', { credentials: 'include' });
+      if (res.ok) setRooms(await res.json());
+    } catch { /* rooms panel is a convenience, not critical to the page */ }
+  }, []);
+
   useEffect(() => { fetchOperations(); }, [fetchOperations]);
+  useEffect(() => { fetchRooms(); }, [fetchRooms]);
+
+  // T4: the only way a room previously left "cleaning" (set automatically
+  // when an operation completes) was a manual database fix — this is the
+  // missing step, so a room doesn't stay blocked on the board indefinitely.
+  const markRoomReady = async (roomId: string) => {
+    setMarkingReady(roomId);
+    try {
+      const res = await authFetch(`/api/theatre/rooms/${roomId}/ready`, { method: 'POST', credentials: 'include' });
+      if (res.ok) {
+        toast.success('Room marked ready');
+        fetchRooms();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to mark room ready');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setMarkingReady(null);
+    }
+  };
 
   return (
     <AppLayout>
@@ -46,6 +77,27 @@ export default function TheatreOperations() {
             </Button>
           )}
         </div>
+
+        {rooms.length > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2.5">Theatre Rooms</p>
+              <div className="flex flex-wrap gap-2">
+                {rooms.map((room) => (
+                  <div key={room.id} className="flex items-center gap-2 border rounded-md px-3 py-1.5">
+                    <span className="text-sm font-medium">{room.name}</span>
+                    <Badge variant={ROOM_STATUS_BADGE[room.status]}>{room.status.replace('_', ' ')}</Badge>
+                    {canWrite && room.status === 'cleaning' && (
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={markingReady === room.id} onClick={() => markRoomReady(room.id)}>
+                        Mark Ready
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-4 flex flex-wrap items-end gap-3">

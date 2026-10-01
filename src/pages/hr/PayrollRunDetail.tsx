@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import * as docTemplate from '@/utils/documentTemplate';
 import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check, FileSpreadsheet, QrCode, Copy, Clock } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   draft: 'neutral',
@@ -26,6 +27,7 @@ const MONTHS = [
 ];
 
 export default function PayrollRunDetail() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -98,7 +100,7 @@ export default function PayrollRunDetail() {
 
   const handlePayAll = async () => {
     if (busy || !run) return;
-    if (!confirm(`Pay all ${unpaidCount} remaining employee(s) on ${run.run_number}? Each gets their own General Ledger entry and this cannot be undone.`)) return;
+    if (!(await confirm({ description: `Pay all ${unpaidCount} remaining employee(s) on ${run.run_number}? Each gets their own General Ledger entry and this cannot be undone.` }))) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/hr/payroll/runs/${run.id}/pay`, { method: 'POST' });
@@ -118,7 +120,7 @@ export default function PayrollRunDetail() {
   // QR dialog. This is the same immediate pay-and-post action as before.
   const handleManualPayLine = async (line: any) => {
     if (payingLineId || !run) return;
-    if (!confirm(`Pay ${line.first_name} ${line.last_name} — ${line.currency} ${parseFloat(line.net_pay).toFixed(2)} from ${run.payment_account_name}?`)) return;
+    if (!(await confirm({ description: `Pay ${line.first_name} ${line.last_name} — ${line.currency} ${parseFloat(line.net_pay).toFixed(2)} from ${run.payment_account_name}?` }))) return;
     setPayingLineId(line.id);
     try {
       const res = await authFetch(`/api/hr/payroll/runs/${run.id}/lines/${line.id}/pay`, { method: 'POST' });
@@ -236,7 +238,7 @@ export default function PayrollRunDetail() {
 
   const handleCancel = async () => {
     if (busy || !run) return;
-    if (!confirm(`Cancel draft ${run.run_number}?`)) return;
+    if (!(await confirm({ description: `Cancel draft ${run.run_number}?` }))) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/hr/payroll/runs/${run.id}/cancel`, { method: 'POST' });
@@ -329,6 +331,7 @@ export default function PayrollRunDetail() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)]">
         <div className="max-w-[1700px] mx-auto space-y-4">
           <PageHeader

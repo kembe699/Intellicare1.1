@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useReportsAccess } from '@/hooks/useReportsAccess';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
   Users, Package, Pill, FlaskConical,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
@@ -39,6 +40,7 @@ const REPORT_CATEGORIES = [
 ];
 
 export default function ReportsDashboard() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const navigate = useNavigate();
   const location = useLocation();
   const { exitReports } = useReportsAccess();
@@ -53,14 +55,15 @@ export default function ReportsDashboard() {
     location.pathname.includes(cat.id)
   );
 
-  const handleLogoutReports = () => {
-    if (window.confirm('Exit reports section?')) {
+  const handleLogoutReports = async () => {
+    if (await confirm({ description: 'Exit reports section?' })) {
       exitReports();
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-50 print:block">
+      {confirmDialog}
       {/* Sidebar */}
       <div className={`print:hidden ${sidebarOpen ? 'w-64' : 'w-[68px]'} bg-gradient-to-b from-[#3D8A97] via-[#2d6a75] to-[#1e4d57] text-white transition-all duration-300 flex flex-col flex-shrink-0`}>
         {/* Logo/Header */}

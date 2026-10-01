@@ -7,10 +7,11 @@ const { v4: uuidv4 } = require('uuid');
 const BillingIntegrationService = require('../services/BillingIntegrationService');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
-const { normalizeServices } = require('../utils/normalizeServices');
+const { normalizeServices, ensureLineIds } = require('../utils/normalizeServices');
 const AccountingService = require('../services/AccountingService');
 const { authorize } = require('../middleware/authorize');
 const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } = require('./patientDeposits');
+const { postJournalEntry } = require('../services/JournalPostingService');
 
 // Read access is intentionally broad — every clinical/financial-facing role needs to look
 // up a patient's bill (a doctor checking it's settled, pharmacy/lab billing against it,
@@ -592,7 +593,10 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     billData.balance_amount = (billData.total_amount || 0) - (billData.paid_amount || 0);
     
     // Apply scheme prices if patient has a scheme
-    let parsedServices = normalizeServices(billData.services);
+    // B1: every line gets a stable id here, before scheme pricing/merging/anything
+    // else touches it — see ensureLineIds's own docstring for why array position
+    // alone is not a safe way to identify "which line" later (void-item, payment).
+    let parsedServices = ensureLineIds(normalizeServices(billData.services));
 
     // Frontend already blocks a typed negative quantity, but that's bypassable
     // via a direct API call — a negative quantity/price produces a negative
@@ -693,7 +697,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
 
         let result, isNew;
         if (existingBill) {
-          const existingServices = normalizeServices(existingBill.services);
+          const existingServices = ensureLineIds(normalizeServices(existingBill.services));
           const mergedServices = [...existingServices, ...parsedServices];
           const newTotal = parseFloat(existingBill.total_amount) + parseFloat(billData.total_amount || 0);
           const paid = parseFloat(existingBill.paid_amount);
@@ -715,7 +719,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
           const mergedTotal = parseFloat(billData.total_amount || 0);
           if (mergedTotal > 0) {
             await AccountingService.createGLTopUpForPatientBill(
-              { id: result.id, clinic_id: result.clinic_id, scheme_id: result.scheme_id, bill_number: result.bill_number, patient_name: result.patient_name, bill_currency: billData.bill_currency },
+              { id: result.id, clinic_id: result.clinic_id, branch_id: result.branch_id, scheme_id: result.scheme_id, bill_number: result.bill_number, patient_name: result.patient_name, bill_currency: billData.bill_currency },
               parsedServices.filter(s => !s.isVoided),
               mergedTotal,
               billData.created_by,
@@ -908,7 +912,8 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     if (!billPeek) {
       return res.status(404).json({ error: 'Bill not found' });
     }
-    const schemeResult = await applySchemePrice(billPeek.patient_id, services, billPeek.scheme_id, req);
+    // B1: give every newly-added line a stable id, same as bill creation.
+    const schemeResult = await applySchemePrice(billPeek.patient_id, ensureLineIds(services), billPeek.scheme_id, req);
     let pricedServices = schemeResult.services;
 
     // Locking the row for the rest of this handler closes the "lost update" race: without
@@ -928,8 +933,10 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
       return res.status(403).json({ error: 'Access denied to this patient bill' });
     }
 
-    // Parse existing services
-    const existingServices = normalizeServices(bill.services);
+    // Parse existing services. ensureLineIds self-heals a bill created before
+    // B1 the moment it's next written to, same as normalizeServices already
+    // self-heals the old double-encoding bug on every write.
+    const existingServices = ensureLineIds(normalizeServices(bill.services));
 
     // A bill is either wholly cash or wholly scheme-priced — once created, later
     // additions inherit whatever mode the bill was created under (bill.scheme_id)
@@ -1002,7 +1009,7 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     if (newServicesTotal > 0) {
       try {
         await AccountingService.createGLTopUpForPatientBill(
-          { id: bill.id, clinic_id: bill.clinic_id, scheme_id: updatePayload.scheme_id ?? bill.scheme_id, bill_number: bill.bill_number, patient_name: bill.patient_name, bill_currency: updatePayload.bill_currency },
+          { id: bill.id, clinic_id: bill.clinic_id, branch_id: bill.branch_id, scheme_id: updatePayload.scheme_id ?? bill.scheme_id, bill_number: bill.bill_number, patient_name: bill.patient_name, bill_currency: updatePayload.bill_currency },
           pricedServices.filter(s => !s.isVoided),
           newServicesTotal,
           req.user?.displayName || req.user?.id,
@@ -1123,10 +1130,10 @@ router.put('/:billId', authorize('bills.financial_action'), async (req, res) => 
 router.post('/:billId/void-item', authorize('bills.financial_action'), async (req, res) => {
   try {
     const { billId } = req.params;
-    const { serviceIndex, reason } = req.body;
+    const { serviceIndex, lineId, reason } = req.body;
 
-    if (serviceIndex === undefined || serviceIndex === null || isNaN(parseInt(serviceIndex))) {
-      return res.status(400).json({ error: 'serviceIndex is required' });
+    if (!lineId && (serviceIndex === undefined || serviceIndex === null || isNaN(parseInt(serviceIndex)))) {
+      return res.status(400).json({ error: 'lineId (or serviceIndex) is required' });
     }
 
     const bill = await PatientBill.findByPk(billId);
@@ -1137,9 +1144,15 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
       return res.status(403).json({ error: 'Access denied to this patient bill' });
     }
 
-    const services = normalizeServices(bill.services);
-    const index = parseInt(serviceIndex);
-    const item = services[index];
+    // B1: lineId identifies the exact line the user clicked, immune to the
+    // array shifting underneath it (another void's splice, a concurrent
+    // add-services) between when the page fetched this bill and when this
+    // request lands. serviceIndex (array position) is kept only for older
+    // frontend builds and bills whose lines predate B1 and have no id yet —
+    // ensureLineIds heals those the moment this write happens.
+    const services = ensureLineIds(normalizeServices(bill.services));
+    const index = lineId ? services.findIndex((s) => s.line_id === lineId) : parseInt(serviceIndex);
+    const item = index >= 0 ? services[index] : undefined;
     if (!item) {
       return res.status(404).json({ error: 'Line item not found on this bill' });
     }
@@ -1269,13 +1282,35 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
             }
           }
 
+          // C5: post in the bill's own currency, at the ORIGINAL bill's rate —
+          // this used to omit transaction_currency entirely, so createGLEntry
+          // defaulted to base currency and posted the raw foreign-currency
+          // voidedAmount (item.totalPrice is priced in bill_currency, same as
+          // every other line on this bill) as if it were that many base-currency
+          // units. The original bill-creation entry (AccountingService.
+          // createGLFromPatientBill, reference_module 'patient_billing') is the
+          // source of truth for what rate was actually used.
+          const { GeneralLedger: GLForVoid } = require('../models');
+          const originalBillGL = await GLForVoid.findOne({
+            where: { clinic_id: clinicIdForVoid, reference_id: billId, reference_module: 'patient_billing' },
+            order: [['created_at', 'ASC']],
+          });
+          const voidCurrency = bill.bill_currency || originalBillGL?.transaction_currency;
+          const voidRate = originalBillGL ? parseFloat(originalBillGL.exchange_rate) : undefined;
+
           const glEntry = await AccountingService.createGLEntry({
             clinic_id: clinicIdForVoid,
+            // B7: without this, a voided item's reversal posted with no
+            // branch_id at all — a branch-scoped income statement would show
+            // the original revenue but never see it reversed.
+            branch_id: bill.branch_id || getCreateBranchId(req),
             transaction_date: new Date().toISOString().split('T')[0],
             transaction_type: 'bill_item_void',
             description: `Voided item on ${bill.bill_number}`,
             reference_id: billId,
             reference_module: 'bill_item_void',
+            transaction_currency: voidCurrency,
+            exchange_rate: voidRate,
           }, lineItems, req.user?.id || 'system');
           await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
         } else {
@@ -1497,7 +1532,66 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     // normalizeServices() — even when paidServiceIndexes is empty — so every payment
     // self-heals any pre-existing multi-encoded services on this bill instead of just
     // passing the raw (possibly still-corrupted) value straight back through.
-    let updatedServices = normalizeServices(currentBill.services);
+    let updatedServices = ensureLineIds(normalizeServices(currentBill.services));
+
+    // B1: paidLineIds/partialLineSplit.lineId identify lines by their stable id
+    // rather than array position — the page that built this request fetched the
+    // bill, and possibly rendered it, before this handler took the row lock
+    // above; if another request voided or added a line on this same bill in
+    // that window, "index 3" from that stale fetch may no longer be the line
+    // the user actually selected. Resolving by id against updatedServices (read
+    // just now, under the lock) and rewriting paymentData in place means every
+    // index-based branch below — including the receipt/response building
+    // further down — keeps working unchanged, now pointed at the right line
+    // regardless of what shifted underneath it. Falls back to whatever index
+    // was sent when no id is present (older frontend builds, or a bill whose
+    // lines had no id before this request healed them).
+    if (paymentData.paidLineIds && paymentData.paidLineIds.length > 0) {
+      paymentData.paidServiceIndexes = paymentData.paidLineIds
+        .map((id) => updatedServices.findIndex((s) => s.line_id === id))
+        .filter((idx) => idx >= 0);
+    }
+    if (paymentData.partialLineSplit && paymentData.partialLineSplit.lineId) {
+      const resolvedIdx = updatedServices.findIndex((s) => s.line_id === paymentData.partialLineSplit.lineId);
+      if (resolvedIdx >= 0) paymentData.partialLineSplit.index = resolvedIdx;
+    }
+
+    // B8: paidServiceIndexes used to be trusted blindly — every listed index got
+    // flipped to paid:true no matter what paymentAmountNum actually was, so a
+    // request paying 100 while listing three lines worth 50,000 would mark all
+    // three fully settled, permanently misrepresenting what was actually
+    // collected against them (the bill's own total_amount/balance_amount stay
+    // correct either way, since those come from paymentAmountNum directly, but
+    // the per-line paid flags — what the receipt and "still payable" filters
+    // read — would be wrong). The frontend already computes this same check
+    // before sending (selectedTotal vs amount in BillDetails.tsx/PatientsBill
+    // .tsx); this is the server no longer trusting that a client did.
+    if (paymentData.paidServiceIndexes && paymentData.paidServiceIndexes.length > 0) {
+      let selectedTotal = 0;
+      for (const indexStr of paymentData.paidServiceIndexes) {
+        const line = updatedServices[parseInt(indexStr, 10)];
+        if (!line) {
+          await t.rollback();
+          return res.status(400).json({ error: `paidServiceIndexes references a line that doesn't exist on this bill (index ${indexStr}).` });
+        }
+        if (line.isVoided) {
+          await t.rollback();
+          return res.status(400).json({ error: `Cannot pay "${line.serviceName || line.name || 'a line'}" — it has been voided.` });
+        }
+        if (line.paid) {
+          await t.rollback();
+          return res.status(400).json({ error: `"${line.serviceName || line.name || 'A line'}" is already fully paid.` });
+        }
+        selectedTotal += parseFloat(line.totalPrice) || 0;
+      }
+      if (paymentAmountNum < selectedTotal - 0.01) {
+        await t.rollback();
+        return res.status(400).json({
+          error: `This payment (${paymentAmountNum}) doesn't cover everything selected (${selectedTotal}). Select fewer items, or pay the full amount for everything checked.`,
+        });
+      }
+    }
+
     // A payment that only covers part of one specific line (e.g. 20,000 of a 520,000,
     // 26-day bed charge) splits that line into a paid portion sized to what was actually
     // collected + a still-open remainder for the rest — instead of the old behavior of
@@ -1610,27 +1704,42 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
       notes: paymentData.notes,
       from_lease: paymentData.from_lease || false,
       lease_details: paymentData.lease_details,
-      cashier_name: req.body.cashierName || req.body.cashier_name || 'System',
-      cashier_id: req.body.cashierId || req.body.cashier_id || null,
+      // B4: cashier attribution comes from the AUTHENTICATED session (req.user,
+      // already verified above against an open CashierShift), never from the
+      // request body — a client-supplied cashierId/cashierName let anyone
+      // recording a payment attribute it to a different cashier than whoever
+      // actually holds the open shift and typed it in, breaking reconciliation
+      // and audit trail for the person it was actually attributed to.
+      cashier_name: req.user?.displayName || req.user?.email || 'System',
+      cashier_id: userId,
       status: 'active'
     };
     
     await Receipt.create(receiptData, { transaction: t });
 
-    // Commits the locked bill update + receipt together, releasing the row lock so the
-    // next queued payment (if any) can proceed. Everything after this point (GL posting,
-    // receivables sync, audit log) is already-established best-effort/non-blocking side
-    // effects that read the now-committed bill state.
-    await t.commit();
-
-    // Post payment to Chart of Accounts (AccountLedger) so balances stay accurate
-    try {
-      const { ChartOfAccounts, AccountLedger, JournalEntries, JournalEntryLines, sequelize: seq } = require('../models');
+    // N2: the payment's GL posting now happens BEFORE this commit, in the
+    // SAME transaction as the bill update + receipt — it used to run after
+    // this commit, in its own separate transaction, fire-and-forget-adjacent
+    // and swallowed as "non-fatal" on failure. That is exactly how a payment
+    // could be taken with the cashier's screen showing success while nothing
+    // reached the ledger (see the comment further down — this happened for
+    // real, 150 receipts once). A posting failure now fails the whole
+    // payment instead.
+    {
+      const { ChartOfAccounts } = require('../models');
       const { Op: COAOp } = require('sequelize');
       const payAmt = parseFloat(paymentData.amount || 0);
       if (payAmt > 0) {
         const clinicId = currentBill.clinic_id || 1;
-        const today = new Date().toISOString().split('T')[0];
+        // B6: post on the payment's OWN date, not the server's "now" — this used
+        // to always post as of today regardless of what payment_date the cashier
+        // actually entered (a backdated end-of-day reconciliation, or a payment
+        // taken just after local midnight when the server's UTC clock still
+        // reads the previous day), so the ledger's date disagreed with the
+        // receipt's own printed date and could land revenue in the wrong
+        // accounting period. payment_date is already validated as required
+        // above and is what the receipt itself is dated with (line ~1660).
+        const today = String(paymentData.payment_date).split('T')[0];
 
         // Choose debit account based on payment method
         let debitAccount = null;
@@ -1653,22 +1762,22 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
           // below is not: a clinic can rename "Cash" without this silently
           // drifting back to whatever sorts first.
           debitAccount = await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_code: '1100', is_active: true }
+            where: { clinic_id: clinicId, account_code: '1100', is_active: true }, transaction: t
           }) || await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: 'cash' } }
+            where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: 'cash' } }, transaction: t
           }) || await ChartOfAccounts.findOne({
             // Falls back toward cash-in-hand, then to sort order, only if there is
             // no account that reads as plain "Cash" at all.
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%hand%' } },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           }) || await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true, account_name: { [COAOp.iLike]: '%cash%' } },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           });
         } else if (method === 'card') {
           debitAccount = await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, is_bank_account: true, is_active: true },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           });
         } else if (method === 'deposit') {
           // No new cash is coming in right now — it already came in when the deposit was
@@ -1676,16 +1785,16 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
           // reduces "Patient Deposits Held" as this bill's receivable clears, same credit
           // side (1200 AR) as every other payment method below.
           debitAccount = await ChartOfAccounts.findOne({
-            where: { clinic_id: clinicId, account_code: '2150', is_active: true }
+            where: { clinic_id: clinicId, account_code: '2150', is_active: true }, transaction: t
           });
         } else {
           // mobile_money / bank_transfer / insurance — post to main bank or cash
           debitAccount = await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, is_bank_account: true, is_active: true },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           }) || await ChartOfAccounts.findOne({
             where: { clinic_id: clinicId, account_type: 'asset', is_active: true },
-            order: [['account_code', 'ASC']]
+            order: [['account_code', 'ASC']], transaction: t
           });
         }
 
@@ -1694,121 +1803,123 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         // AccountingService.createGLFromPatientBill), 1200 Accounts Receivable otherwise.
         const receivableCode = currentBill.scheme_id ? '1210' : '1200';
         const creditAccount = await ChartOfAccounts.findOne({
-          where: { clinic_id: clinicId, account_code: receivableCode, is_active: true }
+          where: { clinic_id: clinicId, account_code: receivableCode, is_active: true }, transaction: t
         }) || await ChartOfAccounts.findOne({
-          where: { clinic_id: clinicId, account_code: '1200', is_active: true }
+          where: { clinic_id: clinicId, account_code: '1200', is_active: true }, transaction: t
         }) || await ChartOfAccounts.findOne({
           where: { clinic_id: clinicId, account_type: 'asset', account_name: { [COAOp.iLike]: '%receivable%' }, is_active: true },
-          order: [['account_code', 'ASC']]
+          order: [['account_code', 'ASC']], transaction: t
         });
 
         if (!debitAccount || !creditAccount) {
-          // Do not fall through quietly. This block is best-effort inside a
-          // try/catch, so an unresolved account used to mean the payment cleared
-          // no receivable and reached no cash account while the cashier's screen
-          // showed the money — 150 receipts went that way once and were only
-          // found by totals disagreeing weeks later.
+          // N2: this used to log an audit trail and let the payment through
+          // anyway ("non-fatal") — that is exactly how a payment could be
+          // taken with the cashier's screen showing success while nothing
+          // reached the ledger (this happened for real: 150 receipts once,
+          // found only when totals disagreed weeks later). Now it fails the
+          // whole payment instead, rolling back the receipt and bill update
+          // together with it.
           const missing = [
             !debitAccount && `no account to debit for a ${method} payment`,
             !creditAccount && `no receivable account (${receivableCode}) to credit`,
           ].filter(Boolean).join('; ');
-          console.error(`Payment on bill ${currentBill.bill_number}: not posted to the ledger — ${missing}`);
-          const rr = require('./reports');
-          await rr.logAudit({
-            req,
-            module: 'Billing',
-            action: 'PAYMENT_POSTING_FAILED',
-            entity_type: 'PatientBill',
-            entity_id: currentBill.id,
-            description: `Payment of ${paymentData.amount} on bill ${currentBill.bill_number} was recorded but did not reach the ledger — ${missing}. The receipt exists and the cash was taken; the accounts need this posting added.`,
-            new_values: { bill_number: currentBill.bill_number, amount: paymentData.amount, method, reason: missing },
-            status: 'failure',
-          }).catch(() => {});
+          throw new Error(`Cannot post this payment to the ledger — ${missing}. Set up the missing account in Chart of Accounts first.`);
         }
 
-        if (debitAccount && creditAccount) {
-          // Generate JE number
-          const year = new Date().getFullYear();
-          const month = String(new Date().getMonth() + 1).padStart(2, '0');
-          const lastJE = await JournalEntries.findOne({
-            where: { clinic_id: clinicId, je_number: { [COAOp.like]: `JE-${year}${month}-%` } },
-            order: [['je_number', 'DESC']]
+        // Scheme-priced bills (e.g. insurance schemes billing in USD) carry their
+        // own currency on bill_currency — postJournalEntry converts to base
+        // currency the same way AccountingService.createGLEntry does, and throws
+        // (failing this whole payment, per N2) rather than silently posting 1:1
+        // if no exchange rate exists for billCurrency on this date.
+        const billCurrency = currentBill.bill_currency || undefined;
+        const { code: baseCurrencyCode } = await require('../services/CurrencyService').getBaseCurrency();
+
+        if (billCurrency && billCurrency !== baseCurrencyCode) {
+          // C3: the receivable this payment is clearing was booked (at bill
+          // creation, in AccountingService.createGLFromPatientBill) at whatever
+          // exchange rate applied on the bill date. Cash collected now is almost
+          // never converted at that same rate — re-converting payAmt at TODAY's
+          // rate and crediting the receivable for that number (what
+          // postJournalEntry would do) leaves a residue on 1200/1210 for this
+          // bill even once it is fully paid off in bill_currency terms. Instead:
+          // clear the receivable for exactly the ORIGINAL booked base-currency
+          // share (so it nets to zero), convert the actual cash received at
+          // today's rate, and post the difference as a realized FX gain/loss to
+          // account 5610 — the same mechanism already used for supplier-bill FX
+          // settlement in daily-expenses.js.
+          const { GeneralLedger: GLForBooking } = require('../models');
+          const originalBillGL = await GLForBooking.findOne({
+            where: { clinic_id: clinicId, reference_id: billId, reference_module: 'patient_billing' },
+            order: [['created_at', 'ASC']],
+            transaction: t,
           });
-          const jeSeq = lastJE ? parseInt(lastJE.je_number.split('-').pop()) + 1 : 1;
-          const jeNumber = `JE-${year}${month}-${String(jeSeq).padStart(4, '0')}`;
-
-          // Scheme-priced bills (e.g. insurance schemes billing in USD) carry their own
-          // currency on bill_currency. This JE is built by hand (not via
-          // AccountingService.createGLEntry), so unlike the bill-creation/discount/
-          // write-off/credit-note/claim-payment paths, nothing converts payAmt to base
-          // currency unless it's done explicitly here — previously this posted the raw
-          // foreign-currency number straight into the SSP ledger unconverted.
-          let baseCurrencyCode = 'SSP';
-          try {
-            const [baseCurrencyRows] = await seq.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
-            if (baseCurrencyRows[0]?.code) baseCurrencyCode = baseCurrencyRows[0].code;
-          } catch (baseCurrErr) { /* fall back to SSP */ }
-          const billCurrency = currentBill.bill_currency || baseCurrencyCode;
-          let rateNow = 1.0;
-          if (billCurrency !== baseCurrencyCode) {
-            try {
-              rateNow = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrencyCode, today);
-            } catch (rateErr) {
-              console.warn(`No ${billCurrency}->${baseCurrencyCode} rate for ${today}, posting payment at 1:1 — ledger will be understated:`, rateErr.message);
-            }
+          if (!originalBillGL || !originalBillGL.exchange_rate) {
+            throw new Error(`Cannot post this ${billCurrency} payment — no original billing GL entry with an exchange rate was found for bill ${billId}.`);
           }
-          const baseAmt = AccountingService.convertAmount(payAmt, rateNow);
 
-          const t2 = await seq.transaction();
-          try {
-            const je = await JournalEntries.create({
-              clinic_id: clinicId,
-              je_number: jeNumber,
-              entry_date: today,
-              description: `Payment: Bill ${billId} (${method})`,
-              narration: `Receipt ${receiptNumber}`,
-              reference: `RCP-${receiptId}`,
-              transaction_currency: billCurrency,
-              base_currency: baseCurrencyCode,
-              exchange_rate: rateNow,
-              total_debit: payAmt,
-              total_credit: payAmt,
-              base_total_debit: baseAmt,
-              base_total_credit: baseAmt,
-              status: 'posted',
-              created_by: userId || 'system',
-              posted_by: userId || 'system',
-              posted_date: new Date()
-            }, { transaction: t2 });
+          const bookedRate = parseFloat(originalBillGL.exchange_rate);
+          const totalBillAmount = parseFloat(currentBill.total_amount) || payAmt;
+          const bookedBase = parseFloat(originalBillGL.base_total_debit) || AccountingService.convertAmount(totalBillAmount, bookedRate);
+          const bookedShare = totalBillAmount > 0
+            ? Math.round(bookedBase * (payAmt / totalBillAmount) * 100) / 100
+            : AccountingService.convertAmount(payAmt, bookedRate);
 
+          const todaysRate = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrencyCode, today);
+          const paymentBaseAmount = AccountingService.convertAmount(payAmt, todaysRate);
+          const fxDelta = Math.round((paymentBaseAmount - bookedShare) * 100) / 100; // >0 gain, <0 loss
+
+          const lineItems = [
+            { account_id: debitAccount.id, debit_amount: paymentBaseAmount, credit_amount: 0, description: `Payment received (${method}) — ${billCurrency} ${payAmt} @ ${todaysRate}` },
+            { account_id: creditAccount.id, debit_amount: 0, credit_amount: bookedShare, description: `Receivable cleared - bill ${billId} (booked @ ${bookedRate})` },
+          ];
+          if (Math.abs(fxDelta) > 0.01) {
+            const fxAccount = await ChartOfAccounts.findOne({ where: { clinic_id: clinicId, account_code: '5610', is_active: true }, transaction: t });
+            if (!fxAccount) {
+              throw new Error(`Cannot post this payment — a realized FX ${fxDelta > 0 ? 'gain' : 'loss'} of ${Math.abs(fxDelta)} ${baseCurrencyCode} has no home (account 5610, Foreign Exchange Gain/Loss, not found for this clinic). Set it up in Chart of Accounts first.`);
+            }
+            lineItems.push(fxDelta > 0
+              ? { account_id: fxAccount.id, debit_amount: 0, credit_amount: fxDelta, description: `FX gain — bill ${billId} payment` }
+              : { account_id: fxAccount.id, debit_amount: -fxDelta, credit_amount: 0, description: `FX loss — bill ${billId} payment` });
+          }
+
+          // transaction_currency is intentionally left unset (defaults to base
+          // currency, rate 1.0) — every line above is already a base-currency
+          // amount, so no further conversion should happen.
+          await AccountingService.createGLEntry({
+            clinic_id: clinicId,
+            branch_id: currentBill.branch_id || getCreateBranchId(req), // B7
+            transaction_date: today,
+            transaction_type: 'patient_bill_payment',
+            description: `Payment: Bill ${billId} (${method})`,
+            reference_id: String(billId),
+            reference_module: 'patient_bill_payment',
+          }, lineItems, userId, t);
+        } else {
+          await postJournalEntry({
+            clinicId, branchId: currentBill.branch_id || getCreateBranchId(req), transaction: t,
+            entryDate: today, currency: billCurrency,
+            description: `Payment: Bill ${billId} (${method})`,
+            narration: `Receipt ${receiptNumber}`,
+            reference: `RCP-${receiptId}`,
             // Revenue was already recognized when the bill was created (Dr Receivable /
             // Cr Revenue, in AccountingService.createGLFromPatientBill) — this entry only
             // clears that receivable as cash/bank comes in, it doesn't book new revenue.
-            // Labeling the credit line "Revenue from bill X" mislabeled what the account
-            // activity actually shows for anyone reading the ledger.
-            await JournalEntryLines.bulkCreate([
-              { je_id: je.id, account_id: debitAccount.id,  debit_amount: payAmt, credit_amount: 0,      base_debit_amount: baseAmt, base_credit_amount: 0,      description: `Payment received (${method})` },
-              { je_id: je.id, account_id: creditAccount.id, debit_amount: 0,      credit_amount: payAmt, base_debit_amount: 0,      base_credit_amount: baseAmt, description: `Receivable cleared - bill ${billId}` }
-            ], { transaction: t2 });
-
-            // AccountLedger (what General Ledger/trial balance reports read from) is
-            // always base-currency — must use baseAmt here, never the raw payAmt.
-            await AccountLedger.bulkCreate([
-              { clinic_id: clinicId, account_id: debitAccount.id,  transaction_date: today, debit_amount: baseAmt, credit_amount: 0,      reference_number: jeNumber, description: `Payment received (${method}) - ${receiptNumber}`, is_posted: true, posted_date: new Date(), source_module: 'billing' },
-              { clinic_id: clinicId, account_id: creditAccount.id, transaction_date: today, debit_amount: 0,      credit_amount: baseAmt, reference_number: jeNumber, description: `Receivable cleared - bill ${billId} - ${receiptNumber}`,    is_posted: true, posted_date: new Date(), source_module: 'billing' }
-            ], { transaction: t2 });
-
-            await t2.commit();
-            console.log(`Payment posted to Chart of Accounts: ${jeNumber} (${debitAccount.account_name} / ${creditAccount.account_name})`);
-          } catch (jeErr) {
-            await t2.rollback();
-            console.warn('Non-fatal: failed to post payment to CoA:', jeErr.message);
-          }
+            lines: [
+              { accountId: debitAccount.id, debit: payAmt, description: `Payment received (${method})` },
+              { accountId: creditAccount.id, credit: payAmt, description: `Receivable cleared - bill ${billId}` },
+            ],
+            userId,
+          });
         }
       }
-    } catch (coaErr) {
-      console.warn('Non-fatal: CoA payment posting skipped:', coaErr.message);
     }
+
+    // Commits the locked bill update + receipt + payment GL entry together,
+    // releasing the row lock so the next queued payment (if any) can
+    // proceed. Everything after this point (receivables sync, audit log,
+    // dispensing) is already-established best-effort/non-blocking side
+    // effects that read the now-committed bill state.
+    await t.commit();
 
     // Sync the receivables ledger row for this bill so aging/receivables reports reflect the payment.
     try {
@@ -1836,7 +1947,7 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     try {
       const rr = require('./reports');
       await rr.logAudit({ req,
-        clinic_id: updatedBill?.clinic_id, user_id: req.body.cashierId || req.user?.id, user_name: req.body.cashierName || req.user?.displayName, user_role: req.user?.role,
+        clinic_id: updatedBill?.clinic_id, user_id: userId, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
         module: 'Billing', action: 'PAYMENT_RECORDED', entity_type: 'PatientBill', entity_id: billId,
         description: `Payment of ${paymentData.amount} (${paymentData.payment_method}) recorded on bill ${updatedBill?.bill_number} — receipt ${receiptNumber}`,
         new_values: { amount: paymentData.amount, method: paymentData.payment_method, receipt_number: receiptNumber },
@@ -1907,8 +2018,8 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         notes: paymentData.notes,
         from_lease: paymentData.from_lease,
         lease_details: paymentData.lease_details,
-        cashier_name: paymentData.cashier_name,
-        cashier_id: paymentData.cashier_id,
+        cashier_name: req.user?.displayName || req.user?.email || 'System',
+        cashier_id: userId,
         paid_services: paymentData.partialLineSplit ? [paymentData.partialLineSplit.index] : (paymentData.paidServiceIndexes || []),
         service_details: serviceDetails
       }

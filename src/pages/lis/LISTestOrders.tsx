@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -61,6 +62,7 @@ const EMPTY_QUICK_REGISTER = { full_name: '', age_years: '', age_months: '', gen
 const DPOC_TENANT = 'dpoc';
 
 export default function LISTestOrders() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user, hasPrivilege } = useAuth();
   const navigate = useNavigate();
   const facilityInfo = useFacilityInfo();
@@ -582,7 +584,7 @@ export default function LISTestOrders() {
 
   const handleCloseVisit = async () => {
     if (!selectedSummary) return;
-    if (!confirm('Close this visit? This marks the encounter as complete.')) return;
+    if (!(await confirm({ description: 'Close this visit? This marks the encounter as complete.' }))) return;
     setClosingVisit(true);
     try {
       const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/close`, { method: 'PUT', credentials: 'include' });
@@ -1799,6 +1801,7 @@ export default function LISTestOrders() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="w-full h-[calc(100vh-64px)] flex flex-col">
         <div className="flex justify-between items-start">

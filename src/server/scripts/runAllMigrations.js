@@ -8,6 +8,7 @@
 
 async function main() {
   const steps = [
+    ['DocumentNumberCounters', () => require('./migrateDocumentNumberCounters').migrateDocumentNumberCounters()],
     ['Accounting',        () => require('./migrateAccountingTables').setupAccountingModule()],
     ['CashTransfers',     () => require('./migrateCashTransfers').migrateCashTransfers()],
     ['Procurement',       () => require('./migrateProcurementTables').migrateProcurementTables()],
