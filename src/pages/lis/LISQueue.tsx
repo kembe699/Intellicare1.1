@@ -107,13 +107,13 @@ export default function LISQueue() {
   // Deliberately NOT wrapped in AppLayout — this page is a waiting-room TV
   // display, not a staff admin screen, so the sidebar/topbar chrome would
   // only waste space and distract from what matters at a glance: who's
-  // being called and how long the line is. The `dark` class scopes the
-  // app's own dark-theme CSS variables (index.css's `.dark` block) to this
-  // subtree, so every shared component below (Card, AdvancedDataTable,
-  // badges) renders in the app's existing dark palette automatically —
-  // same design system, not a one-off custom theme.
+  // being called and how long the line is. Stays on the app's normal light
+  // theme (not `.dark`) — every shared component below (Card,
+  // AdvancedDataTable, badges) already uses the same design-system tokens,
+  // so this is still the same look as the rest of the app, just without the
+  // nav chrome.
   return (
-    <div className="dark min-h-screen bg-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="flex items-center justify-between gap-4 px-6 lg:px-10 py-4 border-b border-border bg-card/60 backdrop-blur shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
@@ -228,7 +228,7 @@ export default function LISQueue() {
                 {
                   key: 'created_at', header: 'Wait Time', align: 'right',
                   render: (v) => (
-                    <div className="inline-flex items-center gap-1.5 font-mono text-sm text-amber-400 font-medium">
+                    <div className="inline-flex items-center gap-1.5 font-mono text-sm text-amber-600 font-medium">
                       <Clock className="w-3.5 h-3.5 opacity-70" />
                       {formatWaitTime(v)}
                     </div>
