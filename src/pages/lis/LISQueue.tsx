@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Clock, ArrowRight, Volume2, VolumeX, MonitorPlay } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Clock, ArrowRight, Volume2, VolumeX, MonitorPlay, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeader } from '@/components/common';
 import { authFetch } from '@/api/apiClient';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 
 // Custom format timer
 const formatWaitTime = (createdAt: string) => {
@@ -16,6 +16,8 @@ const formatWaitTime = (createdAt: string) => {
 };
 
 export default function LISQueue() {
+  const navigate = useNavigate();
+  const facilityInfo = useFacilityInfo();
   const [queue, setQueue] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -44,28 +46,28 @@ export default function LISQueue() {
         const lastUpdated = calledOrdersRef.current.get(p.order_id);
         if (lastUpdated !== p.updated_at) {
           calledOrdersRef.current.set(p.order_id, p.updated_at);
-          
+
           // Trigger announcement if audio is enabled and it's not the initial page load
-        if (audioEnabled && !isFirstLoadRef.current) {
-          window.speechSynthesis.cancel(); // Clear any stuck utterances
-          const doctorStr = p.doctor_name ? `Doctor ${p.doctor_name}` : 'the General Laboratory';
-          let announcement = '';
-          if (p.room_number && p.doctor_name) {
-            announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${p.room_number} to see Doctor ${p.doctor_name}.`;
-          } else if (p.room_number) {
-            announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${p.room_number}.`;
-          } else {
-            announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${doctorStr}.`;
+          if (audioEnabled && !isFirstLoadRef.current) {
+            window.speechSynthesis.cancel(); // Clear any stuck utterances
+            const doctorStr = p.doctor_name ? `Doctor ${p.doctor_name}` : 'the General Laboratory';
+            let announcement = '';
+            if (p.room_number && p.doctor_name) {
+              announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${p.room_number} to see Doctor ${p.doctor_name}.`;
+            } else if (p.room_number) {
+              announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${p.room_number}.`;
+            } else {
+              announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${doctorStr}.`;
+            }
+            const utterance = new SpeechSynthesisUtterance(announcement);
+            utterance.rate = 0.85;
+            utterance.pitch = 1;
+            window.speechSynthesis.speak(utterance);
           }
-          const utterance = new SpeechSynthesisUtterance(announcement);
-          utterance.rate = 0.85;
-          utterance.pitch = 1;
-          window.speechSynthesis.speak(utterance);
-        }
         }
       }
     });
-    
+
     // Mark first load as complete after the first pass
     if (isFirstLoadRef.current) {
       isFirstLoadRef.current = false;
@@ -85,11 +87,11 @@ export default function LISQueue() {
   const toggleAudio = () => {
     const nextState = !audioEnabled;
     setAudioEnabled(nextState);
-    
+
     // Unlock and clear speech synthesis on user interaction
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
-    
+
     if (nextState) {
       window.speechSynthesis.speak(new SpeechSynthesisUtterance('Audio enabled'));
     }
@@ -102,104 +104,141 @@ export default function LISQueue() {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const called = queue.filter(q => q.status === 'called').slice(0, 5); // Only show last 5 called
 
+  // Deliberately NOT wrapped in AppLayout — this page is a waiting-room TV
+  // display, not a staff admin screen, so the sidebar/topbar chrome would
+  // only waste space and distract from what matters at a glance: who's
+  // being called and how long the line is. The `dark` class scopes the
+  // app's own dark-theme CSS variables (index.css's `.dark` block) to this
+  // subtree, so every shared component below (Card, AdvancedDataTable,
+  // badges) renders in the app's existing dark palette automatically —
+  // same design system, not a one-off custom theme.
   return (
-    <AppLayout>
-      <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-      <PageHeader
-        title="Laboratory Queue"
-        icon={<MonitorPlay />}
-        className="mb-3"
-        actions={
+    <div className="dark min-h-screen bg-background text-foreground flex flex-col">
+      <header className="flex items-center justify-between gap-4 px-6 lg:px-10 py-4 border-b border-border bg-card/60 backdrop-blur shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+            <MonitorPlay className="w-5 h-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg lg:text-xl font-bold tracking-tight truncate">
+              {facilityInfo.facilityName ? `${facilityInfo.facilityName} — ` : ''}Laboratory Queue
+            </h1>
+            <p className="text-xs text-muted-foreground">Live waiting-room display</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 lg:gap-4 shrink-0">
+          <div className="hidden sm:block text-xl lg:text-2xl font-mono font-semibold tabular-nums tracking-tight">
+            {new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </div>
           <button
             onClick={toggleAudio}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${audioEnabled ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-            title="Toggle Voice Announcements (Click required for auto-play)"
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${audioEnabled ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive'}`}
+            title="Toggle voice announcements (click required for auto-play)"
           >
-            {audioEnabled ? <><Volume2 className="w-4 h-4" /> Audio On</> : <><VolumeX className="w-4 h-4" /> Audio Off</>}
+            {audioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span className="hidden sm:inline">{audioEnabled ? 'Audio On' : 'Audio Off'}</span>
           </button>
-        }
-      />
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            title="Exit display and return to the dashboard"
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Exit</span>
+          </button>
+        </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* CURRENTLY CALLED (Highlights) */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Now Calling</h2>
-            <div className="text-sm text-muted-foreground font-mono">{new Date(now).toLocaleTimeString()}</div>
+      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-6 p-6 lg:p-8">
+        {/* NOW CALLING */}
+        <section className="lg:col-span-2 flex flex-col min-h-0">
+          <div className="flex items-center gap-2 mb-4 shrink-0">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary" />
+            </span>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Now Calling</h2>
           </div>
-          
+
           {called.length > 0 ? (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4 overflow-y-auto pr-1">
               {called.map((p, idx) => (
-                <Card key={p.order_id} className={`p-6 border-2 relative overflow-hidden transition-all ${idx === 0 ? 'bg-card border-primary shadow-md' : 'bg-card border-border opacity-70'}`}>
-                  {idx === 0 && <div className="absolute inset-0 bg-primary/10 animate-pulse opacity-50"></div>}
+                <Card
+                  key={p.order_id}
+                  className={idx === 0
+                    ? 'p-7 border-2 border-primary bg-primary/10 shadow-lg shadow-primary/10 relative overflow-hidden'
+                    : 'p-5 border border-border bg-card/60'}
+                >
+                  {idx === 0 && <div className="absolute inset-0 bg-primary/5 animate-pulse pointer-events-none" />}
                   <div className="relative z-10">
-                    <div className="text-xs uppercase tracking-widest font-bold text-muted-foreground mb-1">Queue No: {p.participant_number}</div>
-                    <div className={`text-3xl font-extrabold mb-4 ${idx === 0 ? 'text-primary' : 'text-card-foreground'}`}>
+                    <div className={`text-xs uppercase tracking-widest font-bold mb-1.5 ${idx === 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                      Queue No. {p.participant_number}
+                    </div>
+                    <div className={idx === 0 ? 'text-4xl lg:text-5xl font-extrabold tracking-tight mb-4' : 'text-xl font-bold mb-2'}>
                       {p.first_name} {p.last_name}
                     </div>
-                    <div className="flex flex-col gap-1 border-t pt-3">
-                      <div className="font-mono text-sm text-muted-foreground">
-                        Proceed To:
-                      </div>
-                      <div className="text-xl font-bold truncate text-muted-foreground flex flex-col">
-                        {p.room_number && <span className="text-primary">{p.room_number}</span>}
-                        <span>{p.doctor_name ? `Dr. ${p.doctor_name}` : 'General Lab'}</span>
-                      </div>
+                    <div className={`flex items-center gap-2 flex-wrap ${idx === 0 ? 'pt-4 border-t border-primary/20' : 'pt-2 border-t border-border'}`}>
+                      <ArrowRight className={idx === 0 ? 'w-5 h-5 text-primary shrink-0' : 'w-4 h-4 text-muted-foreground shrink-0'} />
+                      <span className={idx === 0 ? 'text-2xl font-bold text-primary' : 'text-sm font-semibold'}>
+                        {p.room_number || (p.doctor_name ? `Dr. ${p.doctor_name}` : 'General Lab')}
+                      </span>
+                      {idx === 0 && p.room_number && p.doctor_name && (
+                        <span className="text-muted-foreground text-sm">· Dr. {p.doctor_name}</span>
+                      )}
                     </div>
                   </div>
                 </Card>
               ))}
             </div>
           ) : (
-            <Card className="h-48 flex flex-col items-center justify-center text-muted-foreground border-dashed">
-              <Users className="w-10 h-10 mb-3 opacity-20" />
+            <Card className="flex-1 min-h-[16rem] flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed bg-transparent">
+              <Users className="w-12 h-12 mb-3 opacity-20" />
               <p className="text-sm font-medium">No one is currently called</p>
             </Card>
           )}
-        </div>
+        </section>
 
         {/* WAITING LIST */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Waiting List</h2>
-            <span className="bg-muted text-muted-foreground text-xs px-2 py-1 rounded-md font-medium">
-              {waiting.length} Waiting
+        <section className="lg:col-span-3 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-4 shrink-0">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Waiting List</h2>
+            <span className="bg-secondary text-secondary-foreground text-xs font-semibold px-2.5 py-1 rounded-full">
+              {waiting.length} waiting
             </span>
           </div>
-          
-          <AdvancedDataTable<any>
-            data={waiting}
-            keyExtractor={(p) => p.order_id}
-            emptyMessage="The waiting list is currently empty."
-            columns={[
-              { key: 'participant_number', header: 'Queue ID', render: (v) => <span className="font-mono text-sm text-muted-foreground">{v}</span> },
-              { key: 'first_name', header: 'Patient Name', render: (_v, p) => <span className="font-semibold">{p.first_name} {p.last_name}</span> },
-              {
-                key: 'doctor_name', header: 'Assigned To',
-                render: (v) => (
-                  <div className="inline-flex items-center gap-1.5 bg-secondary px-2.5 py-0.5 rounded-full text-xs font-medium">
-                    <ArrowRight className="w-3 h-3 text-muted-foreground" />
-                    {v ? `Dr. ${v}` : 'General'}
-                  </div>
-                ),
-              },
-              {
-                key: 'created_at', header: 'Wait Time', align: 'right',
-                render: (v) => (
-                  <div className="inline-flex items-center gap-1.5 font-mono text-sm text-amber-600 dark:text-amber-500 font-medium">
-                    <Clock className="w-3.5 h-3.5 opacity-70" />
-                    {formatWaitTime(v)}
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </div>
 
-      </div>
-      </div>
-    </AppLayout>
+          <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-border bg-card/40">
+            <AdvancedDataTable<any>
+              data={waiting}
+              keyExtractor={(p) => p.order_id}
+              emptyMessage="The waiting list is currently empty."
+              columns={[
+                { key: 'participant_number', header: 'Queue ID', render: (v) => <span className="font-mono text-sm text-muted-foreground">{v}</span> },
+                { key: 'first_name', header: 'Patient Name', render: (_v, p) => <span className="font-semibold">{p.first_name} {p.last_name}</span> },
+                {
+                  key: 'doctor_name', header: 'Assigned To',
+                  render: (v) => (
+                    <div className="inline-flex items-center gap-1.5 bg-secondary px-2.5 py-0.5 rounded-full text-xs font-medium">
+                      <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                      {v ? `Dr. ${v}` : 'General'}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'created_at', header: 'Wait Time', align: 'right',
+                  render: (v) => (
+                    <div className="inline-flex items-center gap-1.5 font-mono text-sm text-amber-400 font-medium">
+                      <Clock className="w-3.5 h-3.5 opacity-70" />
+                      {formatWaitTime(v)}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }
