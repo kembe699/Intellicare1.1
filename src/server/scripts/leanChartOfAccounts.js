@@ -73,9 +73,14 @@ const ESSENTIAL = {
   '4900': 'Other Income',
   '5110': 'Doctor Fees — the Doctor Fees expense category posts here',
   '5120': 'Employee Benefits — the Allowance expense category posts here',
+  '5200': 'Medical Supplies Expense — the Medical Supplies expense category posts here',
+  '5310': 'Utilities Expense — the Utilities expense category posts here',
+  '5330': 'Maintenance and Repairs — the Maintenance expense category posts here',
   '5400': 'Office Supplies Expense — daily expenses',
+  '5440': 'Administrative Expenses — the Administrative Expenses expense category posts here',
   '5610': 'Foreign Exchange Gain/Loss — multi-currency settlement',
   '5700': 'Bad Debt Expense — write-offs',
+  '5800': 'Travel and Transport — the Transport expense category posts here',
   '5900': 'Miscellaneous Expenses — catch-all for daily expenses',
 };
 

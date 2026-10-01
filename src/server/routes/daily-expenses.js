@@ -32,13 +32,14 @@ const CATEGORY_EXPENSE_CODE = {
   // Doctor fees and allowances are large, recurring and reported on separately;
   // burying them in 5900 would make the income statement useless for the two
   // lines a clinic is asked about most.
-  'Doctor Fees': '5110',       // Doctor Fees
-  'Allowance': '5120',         // Employee Benefits
-  'Office Supplies': '5400',   // Office Supplies Expense
-  'Utilities': '5310',         // Utilities Expense
-  'Maintenance': '5330',       // Maintenance and Repairs
-  'Transport': '5800',         // Travel and Transport
-  'Medical Supplies': '5200',  // Medical Supplies Expense
+  'Doctor Fees': '5110',             // Doctor Fees
+  'Allowance': '5120',               // Employee Benefits
+  'Office Supplies': '5400',         // Office Supplies Expense
+  'Utilities': '5310',               // Utilities Expense
+  'Maintenance': '5330',             // Maintenance and Repairs
+  'Transport': '5800',               // Travel and Transport
+  'Medical Supplies': '5200',        // Medical Supplies Expense
+  'Administrative Expenses': '5440', // Administrative Expenses
 };
 const DEFAULT_EXPENSE_CODE = '5900'; // Miscellaneous Expenses — fallback for Catering/Cleaning/Security/Other/unknown
 

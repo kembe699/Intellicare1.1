@@ -35,7 +35,7 @@ interface UserProfile { id: string; displayName: string; email: string; role: st
 const today = () => new Date().toISOString().split('T')[0];
 const APPROVAL_LEVELS = ['Approval 1', 'Authorization'];
 
-const EXPENSE_CATEGORIES = ['Doctor Fees','Allowance','Office Supplies','Utilities','Maintenance','Transport','Catering','Medical Supplies','Cleaning','Security','Other'];
+const EXPENSE_CATEGORIES = ['Doctor Fees','Allowance','Office Supplies','Administrative Expenses','Utilities','Maintenance','Transport','Catering','Medical Supplies','Cleaning','Security','Other'];
 const PAYMENT_METHODS = ['Cash','Bank Transfer','Cheque','Mobile Money'];
 
 const DailyExpenses: React.FC = () => {
