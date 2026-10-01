@@ -208,7 +208,12 @@ export default function PatientDetails() {
     queryClient.invalidateQueries({ queryKey: ['ip-radiology', admissionId] });
   };
 
-  const createMutation = (url: string, successMsg: string, onDone: () => void) => useMutation({
+  // Named useCreateMutation (not createMutation) so ESLint's rules-of-hooks
+  // check recognizes this as a hook and can verify its own call sites — every
+  // one below is called unconditionally, in the same fixed order, on every
+  // render, which is what actually keeps this safe; the naming is what lets
+  // the linter confirm that instead of silently trusting it.
+  const useCreateMutation = (url: string, successMsg: string, onDone: () => void) => useMutation({
     mutationFn: async (data: any) => {
       const r = await authFetch(url, { method: 'POST', body: JSON.stringify({ ...data, admission_id: admissionId, patient_id: admission?.patient_id, clinic_id: user?.clinic || 1 }) });
       if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Failed'); }
@@ -218,7 +223,7 @@ export default function PatientDetails() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const notesMut = createMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' }); });
+  const notesMut = useCreateMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' }); });
 
   const resetRxForm = () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: '' }); setRxQtyTouched(false); setDispenseNow(false); };
 
@@ -260,10 +265,10 @@ export default function PatientDetails() {
     onSuccess: () => { toast.success('Prescription created'); resetRxForm(); invalidateAll(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const nursingMut = createMutation('/api/inpatient/nursing-notes', 'Nursing note saved', () => { setNursingForm({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' }); });
-  const adminMut = createMutation('/api/inpatient/drug-administrations', 'Administration recorded', () => { setShowAdminForm(false); setAdminForm({ prescription_id: '', medication_name: '', dosage_given: '', route: 'oral', notes: '', status: 'given' }); });
-  const labMut = createMutation('/api/inpatient/lab-requests', 'Lab request created', () => { setLabForm({ test_id: '', test_type: '', test_code: '', category: '', unit_price: 0, clinical_indication: '', sample_type: '', urgent: false }); });
-  const radMut = createMutation('/api/inpatient/radiology-requests', 'Radiology request created', () => { setRadForm({ service_id: '', imaging_type: '', unit_price: 0, body_part: '', clinical_indication: '', urgent: false }); });
+  const nursingMut = useCreateMutation('/api/inpatient/nursing-notes', 'Nursing note saved', () => { setNursingForm({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' }); });
+  const adminMut = useCreateMutation('/api/inpatient/drug-administrations', 'Administration recorded', () => { setShowAdminForm(false); setAdminForm({ prescription_id: '', medication_name: '', dosage_given: '', route: 'oral', notes: '', status: 'given' }); });
+  const labMut = useCreateMutation('/api/inpatient/lab-requests', 'Lab request created', () => { setLabForm({ test_id: '', test_type: '', test_code: '', category: '', unit_price: 0, clinical_indication: '', sample_type: '', urgent: false }); });
+  const radMut = useCreateMutation('/api/inpatient/radiology-requests', 'Radiology request created', () => { setRadForm({ service_id: '', imaging_type: '', unit_price: 0, body_part: '', clinical_indication: '', urgent: false }); });
 
   const dischargeMut = useMutation({
     mutationFn: async (data: any) => {
