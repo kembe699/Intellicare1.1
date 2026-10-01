@@ -30,13 +30,18 @@ export default function LISQueue() {
   // One shared <audio> element, reused across calls, rather than a new Audio()
   // per announcement — keeps a single, predictable "is something unlocked yet"
   // state for the browser's autoplay-gesture requirement (see toggleAudio).
+  //
+  // Falls back to the old robotic browser voice on any failure (network,
+  // the TTS service being down, etc.) rather than going silent — a patient
+  // waiting on an audio cue to know they're being called is a real-world
+  // consequence of "no sound at all", worse than a less-natural voice.
   const playAnnouncement = async (text: string) => {
     try {
       const res = await authFetch('/api/lis/queue/announce', {
         method: 'POST',
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(`TTS request failed: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       if (!announcerRef.current) announcerRef.current = new Audio();
@@ -46,7 +51,13 @@ export default function LISQueue() {
       audio.onended = () => URL.revokeObjectURL(url);
       await audio.play();
     } catch (e) {
-      console.error('Failed to play queue announcement', e);
+      console.error('Natural voice announcement failed, falling back to the browser voice:', e);
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      } catch (fallbackError) {
+        console.error('Fallback browser voice also failed', fallbackError);
+      }
     }
   };
 
