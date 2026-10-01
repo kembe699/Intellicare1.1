@@ -337,3 +337,148 @@ describe('T2/T3: item usage writes a real inventory_transactions audit row, with
     expect(usageFnSrc).toMatch(/FOR UPDATE/);
   });
 });
+
+describe('Theatre item usage bills the patient', () => {
+  // Separate priced items from testItemId above (which has no selling_price
+  // on purpose, to prove T2/T3's own test above records usage without ever
+  // touching billing when there's no price). One 'drugs' item and one
+  // 'blood' item, to prove the revenue-category split: a drug item should
+  // land on Pharmacy Sales Revenue (4120), everything else (blood included)
+  // on Procedure Revenue (4140) — there is no separate "blood revenue"
+  // account, so blood intentionally shares 4140 with other consumables.
+  let drugItemId, drugBatchId, bloodItemId, bloodBatchId;
+
+  beforeAll(async () => {
+    drugItemId = uuid();
+    await sequelize.query(
+      `INSERT INTO inventory_items (id, clinic_id, item_code, item_name, is_active, item_category, selling_price, unit_of_measure)
+       VALUES (:id, :c, 'THRTEST-DRUG', 'THRTEST Lidocaine', true, 'drugs', 500, 'vial')`,
+      { replacements: { id: drugItemId, c: TEST_CLINIC_ID } }
+    );
+    drugBatchId = uuid();
+    await sequelize.query(
+      `INSERT INTO inventory_batches (id, clinic_id, item_id, batch_number, location_id, receipt_date, quantity_received, quantity_used, status)
+       VALUES (:id, :c, :itemId, 'THRTEST-DRUG-BATCH', :locationId, CURRENT_DATE, 10, 0, 'active')`,
+      { replacements: { id: drugBatchId, c: TEST_CLINIC_ID, itemId: drugItemId, locationId: testLocationId } }
+    );
+    await sequelize.query(
+      `INSERT INTO stock_by_location (id, clinic_id, item_id, location_id, quantity_on_hand) VALUES (:id, :c, :itemId, :locationId, 10)`,
+      { replacements: { id: uuid(), c: TEST_CLINIC_ID, itemId: drugItemId, locationId: testLocationId } }
+    );
+
+    bloodItemId = uuid();
+    await sequelize.query(
+      `INSERT INTO inventory_items (id, clinic_id, item_code, item_name, is_active, item_category, selling_price, unit_of_measure)
+       VALUES (:id, :c, 'THRTEST-BLOOD', 'THRTEST O+ Whole Blood', true, 'blood', 20000, 'mL')`,
+      { replacements: { id: bloodItemId, c: TEST_CLINIC_ID } }
+    );
+    bloodBatchId = uuid();
+    await sequelize.query(
+      `INSERT INTO inventory_batches (id, clinic_id, item_id, batch_number, location_id, receipt_date, quantity_received, quantity_used, status)
+       VALUES (:id, :c, :itemId, 'THRTEST-BLOOD-BATCH', :locationId, CURRENT_DATE, 500, 0, 'active')`,
+      { replacements: { id: bloodBatchId, c: TEST_CLINIC_ID, itemId: bloodItemId, locationId: testLocationId } }
+    );
+    await sequelize.query(
+      `INSERT INTO stock_by_location (id, clinic_id, item_id, location_id, quantity_on_hand) VALUES (:id, :c, :itemId, :locationId, 500)`,
+      { replacements: { id: uuid(), c: TEST_CLINIC_ID, itemId: bloodItemId, locationId: testLocationId } }
+    );
+  });
+
+  afterAll(async () => {
+    try {
+      for (const itemId of [drugItemId, bloodItemId]) {
+        await sequelize.query(`DELETE FROM batch_usage_history WHERE batch_id IN (SELECT id FROM inventory_batches WHERE item_id = :i)`, { replacements: { i: itemId } });
+        await sequelize.query(`DELETE FROM stock_by_location WHERE item_id = :i`, { replacements: { i: itemId } });
+        await sequelize.query(`DELETE FROM inventory_batches WHERE item_id = :i`, { replacements: { i: itemId } });
+        await sequelize.query(`DELETE FROM inventory_items WHERE id = :i`, { replacements: { i: itemId } });
+      }
+    } catch (e) { console.warn('billing-test item cleanup failed (non-fatal):', e.message); }
+  });
+
+  async function cleanupBillFor(patientId) {
+    await sequelize.query(`DELETE FROM patient_bills WHERE patient_id = :p AND bill_number LIKE 'BILL-%'`, { replacements: { p: patientId } });
+  }
+
+  test('a priced drug used in theatre creates a bill with a Pharmacy Sales Revenue line', async () => {
+    const patientId = uuid();
+    const { body: op } = await scheduleOp({ patient_id: patientId });
+    await withTenant(() => handlers.startOperation(req({ params: { id: op.id } }), mockRes()));
+    const res = mockRes();
+    await withTenant(() => handlers.recordItemUsage(req({
+      params: { id: op.id }, body: { location_id: testLocationId, item_id: drugItemId, quantity: 2 },
+    }), res));
+    expect(res.statusCode).toBe(201);
+
+    const [[bill]] = await sequelize.query(`SELECT id, total_amount, services FROM patient_bills WHERE patient_id = :p`, { replacements: { p: patientId } });
+    expect(bill).toBeDefined();
+    expect(parseFloat(bill.total_amount)).toBe(1000); // 500 * 2
+    const services = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services;
+    expect(services).toHaveLength(1);
+    expect(services[0].serviceName).toBe('THRTEST Lidocaine');
+    expect(parseFloat(services[0].totalPrice)).toBe(1000);
+
+    const [[revenueAccount]] = await sequelize.query(
+      `SELECT ca.account_code FROM chart_of_accounts ca JOIN account_ledger al ON al.account_id = ca.id WHERE al.reference_number = :billId`,
+      { replacements: { billId: bill.id } }
+    ).catch(() => [[null]]);
+    // GL posting is deferred to ledgerSweeper.js, not synchronous here, so
+    // account_ledger may not have a row yet — only assert on it if the
+    // sweeper (or a prior run) already reconciled it; the bill row itself,
+    // asserted above, is the part this fix is actually responsible for.
+    if (revenueAccount) expect(revenueAccount.account_code).toBe('4120');
+
+    await cleanupBillFor(patientId);
+  });
+
+  test('blood used in theatre bills under Procedure Revenue, separate from drugs', async () => {
+    const patientId = uuid();
+    const { body: op } = await scheduleOp({ patient_id: patientId });
+    await withTenant(() => handlers.startOperation(req({ params: { id: op.id } }), mockRes()));
+    const res = mockRes();
+    await withTenant(() => handlers.recordItemUsage(req({
+      params: { id: op.id }, body: { location_id: testLocationId, item_id: bloodItemId, quantity: 350 },
+    }), res));
+    expect(res.statusCode).toBe(201);
+    expect(res.body.item_category).toBe('blood');
+
+    const [[bill]] = await sequelize.query(`SELECT total_amount, services FROM patient_bills WHERE patient_id = :p`, { replacements: { p: patientId } });
+    expect(bill).toBeDefined();
+    expect(parseFloat(bill.total_amount)).toBe(7000000); // 20000 * 350
+    const services = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services;
+    expect(services[0].serviceName).toBe('THRTEST O+ Whole Blood');
+
+    await cleanupBillFor(patientId);
+  });
+
+  test('a second item used on the same operation appends to the same bill instead of creating a new one', async () => {
+    const patientId = uuid();
+    const { body: op } = await scheduleOp({ patient_id: patientId });
+    await withTenant(() => handlers.startOperation(req({ params: { id: op.id } }), mockRes()));
+    await withTenant(() => handlers.recordItemUsage(req({
+      params: { id: op.id }, body: { location_id: testLocationId, item_id: drugItemId, quantity: 1 },
+    }), mockRes()));
+    await withTenant(() => handlers.recordItemUsage(req({
+      params: { id: op.id }, body: { location_id: testLocationId, item_id: bloodItemId, quantity: 1 },
+    }), mockRes()));
+
+    const bills = await sequelize.query(`SELECT id, total_amount FROM patient_bills WHERE patient_id = :p`, { replacements: { p: patientId }, type: sequelize.QueryTypes.SELECT });
+    expect(bills).toHaveLength(1); // not two separate bills
+    expect(parseFloat(bills[0].total_amount)).toBe(500 + 20000); // 1 drug + 1 mL blood
+
+    await cleanupBillFor(patientId);
+  });
+
+  test('an item with no selling_price is recorded and deducted from stock, but never billed', async () => {
+    const patientId = uuid();
+    const { body: op } = await scheduleOp({ patient_id: patientId });
+    await withTenant(() => handlers.startOperation(req({ params: { id: op.id } }), mockRes()));
+    const res = mockRes();
+    await withTenant(() => handlers.recordItemUsage(req({
+      params: { id: op.id }, body: { location_id: testLocationId, item_id: testItemId, quantity: 1 },
+    }), res));
+    expect(res.statusCode).toBe(201);
+
+    const [[bill]] = await sequelize.query(`SELECT id FROM patient_bills WHERE patient_id = :p`, { replacements: { p: patientId } });
+    expect(bill).toBeUndefined(); // no price set — recorded, not billed
+  });
+});

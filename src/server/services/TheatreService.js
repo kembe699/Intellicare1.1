@@ -421,7 +421,7 @@ class TheatreService {
 
     await this._assertOperationEditable(operationId, clinicId);
 
-    const [[item]] = await sequelize.query(`SELECT id, item_name, unit_of_measure FROM inventory_items WHERE id = :itemId AND clinic_id = :clinicId`, { replacements: { itemId, clinicId } });
+    const [[item]] = await sequelize.query(`SELECT id, item_name, unit_of_measure, selling_price, item_category FROM inventory_items WHERE id = :itemId AND clinic_id = :clinicId`, { replacements: { itemId, clinicId } });
     if (!item) throw httpError('Item not found', 404);
 
     const [[location]] = await sequelize.query(`SELECT id, location_name FROM stock_locations WHERE id = :locationId AND clinic_id = :clinicId`, { replacements: { locationId, clinicId } });
@@ -484,13 +484,56 @@ class TheatreService {
 
       const usageId = uuidv4();
       await sequelize.query(
-        `INSERT INTO theatre_operation_items (id, operation_id, item_id, item_name, batch_id, location_id, location_name, quantity, unit_of_measure, dispensed_by, notes)
-         VALUES (:id, :operationId, :itemId, :itemName, :batchId, :locationId, :locationName, :qty, :uom, :userId, :notes)`,
-        { replacements: { id: usageId, operationId, itemId, itemName: item.item_name, batchId: batch.id, locationId, locationName: location.location_name, qty, uom: item.unit_of_measure || null, userId: userId || null, notes: notes || null }, transaction }
+        `INSERT INTO theatre_operation_items (id, operation_id, item_id, item_name, batch_id, location_id, location_name, quantity, unit_of_measure, dispensed_by, notes, item_category)
+         VALUES (:id, :operationId, :itemId, :itemName, :batchId, :locationId, :locationName, :qty, :uom, :userId, :notes, :itemCategory)`,
+        { replacements: { id: usageId, operationId, itemId, itemName: item.item_name, batchId: batch.id, locationId, locationName: location.location_name, qty, uom: item.unit_of_measure || null, userId: userId || null, notes: notes || null, itemCategory: item.item_category || null }, transaction }
       );
 
       await transaction.commit();
       const [[created]] = await sequelize.query(`SELECT * FROM theatre_operation_items WHERE id = :id`, { replacements: { id: usageId } });
+
+      // Bill the patient for what was used, same as every other clinical
+      // action in the app — items used in theatre were previously deducted
+      // from stock but never charged at all. Sequential, not nested in the
+      // stock transaction above: a billing failure must never undo a stock
+      // movement that already happened, matching inpatient.js's lab/radiology
+      // request handlers (billInpatientRequest is called the same way, after
+      // its own insert commits). addLineItemsToBill finds the patient's
+      // active bill or creates one; GL posting is left to ledgerSweeper.js's
+      // existing reconciliation, the same mechanism those inpatient charges
+      // already rely on — not a second, synchronous GL path.
+      if (parseFloat(item.selling_price) > 0) {
+        try {
+          const [[op]] = await sequelize.query(
+            `SELECT t.patient_id, t.branch_id, t.procedure_name, ${PATIENT_FIELDS}
+               FROM theatre_operations t ${PATIENT_JOIN} WHERE t.id = :operationId`,
+            { replacements: { operationId } }
+          );
+          const { addLineItemsToBill } = require('../utils/billingResolver');
+          await addLineItemsToBill({
+            patientId: op.patient_id,
+            patientName: [op.patient_first_name, op.patient_last_name].filter(Boolean).join(' ') || 'Theatre Patient',
+            clinicId,
+            branchId: op.branch_id,
+            lineItems: [{
+              serviceName: item.item_name,
+              quantity: qty,
+              unitPrice: parseFloat(item.selling_price),
+              totalPrice: parseFloat(item.selling_price) * qty,
+              revenueCategory: item.item_category === 'drugs' ? 'pharma' : 'theatre',
+            }],
+            createdBy: userId || 'system',
+            notes: `Theatre: ${op.procedure_name}`,
+          });
+        } catch (billErr) {
+          // Non-fatal, same convention as daily-expenses.js's GL posting:
+          // the item is already recorded and stock already deducted — a
+          // billing failure here must be visible, not silently swallowed,
+          // but must never undo what already succeeded.
+          console.error(`Theatre operation ${operationId}: item "${item.item_name}" recorded and stock deducted, but billing failed —`, billErr.message);
+        }
+      }
+
       return created;
     } catch (error) {
       if (!transaction.finished) await transaction.rollback().catch(() => {});
