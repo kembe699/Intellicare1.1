@@ -1,48 +1,21 @@
 {
-  "timestamp": "2026-10-01T15:58:13.204Z",
-  "totalTests": 552,
-  "passed": 552,
+  "timestamp": "2026-10-01T17:16:46.463Z",
+  "totalTests": 561,
+  "passed": 561,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 78589,
+  "duration": 93931,
   "success": false,
   "modules": [
     {
-      "name": "icd10.test.js",
-      "tests": 22,
-      "passed": 22,
+      "name": "theatreAutoBillRequests.test.js",
+      "tests": 4,
+      "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 3148
-    },
-    {
-      "name": "theatreOperations.test.js",
-      "tests": 15,
-      "passed": 15,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 4097
-    },
-    {
-      "name": "fixedAssets.test.js",
-      "tests": 13,
-      "passed": 13,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2778
-    },
-    {
-      "name": "paymentFxGainLossCurrency.test.js",
-      "tests": 3,
-      "passed": 3,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2143
+      "duration": 3409
     },
     {
       "name": "assetService.test.js",
@@ -51,52 +24,25 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 3750
+      "duration": 5332
     },
     {
-      "name": "receiptVoidApproval.test.js",
-      "tests": 6,
-      "passed": 6,
+      "name": "theatreOperations.test.js",
+      "tests": 19,
+      "passed": 19,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2565
+      "duration": 4366
     },
     {
-      "name": "paidServiceIndexesValidation.test.js",
-      "tests": 4,
-      "passed": 4,
+      "name": "icd10.test.js",
+      "tests": 22,
+      "passed": 22,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2175
-    },
-    {
-      "name": "paymentPostingDate.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2593
-    },
-    {
-      "name": "glEntryRounding.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1998
-    },
-    {
-      "name": "receiptVoidConcurrency.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2549
+      "duration": 2736
     },
     {
       "name": "voidItemCurrency.test.js",
@@ -105,25 +51,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2932
-    },
-    {
-      "name": "receiptStatusTerminal.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2617
-    },
-    {
-      "name": "dhis2Report.test.js",
-      "tests": 13,
-      "passed": 13,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2894
+      "duration": 2273
     },
     {
       "name": "clinicalInsights.test.js",
@@ -132,133 +60,34 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2999
+      "duration": 2594
     },
     {
-      "name": "glNumbering.test.js",
+      "name": "paidServiceIndexesValidation.test.js",
       "tests": 4,
       "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1518
+      "duration": 3116
     },
     {
-      "name": "dataIntegrity.test.js",
-      "tests": 41,
-      "passed": 41,
+      "name": "dhis2Report.test.js",
+      "tests": 13,
+      "passed": 13,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1435
+      "duration": 1869
     },
     {
-      "name": "billingEnhancedRecalculateBillTotals.test.js",
-      "tests": 2,
-      "passed": 2,
+      "name": "receiptVoidApproval.test.js",
+      "tests": 6,
+      "passed": 6,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 2085
-    },
-    {
-      "name": "billCreationAtomicity.test.js",
-      "tests": 3,
-      "passed": 3,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2507
-    },
-    {
-      "name": "billLineIdStability.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2037
-    },
-    {
-      "name": "billingLedgerBranchId.test.js",
-      "tests": 2,
-      "passed": 2,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 3047
-    },
-    {
-      "name": "insuranceClaims.test.js",
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2258
-    },
-    {
-      "name": "icd10.test.js",
-      "tests": 26,
-      "passed": 26,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1459
-    },
-    {
-      "name": "receiptReversalCurrency.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2164
-    },
-    {
-      "name": "journalPosting.test.js",
-      "tests": 7,
-      "passed": 7,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2408
-    },
-    {
-      "name": "rolePrivileges.test.js",
-      "tests": 9,
-      "passed": 9,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 2508
-    },
-    {
-      "name": "currencies.test.js",
-      "tests": 25,
-      "passed": 25,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1242
-    },
-    {
-      "name": "ledgerIntegration.test.js",
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 977
-    },
-    {
-      "name": "multiCurrency.test.js",
-      "tests": 15,
-      "passed": 15,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 781
+      "duration": 2551
     },
     {
       "name": "billing.test.js",
@@ -267,25 +96,70 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 909
+      "duration": 1181
     },
     {
-      "name": "ensureDailyExpenseAccounts.test.js",
+      "name": "receiptReversalCurrency.test.js",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2572
+    },
+    {
+      "name": "fixedAssets.test.js",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 6150
+    },
+    {
+      "name": "billingLedgerBranchId.test.js",
       "tests": 2,
       "passed": 2,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1486
+      "duration": 1993
     },
     {
-      "name": "patientReferrals.test.js",
-      "tests": 16,
-      "passed": 16,
+      "name": "paymentFxGainLossCurrency.test.js",
+      "tests": 3,
+      "passed": 3,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1201
+      "duration": 2649
+    },
+    {
+      "name": "currencies.test.js",
+      "tests": 25,
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1332
+    },
+    {
+      "name": "glEntryRounding.test.js",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2105
+    },
+    {
+      "name": "billingEnhancedRecalculateBillTotals.test.js",
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2997
     },
     {
       "name": "dhis2Report.test.js",
@@ -294,25 +168,70 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1172
+      "duration": 1393
     },
     {
-      "name": "invoices.test.js",
-      "tests": 14,
-      "passed": 14,
+      "name": "journalPosting.test.js",
+      "tests": 7,
+      "passed": 7,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 982
+      "duration": 3504
     },
     {
-      "name": "accountingInvariants.test.js",
-      "tests": 10,
-      "passed": 10,
+      "name": "paymentPostingDate.test.js",
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 820
+      "duration": 2482
+    },
+    {
+      "name": "rolePrivileges.test.js",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2300
+    },
+    {
+      "name": "patientReferrals.test.js",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 837
+    },
+    {
+      "name": "multiCurrency.test.js",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1196
+    },
+    {
+      "name": "billCreationAtomicity.test.js",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2118
+    },
+    {
+      "name": "receiptVoidConcurrency.test.js",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 3957
     },
     {
       "name": "shiftRefunds.test.js",
@@ -321,34 +240,88 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 702
+      "duration": 932
     },
     {
-      "name": "transactionLeaks.test.js",
+      "name": "receiptStatusTerminal.test.js",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 3150
+    },
+    {
+      "name": "ensureDailyExpenseAccounts.test.js",
       "tests": 2,
       "passed": 2,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 162
+      "duration": 2909
     },
     {
-      "name": "roleAccess.test.js",
-      "tests": 17,
-      "passed": 17,
+      "name": "billLineIdStability.test.js",
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 316
+      "duration": 3074
     },
     {
-      "name": "authHeaders.test.js",
-      "tests": 2,
-      "passed": 2,
+      "name": "glNumbering.test.js",
+      "tests": 4,
+      "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 233
+      "duration": 2719
+    },
+    {
+      "name": "icd10.test.js",
+      "tests": 26,
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1530
+    },
+    {
+      "name": "dataIntegrity.test.js",
+      "tests": 41,
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 2665
+    },
+    {
+      "name": "accountingInvariants.test.js",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1195
+    },
+    {
+      "name": "insuranceClaims.test.js",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1392
+    },
+    {
+      "name": "ledgerIntegration.test.js",
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1015
     },
     {
       "name": "radiologyModule.test.js",
@@ -357,16 +330,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 174
-    },
-    {
-      "name": "permissionsCatalog.test.js",
-      "tests": 6,
-      "passed": 6,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 144
+      "duration": 195
     },
     {
       "name": "newUserCredentials.test.js",
@@ -375,70 +339,16 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 643
+      "duration": 166
     },
     {
-      "name": "ensureLineIds.test.js",
-      "tests": 5,
-      "passed": 5,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 188
-    },
-    {
-      "name": "radiologyVisitGrouping.test.js",
-      "tests": 17,
-      "passed": 17,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 203
-    },
-    {
-      "name": "selfHealing.test.js",
+      "name": "invoices.test.js",
       "tests": 14,
       "passed": 14,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 218
-    },
-    {
-      "name": "pharmacyStorePicker.test.js",
-      "tests": 13,
-      "passed": 13,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 148
-    },
-    {
-      "name": "inpatientPharmacyVisibility.test.js",
-      "tests": 12,
-      "passed": 12,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 167
-    },
-    {
-      "name": "paymentCashierAttribution.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 108
-    },
-    {
-      "name": "radiologyEverywhere.test.js",
-      "tests": 7,
-      "passed": 7,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 123
+      "duration": 767
     },
     {
       "name": "cashRevenueAllocation.test.js",
@@ -447,7 +357,142 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 147
+      "duration": 164
+    },
+    {
+      "name": "radiologyEverywhere.test.js",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 135
+    },
+    {
+      "name": "roleAccess.test.js",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 284
+    },
+    {
+      "name": "frontendPrivileges.test.js",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 111
+    },
+    {
+      "name": "proformaPatientFields.test.js",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 113
+    },
+    {
+      "name": "patientDirectoryReach.test.js",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 104
+    },
+    {
+      "name": "selfHealing.test.js",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 203
+    },
+    {
+      "name": "authHeaders.test.js",
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 175
+    },
+    {
+      "name": "prescriptionDispenseStatus.test.js",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 102
+    },
+    {
+      "name": "pharmacyStorePicker.test.js",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 209
+    },
+    {
+      "name": "transactionLeaks.test.js",
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 255
+    },
+    {
+      "name": "labResultBranchInheritance.test.js",
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 181
+    },
+    {
+      "name": "inpatientPharmacyVisibility.test.js",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 257
+    },
+    {
+      "name": "permissionsCatalog.test.js",
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 196
+    },
+    {
+      "name": "radiologyVisitGrouping.test.js",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 288
+    },
+    {
+      "name": "ensureLineIds.test.js",
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 173
     },
     {
       "name": "incomeStatementRounding.test.js",
@@ -456,7 +501,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 140
+      "duration": 184
     },
     {
       "name": "cashAccountPreference.test.js",
@@ -468,22 +513,22 @@
       "duration": 186
     },
     {
+      "name": "paymentCashierAttribution.test.js",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 124
+    },
+    {
       "name": "branchSwitcherPersistence.test.js",
       "tests": 5,
       "passed": 5,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 149
-    },
-    {
-      "name": "patientDirectoryReach.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 165
+      "duration": 173
     },
     {
       "name": "creditNoteRevenueAccount.test.js",
@@ -492,43 +537,7 @@
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 170
-    },
-    {
-      "name": "frontendPrivileges.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 160
-    },
-    {
-      "name": "labResultBranchInheritance.test.js",
-      "tests": 2,
-      "passed": 2,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 129
-    },
-    {
-      "name": "proformaPatientFields.test.js",
-      "tests": 3,
-      "passed": 3,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 120
-    },
-    {
-      "name": "prescriptionDispenseStatus.test.js",
-      "tests": 1,
-      "passed": 1,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 114
+      "duration": 164
     }
   ],
   "errors": [],

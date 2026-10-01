@@ -9,10 +9,11 @@ export interface TheatreRoom {
 }
 
 export interface StockLocation { id: string; location_code: string; location_name: string; location_type: string; }
-export interface StockItemOption { id: string; item_name: string; item_code: string; unit_of_measure: string | null; available_quantity: number; }
+export interface StockItemOption { id: string; item_name: string; item_code: string; unit_of_measure: string | null; available_quantity: number; item_category: string | null; }
 export interface OperationItemUsage {
   id: string; item_id: string; item_name: string; location_id: string | null; location_name: string | null;
   quantity: string; unit_of_measure: string | null; dispensed_by: string | null; dispensed_at: string; notes: string | null;
+  item_category: string | null;
 }
 
 export interface TheatreRequest {

@@ -16,6 +16,7 @@ import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   ArrowLeft, Loader2, Scissors, Play, Square, XCircle, User, MapPin,
   Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe,
+  Droplet, FlaskConical, Radio,
 } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
@@ -63,14 +64,20 @@ export default function TheatreOperationDetail() {
   const [causeOfDeath, setCauseOfDeath] = useState('');
 
   const [patientVisits, setPatientVisits] = useState<any[] | null>(null);
+  const [labResultsBySpecimen, setLabResultsBySpecimen] = useState<Record<string, any[]>>({});
+  const [radiologyRequests, setRadiologyRequests] = useState<any[]>([]);
 
   const [locations, setLocations] = useState<StockLocation[]>([]);
-  const [locationId, setLocationId] = useState('');
-  const [itemSearch, setItemSearch] = useState('');
-  const [selectedItem, setSelectedItem] = useState<StockItemOption | null>(null);
-  const [itemQty, setItemQty] = useState('');
-  const [itemNotes, setItemNotes] = useState('');
-  const [recordingItem, setRecordingItem] = useState(false);
+
+  const [labCatalog, setLabCatalog] = useState<any[]>([]);
+  const [showLabRequestForm, setShowLabRequestForm] = useState(false);
+  const [labTestId, setLabTestId] = useState('');
+  const [requestingLab, setRequestingLab] = useState(false);
+
+  const [radiologyCatalog, setRadiologyCatalog] = useState<any[]>([]);
+  const [showRadRequestForm, setShowRadRequestForm] = useState(false);
+  const [radExamId, setRadExamId] = useState('');
+  const [requestingRad, setRequestingRad] = useState(false);
 
   const timer = useElapsedTimer(operation?.started_at || null, operation?.status === 'in_progress');
 
@@ -79,17 +86,15 @@ export default function TheatreOperationDetail() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setLocations)
       .catch(() => setLocations([]));
+    authFetch('/api/lab-tests', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setLabCatalog)
+      .catch(() => setLabCatalog([]));
+    authFetch('/api/radiology/exam-types', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setRadiologyCatalog)
+      .catch(() => setRadiologyCatalog([]));
   }, []);
-
-  const { data: itemResults = [], isFetching: searchingItems } = useQuery({
-    queryKey: ['theatre-item-search', locationId, itemSearch],
-    queryFn: async () => {
-      if (!locationId) return [] as StockItemOption[];
-      const res = await authFetch(`/api/theatre/items/search?location_id=${locationId}&q=${encodeURIComponent(itemSearch)}`, { credentials: 'include' });
-      return res.ok ? res.json() : [];
-    },
-    enabled: !!locationId,
-  });
 
   // showLoading is only true for the initial mount fetch — every subsequent
   // refresh (after starting/completing/toggling a checklist item/recording
@@ -107,8 +112,26 @@ export default function TheatreOperationDetail() {
         // gets an empty result back, which is fine, not an error.
         authFetch(`/api/lis/visit-summaries?participant_id=${data.patient_id}`, { credentials: 'include' })
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => setPatientVisits(Array.isArray(d) ? d : d?.visits || null))
+          .then(async (d) => {
+            const visits = Array.isArray(d) ? d : d?.visits || null;
+            setPatientVisits(visits);
+            // Component-level values (e.g. WBC/RBC for a Complete Blood
+            // Count), not just the test name — same pattern LISTestOrders.tsx
+            // already uses (fetch per approved specimen, once each).
+            const approved: Array<{ id: string }> = (visits || []).flatMap((v: any) => (v.tests || []).filter((t: any) => t.status === 'approved'));
+            const results = await Promise.all(approved.map(async (t) => {
+              try {
+                const r = await authFetch(`/api/lis/specimens/${t.id}/results`, { credentials: 'include' });
+                return [t.id, r.ok ? await r.json() : []] as const;
+              } catch { return [t.id, []] as const; }
+            }));
+            setLabResultsBySpecimen(Object.fromEntries(results));
+          })
           .catch(() => setPatientVisits(null));
+        authFetch(`/api/radiology/requests?participant_id=${data.patient_id}`, { credentials: 'include' })
+          .then((r) => (r.ok ? r.json() : []))
+          .then((rows) => setRadiologyRequests(Array.isArray(rows) ? rows : []))
+          .catch(() => setRadiologyRequests([]));
       } else {
         toast.error('Operation not found');
       }
@@ -197,31 +220,59 @@ export default function TheatreOperationDetail() {
     } catch { toast.error('Network error'); }
   };
 
-  const recordItemUsage = async () => {
-    if (!locationId) { toast.error('Pick a storage location'); return; }
-    if (!selectedItem) { toast.error('Search for and select an item'); return; }
-    const qty = parseFloat(itemQty);
-    if (!(qty > 0)) { toast.error('Enter a quantity greater than 0'); return; }
-
-    setRecordingItem(true);
+  // Reuses the main LIS path (participant_id = operation.patient_id — the
+  // same polymorphic identity PATIENT_JOIN resolves elsewhere in this page),
+  // not the admission-scoped inpatient_lab_requests table, since a theatre
+  // patient may not have an admission at all, and the results panel above is
+  // already built against this same LIS data model. auto_bill: true is the
+  // opt-in flag added specifically for this page — see lisModule.js's
+  // POST /orders comment for why it isn't the default for every caller.
+  const requestLabTest = async () => {
+    const test = labCatalog.find((t) => t.id === labTestId);
+    if (!test || !operation) { toast.error('Select a test'); return; }
+    setRequestingLab(true);
     try {
-      const res = await authFetch(`/api/theatre/operations/${id}/items`, {
+      const res = await authFetch('/api/lis/orders', {
         method: 'POST',
-        body: JSON.stringify({ location_id: locationId, item_id: selectedItem.id, quantity: qty, notes: itemNotes || null }),
+        body: JSON.stringify({
+          participant_id: operation.patient_id,
+          tests: [{ code: test.test_code, name: test.test_name, department: test.category, price: test.price }],
+          auto_bill: true,
+        }),
       });
       if (res.ok) {
-        toast.success(`${qty} ${selectedItem.unit_of_measure || ''} of ${selectedItem.item_name} recorded`);
-        setSelectedItem(null); setItemSearch(''); setItemQty(''); setItemNotes('');
+        toast.success(`${test.test_name} requested and added to the patient's bill`);
+        setLabTestId(''); setShowLabRequestForm(false);
         fetchOperation();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to record item usage');
+        toast.error(err.error || 'Failed to request lab test');
       }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setRecordingItem(false);
-    }
+    } catch { toast.error('Network error'); } finally { setRequestingLab(false); }
+  };
+
+  const requestRadiology = async () => {
+    const exam = radiologyCatalog.find((e) => e.id === radExamId);
+    if (!exam || !operation) { toast.error('Select an exam'); return; }
+    setRequestingRad(true);
+    try {
+      const res = await authFetch('/api/radiology/requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          participant_id: operation.patient_id,
+          items: [{ service_id: exam.id, exam_name: exam.name, price: exam.price }],
+          auto_bill: true,
+        }),
+      });
+      if (res.ok) {
+        toast.success(`${exam.name} requested and added to the patient's bill`);
+        setRadExamId(''); setShowRadRequestForm(false);
+        fetchOperation();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to request radiology exam');
+      }
+    } catch { toast.error('Network error'); } finally { setRequestingRad(false); }
   };
 
   const fi = () => ({ name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo });
@@ -265,8 +316,8 @@ export default function TheatreOperationDetail() {
       : '';
     const itemsBody = operation.items.length > 0
       ? `<div class="ic-section-title">Drugs, Consumables & Blood Used</div>` + docTemplate.buildTable(
-          [{ label: 'Time' }, { label: 'Item' }, { label: 'Qty', align: 'right' }, { label: 'From' }, { label: 'Notes' }],
-          operation.items.map((it) => ({ cells: [new Date(it.dispensed_at).toLocaleString(), it.item_name, `${it.quantity} ${it.unit_of_measure || ''}`, it.location_name || '—', it.notes || '—'] }))
+          [{ label: 'Time' }, { label: 'Item' }, { label: 'Category' }, { label: 'Qty', align: 'right' }, { label: 'From' }, { label: 'Notes' }],
+          operation.items.map((it) => ({ cells: [new Date(it.dispensed_at).toLocaleString(), it.item_name, it.item_category === 'blood' ? 'Blood' : (it.item_category || '—'), `${it.quantity} ${it.unit_of_measure || ''}`, it.location_name || '—', it.notes || '—'] }))
         )
       : '';
 
@@ -371,21 +422,101 @@ export default function TheatreOperationDetail() {
             </div>
 
             {/* Patient context — best-effort, only populates for an LIS-identified patient */}
-            <div className="bg-card rounded-lg border shadow-sm p-5">
-              <h3 className="font-medium flex items-center gap-2 mb-3 text-sm"><Activity className="w-4 h-4 text-primary" /> Recent Results & Vitals</h3>
+            <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium flex items-center gap-2 text-sm"><Activity className="w-4 h-4 text-primary" /> Recent Results & Vitals</h3>
+              </div>
+
               {!patientVisits || patientVisits.length === 0 ? (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5"><FileWarning className="w-3.5 h-3.5" /> No linked visit history found for this patient.</p>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {patientVisits.slice(0, 5).map((v: any, i: number) => (
-                    <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0">
+                    <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0 space-y-1.5">
                       <p className="font-medium">{v.created_at ? new Date(v.created_at).toLocaleDateString() : ''}</p>
                       {v.vitals && <p className="text-muted-foreground">Vitals: {Object.entries(v.vitals).filter(([, val]) => val).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</p>}
-                      {v.tests?.length > 0 && <p className="text-muted-foreground">Tests: {v.tests.map((t: any) => t.test_name || t.name).join(', ')}</p>}
+                      {v.tests?.map((t: any) => {
+                        const results = labResultsBySpecimen[t.id];
+                        return (
+                          <div key={t.id} className="pl-2 border-l-2 border-border/70">
+                            <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
+                            {t.status === 'approved' && Array.isArray(results) && results.length > 0 && (
+                              <table className="w-full text-[11px] mt-1">
+                                <tbody>
+                                  {results.map((r: any) => (
+                                    <tr key={r.id} className={r.flag ? 'text-destructive' : ''}>
+                                      <td className="pr-2 py-0.5">{r.analyte}</td>
+                                      <td className="pr-2 py-0.5 font-mono">{r.value} {r.unit || ''}</td>
+                                      <td className="text-muted-foreground py-0.5">{r.reference_range || ''}{r.flag ? ` (${r.flag})` : ''}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
               )}
+
+              <div className="border-t pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold flex items-center gap-1.5"><FlaskConical className="w-3.5 h-3.5 text-primary" /> Lab</p>
+                  {canWrite && !showLabRequestForm && (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setShowLabRequestForm(true)}><Plus className="h-3 w-3" /> Request</Button>
+                  )}
+                </div>
+                {showLabRequestForm && (
+                  <div className="flex gap-1.5 mb-2">
+                    <div className="flex-1">
+                      <Combobox
+                        options={labCatalog.map((t) => ({ value: t.id, label: `${t.test_name}${parseFloat(t.price) > 0 ? ` — SSP ${parseFloat(t.price).toLocaleString()}` : ' — NO PRICE SET'}` }))}
+                        value={labTestId} onChange={setLabTestId} placeholder="Select a test..." searchPlaceholder="Search tests..." className="h-8 text-xs"
+                      />
+                    </div>
+                    <Button size="sm" className="h-8 px-2" onClick={requestLabTest} disabled={requestingLab || !labTestId}>{requestingLab ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Go'}</Button>
+                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => { setShowLabRequestForm(false); setLabTestId(''); }}>×</Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold flex items-center gap-1.5"><Radio className="w-3.5 h-3.5 text-primary" /> Radiology</p>
+                  {canWrite && !showRadRequestForm && (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setShowRadRequestForm(true)}><Plus className="h-3 w-3" /> Request</Button>
+                  )}
+                </div>
+                {showRadRequestForm && (
+                  <div className="flex gap-1.5 mb-2">
+                    <div className="flex-1">
+                      <Combobox
+                        options={radiologyCatalog.map((e) => ({ value: e.id, label: `${e.name}${parseFloat(e.price) > 0 ? ` — SSP ${parseFloat(e.price).toLocaleString()}` : ' — NO PRICE SET'}` }))}
+                        value={radExamId} onChange={setRadExamId} placeholder="Select an exam..." searchPlaceholder="Search exams..." className="h-8 text-xs"
+                      />
+                    </div>
+                    <Button size="sm" className="h-8 px-2" onClick={requestRadiology} disabled={requestingRad || !radExamId}>{requestingRad ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Go'}</Button>
+                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => { setShowRadRequestForm(false); setRadExamId(''); }}>×</Button>
+                  </div>
+                )}
+                {radiologyRequests.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No radiology requests for this patient yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {radiologyRequests.map((r: any) => (
+                      <div key={r.id} className="text-xs border-b border-border/50 pb-2 last:border-0">
+                        <p className="font-medium">{r.exam_name} — <span className="capitalize">{r.status.replace('_', ' ')}</span></p>
+                        <p className="text-muted-foreground">{new Date(r.request_date).toLocaleDateString()}</p>
+                        {r.status === 'completed' && r.report_html && (
+                          <div className="mt-1 text-muted-foreground border-l-2 border-border/70 pl-2 [&_p]:m-0" dangerouslySetInnerHTML={{ __html: r.report_html }} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -466,66 +597,36 @@ export default function TheatreOperationDetail() {
               </CardContent>
             </Card>
 
+            {canWrite && (
+              <ItemUsageCard
+                operationId={id!} locations={locations}
+                title="Drugs & Consumables Used" icon={<Syringe className="w-4 h-4 text-primary" />}
+                onRecorded={fetchOperation}
+              />
+            )}
+
+            {canWrite && (
+              <ItemUsageCard
+                operationId={id!} locations={locations} category="blood"
+                title="Blood Used" icon={<Droplet className="w-4 h-4 text-primary" />}
+                onRecorded={fetchOperation}
+              />
+            )}
+
             <Card>
-              <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm">Drugs, Consumables & Blood Used</h4></div>
-              <CardContent className="p-4 space-y-3">
-                {canWrite && (
-                  <div className="space-y-2">
-                    <Combobox
-                      options={locations.map((l) => ({ value: l.id, label: `${l.location_name} (${l.location_type})` }))}
-                      value={locationId} onChange={(v) => { setLocationId(v); setSelectedItem(null); setItemSearch(''); }}
-                      placeholder="Storage location..." searchPlaceholder="Search locations..." className="h-9"
-                    />
-                    {locationId && (
-                      selectedItem ? (
-                        <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30 text-sm">
-                          <div>
-                            <span className="font-medium">{selectedItem.item_name}</span>
-                            <span className="text-muted-foreground ml-2">{selectedItem.available_quantity} {selectedItem.unit_of_measure} available</span>
-                          </div>
-                          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => { setSelectedItem(null); setItemSearch(''); }}>×</Button>
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <Input placeholder="Search items at this location..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} className="h-9 text-sm" />
-                          {itemSearch.length >= 1 && (
-                            <div className="mt-1 border rounded-md max-h-44 overflow-y-auto bg-card shadow-sm">
-                              {searchingItems ? (
-                                <p className="text-sm text-muted-foreground px-3 py-2">Searching...</p>
-                              ) : itemResults.length === 0 ? (
-                                <p className="text-sm text-muted-foreground px-3 py-2">No matching items with stock here.</p>
-                              ) : itemResults.map((it: StockItemOption) => (
-                                <button key={it.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between" onClick={() => setSelectedItem(it)}>
-                                  <span>{it.item_name}</span>
-                                  <span className="text-xs text-muted-foreground">{it.available_quantity} {it.unit_of_measure}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    )}
-                    {selectedItem && (
-                      <div className="flex gap-2">
-                        <Input placeholder="Quantity" type="number" min="0" step="0.01" value={itemQty} onChange={(e) => setItemQty(e.target.value)} className="h-9 text-sm w-28" />
-                        <Input placeholder="Notes (optional)" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} className="h-9 text-sm flex-1" />
-                        <Button size="sm" onClick={recordItemUsage} disabled={recordingItem} className="gap-1.5">
-                          {recordingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Syringe className="h-3.5 w-3.5" />} Use
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
+              <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm">Items & Blood Used</h4></div>
+              <CardContent className="p-4">
                 {operation.items.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Nothing recorded as used yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">Item</th><th className="text-right py-1.5">Qty</th><th className="text-left py-1.5">From</th></tr></thead>
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">Item</th><th className="text-left py-1.5">Category</th><th className="text-right py-1.5">Qty</th><th className="text-left py-1.5">From</th></tr></thead>
                     <tbody>
                       {operation.items.map((it) => (
                         <tr key={it.id} className="border-b border-border/50">
                           <td className="py-1.5">{new Date(it.dispensed_at).toLocaleTimeString()}</td>
                           <td className="py-1.5">{it.item_name}</td>
+                          <td className="py-1.5">{it.item_category === 'blood' ? <Badge variant="outline" className="gap-1 text-[11px]"><Droplet className="w-3 h-3" /> Blood</Badge> : <span className="text-muted-foreground capitalize">{it.item_category || '—'}</span>}</td>
                           <td className="py-1.5 text-right font-mono">{it.quantity} {it.unit_of_measure}</td>
                           <td className="py-1.5">{it.location_name || '—'}</td>
                         </tr>
@@ -573,5 +674,118 @@ export default function TheatreOperationDetail() {
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+// Shared by the "Drugs & Consumables Used" and "Blood Used" cards — same
+// search/quantity/notes flow, just scoped to a different item_category via
+// GET /api/theatre/items/search's category/exclude_category params. Each
+// instance owns its own location/search/selection state so picking a drug
+// doesn't clear an in-progress blood entry and vice versa; both post to the
+// same POST /operations/:id/items endpoint, which bills the patient and
+// deducts stock identically regardless of category.
+function ItemUsageCard({
+  operationId, locations, category, title, icon, onRecorded,
+}: {
+  operationId: string;
+  locations: StockLocation[];
+  category?: string;
+  title: string;
+  icon: React.ReactNode;
+  onRecorded: () => void;
+}) {
+  const [locationId, setLocationId] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
+  const [selectedItem, setSelectedItem] = useState<StockItemOption | null>(null);
+  const [itemQty, setItemQty] = useState('');
+  const [itemNotes, setItemNotes] = useState('');
+  const [recording, setRecording] = useState(false);
+
+  const { data: itemResults = [], isFetching: searchingItems } = useQuery({
+    queryKey: ['theatre-item-search', category || 'non-blood', locationId, itemSearch],
+    queryFn: async () => {
+      if (!locationId) return [] as StockItemOption[];
+      const categoryParam = category ? `&category=${encodeURIComponent(category)}` : '&exclude_category=blood';
+      const res = await authFetch(`/api/theatre/items/search?location_id=${locationId}&q=${encodeURIComponent(itemSearch)}${categoryParam}`, { credentials: 'include' });
+      return res.ok ? res.json() : [];
+    },
+    enabled: !!locationId,
+  });
+
+  const recordUsage = async () => {
+    if (!locationId) { toast.error('Pick a storage location'); return; }
+    if (!selectedItem) { toast.error('Search for and select an item'); return; }
+    const qty = parseFloat(itemQty);
+    if (!(qty > 0)) { toast.error('Enter a quantity greater than 0'); return; }
+    setRecording(true);
+    try {
+      const res = await authFetch(`/api/theatre/operations/${operationId}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ location_id: locationId, item_id: selectedItem.id, quantity: qty, notes: itemNotes || null }),
+      });
+      if (res.ok) {
+        toast.success(`${qty} ${selectedItem.unit_of_measure || ''} of ${selectedItem.item_name} recorded`);
+        setSelectedItem(null); setItemSearch(''); setItemQty(''); setItemNotes('');
+        onRecorded();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to record item usage');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setRecording(false);
+    }
+  };
+
+  return (
+    <Card>
+      <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center gap-2">{icon}<h4 className="font-semibold text-sm">{title}</h4></div>
+      <CardContent className="p-4 space-y-2">
+        <Combobox
+          options={locations.map((l) => ({ value: l.id, label: `${l.location_name} (${l.location_type})` }))}
+          value={locationId} onChange={(v) => { setLocationId(v); setSelectedItem(null); setItemSearch(''); }}
+          placeholder="Storage location..." searchPlaceholder="Search locations..." className="h-9"
+        />
+        {locationId && (
+          selectedItem ? (
+            <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30 text-sm">
+              <div>
+                <span className="font-medium">{selectedItem.item_name}</span>
+                <span className="text-muted-foreground ml-2">{selectedItem.available_quantity} {selectedItem.unit_of_measure} available</span>
+              </div>
+              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => { setSelectedItem(null); setItemSearch(''); }}>×</Button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Input placeholder={category === 'blood' ? 'Search blood products...' : 'Search items at this location...'} value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} className="h-9 text-sm" />
+              {itemSearch.length >= 1 && (
+                <div className="mt-1 border rounded-md max-h-44 overflow-y-auto bg-card shadow-sm">
+                  {searchingItems ? (
+                    <p className="text-sm text-muted-foreground px-3 py-2">Searching...</p>
+                  ) : itemResults.length === 0 ? (
+                    <p className="text-sm text-muted-foreground px-3 py-2">{category === 'blood' ? 'No matching blood products with stock here.' : 'No matching items with stock here.'}</p>
+                  ) : itemResults.map((it: StockItemOption) => (
+                    <button key={it.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between" onClick={() => setSelectedItem(it)}>
+                      <span>{it.item_name}</span>
+                      <span className="text-xs text-muted-foreground">{it.available_quantity} {it.unit_of_measure}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        )}
+        {selectedItem && (
+          <div className="flex gap-2">
+            <Input placeholder={selectedItem.unit_of_measure === 'mL' ? 'mL used' : 'Quantity'} type="number" min="0" step="0.01" value={itemQty} onChange={(e) => setItemQty(e.target.value)} className="h-9 text-sm w-28" />
+            <Input placeholder="Notes (optional)" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} className="h-9 text-sm flex-1" />
+            <Button size="sm" onClick={recordUsage} disabled={recording} className="gap-1.5">
+              {recording ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Syringe className="h-3.5 w-3.5" />} Use
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
