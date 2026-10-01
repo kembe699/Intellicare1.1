@@ -507,22 +507,15 @@ router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
 // Natural-sounding (not robotic) voice for the queue display's "Patient X, please
 // proceed to..." calls — the browser's own speechSynthesis voices are universally
 // synthetic-sounding and vary by device/OS with no way to pick a good one reliably.
-// msedge-tts calls Microsoft Edge's own neural "Read Aloud" voices directly from the
-// server (confirmed it sends its own browser-matching User-Agent, so this works from
-// any Node runtime, not just from inside Edge) — free, no API key, genuinely natural.
-// It's an unofficial use of that service (not a published public API), so it could
-// need revisiting if Microsoft changes it, but it's the only free option that sounds
-// like a real person rather than a screen reader.
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+// ../utils/edgeTts calls Microsoft Edge's own neural "Read Aloud" voices directly
+// from the server — free, no API key, genuinely natural. It's an unofficial use of
+// that service (not a published public API), so it could need revisiting if
+// Microsoft changes it, but it's the only free option that sounds like a real
+// person rather than a screen reader. (This used to depend on the npm package
+// `msedge-tts`, which ships a `preinstall: npx only-allow pnpm` script that broke
+// the Render build — see edgeTts.js's own header comment for the full story.)
+const { synthesize } = require('../utils/edgeTts');
 const ANNOUNCEMENT_VOICE = 'en-US-GuyNeural';
-
-// SSML, not plain text, is sent over the wire — msedge-tts interpolates the given
-// text directly into an XML document with no escaping of its own (its own README
-// says as much), so a patient name containing &, <, or > would otherwise break the
-// request or get interpreted as markup.
-function escapeForSSML(text) {
-  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-}
 
 router.post('/queue/announce', authorize('lis.queue.write'), async (req, res) => {
   const { text } = req.body || {};
@@ -530,15 +523,9 @@ router.post('/queue/announce', authorize('lis.queue.write'), async (req, res) =>
     return res.status(400).json({ error: 'text is required (max 300 characters)' });
   }
   try {
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(ANNOUNCEMENT_VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-    const { audioStream } = tts.toStream(escapeForSSML(text));
+    const audio = await synthesize(text, ANNOUNCEMENT_VOICE);
     res.setHeader('Content-Type', 'audio/mpeg');
-    audioStream.on('error', (err) => {
-      console.error('Queue announcement TTS stream error:', err.message);
-      if (!res.headersSent) res.status(502).json({ error: 'Voice service unavailable' });
-    });
-    audioStream.pipe(res);
+    res.send(audio);
   } catch (error) {
     console.error('Error generating queue announcement audio:', error.message);
     res.status(502).json({ error: 'Voice service unavailable' });
