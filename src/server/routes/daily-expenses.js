@@ -32,13 +32,14 @@ const CATEGORY_EXPENSE_CODE = {
   // Doctor fees and allowances are large, recurring and reported on separately;
   // burying them in 5900 would make the income statement useless for the two
   // lines a clinic is asked about most.
-  'Doctor Fees': '5110',       // Doctor Fees
-  'Allowance': '5120',         // Employee Benefits
-  'Office Supplies': '5400',   // Office Supplies Expense
-  'Utilities': '5310',         // Utilities Expense
-  'Maintenance': '5330',       // Maintenance and Repairs
-  'Transport': '5800',         // Travel and Transport
-  'Medical Supplies': '5200',  // Medical Supplies Expense
+  'Doctor Fees': '5110',             // Doctor Fees
+  'Allowance': '5120',               // Employee Benefits
+  'Office Supplies': '5400',         // Office Supplies Expense
+  'Utilities': '5310',               // Utilities Expense
+  'Maintenance': '5330',             // Maintenance and Repairs
+  'Transport': '5800',               // Travel and Transport
+  'Medical Supplies': '5200',        // Medical Supplies Expense
+  'Administrative Expenses': '5440', // Administrative Expenses
 };
 const DEFAULT_EXPENSE_CODE = '5900'; // Miscellaneous Expenses — fallback for Catering/Cleaning/Security/Other/unknown
 
@@ -457,6 +458,7 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
           description: `Supplier bill payment — PO ${po_number || po.po_number} to ${supplier_name || 'supplier'} (Voucher ${voucherNo})`,
           reference_id: String(insertedId || paymentId),
           reference_module: 'supplier_bill_payment',
+          branch_id: po.branch_id ?? null,
         }, lineItems, req.user.id);
         await AccountingService.postGLEntry(glEntry.id, req.user.id);
       } else if (!hasGrnLiability) {
@@ -473,6 +475,7 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
             description: `Supplier bill payment — PO ${po_number || po.po_number} to ${supplier_name || 'supplier'} (Voucher ${voucherNo}) — posted direct to expense, no GRN on file`,
             reference_id: String(insertedId || paymentId),
             reference_module: 'supplier_bill_payment',
+            branch_id: po.branch_id ?? null,
           }, lineItems, req.user.id);
           await AccountingService.postGLEntry(glEntry.id, req.user.id);
         } else {
@@ -644,6 +647,7 @@ router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
           description: `Expense paid: ${exp.description} (Voucher ${exp.voucher_number || `EXP-${expenseId}`})`,
           reference_id: String(expenseId),
           reference_module: 'daily_expense',
+          branch_id: exp.branch_id ?? null,
         }, [
           { account_id: expenseAccount.id, debit_amount: parseFloat(exp.amount), credit_amount: 0, description: `${exp.category || 'Expense'} — ${exp.description}` },
           { account_id: String(exp.account_id), debit_amount: 0, credit_amount: parseFloat(exp.amount), description: `Payment via ${exp.payment_method || 'cash'} — ${exp.description}` },

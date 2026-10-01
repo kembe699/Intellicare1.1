@@ -817,6 +817,13 @@ async function runBackgroundMigrations() {
     ['Theatre',           () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/migrateTheatreTables').migrateTheatreTables, 'Theatre'
     )],
+    // Same reasoning as FixedAssets/Theatre above: adding a new essential
+    // account code only seeds it for brand-new tenants, so this loops the
+    // self-heal across every real tenant on each deploy instead of relying
+    // on a manually-run script against dpoc/demo/gudele/nationmc.
+    ['DailyExpenseAccounts', () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/ensureDailyExpenseAccounts').ensureDailyExpenseAccounts, 'Daily Expense Accounts'
+    )],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
     ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],

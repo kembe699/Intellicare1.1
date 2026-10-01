@@ -31,9 +31,14 @@ const ESSENTIAL_ACCOUNT_CODES = new Set([
   '4900', // Other Income
   '5110', // Doctor Fees — the Doctor Fees daily-expense category posts here
   '5120', // Employee Benefits — the Allowance category posts here
+  '5200', // Medical Supplies Expense — the Medical Supplies category posts here
+  '5310', // Utilities Expense — the Utilities category posts here
+  '5330', // Maintenance and Repairs — the Maintenance category posts here
   '5400', // Office Supplies Expense
+  '5440', // Administrative Expenses — the Administrative Expenses category posts here
   '5610', // Foreign Exchange Gain/Loss
   '5700', // Bad Debt Expense
+  '5800', // Travel and Transport — the Transport category posts here
   '5900', // Miscellaneous Expenses
 ]);
 
@@ -472,6 +477,18 @@ const healthcareChartOfAccounts = [
     sub_account_type: 'operating_expense',
     balance_type: 'debit',
     description: 'Staff training and professional development'
+  },
+  {
+    // The Daily Expenses page's "Administrative Expenses" category posts
+    // here (see CATEGORY_EXPENSE_CODE in routes/daily-expenses.js). No
+    // existing account was named for general administrative costs that
+    // don't fit Office Supplies/Marketing/Professional Fees/Training.
+    account_code: '5440',
+    account_name: 'Administrative Expenses',
+    account_type: 'expense',
+    sub_account_type: 'operating_expense',
+    balance_type: 'debit',
+    description: 'General administrative costs not covered by a more specific expense account'
   },
   {
     account_code: '5500',

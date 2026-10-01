@@ -20,9 +20,13 @@
  *
  * branch_id is taken from the associated patient_bills row (joined via
  * general_ledger.reference_id for reference_module IN ('patient_billing',
- * 'bill_item_void', 'patient_bill_payment')) — the same source
- * AccountingService now stamps at posting time going forward. A bill with no
- * branch_id of its own (pre-dates branch isolation entirely) leaves its
+ * 'bill_item_void', 'patient_bill_payment', 'bill_revenue_adjustment')) — the
+ * same source AccountingService now stamps at posting time going forward.
+ * 'bill_revenue_adjustment' rows come from reconcileBillRevenue.js, which
+ * writes account_ledger directly (bypassing createGLEntry) and has
+ * separately been given the same branch_id fix — included here so those
+ * rows get backfilled too rather than needing a second script. A bill with
+ * no branch_id of its own (pre-dates branch isolation entirely) leaves its
  * ledger rows NULL, same as before — there is nothing to backfill FROM.
  *
  * Idempotent: only ever updates a row that is currently NULL — a row already
@@ -63,7 +67,7 @@ function connConfig() {
   return { ...rest, ...(ssl ? { ssl: { rejectUnauthorized: false } } : {}) };
 }
 
-const REFERENCE_MODULES = ['patient_billing', 'bill_item_void', 'patient_bill_payment'];
+const REFERENCE_MODULES = ['patient_billing', 'bill_item_void', 'patient_bill_payment', 'bill_revenue_adjustment'];
 
 async function backfillOne(db, schema) {
   const { rows: preview } = await db.query(
