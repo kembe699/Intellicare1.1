@@ -166,9 +166,10 @@ export default function LISManagerReview() {
   const handleReview = async (specimenId: string, action: 'approved' | 'queried') => {
     if (reviewingAction) return;
 
-    // In our backend, review is done per result ID, but realistically we want to approve the whole specimen.
-    // The backend route is `/api/lis/results/:id/review` which updates one result.
-    // Let's loop through all results for this specimen and approve them.
+    // A specimen's panel is reviewed as one unit, so it's approved/queried in
+    // one call to /results/batch-review rather than one HTTP round trip per
+    // result (a 5-analyte panel used to be 5 sequential requests before
+    // anything resolved — the main reason approving "took forever").
     const specimenResults = results.filter(r => r.specimen_id === specimenId);
     const notes = managerNotes[specimenId] || '';
 
@@ -176,23 +177,15 @@ export default function LISManagerReview() {
 
     setReviewingAction(action);
     try {
-      let successCount = 0;
-      for (const r of specimenResults) {
-        const res = await authFetch(`/api/lis/results/${r.id}/review`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ action, manager_notes: notes, manager_id: user?.id })
-        });
-        if (res.ok) successCount++;
-      }
+      const res = await authFetch('/api/lis/results/batch-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ids: specimenResults.map(r => r.id), action, manager_notes: notes, manager_id: user?.id })
+      });
 
-      if (successCount === specimenResults.length) {
+      if (res.ok) {
         toast.success(`Specimen results ${action}`);
-        // Only auto-advance once every component actually updated — advancing
-        // on a partial failure used to leave the specimen half-approved (some
-        // lis_results rows updated, others still pending) with no way to tell
-        // and no retry path, since the UI had already moved on.
         const remaining = (currentOrder?.specimens || []).filter((s: any) => s.specimen_id !== specimenId);
         if (remaining.length > 0) {
           setSelectedSpecimenId(remaining[0].specimen_id);
@@ -201,7 +194,7 @@ export default function LISManagerReview() {
           setSelectedOrderId(null);
         }
       } else {
-        toast.error(`${specimenResults.length - successCount} of ${specimenResults.length} result(s) failed to update — still on this specimen, please retry`);
+        toast.error('Failed to update this specimen — still pending, please retry');
       }
       fetchResults();
     } catch (e) {
@@ -214,16 +207,15 @@ export default function LISManagerReview() {
   /**
    * Approve every outstanding test on the open order in one action.
    *
-   * A patient rarely has one test: a panel arrives as four or five specimens and
-   * approving them one at a time means selecting, approving, waiting for the
-   * auto-advance, and repeating. This walks the same per-result review endpoint
-   * the single-specimen path uses, so approval is recorded identically — there
-   * is no bulk endpoint doing something subtly different.
-   *
-   * Requests are issued per specimen and counted, because a partial failure has
-   * to be reported honestly: the specimens that did update stay updated, and the
-   * ones that did not are named so they can be retried rather than silently
-   * left pending.
+   * A patient rarely has one test: a panel arrives as four or five specimens.
+   * This used to call /results/:id/review once per result, nested inside a
+   * loop over every outstanding specimen — a handful of specimens with a few
+   * results each meant dozens of sequential HTTP round trips before the
+   * button's spinner stopped. Outstanding specimens are grouped by their
+   * manager_notes value (almost always just one group, since "approve all"
+   * rarely has per-specimen notes) and each group's result ids go in a
+   * single /results/batch-review call, issued in parallel across groups —
+   * so the common case is exactly one request for the whole order.
    */
   const handleApproveOrder = async () => {
     if (approvingAll || reviewingAction || !currentOrder) return;
@@ -233,22 +225,26 @@ export default function LISManagerReview() {
 
     setApprovingAll(true);
     try {
-      const failed: string[] = [];
+      const groups = new Map<string, { ids: string[]; testNames: string[] }>();
       for (const sp of outstanding) {
-        const specimenResults = results.filter(r => r.specimen_id === sp.specimen_id);
         const notes = managerNotes[sp.specimen_id] || '';
-        let ok = 0;
-        for (const r of specimenResults) {
-          const res = await authFetch(`/api/lis/results/${r.id}/review`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ action: 'approved', manager_notes: notes, manager_id: user?.id }),
-          });
-          if (res.ok) ok++;
-        }
-        if (ok !== specimenResults.length) failed.push(sp.test_name);
+        const specimenResults = results.filter(r => r.specimen_id === sp.specimen_id);
+        if (!groups.has(notes)) groups.set(notes, { ids: [], testNames: [] });
+        const group = groups.get(notes)!;
+        group.ids.push(...specimenResults.map(r => r.id));
+        group.testNames.push(sp.test_name);
       }
+
+      const failed: string[] = [];
+      await Promise.all(Array.from(groups.entries()).map(async ([notes, group]) => {
+        const res = await authFetch('/api/lis/results/batch-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ ids: group.ids, action: 'approved', manager_notes: notes, manager_id: user?.id }),
+        });
+        if (!res.ok) failed.push(...group.testNames);
+      }));
 
       if (failed.length === 0) {
         toast.success(`Approved all ${outstanding.length} test${outstanding.length > 1 ? 's' : ''}`);
