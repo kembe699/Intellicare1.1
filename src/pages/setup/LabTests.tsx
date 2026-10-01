@@ -18,6 +18,7 @@ import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, TestTube, X, Database, Search, Download, Upload, FileText, Check, ChevronsUpDown, GripVertical, Cpu, Settings, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LabTest, LabTestComponent } from '@/types';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const testCategories = [
   'Hematology',
@@ -30,6 +31,7 @@ const testCategories = [
 ];
 
 const LabTests: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { currency: baseCurrency } = useCurrency();
   const [tests, setTests] = useState<LabTest[]>([]);
@@ -361,7 +363,7 @@ const handleBulkDelete = async () => {
     return;
   }
 
-  if (!confirm(`Are you sure you want to delete ${selectedTests.size} selected test(s)?`)) {
+  if (!(await confirm({ description: `Are you sure you want to delete ${selectedTests.size} selected test(s)?`, destructive: true }))) {
     return;
   }
 
@@ -401,7 +403,7 @@ const handleBulkDelete = async () => {
 
   const handleDelete = async (id: string) => {
     if (deletingId) return;
-    if (!confirm('Are you sure you want to delete this lab test?')) {
+    if (!(await confirm({ description: 'Are you sure you want to delete this lab test?', destructive: true }))) {
       return;
     }
 
@@ -649,6 +651,7 @@ const handleBulkDelete = async () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full flex flex-col">
         <PageHeader

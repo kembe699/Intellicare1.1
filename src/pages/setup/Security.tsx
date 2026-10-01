@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 // ─── Types ──────────────────────────────────────────────────
 interface UserData {
@@ -113,6 +114,7 @@ const ROLE_TONES: Record<string, StatusBadgeTone> = {
 
 // ─── Main Component ─────────────────────────────────────────
 const Security: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
 
   // Data state
@@ -444,7 +446,7 @@ const Security: React.FC = () => {
   // account has an email on file, sends it there too. Shown once in the same
   // "credentials" dialog account creation already uses.
   const handleResetPassword = async (u: UserData) => {
-    if (!confirm(`Reset the password for ${u.displayName}? A new temporary password will be generated${u.email ? ' and emailed to them if possible' : ''}.`)) return;
+    if (!(await confirm({ description: `Reset the password for ${u.displayName}? A new temporary password will be generated${u.email ? ' and emailed to them if possible' : ''}.` }))) return;
     setResettingUserId(u.id);
     try {
       const response = await authFetch(`/api/users/${u.id}/reset-password`, { method: 'POST' });
@@ -593,6 +595,7 @@ const Security: React.FC = () => {
   // ─── Render ───────────────────────────────────────────────
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="animate-fade-in w-full flex flex-col">
         <PageHeader

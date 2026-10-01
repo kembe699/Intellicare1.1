@@ -27,6 +27,7 @@ import {
   ShoppingCart, Loader2, PenLine, ArrowLeft, ChevronsUpDown, Check as CheckIcon, X, Download
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface PRLine {
   id?: string;
@@ -127,6 +128,7 @@ const emptyLine = (): PRLine => ({
 });
 
 const PurchaseRequisitions: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency, fmt } = useCurrency();
@@ -520,7 +522,7 @@ const PurchaseRequisitions: React.FC = () => {
 
   const cancelPR = async (id: string) => {
     if (processing?.id === id) return;
-    if (!confirm('Cancel this requisition?')) return;
+    if (!(await confirm({ description: 'Cancel this requisition?' }))) return;
     setProcessing({ id, action: 'cancel' });
     try {
       const res = await authFetch(`/api/procurement/purchase-requisitions/${id}/cancel`, {
@@ -666,6 +668,7 @@ const PurchaseRequisitions: React.FC = () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">

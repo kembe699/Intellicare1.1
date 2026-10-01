@@ -21,6 +21,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import * as docTemplate from '@/utils/documentTemplate';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 function Field({ label, value, capitalize }: { label: string; value: React.ReactNode; capitalize?: boolean }) {
   return (
@@ -58,6 +59,7 @@ const OUTCOME_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = { aliv
 const OUTCOME_LABEL: Record<string, string> = { alive: 'Alive', dead: 'Deceased', absconded: 'Absconded' };
 
 export default function PatientDetails() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { id: admissionId } = useParams<{ id: string }>();
   const { user, hasPrivilege } = useAuth();
   const { fmt } = useCurrency();
@@ -465,6 +467,7 @@ export default function PatientDetails() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-5 w-full flex flex-col">
         {/* ── Patient header: identity, key facts, and the two things you actually do from here ── */}
@@ -1015,11 +1018,11 @@ export default function PatientDetails() {
               <Button
                 disabled={dischargeMut.isPending}
                 className="gap-1.5"
-                onClick={() => {
+                onClick={async () => {
                   if (!dischargeData.discharge_outcome) { toast.error('Outcome is required'); return; }
                   if (!dischargeData.discharge_reason.trim()) { toast.error('Discharge reason is required'); return; }
                   if (!dischargeData.discharge_summary.trim()) { toast.error('Discharge summary is required'); return; }
-                  if (!window.confirm('Discharge this patient? This ends the admission and cannot be undone.')) return;
+                  if (!(await confirm({ description: 'Discharge this patient? This ends the admission and cannot be undone.' }))) return;
                   dischargeMut.mutate(dischargeData);
                 }}
               >

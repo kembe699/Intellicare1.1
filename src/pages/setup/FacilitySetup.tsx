@@ -18,6 +18,7 @@ import {
 import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { refreshFacilityInfo } from '@/hooks/useFacilityInfo';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 // ─── Interfaces ─────────────────────────────────────────────
 interface FacilityData {
@@ -83,6 +84,7 @@ const emptyBranch: BranchData = {
 
 // ─── Main Component ─────────────────────────────────────────
 const FacilitySetup: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
 
   // Tab state
@@ -387,6 +389,7 @@ const FacilitySetup: React.FC = () => {
   // ─── Render ───────────────────────────────────────────────
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="animate-fade-in w-full flex flex-col">
         <PageHeader
@@ -807,8 +810,8 @@ const FacilitySetup: React.FC = () => {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (branch.id && confirm(`Delete branch "${branch.name}"? This cannot be undone.`)) {
+                          onClick={async () => {
+                            if (branch.id && await confirm({ description: `Delete branch "${branch.name}"? This cannot be undone.`, destructive: true })) {
                               handleDeleteBranch(branch.id);
                             }
                           }}

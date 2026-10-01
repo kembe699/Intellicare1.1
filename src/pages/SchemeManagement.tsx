@@ -23,6 +23,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 type TabType = 'schemes' | 'service-pricing' | 'product-pricing' | 'membership' | 'discounts' | 'reports';
 
@@ -41,6 +42,7 @@ const SCHEME_TYPES = [
 ];
 
 const SchemeManagement: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { currency, fmt } = useCurrency();
   const clinicId = user?.clinic || '1';
@@ -240,7 +242,7 @@ const SchemeManagement: React.FC = () => {
   }
 
   async function handleDeleteScheme(id: string) {
-    if (!confirm('Deactivate this scheme?')) return;
+    if (!(await confirm({ description: 'Deactivate this scheme?' }))) return;
     try {
       const res = await authFetch(`/api/schemes/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -302,7 +304,7 @@ const SchemeManagement: React.FC = () => {
   }
 
   async function handleRemoveMember(membershipId: string) {
-    if (!confirm('Remove this member?')) return;
+    if (!(await confirm({ description: 'Remove this member?' }))) return;
     try {
       const res = await authFetch(`/api/schemes/membership/${membershipId}`, { method: 'DELETE' });
       if (res.ok) { toast.success('Member removed'); loadMembers(); }
@@ -600,6 +602,7 @@ const SchemeManagement: React.FC = () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="animate-fade-in w-full flex flex-col">
         <PageHeader

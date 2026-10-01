@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const STATUS_CLASS: Record<string, string> = {
   in_progress: 'bg-sky-50 text-sky-700 border-sky-200', completed: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -41,6 +42,7 @@ const VARIANCE_REASON_OPTIONS = [
 ];
 
 export default function PhysicalCounts() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { fmt } = useCurrency();
   const clinicId = user?.clinic || 1;
@@ -181,7 +183,7 @@ export default function PhysicalCounts() {
   const reconcileCount = async () => {
     if (reconciling) return;
     if (!selectedCount) return;
-    if (!confirm('Reconcile this count? Adjustments will be created for all variances.')) return;
+    if (!(await confirm({ description: 'Reconcile this count? Adjustments will be created for all variances.' }))) return;
     setReconciling(true);
     try {
       const res = await authFetch(`/api/inventory/physical-counts/${selectedCount.id}/reconcile`, {
@@ -267,6 +269,7 @@ export default function PhysicalCounts() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1600px] mx-auto w-full flex flex-col">

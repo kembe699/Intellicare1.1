@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,7 @@ function AgeSexSectionTable({ section, computedRows, overrideRows, onOverride, r
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Dhis2Report() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user, hasPrivilege } = useAuth();
   const facilityInfo = useFacilityInfo();
   const isAdmin = !!user?.isAdmin;
@@ -325,7 +327,7 @@ export default function Dhis2Report() {
 
   const handleFinalize = async () => {
     if (!savedReport) { toast.error('Save the report before finalizing it'); return; }
-    if (!window.confirm('Finalize this report? It will be locked — only an admin can reopen it.')) return;
+    if (!(await confirm({ description: 'Finalize this report? It will be locked — only an admin can reopen it.' }))) return;
     const res = await authFetch(`/api/reports-v2/dhis2/${savedReport.id}/finalize`, { method: 'POST' });
     if (res.ok) { toast.success('Report finalized'); loadReport(); }
     else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Failed to finalize'); }
@@ -333,7 +335,7 @@ export default function Dhis2Report() {
 
   const handleReopen = async () => {
     if (!savedReport) return;
-    if (!window.confirm('Reopen this finalized report for editing?')) return;
+    if (!(await confirm({ description: 'Reopen this finalized report for editing?' }))) return;
     const res = await authFetch(`/api/reports-v2/dhis2/${savedReport.id}/reopen`, { method: 'POST' });
     if (res.ok) { toast.success('Report reopened'); loadReport(); }
     else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Failed to reopen'); }
@@ -369,6 +371,7 @@ export default function Dhis2Report() {
 
   return (
     <div className={cn('dhis2-report', savedReport?.status !== 'final' && 'dhis2-draft')}>
+      {confirmDialog}
       <ReportSubPageShell
         title="DHIS2 Monthly Report"
         description="Monthly HMIS facility report, generated from Intellicare data"

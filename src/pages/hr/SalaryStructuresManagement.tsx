@@ -13,6 +13,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
 import { Wallet, Plus, Trash2, Loader2, Check, X, Users2, Edit } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface SalaryStructure {
   id: string;
@@ -36,6 +37,7 @@ interface Component {
 const emptyForm = (currencyCode: string) => ({ name: '', description: '', basic_salary: '0', currency: currencyCode, pay_frequency: 'monthly' });
 
 export default function SalaryStructuresManagement() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { currency } = useCurrency();
   const [structures, setStructures] = useState<SalaryStructure[]>([]);
   const [currencies, setCurrencies] = useState<any[]>([]);
@@ -117,7 +119,7 @@ export default function SalaryStructuresManagement() {
   };
 
   const handleDelete = async (s: SalaryStructure) => {
-    if (!confirm(`Delete the "${s.name}" salary structure? Employees already assigned it keep their current salary — this only removes the template.`)) return;
+    if (!(await confirm({ description: `Delete the "${s.name}" salary structure? Employees already assigned it keep their current salary — this only removes the template.` }))) return;
     try {
       const res = await authFetch(`/api/hr/salary-structures/${s.id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -222,6 +224,7 @@ export default function SalaryStructuresManagement() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full">
         <PageHeader icon={<Wallet />} title="Salary Structures" subtitle="Define standard pay templates once, then assign them to employees or consultants" />

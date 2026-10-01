@@ -7,6 +7,7 @@ import { FlaskConical, MessageSquare, Image, CreditCard, Phone, Cpu, Grid, User,
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ConfigType {
@@ -39,6 +40,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ApiConfigurations: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [configs, setConfigs] = useState<ConfigType[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ConfigType | null>(null);
@@ -79,7 +81,7 @@ const ApiConfigurations: React.FC = () => {
   // ─── Generate Token ─────────────────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!selected) return;
-    if (!confirm(`Generate a new token for "${selected.label}"? Any existing token will be revoked immediately.`)) return;
+    if (!(await confirm({ description: `Generate a new token for "${selected.label}"? Any existing token will be revoked immediately.` }))) return;
 
     setGenerating(true);
     setNewToken(null);
@@ -112,7 +114,7 @@ const ApiConfigurations: React.FC = () => {
   // ─── Revoke Token ───────────────────────────────────────────────────────────
   const handleRevoke = async () => {
     if (!selected?.token) return;
-    if (!confirm(`Revoke the token for "${selected.label}"? The Lab Agent will stop working until a new token is generated and pasted.`)) return;
+    if (!(await confirm({ description: `Revoke the token for "${selected.label}"? The Lab Agent will stop working until a new token is generated and pasted.` }))) return;
 
     setRevoking(true);
     try {
@@ -153,6 +155,7 @@ const ApiConfigurations: React.FC = () => {
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="animate-fade-in w-full flex flex-col">
         <PageHeader

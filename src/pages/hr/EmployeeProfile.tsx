@@ -9,6 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
   Users, Edit, Phone, Mail, MapPin, Loader2, Check, Plus, Trash2,
   ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt,
@@ -21,6 +22,7 @@ const STATUS_TONE: Record<string, StatusBadgeTone> = {
 };
 
 export default function EmployeeProfile() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currency } = useCurrency();
@@ -72,7 +74,7 @@ export default function EmployeeProfile() {
 
   const handleUnassignStructure = async () => {
     if (!id || savingStructure) return;
-    if (!confirm("Remove this employee's assigned salary structure? Their current basic salary and components stay as-is — only the link to the template is cleared.")) return;
+    if (!(await confirm({ description: "Remove this employee's assigned salary structure? Their current basic salary and components stay as-is — only the link to the template is cleared." }))) return;
     setSavingStructure(true);
     try {
       const res = await authFetch(`/api/hr/employees/${id}/unassign-salary-structure`, { method: 'POST' });
@@ -124,7 +126,7 @@ export default function EmployeeProfile() {
 
   const handleCreateBill = async () => {
     if (!id || creatingBill || !billCurrency) return;
-    if (!confirm(`Create a consultant bill for ${billCurrency} ${consultTrace?.billable?.[billCurrency]?.collected?.toFixed(2)} × ${employee.consultation_fee_percentage}%?`)) return;
+    if (!(await confirm({ description: `Create a consultant bill for ${billCurrency} ${consultTrace?.billable?.[billCurrency]?.collected?.toFixed(2)} × ${employee.consultation_fee_percentage}%?` }))) return;
     setCreatingBill(true);
     try {
       const res = await authFetch(`/api/hr/consultants/${id}/bills`, {
@@ -213,7 +215,7 @@ export default function EmployeeProfile() {
 
   const handleRemoveComponent = async (componentId: string) => {
     if (removingId) return;
-    if (!confirm('Remove this salary component?')) return;
+    if (!(await confirm({ description: 'Remove this salary component?' }))) return;
     setRemovingId(componentId);
     try {
       const res = await authFetch(`/api/hr/salary-components/${componentId}`, { method: 'DELETE' });
@@ -256,6 +258,7 @@ export default function EmployeeProfile() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)]">
         <div className="max-w-[1700px] mx-auto space-y-4">
           <PageHeader

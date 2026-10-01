@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface CartLine {
   type: 'service' | 'product';
@@ -48,6 +49,7 @@ interface ProformaRecord {
 }
 
 export default function ProformaInvoicePage() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { currency: baseCurrency } = useCurrency();
   const facilityInfo = useFacilityInfo();
@@ -429,7 +431,7 @@ export default function ProformaInvoicePage() {
 
   const handleConvert = async (proforma: ProformaRecord) => {
     if (convertingId) return;
-    if (!confirm(`Convert ${proforma.proforma_number} into a real bill for ${proforma.patient_name}? This will add these items to their active bill (or create one).`)) return;
+    if (!(await confirm({ description: `Convert ${proforma.proforma_number} into a real bill for ${proforma.patient_name}? This will add these items to their active bill (or create one).` }))) return;
     setConvertingId(proforma.id);
     try {
       const res = await authFetch(`/api/proforma-invoices/${proforma.id}/convert`, { method: 'POST', credentials: 'include' });
@@ -456,6 +458,7 @@ export default function ProformaInvoicePage() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1700px] mx-auto space-y-4 w-full">
         <div className="flex flex-wrap items-center justify-between gap-4">

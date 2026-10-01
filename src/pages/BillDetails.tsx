@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface ServiceLine {
   // Stable per-line id, assigned server-side once and never regenerated — lets
@@ -117,6 +118,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function BillDetails() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { billId } = useParams<{ billId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -415,7 +417,7 @@ export default function BillDetails() {
   const handleVoidItem = async (index: number) => {
     if (voidingIndex !== null) return;
     if (!bill) return;
-    if (!confirm('Void this line item? It will be removed from the bill total.')) return;
+    if (!(await confirm({ description: 'Void this line item? It will be removed from the bill total.' }))) return;
     setVoidingIndex(index);
     try {
       // B1: lineId identifies the exact line clicked; serviceIndex is sent only
@@ -821,6 +823,7 @@ export default function BillDetails() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="w-full flex flex-col">
         <PageHeader
