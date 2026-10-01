@@ -829,8 +829,8 @@ router.post('/journal-entries/:id/revert-to-draft', authorize('accounting.write'
 // NOTE: This reads directly from `patient_bills` (the live billing table that
 // BillingManagement/PatientsBill/etc. actually write to) rather than the
 // `patient_receivables` side-table below. `patient_receivables` is only ever
-// populated by AccountingService.createGLFromPatientBill/createGLFromPayment,
-// which no route currently calls — so it silently drifts out of sync with
+// populated by AccountingService.createGLFromPatientBill, which no route
+// currently calls for this side-table — so it silently drifts out of sync with
 // real bill balances (verified against live data: e.g. bills already fully
 // paid in patient_bills still showed as pending/unpaid in patient_receivables).
 // due_date defaults to 30 days after bill_date when unset, since a NULL

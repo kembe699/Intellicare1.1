@@ -13,6 +13,7 @@ import { Plus, Trash2, Edit, Wrench, X, Search, Download, Upload, FileText, Sett
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 // Import the ClinicalApiClient from Clinical.tsx temporarily
 // In production, this should be moved to a separate API module
 class ClinicalApiClient {
@@ -225,6 +226,7 @@ const normalizeDepartment = (input: string): string | null => {
 };
 
 const Services: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { currency: baseCurrency } = useCurrency();
   const [services, setServices] = useState<Service[]>([]);
@@ -416,7 +418,7 @@ const Services: React.FC = () => {
 
   const handleDelete = async (serviceId: string) => {
     if (deletingId) return;
-    if (!confirm('Are you sure you want to delete this service?')) return;
+    if (!(await confirm({ description: 'Are you sure you want to delete this service?' }))) return;
 
     setDeletingId(serviceId);
     try {
@@ -452,7 +454,7 @@ const Services: React.FC = () => {
       confirmMsg = `${priceAdjForm.direction === 'increase' ? 'Increase' : 'Decrease'} the price of ${scopeLabel} by ${pct}%? This applies immediately and cannot be undone automatically.`;
     }
 
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirm({ description: confirmMsg }))) return;
 
     setApplyingPriceAdj(true);
     try {
@@ -682,6 +684,7 @@ const Services: React.FC = () => {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 w-full flex flex-col">
         <PageHeader

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import RecordPaymentModal from '@/components/billing/RecordPaymentModal';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Invoice {
   id: string;
@@ -53,6 +54,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function Invoices() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { currency } = useCurrency();
   const { downloadPDF, printPDF, loading: pdfLoading } = usePDFDocument();
 
@@ -118,7 +120,7 @@ export default function Invoices() {
 
   const handleMarkPaid = async (inv: Invoice) => {
     if (markingPaid) return;
-    if (!confirm(`Mark invoice ${inv.invoice_number} as fully paid?`)) return;
+    if (!(await confirm({ description: `Mark invoice ${inv.invoice_number} as fully paid?` }))) return;
     setMarkingPaid(true);
     try {
       const res = await authFetch(`/api/invoices/${inv.id}/mark-paid`, { method: 'PUT', credentials: 'include' });
@@ -132,7 +134,7 @@ export default function Invoices() {
 
   const handleCancel = async (inv: Invoice) => {
     if (cancellingInvoice) return;
-    if (!confirm(`Cancel invoice ${inv.invoice_number}? This will revert the bill to cash billing.`)) return;
+    if (!(await confirm({ description: `Cancel invoice ${inv.invoice_number}? This will revert the bill to cash billing.` }))) return;
     setCancellingInvoice(true);
     try {
       const res = await authFetch(`/api/invoices/${inv.id}/cancel`, { method: 'PUT', credentials: 'include' });
@@ -148,6 +150,7 @@ export default function Invoices() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
         <PageHeader

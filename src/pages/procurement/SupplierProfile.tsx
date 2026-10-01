@@ -9,6 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { cn } from '@/lib/utils';
 import {
   Building2, Edit, Star, Phone, Mail, MapPin, CheckCircle, Ban, Loader2,
@@ -48,6 +49,7 @@ export default function SupplierProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currency } = useCurrency();
+  const { prompt, promptDialog } = usePromptDialog();
 
   const [supplier, setSupplier] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -114,7 +116,7 @@ export default function SupplierProfile() {
 
   const toggleHold = async () => {
     if (!supplier || holdingId === supplier.id) return;
-    const reason = supplier.on_hold ? '' : prompt('Reason for placing on hold:');
+    const reason = supplier.on_hold ? '' : await prompt({ title: 'Reason for placing on hold' });
     if (!supplier.on_hold && !reason) return;
     setHoldingId(supplier.id);
     try {
@@ -193,6 +195,7 @@ export default function SupplierProfile() {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)]">
         <div className="max-w-[1700px] mx-auto space-y-4">
           <PageHeader

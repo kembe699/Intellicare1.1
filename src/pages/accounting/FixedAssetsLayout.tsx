@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Building2, Plus, Settings, Loader2, Edit, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Category, ChartAccount, NATURE_LABEL } from './fixedAssetsShared';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const TABS = [
   { to: '/accounting/fixed-assets/register', label: 'Register' },
@@ -110,6 +111,7 @@ export default function FixedAssetsLayout() {
 function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
   categories: Category[]; accounts: ChartAccount[]; onClose: () => void; onChanged: () => void;
 }) {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -199,7 +201,7 @@ function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
   };
 
   const handleDelete = async (c: Category) => {
-    if (!window.confirm(`Delete category "${c.name}"? This only works if no assets use it.`)) return;
+    if (!(await confirm({ description: `Delete category "${c.name}"? This only works if no assets use it.` }))) return;
     setBusyId(c.id);
     try {
       const res = await authFetch(`/api/fixed-assets/categories/${c.id}`, { method: 'DELETE' });
@@ -214,6 +216,7 @@ function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
+      {confirmDialog}
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Asset Categories</DialogTitle></DialogHeader>
         <div className="space-y-2">

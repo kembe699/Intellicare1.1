@@ -1,42 +1,29 @@
 #!/usr/bin/env node
 /**
- * Backfill account_ledger.branch_id for rows posted before this was fixed.
+ * Backfill account_ledger.branch_id for expense-side GL postings made before
+ * AccountingService.createGLEntry's branch_id fix shipped.
  *
- * AccountingService.createGLEntry's AccountLedger.create() call never included
- * branch_id — not because callers lacked it, but because the object literal
- * that builds each ledger row simply never read glData.branch_id. Every
- * account_ledger row ever posted through it (patient bill revenue, bill
- * voids/top-ups, daily expense payments, supplier bill payments, consultant
- * bill payments, FX settlements, asset postings — effectively the entire
- * double-entry ledger) has branch_id = NULL.
+ * Same root cause as B7 (backfillPatientBillingLedgerBranchIds.js):
+ * createGLEntry's AccountLedger.create() call never read glData.branch_id,
+ * so every account_ledger row it ever posted had branch_id = NULL regardless
+ * of what the caller resolved. B7 fixed and backfilled the patient-billing
+ * side (patient_billing / bill_item_void / patient_bill_payment /
+ * bill_revenue_adjustment). This script covers the two expense-side
+ * reference_modules B7 didn't touch — daily-expenses.js's own GL postings:
  *
- * Every branch-scoped read of account_ledger (both Income Statement reports,
- * trial balance, balance sheet — anywhere branchScope() filters `al.branch_id
- * = :branchId`) therefore returns nothing for a non-unscoped-admin viewer,
- * while receipts (which DO carry branch_id correctly) keep showing real
- * totals — exactly the "dashboard shows real numbers, income statement shows
- * 0" symptom reported on nation. An unscoped admin (the default — see
- * branch_isolation_initiative notes on the TopBar switcher) never hits this,
- * which is why it went unnoticed until someone viewed a report scoped to a
- * specific branch.
+ *   daily_expense          -> daily_expenses.branch_id
+ *   supplier_bill_payment  -> supplier_bill_payments.branch_id
  *
- * The code path is now fixed (AccountingService.js, patientBills.js,
- * daily-expenses.js, reconcileBillRevenue.js all now pass branch_id through)
- * — this script repairs rows posted before that fix shipped, by looking up
- * each row's branch_id from the record general_ledger.reference_id actually
- * points to, keyed by reference_module:
- *
- *   patient_billing / bill_item_void / bill_revenue_adjustment -> patient_bills.branch_id
- *   daily_expense                                              -> daily_expenses.branch_id
- *   supplier_bill_payment                                      -> supplier_bill_payments.branch_id
- *
- * Any other reference_module (e.g. consultant_bill, which has no branch_id
- * column at all today) is reported, not guessed at, and left NULL.
+ * Any other reference_module with branch_id still NULL (e.g.
+ * consultant_bill, which has no branch_id column at all today, or
+ * fixed-asset postings, which are a separate, larger gap) is reported, not
+ * guessed at, and left NULL — run backfillPatientBillingLedgerBranchIds.js
+ * separately for the patient-billing side.
  *
  * Idempotent: only ever touches rows where branch_id IS NULL.
  *
- *   node src/server/scripts/backfillAccountLedgerBranchId.js --schema tenant_nation
- *   node src/server/scripts/backfillAccountLedgerBranchId.js --schema tenant_nation --apply
+ *   node src/server/scripts/backfillExpenseLedgerBranchIds.js --schema tenant_nation
+ *   node src/server/scripts/backfillExpenseLedgerBranchIds.js --schema tenant_nation --apply
  */
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
@@ -58,31 +45,14 @@ const APPLY = args.includes('--apply');
 const si = args.indexOf('--schema');
 const SCHEMA = si !== -1 ? args[si + 1] : null;
 if (!SCHEMA || !/^[a-z_][a-z0-9_]{0,62}$/.test(SCHEMA)) {
-  console.error('Usage: backfillAccountLedgerBranchId.js --schema <tenant_schema> [--apply]');
+  console.error('Usage: backfillExpenseLedgerBranchIds.js --schema <tenant_schema> [--apply]');
   process.exit(1);
 }
 
-// One entry per handled reference_module: a SELECT count and the matching
-// UPDATE, written out explicitly rather than generically assembled — the
-// three source tables join on different column shapes (char(36) id, integer
-// id cast to text, varchar id) and string-building one JOIN clause to serve
-// both a SELECT and an UPDATE was fragile enough to not be worth it.
+// One entry per handled reference_module — a SELECT count and the matching
+// UPDATE, written out explicitly rather than generically assembled, since
+// the two source tables join on different id column shapes.
 const SOURCES = [
-  {
-    label: 'patient_bills',
-    modules: ['patient_billing', 'bill_item_void', 'bill_revenue_adjustment'],
-    countSql: `
-      SELECT COUNT(*) AS count
-        FROM account_ledger al
-        JOIN general_ledger gl ON gl.id = al.transaction_id
-        JOIN patient_bills src ON src.id = gl.reference_id
-       WHERE al.branch_id IS NULL AND gl.reference_module = ANY($1::text[]) AND src.branch_id IS NOT NULL`,
-    updateSql: `
-      UPDATE account_ledger al SET branch_id = src.branch_id
-        FROM general_ledger gl JOIN patient_bills src ON src.id = gl.reference_id
-       WHERE al.transaction_id = gl.id AND al.branch_id IS NULL
-         AND gl.reference_module = ANY($1::text[]) AND src.branch_id IS NOT NULL`,
-  },
   {
     label: 'daily_expenses',
     modules: ['daily_expense'],
@@ -146,7 +116,7 @@ async function main() {
       [allModules]
     );
     if (unhandled.length) {
-      console.log(`\nNot handled by this script (no branch_id source wired up for this reference_module):`);
+      console.log(`\nNot handled by this script (patient-billing rows: use backfillPatientBillingLedgerBranchIds.js; everything else below has no branch_id source wired up yet):`);
       for (const r of unhandled) console.log(`  ${(r.reference_module || '(null)').padEnd(24)} ${r.count} row(s) left NULL`);
     }
 

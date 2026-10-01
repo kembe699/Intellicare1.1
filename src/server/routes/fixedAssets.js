@@ -7,6 +7,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
 const AssetService = require('../services/AssetService');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
 
 // Same inline named-parameter branch-scoping convention as accounting.js/
 // hr.js/reportOccupancy.js — admins see every branch unless the X-Branch-ID
@@ -23,6 +24,24 @@ function branchScope(req, replacements, alias = '') {
 function getCreateBranchId(req) {
   if (!req.user) return null;
   return req.branchContext?.branchId || req.user.branchId || null;
+}
+
+// F7: dispose/revalue act on an asset found purely by id + clinic_id
+// (AssetService.getAsset never filters by branch) — a branch-scoped user who
+// knew or guessed another branch's asset id could dispose of or revalue it.
+// Checked here, before the service call, against a lightweight fetch of just
+// the asset's own branch_id — same pattern as patientBills.js/receipts.js.
+async function assertAssetBranchAccess(req, res, sequelize, clinicId, assetId) {
+  const [[asset]] = await sequelize.query(`SELECT branch_id FROM fixed_assets WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: assetId, clinicId } });
+  if (!asset) {
+    res.status(404).json({ error: 'Asset not found' });
+    return false;
+  }
+  if (!BranchQueryFilter.canAccessRecord(asset, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+    res.status(403).json({ error: 'Access denied to this asset' });
+    return false;
+  }
+  return true;
 }
 
 // ── Categories ──────────────────────────────────────────────────────────
@@ -83,6 +102,21 @@ router.put('/categories/:id', authorize('assets.write'), async (req, res) => {
   try {
     const [[existing]] = await sequelize.query(`SELECT id FROM asset_categories WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id: req.params.id, clinicId } });
     if (!existing) return res.status(404).json({ error: 'Category not found' });
+
+    // F4: changing which GL account a category posts to, once assets already
+    // exist under it, would silently split one category's history across two
+    // accounts — every future depreciation/disposal for those assets follows
+    // the new account while everything already posted stays on the old one,
+    // with nothing to reconcile the two. Only blocked when the request is
+    // actually trying to change one of the three account fields — renaming
+    // the category, changing its useful-life default, etc. is unaffected.
+    if (assetAccountId || accumAccountId || expenseAccountId) {
+      const [[{ count }]] = await sequelize.query(`SELECT COUNT(*)::int AS count FROM fixed_assets WHERE category_id = :id`, { replacements: { id: req.params.id } });
+      if (count > 0) {
+        return res.status(400).json({ error: `${count} asset${count === 1 ? '' : 's'} already use this category's GL accounts — changing them now would split that history across two accounts. Register a new category for the new accounts instead.` });
+      }
+    }
+
     await sequelize.query(
       `UPDATE asset_categories SET
          name = COALESCE(:name, name), default_depreciation_method = COALESCE(:method, default_depreciation_method),
@@ -138,7 +172,7 @@ router.get('/', authorize('assets.view'), async (req, res) => {
       FROM fixed_assets fa
       JOIN asset_categories ac ON ac.id = fa.category_id
       LEFT JOIN employees e ON e.id = fa.assigned_to_employee_id
-      LEFT JOIN users u ON fa.created_by ~ '^[0-9]+$' AND u.id = fa.created_by::integer
+      LEFT JOIN users u ON u.id = (CASE WHEN fa.created_by ~ '^[0-9]+$' THEN fa.created_by::integer ELSE NULL END)
       WHERE fa.clinic_id = :clinicId ${branchSql}`;
     if (req.query.status) { sql += ' AND fa.status = :status'; replacements.status = req.query.status; }
     if (req.query.category_id) { sql += ' AND fa.category_id = :categoryId'; replacements.categoryId = req.query.category_id; }
@@ -166,7 +200,7 @@ router.get('/:id', authorize('assets.view'), async (req, res) => {
        FROM fixed_assets fa
        JOIN asset_categories ac ON ac.id = fa.category_id
        LEFT JOIN employees e ON e.id = fa.assigned_to_employee_id
-       LEFT JOIN users u ON fa.created_by ~ '^[0-9]+$' AND u.id = fa.created_by::integer
+       LEFT JOIN users u ON u.id = (CASE WHEN fa.created_by ~ '^[0-9]+$' THEN fa.created_by::integer ELSE NULL END)
        WHERE fa.id = :id AND fa.clinic_id = :clinicId ${branchSql}`,
       { replacements }
     );
@@ -232,6 +266,22 @@ router.put('/:id', authorize('assets.write'), async (req, res) => {
       { replacements: { id: req.params.id, name: name || null, description: description != null ? description : null, serialNumber: serialNumber || null, location: location || null, assignedTo: assignedTo || null, branchId: branchId || null, notes: notes != null ? notes : null } }
     );
     const [[updated]] = await sequelize.query(`SELECT * FROM fixed_assets WHERE id = :id`, { replacements: { id: req.params.id } });
+
+    // F7: every other write in this file (create, dispose, revalue,
+    // depreciation run) logs an audit entry — this one silently didn't, so an
+    // asset's name/location/assignee/branch could be changed with no record
+    // of who changed it or what it used to say.
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Fixed Assets', action: 'ASSET_UPDATED', entity_type: 'FixedAsset', entity_id: req.params.id,
+        description: `Updated asset ${updated.asset_code} — ${updated.name}`,
+        new_values: { name: updated.name, location: updated.location, assigned_to_employee_id: updated.assigned_to_employee_id, branch_id: updated.branch_id },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) {}
+
     res.json(updated);
   } catch (error) {
     console.error('Error updating fixed asset:', error);
@@ -241,7 +291,9 @@ router.put('/:id', authorize('assets.write'), async (req, res) => {
 
 router.post('/:id/dispose', authorize('assets.dispose'), async (req, res) => {
   try {
+    const { sequelize } = req.models;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
+    if (!(await assertAssetBranchAccess(req, res, sequelize, clinicId, req.params.id))) return;
     const result = await AssetService.disposeAsset(clinicId, req.params.id, req.body, req.user?.id);
 
     try {
@@ -263,7 +315,9 @@ router.post('/:id/dispose', authorize('assets.dispose'), async (req, res) => {
 
 router.post('/:id/revalue', authorize('assets.write'), async (req, res) => {
   try {
+    const { sequelize } = req.models;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
+    if (!(await assertAssetBranchAccess(req, res, sequelize, clinicId, req.params.id))) return;
     const result = await AssetService.revalueAsset(clinicId, req.params.id, req.body, req.user?.id);
 
     try {

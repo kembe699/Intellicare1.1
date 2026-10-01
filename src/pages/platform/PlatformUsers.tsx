@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Loader2, UserPlus, Users, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface AdminUser {
   id: number;
@@ -21,6 +22,7 @@ interface AdminUser {
 }
 
 const PlatformUsers: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { admin: currentAdmin } = usePlatformAuth();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ const PlatformUsers: React.FC = () => {
   };
 
   const handleRemove = async (user: AdminUser) => {
-    if (!confirm(`Remove ${user.name} (${user.email}) from platform admin access?`)) return;
+    if (!(await confirm({ description: `Remove ${user.name} (${user.email}) from platform admin access?` }))) return;
     try {
       const res = await platformFetch(`/admins/${user.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to remove user');
@@ -76,6 +78,7 @@ const PlatformUsers: React.FC = () => {
 
   return (
     <PlatformAppLayout>
+      {confirmDialog}
       <PageHeader title="Platform Users" subtitle="Who has access to this admin panel" />
 
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6">

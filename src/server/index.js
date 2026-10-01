@@ -782,6 +782,12 @@ async function runBackgroundMigrations() {
   console.log('⏳ Running background migrations (non-blocking)...');
 
   const migrations = [
+    // Runs first — every accounting posting path (bills, payments, deposits,
+    // receipts, theatre, fixed assets) needs document_number_counters to exist
+    // before it can allocate a GL/JE number.
+    ['DocumentNumberCounters', () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateDocumentNumberCounters').migrateDocumentNumberCounters, 'Document Number Counters'
+    )],
     ['Accounting',        () => require('./scripts/migrateAccountingTables').setupAccountingModule()],
     ['CashTransfers',     () => require('./scripts/migrateCashTransfers').migrateCashTransfers()],
     ['Procurement',       () => require('./scripts/migrateProcurementTables').migrateProcurementTables()],

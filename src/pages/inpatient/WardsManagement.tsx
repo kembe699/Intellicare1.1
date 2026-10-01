@@ -15,6 +15,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge, type StatusBadgeTone } from '@/components/common';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const wardTypeToneMap: Record<string, StatusBadgeTone> = {
   general: 'neutral',
@@ -28,6 +29,7 @@ const wardTypeToneMap: Record<string, StatusBadgeTone> = {
 };
 
 export default function WardsManagement() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { fmt } = useCurrency();
   const clinicId = user?.clinic || 1;
@@ -103,6 +105,7 @@ export default function WardsManagement() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="space-y-6 max-w-6xl mx-auto w-full flex flex-col">
         <PageHeader
@@ -265,7 +268,7 @@ export default function WardsManagement() {
               render: (_v, ward) => (
                 <div className="flex items-center justify-end gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { if (confirm('Delete this ward?')) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={async () => { if (await confirm({ description: 'Delete this ward?', destructive: true })) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               ),
             },

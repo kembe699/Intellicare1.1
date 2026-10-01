@@ -21,8 +21,10 @@ import {
   Calendar, User, Shield, History, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 export default function ClaimDetails() {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { claimId } = useParams();
   const navigate = useNavigate();
   const { currency: baseCurrency } = useCurrency();
@@ -134,7 +136,7 @@ export default function ClaimDetails() {
 
   const handleCancel = async () => {
     if (cancelling) return;
-    if (!confirm('Are you sure you want to cancel this claim?')) return;
+    if (!(await confirm({ description: 'Are you sure you want to cancel this claim?' }))) return;
     setCancelling(true);
     try {
       const res = await authFetch(`/api/insurance-claims/${claimId}`, { method: 'DELETE' });
@@ -211,6 +213,7 @@ export default function ClaimDetails() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="animate-fade-in w-full flex flex-col">
         <PageHeader

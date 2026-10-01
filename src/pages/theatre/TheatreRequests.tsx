@@ -12,6 +12,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Scissors, Plus, X, CalendarPlus, Search, Loader2 } from 'lucide-react';
 import { TheatreRequest, PatientOption, PRIORITY_BADGE, STATUS_BADGE, patientName } from './theatreShared';
 
@@ -33,6 +34,7 @@ export default function TheatreRequests() {
   const navigate = useNavigate();
   const { hasPrivilege } = useAuth();
   const canWrite = hasPrivilege('theatre.write');
+  const { prompt, promptDialog } = usePromptDialog();
 
   const [requests, setRequests] = useState<TheatreRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +109,8 @@ export default function TheatreRequests() {
   };
 
   const handleCancel = async (id: string) => {
-    const reason = window.prompt('Reason for cancelling this request?') || '';
+    const reason = (await prompt({ title: 'Cancel this request', description: 'Reason for cancelling this request?', required: false })) ?? null;
+    if (reason === null) return; // cancelled the dialog itself — don't cancel the request
     try {
       const res = await authFetch(`/api/theatre/requests/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
       if (res.ok) { toast.success('Request cancelled'); fetchRequests(); }
@@ -142,6 +145,7 @@ export default function TheatreRequests() {
 
   return (
     <AppLayout>
+      {promptDialog}
       <div className="space-y-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <PageHeader title="Operation Requests" icon={<Scissors />} subtitle="Every request for theatre time, from any department" />
