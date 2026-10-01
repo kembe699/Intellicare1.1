@@ -1491,6 +1491,52 @@ router.post('/results/:id/review', authorize('lis.results.review'), async (req, 
   }
 });
 
+// Batch counterpart to the single-result route above — LISManagerReview.tsx's
+// "Approve Results" (a specimen's whole panel) and "Approve All N Tests"
+// (every outstanding specimen on an order) used to call POST
+// /results/:id/review once per result in a sequential for-await loop: a
+// 5-analyte panel was 5 full HTTP round trips end to end before anything
+// resolved, and "Approve All" nested that inside a per-specimen loop on top —
+// the main reason approving "took forever" in production, independent of
+// backend speed. This does every result (and the specimens they belong to)
+// in exactly two statements, one transaction, regardless of how many ids are
+// passed.
+router.post('/results/batch-review', authorize('lis.results.review'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { ids, action, manager_notes, manager_id } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, error: 'ids must be a non-empty array' });
+  }
+  if (!action) {
+    return res.status(400).json({ success: false, error: 'action is required' });
+  }
+
+  const t = await db.transaction();
+  try {
+    await db.query(
+      `UPDATE lis_results
+       SET status = ?, manager_notes = ?, manager_review_by = ?, manager_review_at = NOW()
+       WHERE id IN (?)`,
+      { replacements: [action, manager_notes || null, manager_id || null, ids], transaction: t }
+    );
+
+    const [specimenRows] = await db.query(
+      `SELECT DISTINCT specimen_id FROM lis_results WHERE id IN (?) AND specimen_id IS NOT NULL`,
+      { replacements: [ids], transaction: t }
+    );
+    const specimenIds = specimenRows.map((r) => r.specimen_id);
+    if (specimenIds.length > 0) {
+      await db.query(`UPDATE lis_specimens SET status = ? WHERE id IN (?)`, { replacements: [action, specimenIds], transaction: t });
+    }
+
+    await t.commit();
+    res.json({ success: true, updated: ids.length });
+  } catch (error) {
+    if (!t.finished) await t.rollback().catch(() => {});
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
 
 /**
  * Lab workload for the dashboard.

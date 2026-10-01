@@ -44,13 +44,27 @@ const INDEXES = [
   // patient_bills — billing lookups
   'CREATE INDEX IF NOT EXISTS idx_patient_bills_patient ON patient_bills (patient_id)',
   'CREATE INDEX IF NOT EXISTS idx_patient_bills_clinic ON patient_bills (clinic_id)',
+
+  // lis_results — GET /results/pending-review filters on status with no index
+  // at all, forcing a full table scan on every page load AND after every
+  // single approve action (the page refetches the whole pending queue each
+  // time), which only gets slower as historical results accumulate. Found
+  // investigating a production "approving results takes forever" report.
+  'CREATE INDEX IF NOT EXISTS idx_lis_results_status ON lis_results (status)',
+  'CREATE INDEX IF NOT EXISTS idx_lis_results_status_branch ON lis_results (status, branch_id)',
 ];
 
-async function addPerformanceIndexes() {
+// db param (defaulting to the module's own default-connection sequelize) so
+// this can also be run per-tenant via migrateAcrossTenants — previously this
+// only ever ran against the default connection, meaning these indexes were
+// never actually applied to any already-provisioned real tenant, only to
+// tenant_template (and so only to tenants provisioned after this script
+// existed). See runBackgroundMigrations in index.js.
+async function addPerformanceIndexes(db = sequelize) {
   let added = 0;
   for (const sql of INDEXES) {
     try {
-      await sequelize.query(sql);
+      await db.query(sql);
       added++;
     } catch (err) {
       // Non-fatal: table may not exist yet

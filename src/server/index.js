@@ -825,7 +825,12 @@ async function runBackgroundMigrations() {
       require('./scripts/ensureDailyExpenseAccounts').ensureDailyExpenseAccounts, 'Daily Expense Accounts'
     )],
     ['Departments',       () => require('./scripts/migrateDepartments')()],
-    ['PerfIndexes',       () => require('./scripts/addPerformanceIndexes').addPerformanceIndexes()],
+    // Was default-connection-only (so tenant_template only) — these never
+    // reached any already-provisioned real tenant. Same self-heal pattern as
+    // FixedAssets/Theatre above.
+    ['PerfIndexes',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/addPerformanceIndexes').addPerformanceIndexes, 'Performance Indexes'
+    )],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],
     ['LisBarcodeUnify',   async () => {
       const { sequelize: sq } = require('./models');
