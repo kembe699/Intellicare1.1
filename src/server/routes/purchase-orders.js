@@ -230,6 +230,31 @@ router.delete('/:id/items/:itemId', authorize('procurement.purchase_orders.write
 });
 
 // Update purchase order
+//
+// Security audit finding: this used to spread req.body into order.update()
+// near-verbatim, and when both `status` and `signature` were present it
+// dynamically wrote `${status}_signature`/`${status}_signed_by`/
+// `${status}_signed_at` from client-supplied values — a caller holding only
+// procurement.purchase_orders.write (the same privilege every procurement
+// clerk has) could set status: 'approved' with a forged signedBy name,
+// completely bypassing the real approval chain. That chain already exists
+// and is properly gated: POST /purchase-orders/:id/status (procurement.js)
+// requires the specific po_check/po_approve/po_authorize grant for each
+// step and enforces the draft→check→approved→authorized sequence — no
+// frontend caller of this generic PUT route for a status change exists
+// anywhere in src/pages (the UI's own status changes call that dedicated
+// endpoint), so there was no legitimate use case to preserve here.
+// Restricted to a whitelist of fields that are genuinely just PO metadata —
+// status and every *_signature/*_signed_by/*_signed_at field can now only
+// ever be set by that dedicated, permission-gated endpoint.
+// Limited to what the Sequelize model actually declares (src/models/PurchaseOrder.js)
+// — supplier_id/order_date/total_amount/notes plus the status/signature fields
+// this route must never set. Several real DB columns (payment_terms,
+// expected_delivery_date, clinic_id, paid_amount, ...) aren't declared on the
+// model at all, so Sequelize already silently drops them from any update();
+// no need to list fields here that could never persist through this call
+// regardless of whitelisting.
+const PURCHASE_ORDER_UPDATABLE_FIELDS = ['supplier_id', 'notes'];
 router.put('/:id', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     const order = await PurchaseOrder.findByPk(req.params.id);
@@ -238,29 +263,12 @@ router.put('/:id', authorize('procurement.purchase_orders.write'), async (req, r
     }
     if (!assertBranchAccess(order, req, res, 'purchase order')) return;
 
-    const updateData = { ...req.body };
-    
-    // If signature data is provided, store it with the status update
-    if (req.body.signature && req.body.status) {
-      const statusField = `${req.body.status}_signature`;
-      const signedByField = `${req.body.status}_signed_by`;
-      const signedAtField = `${req.body.status}_signed_at`;
-      
-      updateData[statusField] = req.body.signature;
-      updateData[signedByField] = req.body.signedBy;
-      updateData[signedAtField] = req.body.signedAt;
-      
-      // Remove signature data from main update to avoid column errors
-      delete updateData.signature;
-      delete updateData.signedBy;
-      delete updateData.signedAt;
+    const updateData = {};
+    for (const field of PURCHASE_ORDER_UPDATABLE_FIELDS) {
+      if (req.body[field] !== undefined) updateData[field] = req.body[field];
     }
 
-    const prevStatus = order.status;
     await order.update(updateData);
-    if (req.body.status && req.body.status !== prevStatus) {
-      try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: req.user?.display_name, user_role: req.user?.role, module: 'Procurement', action: `PO_STATUS_${req.body.status.toUpperCase()}`, entity_type: 'PurchaseOrder', entity_id: String(order.id), description: `PO ${order.po_number} status changed: ${prevStatus} → ${req.body.status}`, old_values: { status: prevStatus }, new_values: { status: req.body.status }, ip_address: req.ip, status: 'success' }); } catch(e) {}
-    }
     res.json(order);
   } catch (error) {
     console.error('Error updating purchase order:', error);
