@@ -204,13 +204,29 @@ router.post('/requests', authorize('hr.leave.write'), async (req, res) => {
   }
 });
 
+// Audit finding: approve/reject/cancel below only ever scoped their UPDATE
+// by clinic_id, unlike GET /requests (just above) which also restricts a
+// non-admin to their own branch_id. A branch-scoped HR user could approve,
+// reject, or cancel a leave request belonging to a different branch in the
+// same clinic simply by knowing/guessing its id. Mirrors GET /requests'
+// own inline branch-scoping so the same request is reachable the same way
+// whether reading or mutating it.
+function nonAdminBranchId(req) {
+  if (req.user?.role === 'admin') return null;
+  return req.branchContext?.branchId || req.user?.branchId || null;
+}
+
 router.post('/requests/:id/approve', requireApprovalPermission('leave_request_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status = 'pending'"];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
+    const branchId = nonAdminBranchId(req);
+    if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
       `UPDATE leave_requests SET status = 'approved', approved_by = :userId, approved_at = NOW(), updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status = 'pending'`,
-      { replacements: { id: req.params.id, clinicId, userId: req.user?.id || null } }
+       WHERE ${conditions.join(' AND ')}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found or not pending' });
     res.json({ success: true });
@@ -223,10 +239,14 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { reason } = req.body || {};
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status = 'pending'"];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, reason: reason || null };
+    const branchId = nonAdminBranchId(req);
+    if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
       `UPDATE leave_requests SET status = 'rejected', approved_by = :userId, approved_at = NOW(), rejection_reason = :reason, updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status = 'pending'`,
-      { replacements: { id: req.params.id, clinicId, userId: req.user?.id || null, reason: reason || null } }
+       WHERE ${conditions.join(' AND ')}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found or not pending' });
     res.json({ success: true });
@@ -238,10 +258,14 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
 router.post('/requests/:id/cancel', authorize('hr.leave.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status IN ('pending', 'approved')"];
+    const replacements = { id: req.params.id, clinicId };
+    const branchId = nonAdminBranchId(req);
+    if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
       `UPDATE leave_requests SET status = 'cancelled', updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status IN ('pending', 'approved')`,
-      { replacements: { id: req.params.id, clinicId } }
+       WHERE ${conditions.join(' AND ')}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Only a pending or approved request can be cancelled' });
     res.json({ success: true });

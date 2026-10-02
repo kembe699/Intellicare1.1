@@ -1218,13 +1218,19 @@ router.put('/payroll/runs/:id', authorize('hr.payroll.write'), async (req, res) 
   }
 });
 
+// Audit finding: approve/cancel/pay/signing-link below only ever scoped by
+// clinic_id, unlike GET /payroll/runs and GET /payroll/runs/:id (above)
+// which also apply branchScope(). A branch-scoped user could approve,
+// cancel, or pay a payroll run belonging to a different branch in the same
+// clinic simply by knowing/guessing its id.
 router.post('/payroll/runs/:id/approve', requireApprovalPermission('payroll_run_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
     const [, meta] = await sequelize.query(
       `UPDATE payroll_runs SET status = 'approved', approved_by = :userId, approved_at = NOW(), updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status = 'draft'`,
-      { replacements: { id: req.params.id, clinicId, userId: req.user?.id || null } }
+       WHERE id = :id AND clinic_id = :clinicId AND status = 'draft'${branchScope(req, replacements)}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Run not found or not in draft status' });
     res.json({ success: true });
@@ -1237,10 +1243,11 @@ router.post('/payroll/runs/:id/approve', requireApprovalPermission('payroll_run_
 router.post('/payroll/runs/:id/cancel', authorize('hr.payroll.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
     const [, meta] = await sequelize.query(
       `UPDATE payroll_runs SET status = 'cancelled', updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status = 'draft'`,
-      { replacements: { id: req.params.id, clinicId } }
+       WHERE id = :id AND clinic_id = :clinicId AND status = 'draft'${branchScope(req, replacements)}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Only a draft run can be cancelled' });
     res.json({ success: true });
@@ -1262,9 +1269,10 @@ router.post('/payroll/runs/:id/cancel', authorize('hr.payroll.write'), async (re
 router.post('/payroll/runs/:id/lines/:lineId/signing-link', authorize('hr.payroll.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const runReplacements = { id: req.params.id, clinicId };
     const [[run]] = await sequelize.query(
-      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId${branchScope(req, runReplacements)}`,
+      { replacements: runReplacements }
     );
     if (!run) return res.status(404).json({ error: 'Payroll run not found' });
     if (run.status !== 'approved') return res.status(409).json({ error: 'Only an approved run can be paid' });
@@ -1309,9 +1317,10 @@ router.post('/payroll/runs/:id/lines/:lineId/signing-link', authorize('hr.payrol
 router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const runReplacements = { id: req.params.id, clinicId };
     const [[run]] = await sequelize.query(
-      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId${branchScope(req, runReplacements)}`,
+      { replacements: runReplacements }
     );
     if (!run) return res.status(404).json({ error: 'Payroll run not found' });
     if (run.status !== 'approved') return res.status(409).json({ error: 'Only an approved run can be paid' });
@@ -1361,9 +1370,10 @@ router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write')
 router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const runReplacements = { id: req.params.id, clinicId };
     const [[run]] = await sequelize.query(
-      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId`,
-      { replacements: { id: req.params.id, clinicId } }
+      `SELECT * FROM payroll_runs WHERE id = :id AND clinic_id = :clinicId${branchScope(req, runReplacements)}`,
+      { replacements: runReplacements }
     );
     if (!run) return res.status(404).json({ error: 'Payroll run not found' });
     if (run.status !== 'approved') return res.status(409).json({ error: 'Only an approved run can be paid' });

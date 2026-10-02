@@ -278,6 +278,19 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
     const approved_by = dbUser.display_name;
     const signature = dbUser.signature || null;
 
+    // Audit finding: this route never looked at the PO being approved at
+    // all — no existence check, no branch check — unlike every other PO
+    // route in this file. A branch-scoped user could approve a supplier
+    // bill belonging to a PO in a different branch simply by knowing/
+    // guessing its id.
+    const poCheckReplacements = { po_id: parseInt(req.params.po_id, 10) };
+    const poCheckBranchScope = branchScope(req, poCheckReplacements);
+    const [[po]] = await sequelize.query(
+      `SELECT id FROM purchase_orders WHERE id = :po_id${poCheckBranchScope}`,
+      { replacements: poCheckReplacements }
+    );
+    if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+
     const [existing] = await sequelize.query(
       'SELECT * FROM supplier_bill_approvals WHERE po_id = :po_id ORDER BY approval_level ASC',
       { replacements: { po_id: String(req.params.po_id) } }
