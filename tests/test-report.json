@@ -1,21 +1,21 @@
 {
-  "timestamp": "2026-10-02T11:04:47.383Z",
-  "totalTests": 3,
-  "passed": 3,
+  "timestamp": "2026-10-02T11:08:50.198Z",
+  "totalTests": 4,
+  "passed": 4,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 1055,
+  "duration": 1616,
   "success": false,
   "modules": [
     {
-      "name": "purchaseOrderUpdateMassAssignment.test.js",
-      "tests": 3,
-      "passed": 3,
+      "name": "inventoryStockIntegrity.test.js",
+      "tests": 4,
+      "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 996
+      "duration": 1565
     }
   ],
   "errors": [],
