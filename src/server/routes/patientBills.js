@@ -1655,6 +1655,35 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
       }
     }
 
+    // Safety net, independent of which branch above ran (or whether none
+    // did): if THIS payment brings the bill's balance to zero, every line
+    // still collectible in cash must end up marked paid too — otherwise the
+    // bill can show Status: paid / Balance: 0 while one line's own Status
+    // column still reads Unpaid, with no way to ever pay it off afterward
+    // (the balance-exceeds-amount check above rejects any further payment
+    // once the aggregate balance is already 0, so that line would be stuck
+    // "Unpaid" permanently). Found via a live report: a line added to an
+    // already fully-paid bill was settled with a lump, unitemized "Record
+    // Payment" for exactly its price — the frontend is supposed to
+    // auto-attribute an unitemized payment that covers the whole payable
+    // balance to every payable line (BillDetails.tsx's isFullPayment check),
+    // but nothing server-side enforced that same invariant, so any caller
+    // that doesn't replicate it exactly (an older client, a direct API call,
+    // a future bug) can desync the aggregate status from the per-line flags.
+    // Excludes voided/invoiced/unbilled-insurance lines, same as the
+    // frontend's own isPayableLine — those are never meant to be marked
+    // paid by a cash collection.
+    if (newBalanceAmount <= 0.01) {
+      for (const line of updatedServices) {
+        const isUnbilledInsuranceLine = line.schemePrice != null && (parseFloat(line.unitPrice) || 0) === 0;
+        if (!line.paid && !line.isVoided && !line.invoiced && !isUnbilledInsuranceLine) {
+          line.status = 'paid';
+          line.paid = true;
+          line.paidAt = new Date().toISOString();
+        }
+      }
+    }
+
     // Update the bill with new payment amounts and service statuses
     await PatientBill.update({
       paid_amount: newPaidAmount,
