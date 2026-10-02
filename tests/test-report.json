@@ -1,21 +1,21 @@
 {
-  "timestamp": "2026-10-02T10:53:41.055Z",
-  "totalTests": 5,
-  "passed": 5,
+  "timestamp": "2026-10-02T10:57:05.206Z",
+  "totalTests": 4,
+  "passed": 4,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 1622,
+  "duration": 1344,
   "success": false,
   "modules": [
     {
-      "name": "documentsPdfAccess.test.js",
-      "tests": 5,
-      "passed": 5,
+      "name": "insuranceClaimsAccessControl.test.js",
+      "tests": 4,
+      "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1564
+      "duration": 1291
     }
   ],
   "errors": [],
