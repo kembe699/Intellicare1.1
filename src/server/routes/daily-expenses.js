@@ -283,6 +283,13 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
       { replacements: { po_id: String(req.params.po_id) } }
     );
     if (existing.length >= 3) return res.status(400).json({ error: 'This bill already has 3 approvals' });
+    // Segregation of duties: this only counted rows, never who they belonged
+    // to — a single user holding supplier_bill_approve could call this
+    // endpoint three times in a row and single-handedly supply every
+    // required approval, unlocking the supplier payment alone.
+    if (existing.some((a) => String(a.user_id) === String(req.user.id))) {
+      return res.status(400).json({ error: 'You have already approved this bill — a different approver is required for the next level' });
+    }
 
     const nextLevel = existing.length + 1;
     const id = uuidv4();
@@ -727,6 +734,12 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
       { replacements: { id: expenseId } }
     );
     if (existing.length >= 2) return res.status(400).json({ error: 'This expense already has all required approvals' });
+    // Segregation of duties: this only counted rows, never who they belonged
+    // to — a single user holding expense_approve could call this endpoint
+    // twice in a row and single-handedly supply both required approvals.
+    if (existing.some((a) => String(a.user_id) === String(req.user.id))) {
+      return res.status(400).json({ error: 'You have already approved this expense — a second, different approver is required' });
+    }
 
     const nextLevel = existing.length + 1;
     const id = uuidv4();
