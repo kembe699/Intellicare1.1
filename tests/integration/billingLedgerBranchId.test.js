@@ -92,3 +92,41 @@ test('B7: a bill with no branch_id of its own still posts (NULL, not an error)',
   expect(ledgerRows.length).toBeGreaterThan(0);
   expect(ledgerRows.every((r) => r.branch_id === null)).toBe(true);
 });
+
+// syncBillRevenueToGL is the ONE place that actually posts GL for every
+// addLineItemsToBill caller (inpatient lab/radiology/bed charges, Theatre's
+// drug/consumable/procedure billing — none of those post GL themselves,
+// relying entirely on this function via ledgerSweeper.js's periodic
+// reconciliation). Its own SELECT of the bill never fetched branch_id at
+// all, so every one of those revenue categories posted to account_ledger
+// with branch_id always NULL regardless of the B7 fix above — defeating
+// branch-scoped income statements for exactly the categories this session's
+// branch-isolation work was meant to cover. Found via a follow-up accounting
+// audit.
+test('B7 follow-up: syncBillRevenueToGL (the sweeper\'s own posting path) also carries the bill\'s branch_id', async () => {
+  const billNumber = `BRANCHGL-SYNC-${Date.now()}`;
+  const billId = await withTenant(async () => {
+    const bill = await PatientBill.create({
+      clinic_id: TEST_CLINIC_ID, patient_id: uuid(), patient_name: 'BranchGL Sync Test Patient',
+      bill_number: billNumber, total_amount: 2500, paid_amount: 0, balance_amount: 2500,
+      status: 'pending', bill_date: '2026-01-01', created_by: 'test-system', bill_currency: 'SSP',
+      branch_id: TEST_BRANCH_ID,
+      services: [{ serviceName: 'BRANCHGL Sync Test Service', totalPrice: 2500 }],
+    });
+    return bill.id;
+  });
+
+  // No GL entry exists yet for this bill at all — syncBillRevenueToGL sees
+  // the full amount as "out of sync" and posts a correcting entry, exactly
+  // the path ledgerSweeper.js drives on its own periodic sweep.
+  await withTenant(() => AccountingService.syncBillRevenueToGL(billId, 'test-system'));
+
+  const [ledgerRows] = await sequelize.query(
+    `SELECT al.branch_id FROM account_ledger al
+       JOIN general_ledger gl ON gl.id = al.transaction_id
+      WHERE gl.reference_id = :billId AND gl.reference_module = 'bill_revenue_adjustment'`,
+    { replacements: { billId } }
+  );
+  expect(ledgerRows.length).toBeGreaterThan(0);
+  expect(ledgerRows.every((r) => r.branch_id === TEST_BRANCH_ID)).toBe(true);
+});
