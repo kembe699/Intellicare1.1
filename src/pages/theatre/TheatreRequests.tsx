@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Scissors, Plus, X, CalendarPlus, Search, Loader2 } from 'lucide-react';
-import { TheatreRequest, PatientOption, PRIORITY_BADGE, STATUS_BADGE, patientName } from './theatreShared';
+import { TheatreRequest, PatientOption, ProcedureServiceOption, PRIORITY_BADGE, STATUS_BADGE, patientName } from './theatreShared';
 
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle?: string }) {
   return (
@@ -32,7 +32,7 @@ function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementTyp
 
 export default function TheatreRequests() {
   const navigate = useNavigate();
-  const { hasPrivilege } = useAuth();
+  const { hasPrivilege, user } = useAuth();
   const canWrite = hasPrivilege('theatre.write');
   const { prompt, promptDialog } = usePromptDialog();
 
@@ -45,11 +45,26 @@ export default function TheatreRequests() {
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
   const [department, setDepartment] = useState('');
-  const [procedureName, setProcedureName] = useState('');
+  const [procedures, setProcedures] = useState<ProcedureServiceOption[]>([]);
+  const [selectedProcedure, setSelectedProcedure] = useState<ProcedureServiceOption | null>(null);
   const [diagnosis, setDiagnosis] = useState('');
   const [priority, setPriority] = useState('routine');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Catalog-driven, not free text — only /setup/services entries categorized
+  // 'Procedure' are offered, so submitting a request always resolves to a
+  // real, priced catalog service (TheatreService.createRequest bills from it
+  // directly).
+  useEffect(() => {
+    (async () => {
+      const res = await authFetch(`/api/clinical/services/${user?.clinic || '1'}`, { credentials: 'include' });
+      if (res.ok) {
+        const all = await res.json();
+        setProcedures(all.filter((s: ProcedureServiceOption) => s.category === 'Procedure'));
+      }
+    })();
+  }, [user?.clinic]);
 
   const { data: patientResults = [], isFetching: searchingPatients } = useQuery({
     queryKey: ['theatre-patient-search', patientSearch],
@@ -62,7 +77,7 @@ export default function TheatreRequests() {
 
   const resetForm = () => {
     setFormOpen(false);
-    setPatientSearch(''); setSelectedPatient(null); setDepartment(''); setProcedureName('');
+    setPatientSearch(''); setSelectedPatient(null); setDepartment(''); setSelectedProcedure(null);
     setDiagnosis(''); setPriority('routine'); setNotes('');
   };
 
@@ -82,7 +97,7 @@ export default function TheatreRequests() {
 
   const handleSubmit = async () => {
     if (!selectedPatient) { toast.error('Search for and select a patient'); return; }
-    if (!procedureName.trim()) { toast.error('Procedure name is required'); return; }
+    if (!selectedProcedure) { toast.error('Select a procedure'); return; }
 
     setSaving(true);
     try {
@@ -90,7 +105,7 @@ export default function TheatreRequests() {
         method: 'POST',
         body: JSON.stringify({
           patient_id: selectedPatient.id, requesting_department: department || null,
-          procedure_name: procedureName.trim(), diagnosis: diagnosis || null, priority, notes: notes || null,
+          service_id: selectedProcedure.id, diagnosis: diagnosis || null, priority, notes: notes || null,
         }),
       });
       if (res.ok) {
@@ -208,7 +223,13 @@ export default function TheatreRequests() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Procedure</label>
-                  <Input value={procedureName} onChange={(e) => setProcedureName(e.target.value)} placeholder="e.g. Appendectomy" />
+                  <Combobox
+                    options={procedures.map((p) => ({ value: p.id, label: `${p.service_name} — SSP ${Number(p.price || 0).toLocaleString()}` }))}
+                    value={selectedProcedure?.id || ''}
+                    onChange={(id) => setSelectedProcedure(procedures.find((p) => p.id === id) || null)}
+                    placeholder="Select a procedure..." searchPlaceholder="Search procedures..."
+                    emptyText="No Procedure-category services found — add one in Setup > Services"
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Diagnosis</label>

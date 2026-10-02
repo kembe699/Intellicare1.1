@@ -164,6 +164,30 @@ router.post('/operations/:id/items', authorize('theatre.write'), async (req, res
   }
 });
 
+router.post('/operations/:id/team', authorize('theatre.write'), async (req, res) => {
+  try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
+    const team = await TheatreService.addTeamMember(req.body.clinic_id || req.user?.clinicId || 1, req.params.id, req.body);
+    await logAudit(req, { action: 'TEAM_MEMBER_ADDED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Added ${req.body.role} to the surgical team`, new_values: req.body });
+    res.status(201).json(team);
+  } catch (error) {
+    console.error('Error adding theatre team member:', error);
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to add team member' });
+  }
+});
+
+router.delete('/operations/:id/team/:teamMemberId', authorize('theatre.write'), async (req, res) => {
+  try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
+    const team = await TheatreService.removeTeamMember(req.query.clinic_id || req.user?.clinicId || 1, req.params.id, req.params.teamMemberId);
+    await logAudit(req, { action: 'TEAM_MEMBER_REMOVED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Removed team member ${req.params.teamMemberId}` });
+    res.json(team);
+  } catch (error) {
+    console.error('Error removing theatre team member:', error);
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to remove team member' });
+  }
+});
+
 // ── Requests ────────────────────────────────────────────────────────────
 
 router.get('/requests', authorize('theatre.view'), async (req, res) => {

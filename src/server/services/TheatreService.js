@@ -2,6 +2,7 @@ const { sequelize, PatientBill } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { CHECKLIST_TEMPLATE } = require('../scripts/migrateTheatreTables');
 const AccountingService = require('./AccountingService');
+const { addLineItemsToBill } = require('../utils/billingResolver');
 
 // patient_id is polymorphic across `patients` and `lis_participants` — the
 // same dual-identity shape inpatient_admissions already uses. A random UUID
@@ -48,21 +49,67 @@ class TheatreService {
   }
 
   // ── Requests ──────────────────────────────────────────────────────────
+  // Catalog-driven: the frontend only offers services/setup's own
+  // category='Procedure' catalog, not free text — service_id is the source
+  // of truth for both the procedure's name and its price, so the request
+  // and the resulting bill line can never drift from what's actually in the
+  // catalog. Bills the patient immediately (fee > 0), the same way a
+  // Procedure-category service billed through the normal Billing screens
+  // auto-creates a request the OTHER direction (see patientBills.js's
+  // createTheatreRequestsFromBill) — this is the forward direction of that
+  // same pairing.
   async createRequest(data, userId) {
     const {
       clinic_id: clinicId, branch_id: branchId, patient_id: patientId, requesting_department: department,
-      procedure_name: procedureName, diagnosis, priority, notes,
+      service_id: serviceId, diagnosis, priority, notes,
     } = data;
     if (!clinicId) throw httpError('clinic_id is required', 400);
     if (!patientId) throw httpError('patient_id is required', 400);
-    if (!procedureName || !procedureName.trim()) throw httpError('procedure_name is required', 400);
+    if (!serviceId) throw httpError('service_id is required — pick a Procedure from the catalog', 400);
     const validPriority = ['routine', 'urgent', 'emergency'].includes(priority) ? priority : 'routine';
+
+    const [[service]] = await sequelize.query(
+      `SELECT id, service_name, price FROM services WHERE id = :serviceId AND category = 'Procedure' AND is_active = true`,
+      { replacements: { serviceId } }
+    );
+    if (!service) throw httpError('Procedure not found in the service catalog', 404);
+    const fee = parseFloat(service.price) || 0;
+
+    const [[patientRow]] = await sequelize.query(
+      `SELECT COALESCE(p.first_name, lp.first_name) AS first_name, COALESCE(p.last_name, lp.last_name) AS last_name
+       FROM (SELECT :patientId::varchar AS id) x
+       LEFT JOIN patients p ON p.id = x.id LEFT JOIN lis_participants lp ON lp.id = x.id`,
+      { replacements: { patientId } }
+    );
+    const patientName = [patientRow?.first_name, patientRow?.last_name].filter(Boolean).join(' ') || 'Theatre Patient';
+
+    // Bill BEFORE inserting the request row, so the row is written once,
+    // complete, with bill_id already set — no second UPDATE needed. A fee of
+    // 0 (a catalog procedure priced at 0) means "not billed through this
+    // module", same convention theatre_operations.procedure_fee already
+    // uses at scheduling time.
+    let billId = null;
+    if (fee > 0) {
+      const bill = await addLineItemsToBill({
+        patientId, patientName, clinicId, branchId,
+        lineItems: [{ serviceId: service.id, serviceName: service.service_name, quantity: 1, unitPrice: fee, totalPrice: fee, revenueCategory: 'procedure', department: 'Theatre' }],
+        notes: `Theatre request — ${service.service_name}`,
+        createdBy: userId ? String(userId) : 'System',
+      });
+      billId = bill.id;
+    }
 
     const id = uuidv4();
     await sequelize.query(
-      `INSERT INTO theatre_requests (id, clinic_id, branch_id, patient_id, requested_by, requesting_department, procedure_name, diagnosis, priority, notes)
-       VALUES (:id, :clinicId, :branchId, :patientId, :userId, :department, :procedureName, :diagnosis, :priority, :notes)`,
-      { replacements: { id, clinicId, branchId: branchId || null, patientId, userId: userId || null, department: department || null, procedureName: procedureName.trim(), diagnosis: diagnosis || null, priority: validPriority, notes: notes || null } }
+      `INSERT INTO theatre_requests (id, clinic_id, branch_id, patient_id, requested_by, requesting_department,
+         procedure_name, service_id, estimated_fee, fee_currency, bill_id, billed_at, diagnosis, priority, notes)
+       VALUES (:id, :clinicId, :branchId, :patientId, :userId, :department,
+         :procedureName, :serviceId, :estimatedFee, 'SSP', :billId, :billedAt, :diagnosis, :priority, :notes)`,
+      { replacements: {
+          id, clinicId, branchId: branchId || null, patientId, userId: userId || null, department: department || null,
+          procedureName: service.service_name, serviceId, estimatedFee: fee, billId, billedAt: billId ? new Date() : null,
+          diagnosis: diagnosis || null, priority: validPriority, notes: notes || null,
+        } }
     );
     return this.getRequest(clinicId, id);
   }
@@ -95,6 +142,11 @@ class TheatreService {
       clinic_id: clinicId, branch_id: branchId, request_id: requestId, patient_id: patientIdRaw,
       theatre_room_id: roomId, procedure_name: procedureNameRaw, surgeon_employee_id: surgeonId,
       anesthetist_employee_id: anesthetistId, scrub_nurse_employee_id: nurseId, scheduled_at: scheduledAt,
+      // Multi-member team — a role's single `*_employee_id` above still wins
+      // as "the primary" (first in the array, or the lone single id) so every
+      // existing single-column reader keeps working; the full list lands in
+      // theatre_operation_team below.
+      surgeon_employee_ids: surgeonIds, anesthetist_employee_ids: anesthetistIds, scrub_nurse_employee_ids: nurseIds,
       // T1: the fee is captured up front, when the procedure is actually
       // being booked (the point at which someone knows what it should cost) —
       // not guessed at afterward when the operation completes. A fee of 0/
@@ -102,19 +154,30 @@ class TheatreService {
       // case), which completeOperation below respects rather than billing 0.
       procedure_fee: procedureFeeRaw, fee_currency: feeCurrencyRaw,
     } = data;
-    const procedureFee = procedureFeeRaw != null ? parseFloat(procedureFeeRaw) : null;
+    let procedureFee = procedureFeeRaw != null ? parseFloat(procedureFeeRaw) : null;
     if (procedureFee != null && (isNaN(procedureFee) || procedureFee < 0)) throw httpError('procedure_fee must be a non-negative number', 400);
-    const feeCurrency = (feeCurrencyRaw || 'SSP').toUpperCase();
+    let feeCurrency = (feeCurrencyRaw || 'SSP').toUpperCase();
     if (!clinicId) throw httpError('clinic_id is required', 400);
 
     let patientId = patientIdRaw;
     let procedureName = procedureNameRaw;
+    // Set only when the request was already billed (TheatreService.createRequest,
+    // or the reverse auto-request hook in patientBills.js) — carried onto the
+    // new operation's own bill_id so completeOperation's `!bill_id` guard
+    // skips billing it again. Any client-supplied procedure_fee is ignored
+    // once a request has already settled this.
+    let billIdFromRequest = null;
     if (requestId) {
       const request = await this.getRequest(clinicId, requestId);
       if (!request) throw httpError('Request not found', 404);
       if (request.status !== 'pending') throw httpError('This request has already been scheduled or cancelled', 409);
       patientId = patientId || request.patient_id;
       procedureName = procedureName || request.procedure_name;
+      if (request.bill_id) {
+        billIdFromRequest = request.bill_id;
+        procedureFee = parseFloat(request.estimated_fee) || 0;
+        feeCurrency = (request.fee_currency || 'SSP').toUpperCase();
+      }
     }
     if (!patientId) throw httpError('patient_id is required', 400);
     if (!procedureName || !procedureName.trim()) throw httpError('procedure_name is required', 400);
@@ -152,12 +215,38 @@ class TheatreService {
         }
       }
 
+      // Derive each role's primary (first id wins) BEFORE the INSERT, so the
+      // single surgeon_employee_id/etc. columns — still what every existing
+      // reader joins on — are always "the first team member of that role",
+      // whether the caller sent a plural array, a lone singular id, or both.
+      const TEAM_ROLES = [
+        ['surgeon', surgeonIds, surgeonId],
+        ['anesthetist', anesthetistIds, anesthetistId],
+        ['scrub_nurse', nurseIds, nurseId],
+      ];
+      const roleMembers = {};
+      const primary = {};
+      for (const [role, idsArray, singleId] of TEAM_ROLES) {
+        const ids = [...new Set((Array.isArray(idsArray) && idsArray.length ? idsArray : (singleId ? [singleId] : [])).filter(Boolean))];
+        roleMembers[role] = ids;
+        primary[role] = ids[0] || null;
+      }
+
       const operationId = uuidv4();
       await sequelize.query(
-        `INSERT INTO theatre_operations (id, clinic_id, branch_id, request_id, patient_id, theatre_room_id, procedure_name, surgeon_employee_id, anesthetist_employee_id, scrub_nurse_employee_id, scheduled_at, status, created_by, procedure_fee, fee_currency)
-         VALUES (:id, :clinicId, :branchId, :requestId, :patientId, :roomId, :procedureName, :surgeonId, :anesthetistId, :nurseId, :scheduledAt, 'scheduled', :userId, :procedureFee, :feeCurrency)`,
-        { replacements: { id: operationId, clinicId, branchId: branchId || null, requestId: requestId || null, patientId, roomId: roomId || null, procedureName: procedureName.trim(), surgeonId: surgeonId || null, anesthetistId: anesthetistId || null, nurseId: nurseId || null, scheduledAt: scheduledAt || null, userId: userId || null, procedureFee, feeCurrency }, transaction }
+        `INSERT INTO theatre_operations (id, clinic_id, branch_id, request_id, patient_id, theatre_room_id, procedure_name, surgeon_employee_id, anesthetist_employee_id, scrub_nurse_employee_id, scheduled_at, status, created_by, procedure_fee, fee_currency, bill_id, billed_at)
+         VALUES (:id, :clinicId, :branchId, :requestId, :patientId, :roomId, :procedureName, :surgeonId, :anesthetistId, :nurseId, :scheduledAt, 'scheduled', :userId, :procedureFee, :feeCurrency, :billId, :billedAt)`,
+        { replacements: { id: operationId, clinicId, branchId: branchId || null, requestId: requestId || null, patientId, roomId: roomId || null, procedureName: procedureName.trim(), surgeonId: primary.surgeon, anesthetistId: primary.anesthetist, nurseId: primary.scrub_nurse, scheduledAt: scheduledAt || null, userId: userId || null, procedureFee, feeCurrency, billId: billIdFromRequest, billedAt: billIdFromRequest ? new Date() : null }, transaction }
       );
+
+      for (const [role, ids] of Object.entries(roleMembers)) {
+        for (const employeeId of ids) {
+          await sequelize.query(
+            `INSERT INTO theatre_operation_team (id, operation_id, employee_id, role) VALUES (:id, :operationId, :employeeId, :role) ON CONFLICT DO NOTHING`,
+            { replacements: { id: uuidv4(), operationId, employeeId, role }, transaction }
+          );
+        }
+      }
 
       let sortOrder = 0;
       for (const phase of ['pre_op', 'intra_op', 'post_op']) {
@@ -201,7 +290,45 @@ class TheatreService {
     const [checklist] = await sequelize.query(`SELECT * FROM theatre_checklist_items WHERE operation_id = :id ORDER BY phase, sort_order`, { replacements: { id } });
     const [vitals] = await sequelize.query(`SELECT * FROM theatre_vitals WHERE operation_id = :id ORDER BY recorded_at DESC`, { replacements: { id } });
     const [items] = await sequelize.query(`SELECT * FROM theatre_operation_items WHERE operation_id = :id ORDER BY dispensed_at DESC`, { replacements: { id } });
-    return { ...op, checklist, vitals, items };
+    const team = await this.getOperationTeam(id);
+    return { ...op, checklist, vitals, items, team };
+  }
+
+  // ── Surgical team (full multi-member list) ──────────────────────────────
+  // surgeon_employee_id/anesthetist_employee_id/scrub_nurse_employee_id on
+  // theatre_operations itself stay single-valued (the primary, set once at
+  // scheduling time) — this table is the full roster, read separately so
+  // every pre-existing reader of those single columns is unaffected.
+  async getOperationTeam(operationId) {
+    const [rows] = await sequelize.query(
+      `SELECT t.*, e.first_name, e.last_name FROM theatre_operation_team t
+       JOIN employees e ON e.id = t.employee_id WHERE t.operation_id = :operationId ORDER BY t.role, t.created_at`,
+      { replacements: { operationId } }
+    );
+    return rows;
+  }
+
+  async addTeamMember(clinicId, operationId, { employee_id: employeeId, role }) {
+    await this._assertOperationEditable(operationId, clinicId);
+    if (!employeeId) throw httpError('employee_id is required', 400);
+    if (!['surgeon', 'anesthetist', 'scrub_nurse'].includes(role)) throw httpError('role must be surgeon, anesthetist, or scrub_nurse', 400);
+    await sequelize.query(
+      `INSERT INTO theatre_operation_team (id, operation_id, employee_id, role) VALUES (:id, :operationId, :employeeId, :role) ON CONFLICT DO NOTHING`,
+      { replacements: { id: uuidv4(), operationId, employeeId, role } }
+    );
+    return this.getOperationTeam(operationId);
+  }
+
+  // Deliberately never re-derives theatre_operations.surgeon_employee_id/etc.
+  // from what remains — those columns are populate-once at scheduling time,
+  // per the same "existing single-column readers stay unaffected" rule
+  // scheduleOperation follows. Removing the primary leaves that column
+  // pointing at someone no longer on the team list; the full roster in this
+  // table remains the source of truth for anyone who reads it instead.
+  async removeTeamMember(clinicId, operationId, teamMemberId) {
+    await this._assertOperationEditable(operationId, clinicId);
+    await sequelize.query(`DELETE FROM theatre_operation_team WHERE id = :teamMemberId AND operation_id = :operationId`, { replacements: { teamMemberId, operationId } });
+    return this.getOperationTeam(operationId);
   }
 
   // room_id points at the general `rooms` table (room_type = 'or'), managed

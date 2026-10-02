@@ -154,6 +154,26 @@ async function migrateTheatreTables(db = sequelize) {
     )
   `);
 
+  // Full surgical team per operation — theatre_operations.surgeon_employee_id/
+  // anesthetist_employee_id/scrub_nurse_employee_id (below) stay single-valued
+  // and keep holding just the PRIMARY (first-added) person per role, so every
+  // existing reader of those columns (the OR board list, getOperation's own
+  // join, TheatreOperations.tsx, TheatreOperationDetail.tsx's summary lines)
+  // keeps working unchanged. This table holds the full list — including that
+  // same primary, duplicated — so the detail page's full-team section is a
+  // self-contained read of just this one table.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_operation_team (
+      id CHAR(36) PRIMARY KEY,
+      operation_id CHAR(36) NOT NULL,
+      employee_id CHAR(36) NOT NULL,
+      role VARCHAR(20) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT chk_theatre_operation_team_role CHECK (role IN ('surgeon', 'anesthetist', 'scrub_nurse')),
+      CONSTRAINT uq_theatre_operation_team UNIQUE (operation_id, employee_id, role)
+    )
+  `);
+
   // Safety net for a schema created before this file used TIMESTAMPTZ: a plain
   // TIMESTAMP column stores NOW() as a naive local wall-clock value (this
   // deployment's session timezone is UTC+3), which a JS Date then reads back
@@ -191,6 +211,21 @@ async function migrateTheatreTables(db = sequelize) {
     try { await db.query(`ALTER TABLE theatre_operations ${clause}`); } catch (err) { console.error(`Could not add theatre_operations column (${clause}):`, err.message); }
   }
 
+  // Lets a request be billed at submission time (TheatreService.createRequest)
+  // and hand that same bill straight to the operation it schedules into
+  // (scheduleOperation copies bill_id onto the operation), so completeOperation's
+  // existing `!bill_id` guard skips billing it a second time.
+  const theatreRequestFeeColumns = [
+    'ADD COLUMN IF NOT EXISTS service_id CHAR(36)',
+    'ADD COLUMN IF NOT EXISTS estimated_fee NUMERIC(15,2)',
+    "ADD COLUMN IF NOT EXISTS fee_currency VARCHAR(3) NOT NULL DEFAULT 'SSP'",
+    'ADD COLUMN IF NOT EXISTS bill_id CHAR(36)',
+    'ADD COLUMN IF NOT EXISTS billed_at TIMESTAMPTZ',
+  ];
+  for (const clause of theatreRequestFeeColumns) {
+    try { await db.query(`ALTER TABLE theatre_requests ${clause}`); } catch (err) { console.error(`Could not add theatre_requests column (${clause}):`, err.message); }
+  }
+
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_clinic ON theatre_requests (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_status ON theatre_requests (status)',
@@ -203,6 +238,7 @@ async function migrateTheatreTables(db = sequelize) {
     'CREATE INDEX IF NOT EXISTS idx_theatre_checklist_operation ON theatre_checklist_items (operation_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_vitals_operation ON theatre_vitals (operation_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_operation_items_operation ON theatre_operation_items (operation_id)',
+    'CREATE INDEX IF NOT EXISTS idx_theatre_operation_team_operation ON theatre_operation_team (operation_id)',
   ];
   for (const idx of indexes) {
     try { await db.query(idx); } catch (err) { console.error('Index creation failed:', err.message); }

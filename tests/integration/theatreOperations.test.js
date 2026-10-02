@@ -52,6 +52,7 @@ function req(overrides) {
 let roomAId, roomBId;
 let branchAId, branchBId;
 let testItemId, testLocationId, testBatchId;
+let procedureServiceId;
 
 beforeAll(async () => {
   testConn = await getTenantConnection(TEST_SCHEMA);
@@ -100,6 +101,14 @@ beforeAll(async () => {
     `INSERT INTO stock_by_location (id, clinic_id, item_id, location_id, quantity_on_hand) VALUES (:id, :c, :itemId, :locationId, 10)`,
     { replacements: { id: uuid(), c: TEST_CLINIC_ID, itemId: testItemId, locationId: testLocationId } }
   );
+
+  // createRequest (used by T7's test below) is now catalog-driven — needs a
+  // real Procedure-category service to resolve service_id against.
+  const [[svc]] = await sequelize.query(
+    `INSERT INTO services (id, service_name, category, price, is_active) VALUES (:id, 'THRTEST-Appendectomy', 'Procedure', 0, true) RETURNING id`,
+    { replacements: { id: uuid() } }
+  );
+  procedureServiceId = svc.id;
 }, 30000);
 
 afterAll(async () => {
@@ -118,8 +127,10 @@ afterAll(async () => {
     await sequelize.query(`DELETE FROM general_ledger WHERE reference_id IN (SELECT id::text FROM patient_bills WHERE bill_number LIKE 'THR-%')`);
     await sequelize.query(`DELETE FROM patient_receivables WHERE bill_id IN (SELECT id FROM patient_bills WHERE bill_number LIKE 'THR-%')`);
     await sequelize.query(`DELETE FROM patient_bills WHERE bill_number LIKE 'THR-%'`);
+    await sequelize.query(`DELETE FROM theatre_operation_team WHERE operation_id IN (SELECT id FROM theatre_operations WHERE procedure_name LIKE 'THRTEST-%')`);
     await sequelize.query(`DELETE FROM theatre_operations WHERE procedure_name LIKE 'THRTEST-%'`);
     await sequelize.query(`DELETE FROM theatre_requests WHERE procedure_name LIKE 'THRTEST-%'`);
+    await sequelize.query(`DELETE FROM services WHERE service_name LIKE 'THRTEST-%'`);
     await sequelize.query(`DELETE FROM theatre_room_status WHERE room_id IN (:a, :b)`, { replacements: { a: roomAId, b: roomBId } });
     await sequelize.query(`DELETE FROM rooms WHERE id IN (:a, :b)`, { replacements: { a: roomAId, b: roomBId } });
     await sequelize.query(`DELETE FROM branches WHERE id IN (:a, :b)`, { replacements: { a: branchAId, b: branchBId } });
@@ -217,7 +228,7 @@ describe('T7: cancelling an operation reverts its originating request to pending
   test('a request scheduled then orphaned by cancellation goes back to pending', async () => {
     const reqRes = mockRes();
     await withTenant(() => handlers.createRequest(req({
-      body: { clinic_id: TEST_CLINIC_ID, patient_id: uuid(), procedure_name: `THRTEST-REQ-${Date.now()}` },
+      body: { clinic_id: TEST_CLINIC_ID, patient_id: uuid(), service_id: procedureServiceId },
     }), reqRes));
     const request = reqRes.body;
 
