@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
+import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +45,26 @@ export default function TheatreOperations() {
 
   useEffect(() => { fetchOperations(); }, [fetchOperations]);
   useEffect(() => { fetchRooms(); }, [fetchRooms]);
+
+  const columns: Column<TheatreOperation>[] = [
+    { key: 'procedure_name', header: 'Procedure', sortable: true, filterable: true },
+    {
+      key: 'patient_first_name', header: 'Patient', sortable: true,
+      render: (_v, row) => `${patientName(row)}${row.patient_code ? ` (${row.patient_code})` : ''}`,
+    },
+    { key: 'room_name', header: 'Room', render: (v) => v || '—' },
+    {
+      key: 'surgeon_first_name', header: 'Surgeon',
+      render: (_v, row) => row.surgeon_first_name ? `Dr. ${row.surgeon_first_name} ${row.surgeon_last_name}` : '—',
+    },
+    { key: 'status', header: 'Status', width: '120px', render: (v) => <Badge variant={STATUS_BADGE[v]}>{v.replace('_', ' ')}</Badge> },
+    {
+      key: 'outcome', header: 'Outcome', width: '130px',
+      render: (v) => v ? <Badge variant={OUTCOME_BADGE[v]}>{OUTCOME_LABEL[v]}</Badge> : '—',
+    },
+    { key: 'scheduled_at', header: 'Scheduled', sortable: true, render: (v) => v ? new Date(v).toLocaleString() : '—' },
+    { key: 'duration_minutes', header: 'Duration', width: '100px', render: (v, row) => row.status === 'completed' ? formatDuration(v) : '—' },
+  ];
 
   // T4: the only way a room previously left "cleaning" (set automatically
   // when an operation completes) was a manual database fix — this is the
@@ -99,49 +120,25 @@ export default function TheatreOperations() {
           </Card>
         )}
 
-        <Card>
-          <CardContent className="p-4 flex flex-wrap items-end gap-3">
-            <div className="min-w-[180px]">
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Status</label>
+        {loading ? <LoadingState message="Loading operations..." /> : (
+          <AdvancedDataTable
+            data={operations}
+            columns={columns}
+            emptyMessage="No operations found."
+            pagination={{ enabled: true, pageSize: 25 }}
+            keyExtractor={(op) => op.id}
+            onRowClick={(op) => navigate(`/theatre/operations/${op.id}`)}
+            searchable
+            searchPlaceholder="Search operations..."
+            exportable
+            exportFileName="theatre-operations"
+            toolbarExtra={
               <Combobox
                 options={[{ value: '', label: 'All' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'in_progress', label: 'In Progress' }, { value: 'completed', label: 'Completed' }, { value: 'cancelled', label: 'Cancelled' }]}
-                value={statusFilter} onChange={setStatusFilter} searchPlaceholder="Search status..." className="h-9"
+                value={statusFilter} onChange={setStatusFilter} searchPlaceholder="Search status..." className="h-9 w-[160px]"
               />
-            </div>
-          </CardContent>
-        </Card>
-
-        {loading ? <LoadingState message="Loading operations..." /> : (
-          <div className="space-y-2.5">
-            {operations.length === 0 && (
-              <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No operations found.</CardContent></Card>
-            )}
-            {operations.map((op) => (
-              <Card key={op.id} className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => navigate(`/theatre/operations/${op.id}`)}>
-                <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <Badge variant={STATUS_BADGE[op.status]}>{op.status.replace('_', ' ')}</Badge>
-                      {op.outcome && <Badge variant={OUTCOME_BADGE[op.outcome]}>{OUTCOME_LABEL[op.outcome]}</Badge>}
-                      {op.scheduled_at && <span className="text-xs text-muted-foreground">{new Date(op.scheduled_at).toLocaleString()}</span>}
-                    </div>
-                    <p className="font-medium">{op.procedure_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {patientName(op)} {op.patient_code ? `(${op.patient_code})` : ''}
-                      {op.room_name ? ` — ${op.room_name}` : ''}
-                      {op.surgeon_first_name ? ` — Dr. ${op.surgeon_first_name} ${op.surgeon_last_name}` : ''}
-                    </p>
-                  </div>
-                  {op.status === 'completed' && (
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-muted-foreground">Duration</p>
-                      <p className="font-semibold font-mono">{formatDuration(op.duration_minutes)}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+            }
+          />
         )}
       </div>
     </AppLayout>
