@@ -1,21 +1,48 @@
 {
-  "timestamp": "2026-10-02T11:08:50.198Z",
-  "totalTests": 4,
-  "passed": 4,
+  "timestamp": "2026-10-02T11:11:55.632Z",
+  "totalTests": 30,
+  "passed": 30,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 1616,
+  "duration": 3238,
   "success": false,
   "modules": [
     {
-      "name": "inventoryStockIntegrity.test.js",
-      "tests": 4,
-      "passed": 4,
+      "name": "billCreationAtomicity.test.js",
+      "tests": 3,
+      "passed": 3,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1565
+      "duration": 1312
+    },
+    {
+      "name": "billingLedgerBranchId.test.js",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1202
+    },
+    {
+      "name": "accountingInvariants.test.js",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 567
+    },
+    {
+      "name": "selfHealing.test.js",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 83
     }
   ],
   "errors": [],
