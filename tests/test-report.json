@@ -1,39 +1,21 @@
 {
-  "timestamp": "2026-10-02T11:00:26.879Z",
-  "totalTests": 11,
-  "passed": 11,
+  "timestamp": "2026-10-02T11:04:47.383Z",
+  "totalTests": 3,
+  "passed": 3,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 4418,
+  "duration": 1055,
   "success": false,
   "modules": [
     {
-      "name": "billCreationAtomicity.test.js",
+      "name": "purchaseOrderUpdateMassAssignment.test.js",
       "tests": 3,
       "passed": 3,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1337
-    },
-    {
-      "name": "billPaymentLineSync.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1564
-    },
-    {
-      "name": "paidServiceIndexesValidation.test.js",
-      "tests": 4,
-      "passed": 4,
-      "failed": 0,
-      "skipped": 0,
-      "passRate": 100,
-      "duration": 1453
+      "duration": 996
     }
   ],
   "errors": [],
