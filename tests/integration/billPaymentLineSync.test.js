@@ -155,4 +155,23 @@ describe('A lump, unitemized payment that fully settles the bill marks every rem
     expect(reloadedServices.find((s) => s.serviceName === 'Voided Line').paid).toBeFalsy();
     expect(reloadedServices.find((s) => s.serviceName === 'Scheme Line').paid).toBeFalsy();
   });
+
+  test('a corrupted services array with stray non-object entries does not crash the payment', async () => {
+    // Some older bills carry garbage non-object elements in `services` from a
+    // known pre-existing double-stringify bug (see normalizeServices.js) — a
+    // string spread into the array one character at a time. The safety net
+    // must skip these, not throw trying to set properties on them.
+    const services = ['a', 'b', { line_id: 'l1', serviceName: 'Real Line', quantity: 1, unitPrice: 5000, totalPrice: 5000 }];
+    const bill = await makeBill(`BPLS-${Date.now()}`, services, 5000, 0, 5000);
+
+    const req = paymentReq(bill.id, { amount: 5000 });
+    const res = mockRes();
+    await withTenant(() => paymentsHandler(req, res));
+
+    expect(res.statusCode).toBe(200);
+    const reloaded = await withTenant(() => PatientBill.findByPk(bill.id));
+    expect(reloaded.status).toBe('paid');
+    const realLine = normalizeServices(reloaded.services).find((s) => s && s.serviceName === 'Real Line');
+    expect(realLine.paid).toBe(true);
+  });
 });

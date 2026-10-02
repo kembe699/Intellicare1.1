@@ -1672,9 +1672,14 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     // a future bug) can desync the aggregate status from the per-line flags.
     // Excludes voided/invoiced/unbilled-insurance lines, same as the
     // frontend's own isPayableLine — those are never meant to be marked
-    // paid by a cash collection.
+    // paid by a cash collection. Also excludes anything that isn't a real
+    // line-item object — some older bills carry corrupted `services` arrays
+    // with stray non-object entries (see normalizeServices.js's own comment
+    // on the double-stringify bug that produces these); this must never
+    // choke on, or write properties onto, one of those.
     if (newBalanceAmount <= 0.01) {
       for (const line of updatedServices) {
+        if (!line || typeof line !== 'object') continue;
         const isUnbilledInsuranceLine = line.schemePrice != null && (parseFloat(line.unitPrice) || 0) === 0;
         if (!line.paid && !line.isVoided && !line.invoiced && !isUnbilledInsuranceLine) {
           line.status = 'paid';
