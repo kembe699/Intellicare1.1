@@ -1,21 +1,39 @@
 {
-  "timestamp": "2026-10-02T10:57:05.206Z",
-  "totalTests": 4,
-  "passed": 4,
+  "timestamp": "2026-10-02T11:00:26.879Z",
+  "totalTests": 11,
+  "passed": 11,
   "failed": 0,
   "skipped": 0,
   "passRate": 100,
-  "duration": 1344,
+  "duration": 4418,
   "success": false,
   "modules": [
     {
-      "name": "insuranceClaimsAccessControl.test.js",
+      "name": "billCreationAtomicity.test.js",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1337
+    },
+    {
+      "name": "billPaymentLineSync.test.js",
       "tests": 4,
       "passed": 4,
       "failed": 0,
       "skipped": 0,
       "passRate": 100,
-      "duration": 1291
+      "duration": 1564
+    },
+    {
+      "name": "paidServiceIndexesValidation.test.js",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "passRate": 100,
+      "duration": 1453
     }
   ],
   "errors": [],
