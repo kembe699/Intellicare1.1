@@ -208,9 +208,9 @@ async function createLisOrderForLabServices(billData, labServices) {
     if (!orderId) {
       orderId = uuidv4();
       await sequelize.query(
-        `INSERT INTO lis_test_orders (id, participant_id, clinic_id, clinic_name, status)
-         VALUES (:id, :pid, :cid, :cname, 'ordered')`,
-        { replacements: { id: orderId, pid: billData.patient_id, cid: billData.clinic_id || null, cname: billData.clinic_name || null } }
+        `INSERT INTO lis_test_orders (id, participant_id, clinic_id, clinic_name, status, branch_id)
+         VALUES (:id, :pid, :cid, :cname, 'ordered', :branchId)`,
+        { replacements: { id: orderId, pid: billData.patient_id, cid: billData.clinic_id || null, cname: billData.clinic_name || null, branchId: billData.branch_id || null } }
       );
     }
 
@@ -240,10 +240,10 @@ async function createLisOrderForLabServices(billData, labServices) {
         || testName.substring(0, 10).toUpperCase().replace(/[^A-Z0-9]/g, '');
       const department = nameToDept[testName.toLowerCase()] || null;
       await sequelize.query(
-        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status)
-         VALUES (:id, :oid, :code, :name, :barcode, :department, 'pending_collection')`,
+        `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status, branch_id)
+         VALUES (:id, :oid, :code, :name, :barcode, :department, 'pending_collection', :branchId)`,
         {
-          replacements: { id: specimenId, oid: orderId, code, name: testName, barcode, department },
+          replacements: { id: specimenId, oid: orderId, code, name: testName, barcode, department, branchId: billData.branch_id || null },
         }
       );
     }
@@ -2235,6 +2235,15 @@ async function createLabRequestsFromBill(billData, bill) {
     if (labServices.length === 0) {
       return;
     }
+
+    // Bug: the add-services call site below passes a billData object literal that never
+    // included branch_id at all, even though bill.branch_id was sitting right here — every
+    // lis_test_orders/lis_specimens row created from adding a lab service to an EXISTING
+    // bill landed with branch_id NULL, invisible to any non-admin on /lis/collection (whose
+    // query is a strict `AND branch_id = :branchId`, which never matches NULL) while an
+    // unscoped admin saw it regardless. The bill-creation call site already sets
+    // billData.branch_id itself, so this is a no-op there and only backfills the gap here.
+    billData.branch_id = billData.branch_id ?? bill.branch_id ?? null;
 
     // Real LIS pipeline (feeds /lis/collection) — separate from the legacy lab_requests
     // insert below, which some older pages still read.
