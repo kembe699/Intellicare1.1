@@ -66,6 +66,7 @@ export default function TheatreOperationDetail() {
   const [causeOfDeath, setCauseOfDeath] = useState('');
 
   const [patientVisits, setPatientVisits] = useState<any[] | null>(null);
+  const [labResultsBySpecimen, setLabResultsBySpecimen] = useState<Record<string, any[]>>({});
 
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [locationId, setLocationId] = useState('');
@@ -116,7 +117,21 @@ export default function TheatreOperationDetail() {
         // gets an empty result back, which is fine, not an error.
         authFetch(`/api/lis/visit-summaries?participant_id=${data.patient_id}`, { credentials: 'include' })
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => setPatientVisits(Array.isArray(d) ? d : d?.visits || null))
+          .then(async (d) => {
+            const visits = Array.isArray(d) ? d : d?.visits || null;
+            setPatientVisits(visits);
+            // Component-level values (e.g. WBC/RBC for a Complete Blood
+            // Count), not just the test name — same pattern LISTestOrders.tsx
+            // already uses (fetch per approved specimen, once each).
+            const approved: Array<{ id: string }> = (visits || []).flatMap((v: any) => (v.tests || []).filter((t: any) => t.status === 'approved'));
+            const results = await Promise.all(approved.map(async (t) => {
+              try {
+                const r = await authFetch(`/api/lis/specimens/${t.id}/results`, { credentials: 'include' });
+                return [t.id, r.ok ? await r.json() : []] as const;
+              } catch { return [t.id, []] as const; }
+            }));
+            setLabResultsBySpecimen(Object.fromEntries(results));
+          })
           .catch(() => setPatientVisits(null));
       } else {
         toast.error('Operation not found');
@@ -410,10 +425,30 @@ export default function TheatreOperationDetail() {
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {patientVisits.slice(0, 5).map((v: any, i: number) => (
-                    <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0">
+                    <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0 space-y-1.5">
                       <p className="font-medium">{v.created_at ? new Date(v.created_at).toLocaleDateString() : ''}</p>
                       {v.vitals && <p className="text-muted-foreground">Vitals: {Object.entries(v.vitals).filter(([, val]) => val).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</p>}
-                      {v.tests?.length > 0 && <p className="text-muted-foreground">Tests: {v.tests.map((t: any) => t.test_name || t.name).join(', ')}</p>}
+                      {v.tests?.map((t: any) => {
+                        const results = labResultsBySpecimen[t.id];
+                        return (
+                          <div key={t.id} className="pl-2 border-l-2 border-border/70">
+                            <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
+                            {t.status === 'approved' && Array.isArray(results) && results.length > 0 && (
+                              <table className="w-full text-[11px] mt-1">
+                                <tbody>
+                                  {results.map((r: any) => (
+                                    <tr key={r.id} className={r.flag ? 'text-destructive' : ''}>
+                                      <td className="pr-2 py-0.5">{r.analyte}</td>
+                                      <td className="pr-2 py-0.5 font-mono">{r.value} {r.unit || ''}</td>
+                                      <td className="text-muted-foreground py-0.5">{r.reference_range || ''}{r.flag ? ` (${r.flag})` : ''}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -492,6 +527,7 @@ export default function TheatreOperationDetail() {
               </CardContent>
             </Card>
 
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
             <Card>
               <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm">Vitals — {PHASE_LABEL[activePhase]}</h4></div>
               <CardContent className="p-4 space-y-3">
@@ -601,6 +637,7 @@ export default function TheatreOperationDetail() {
                 )}
               </CardContent>
             </Card>
+            </div>
 
             {completing && (
               <Card>
