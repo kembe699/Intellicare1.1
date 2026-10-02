@@ -128,13 +128,28 @@ router.post('/', authorize('hr.salary_advances.write'), async (req, res) => {
   }
 });
 
+// Audit finding: approve/cancel/disburse/repay below only ever scoped by
+// clinic_id, unlike GET /:id (above) which also restricts a non-admin to
+// their own branch_id. A branch-scoped HR user could approve, cancel,
+// disburse, or repay a salary advance belonging to a different branch in
+// the same clinic simply by knowing/guessing its id. Mirrors GET /:id's own
+// inline branch-scoping.
+function nonAdminBranchId(req) {
+  if (req.user?.role === 'admin') return null;
+  return req.branchContext?.branchId || req.user?.branchId || null;
+}
+
 router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status = 'pending'"];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
+    const branchId = nonAdminBranchId(req);
+    if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
       `UPDATE salary_advances SET status = 'approved', approved_by = :userId, approved_at = NOW(), updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status = 'pending'`,
-      { replacements: { id: req.params.id, clinicId, userId: req.user?.id || null } }
+       WHERE ${conditions.join(' AND ')}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Advance not found or not pending' });
     res.json({ success: true });
@@ -146,10 +161,14 @@ router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'),
 router.post('/:id/cancel', authorize('hr.salary_advances.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status IN ('pending', 'approved')"];
+    const replacements = { id: req.params.id, clinicId };
+    const branchId = nonAdminBranchId(req);
+    if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
       `UPDATE salary_advances SET status = 'cancelled', updated_at = NOW()
-       WHERE id = :id AND clinic_id = :clinicId AND status IN ('pending', 'approved')`,
-      { replacements: { id: req.params.id, clinicId } }
+       WHERE ${conditions.join(' AND ')}`,
+      { replacements }
     );
     if (meta.rowCount === 0) return res.status(409).json({ error: 'Only a pending or approved advance can be cancelled' });
     res.json({ success: true });
@@ -167,11 +186,15 @@ router.post('/:id/disburse', authorize('hr.salary_advances.write'), async (req, 
     const { payment_account_id, account_name, disbursement_date } = req.body || {};
     if (!payment_account_id) return res.status(400).json({ error: 'payment_account_id is required' });
 
+    const disburseReplacements = { id: req.params.id, clinicId };
+    let disburseBranchSQL = '';
+    const disburseBranchId = nonAdminBranchId(req);
+    if (disburseBranchId) { disburseBranchSQL = ' AND sa.branch_id = :branchId'; disburseReplacements.branchId = disburseBranchId; }
     const [[advance]] = await sequelize.query(`
       SELECT sa.*, e.first_name, e.last_name, e.employee_number FROM salary_advances sa
       JOIN employees e ON e.id = sa.employee_id
-      WHERE sa.id = :id AND sa.clinic_id = :clinicId
-    `, { replacements: { id: req.params.id, clinicId } });
+      WHERE sa.id = :id AND sa.clinic_id = :clinicId${disburseBranchSQL}
+    `, { replacements: disburseReplacements });
     if (!advance) return res.status(404).json({ error: 'Salary advance not found' });
     if (advance.status !== 'approved') return res.status(409).json({ error: 'Only an approved advance can be disbursed' });
 
@@ -230,11 +253,15 @@ router.post('/:id/repay', authorize('hr.salary_advances.write'), async (req, res
       return res.status(400).json({ error: 'A positive amount and payment_account_id are required' });
     }
 
+    const repayReplacements = { id: req.params.id, clinicId };
+    let repayBranchSQL = '';
+    const repayBranchId = nonAdminBranchId(req);
+    if (repayBranchId) { repayBranchSQL = ' AND sa.branch_id = :branchId'; repayReplacements.branchId = repayBranchId; }
     const [[advance]] = await sequelize.query(`
       SELECT sa.*, e.first_name, e.last_name, e.employee_number FROM salary_advances sa
       JOIN employees e ON e.id = sa.employee_id
-      WHERE sa.id = :id AND sa.clinic_id = :clinicId
-    `, { replacements: { id: req.params.id, clinicId } });
+      WHERE sa.id = :id AND sa.clinic_id = :clinicId${repayBranchSQL}
+    `, { replacements: repayReplacements });
     if (!advance) return res.status(404).json({ error: 'Salary advance not found' });
     if (!['disbursed', 'repaying'].includes(advance.status)) {
       return res.status(409).json({ error: 'Only a disbursed advance can be repaid' });
