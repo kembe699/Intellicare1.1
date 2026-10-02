@@ -25,7 +25,7 @@ async function generateClaimNumber() {
 // ══════════════════════════════════════════════════════════════
 // GET /insurance-schemes — List insurance schemes
 // ══════════════════════════════════════════════════════════════
-router.get('/insurance-schemes', async (req, res) => {
+router.get('/insurance-schemes', authorize('claims.write'), async (req, res) => {
   try {
     const cid = parseInt(req.query.clinic_id) || 1;
     const [rows] = await sequelize.query(`
@@ -46,7 +46,7 @@ router.get('/insurance-schemes', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // GET /unpaid-invoices — Fetch unpaid invoices (scheme_id optional)
 // ══════════════════════════════════════════════════════════════
-router.get('/unpaid-invoices', async (req, res) => {
+router.get('/unpaid-invoices', authorize('claims.write'), async (req, res) => {
   try {
     const { scheme_id, from, to } = req.query;
     const dateFrom = from || '2000-01-01';
@@ -253,7 +253,7 @@ router.post('/', authorize('claims.write'), async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // GET / — List batch claims
 // ══════════════════════════════════════════════════════════════
-router.get('/', async (req, res) => {
+router.get('/', authorize('claims.write'), async (req, res) => {
   try {
     const { search, status, scheme_id, from, to } = req.query;
     let where = 'WHERE 1=1', reps = [];
@@ -309,7 +309,7 @@ router.get('/', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // GET /:id — Claim detail
 // ══════════════════════════════════════════════════════════════
-router.get('/:id', async (req, res) => {
+router.get('/:id', authorize('claims.write'), async (req, res) => {
   try {
     const [claims] = await sequelize.query(`
       SELECT bc.*, ((CURRENT_DATE)::date - (bc.created_at)::date) as days_pending,
@@ -560,7 +560,7 @@ router.put('/:id', authorize('claims.write'), async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // GET /:id/pdf — Generate claim PDF
 // ══════════════════════════════════════════════════════════════
-router.get('/:id/pdf', async (req, res) => {
+router.get('/:id/pdf', authorize('claims.write'), async (req, res) => {
   try {
     const tmpl = require('../services/documentTemplate');
     const [claims] = await sequelize.query(`
@@ -570,6 +570,10 @@ router.get('/:id/pdf', async (req, res) => {
       WHERE bc.id = ?
     `, { replacements: [req.params.id] });
     if (!claims.length) return res.status(404).json({ error: 'Claim not found' });
+    // This route never had the branch check its sibling GET /:id uses —
+    // any authenticated user who could guess/enumerate a claim id could pull
+    // its PDF (patient + financial detail) regardless of branch.
+    if (!BranchQueryFilter.canAccessRecord(claims[0], req.branchContext)) return res.status(404).json({ error: 'Claim not found' });
     const claim = claims[0];
 
     const [items] = await sequelize.query(`
