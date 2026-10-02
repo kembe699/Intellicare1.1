@@ -20,7 +20,18 @@ export interface TheatreRequest {
   requesting_department: string | null; procedure_name: string; diagnosis: string | null;
   priority: 'routine' | 'urgent' | 'emergency'; status: 'pending' | 'scheduled' | 'cancelled';
   notes: string | null; cancelled_reason: string | null; created_at: string;
+  service_id: string | null; estimated_fee: string | null; fee_currency: string; bill_id: string | null; billed_at: string | null;
 }
+
+// A service from /setup/services whose category is 'Procedure' — the
+// catalog /theatre/requests picks from instead of free text.
+export interface ProcedureServiceOption { id: string; service_name: string; price: string | number; category: string; }
+
+export interface TeamMember {
+  id: string; operation_id: string; employee_id: string; role: 'surgeon' | 'anesthetist' | 'scrub_nurse';
+  first_name: string; last_name: string; created_at: string;
+}
+export const ROLE_LABEL: Record<string, string> = { surgeon: 'Surgeon', anesthetist: 'Anaesthetist', scrub_nurse: 'Scrub Nurse' };
 
 export interface ChecklistItem {
   id: string; operation_id: string; phase: 'pre_op' | 'intra_op' | 'post_op'; item_text: string; sort_order: number;
@@ -44,7 +55,8 @@ export interface TheatreOperation {
   scheduled_at: string | null; status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   started_at: string | null; ended_at: string | null; duration_minutes: number | null;
   outcome: 'successful' | 'complication' | 'death' | 'aborted' | null; outcome_notes: string | null; cause_of_death: string | null;
-  checklist: ChecklistItem[]; vitals: VitalsEntry[]; items: OperationItemUsage[];
+  procedure_fee: string | null; fee_currency: string; bill_id: string | null; billed_at: string | null;
+  checklist: ChecklistItem[]; vitals: VitalsEntry[]; items: OperationItemUsage[]; team: TeamMember[];
 }
 
 export const PRIORITY_BADGE: Record<string, 'danger' | 'warning' | 'neutral'> = { emergency: 'danger', urgent: 'warning', routine: 'neutral' };

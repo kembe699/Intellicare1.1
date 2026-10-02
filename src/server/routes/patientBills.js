@@ -775,6 +775,13 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
       // Don't fail bill creation if lab request creation fails
     }
 
+    // Create a pending theatre request if the bill contains Procedure-category services
+    try {
+      await createTheatreRequestsFromBill(billData, bill);
+    } catch (theatreError) {
+      console.error('Error creating theatre requests from bill:', theatreError);
+    }
+
     try {
       const rr = require('./reports');
       await rr.logAudit({ req,
@@ -1039,6 +1046,18 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
       );
     } catch (e) {
       console.error('Error creating lab requests from add-services:', e);
+    }
+
+    // Same scoping as the lab hook above — only the newly-added lines, not
+    // the whole bill, so re-saving an existing procedure line never creates
+    // a second theatre request for it.
+    try {
+      await createTheatreRequestsFromBill(
+        { patient_id: bill.patient_id, patient_name: bill.patient_name, clinic_id: bill.clinic_id, created_by: req.user?.displayName || 'Billing Staff', services: pricedServices },
+        bill
+      );
+    } catch (e) {
+      console.error('Error creating theatre requests from add-services:', e);
     }
 
     try {
@@ -2223,6 +2242,72 @@ async function createLabRequestsFromBill(billData, bill) {
   } catch (error) {
     console.error('Error in createLabRequestsFromBill:', error);
     // Don't throw error to avoid failing bill creation
+  }
+}
+
+// Reverse direction of TheatreService.createRequest: a Procedure-category
+// service billed through the NORMAL billing screens (not via
+// /theatre/requests) should still surface in Theatre, same way a
+// Laboratory-category service billed here already creates a lab order above
+// — mirrors createLabRequestsFromBill's structure exactly, but catalog-only
+// (no keyword fallback; procedures are catalog-driven by this feature, not a
+// legacy free-text concern the way lab names are).
+//
+// Cannot double-fire for a request created from /theatre/requests itself:
+// TheatreService.createRequest bills via billingResolver.js's
+// addLineItemsToBill directly against the PatientBill model — it never calls
+// either of this file's two routes this function is wired into.
+async function createTheatreRequestsFromBill(billData, bill) {
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const { sequelize } = require('../models');
+
+    const services = normalizeServices(billData.services);
+    if (services.length === 0) return;
+
+    const incomingNames = [...new Set(
+      services.map(s => (s.serviceName || s.name || s.service_name || '').toLowerCase()).filter(Boolean)
+    )];
+    if (incomingNames.length === 0) return;
+
+    const [catalogRows] = await sequelize.query(
+      `SELECT id, service_name, price FROM services WHERE category = 'Procedure' AND LOWER(service_name) IN (:names)`,
+      { replacements: { names: incomingNames } }
+    );
+    if (catalogRows.length === 0) return;
+    const byName = new Map(catalogRows.map(r => [r.service_name.toLowerCase(), r]));
+
+    const procedureServices = services.filter(s =>
+      byName.has((s.serviceName || s.name || s.service_name || '').toLowerCase())
+    );
+    if (procedureServices.length === 0) return;
+
+    for (const svc of procedureServices) {
+      try {
+        const name = svc.serviceName || svc.name || svc.service_name;
+        const catalogRow = byName.get(name.toLowerCase());
+        const requestId = uuidv4();
+        await sequelize.query(
+          `INSERT INTO theatre_requests (id, clinic_id, branch_id, patient_id, requested_by, requesting_department,
+             procedure_name, service_id, estimated_fee, fee_currency, bill_id, billed_at, priority, status, notes)
+           VALUES (:id, :clinicId, :branchId, :patientId, :requestedBy, 'Billing',
+             :procedureName, :serviceId, :estimatedFee, 'SSP', :billId, NOW(), 'routine', 'pending', :notes)`,
+          {
+            replacements: {
+              id: requestId, clinicId: billData.clinic_id, branchId: bill.branch_id || null, patientId: billData.patient_id,
+              requestedBy: billData.created_by || null, procedureName: name, serviceId: catalogRow.id,
+              estimatedFee: parseFloat(svc.totalPrice ?? svc.unitPrice ?? catalogRow.price) || 0, billId: bill.id,
+              notes: `Auto-created from patient bill ${bill.bill_number}`,
+            },
+          }
+        );
+        console.log(`Theatre request created from bill for procedure: ${name}`);
+      } catch (svcError) {
+        console.error(`Error creating theatre request for ${svc.serviceName}:`, svcError);
+      }
+    }
+  } catch (error) {
+    console.error('Error in createTheatreRequestsFromBill:', error);
   }
 }
 

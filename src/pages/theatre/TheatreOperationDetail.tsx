@@ -15,13 +15,16 @@ import { toast } from 'sonner';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   ArrowLeft, Loader2, Scissors, Play, Square, XCircle, User, MapPin,
-  Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe,
+  Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe, Users, X,
 } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
   TheatreOperation, PHASE_LABEL, STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE,
-  patientName, formatDuration, StockLocation, StockItemOption,
+  patientName, formatDuration, StockLocation, StockItemOption, ROLE_LABEL,
 } from './theatreShared';
+
+type TeamRole = 'surgeon' | 'anesthetist' | 'scrub_nurse';
+const TEAM_ROLES: TeamRole[] = ['surgeon', 'anesthetist', 'scrub_nurse'];
 
 function useElapsedTimer(startedAt: string | null, running: boolean) {
   const [now, setNow] = useState(Date.now());
@@ -72,6 +75,8 @@ export default function TheatreOperationDetail() {
   const [itemNotes, setItemNotes] = useState('');
   const [recordingItem, setRecordingItem] = useState(false);
 
+  const [employees, setEmployees] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
+
   const timer = useElapsedTimer(operation?.started_at || null, operation?.status === 'in_progress');
 
   useEffect(() => {
@@ -79,6 +84,10 @@ export default function TheatreOperationDetail() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setLocations)
       .catch(() => setLocations([]));
+    authFetch('/api/hr/employees', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setEmployees)
+      .catch(() => setEmployees([]));
   }, []);
 
   const { data: itemResults = [], isFetching: searchingItems } = useQuery({
@@ -222,6 +231,29 @@ export default function TheatreOperationDetail() {
     } finally {
       setRecordingItem(false);
     }
+  };
+
+  const handleAddTeamMember = async (role: TeamRole, employeeId: string) => {
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/team`, {
+        method: 'POST',
+        body: JSON.stringify({ employee_id: employeeId, role }),
+      });
+      if (res.ok) { fetchOperation(); } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to add team member');
+      }
+    } catch { toast.error('Network error'); }
+  };
+
+  const handleRemoveTeamMember = async (teamMemberId: string) => {
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/team/${teamMemberId}`, { method: 'DELETE' });
+      if (res.ok) { fetchOperation(); } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to remove team member');
+      }
+    } catch { toast.error('Network error'); }
   };
 
   const fi = () => ({ name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo });
@@ -386,6 +418,40 @@ export default function TheatreOperationDetail() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Full multi-member roster — the summary lines above stay as the
+                quick-glance primary per role; this is the complete list. */}
+            <div className="bg-card rounded-lg border shadow-sm p-5">
+              <h3 className="font-medium flex items-center gap-2 mb-3 text-sm"><Users className="w-4 h-4 text-primary" /> Surgical Team</h3>
+              {TEAM_ROLES.map((role) => {
+                const members = (operation.team || []).filter((m) => m.role === role);
+                const availableEmployees = employees.filter((e) => !members.some((m) => m.employee_id === e.id));
+                return (
+                  <div key={role} className="mb-3 last:mb-0">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{ROLE_LABEL[role]}</p>
+                    {members.length === 0 && <p className="text-xs text-muted-foreground mb-1">None assigned</p>}
+                    {members.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between text-sm py-0.5">
+                        <span>{m.first_name} {m.last_name}</span>
+                        {canWrite && ['scheduled', 'in_progress'].includes(operation.status) && (
+                          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={() => handleRemoveTeamMember(m.id)}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    {canWrite && ['scheduled', 'in_progress'].includes(operation.status) && (
+                      <Combobox
+                        options={availableEmployees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))}
+                        value="" onChange={(empId) => empId && handleAddTeamMember(role, empId)}
+                        placeholder={`Add ${ROLE_LABEL[role].toLowerCase()}...`} searchPlaceholder="Search employees..."
+                        className="h-8 mt-1"
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
