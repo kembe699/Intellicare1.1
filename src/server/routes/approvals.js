@@ -27,6 +27,18 @@ const { APPROVAL_TYPES } = require('../middleware/requireApprovalPermission');
   } catch (error) {
     reportSchemaGuardFailure('approval_permissions table', error);
   }
+
+  // sole_approver: an explicit, per-grant exemption from the segregation-of-
+  // duties rule in daily-expenses.js's multi-level approval chains (expense
+  // 2-level, supplier bill 3-level) — normally the same user can't supply two
+  // levels of the same chain. Defaults false for every existing grant; an
+  // admin opts a specific user+approval_type into it deliberately, rather
+  // than this being a blanket bypass for everyone holding the permission.
+  try {
+    await sequelize.query(`ALTER TABLE approval_permissions ADD COLUMN IF NOT EXISTS sole_approver BOOLEAN NOT NULL DEFAULT FALSE`);
+  } catch (error) {
+    reportSchemaGuardFailure('approval_permissions.sole_approver column', error);
+  }
 })();
 
 // GET /api/approvals/types — static catalog of every approval/authorization
@@ -47,7 +59,7 @@ router.get('/permissions', async (req, res) => {
   try {
     const clinicId = parseInt(req.query.clinic_id) || req.user?.clinicId || 1;
     const [rows] = await sequelize.query(
-      `SELECT ap.id, ap.clinic_id, ap.user_id, ap.approval_type, ap.granted_by, ap.created_at, ap.updated_at,
+      `SELECT ap.id, ap.clinic_id, ap.user_id, ap.approval_type, ap.granted_by, ap.created_at, ap.updated_at, ap.sole_approver,
               u.display_name, u.email,
               gu.display_name AS granted_by_name
        FROM approval_permissions ap
@@ -73,7 +85,7 @@ router.get('/permissions', async (req, res) => {
 // already granted).
 router.post('/permissions', authorize('approvals.manage'), async (req, res) => {
   try {
-    const { user_id, approval_type, clinic_id } = req.body;
+    const { user_id, approval_type, clinic_id, sole_approver } = req.body;
     if (!user_id || !approval_type) {
       return res.status(400).json({ error: 'user_id and approval_type are required' });
     }
@@ -82,10 +94,16 @@ router.post('/permissions', authorize('approvals.manage'), async (req, res) => {
     }
     const clinicId = parseInt(clinic_id) || req.user?.clinicId || 1;
     const id = uuidv4();
+    // sole_approver only moves when the caller explicitly sends it — re-
+    // granting an existing permission_type without mentioning sole_approver
+    // must not silently reset a previously-set exemption back to false.
+    const soleApproverProvided = sole_approver !== undefined;
     await sequelize.query(
-      `INSERT INTO approval_permissions (id, clinic_id, user_id, approval_type, granted_by)
-       VALUES (:id, :clinicId, :userId, :approvalType, :grantedBy)
-       ON CONFLICT (clinic_id, user_id, approval_type) DO UPDATE SET updated_at = NOW()`,
+      `INSERT INTO approval_permissions (id, clinic_id, user_id, approval_type, granted_by, sole_approver)
+       VALUES (:id, :clinicId, :userId, :approvalType, :grantedBy, :soleApprover)
+       ON CONFLICT (clinic_id, user_id, approval_type) DO UPDATE SET
+         updated_at = NOW(),
+         sole_approver = CASE WHEN :soleApproverProvided THEN :soleApprover ELSE approval_permissions.sole_approver END`,
       {
         replacements: {
           id,
@@ -93,6 +111,8 @@ router.post('/permissions', authorize('approvals.manage'), async (req, res) => {
           userId: parseInt(user_id),
           approvalType: approval_type,
           grantedBy: req.user?.id || null,
+          soleApprover: !!sole_approver,
+          soleApproverProvided,
         },
       }
     );

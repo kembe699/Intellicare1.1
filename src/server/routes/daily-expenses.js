@@ -21,6 +21,21 @@ function branchScope(req, replacements, alias = '') {
   return ` AND ${col} = :branchId`;
 }
 
+// Deliberate, explicit, per-user/per-approval-type exemption from the
+// segregation-of-duties rule below (same user can't supply two levels of
+// the same multi-level approval chain). Set via POST /api/approvals/
+// permissions { sole_approver: true } — an admin opts a specific person
+// into being able to clear every level of expense/supplier-bill approval
+// alone, rather than this being a blanket bypass for anyone holding the
+// underlying expense_approve/supplier_bill_approve grant.
+async function isSoleApprover(clinicId, userId, approvalType) {
+  const [[row]] = await sequelize.query(
+    `SELECT 1 FROM approval_permissions WHERE clinic_id = :clinicId AND user_id = :userId AND approval_type = :approvalType AND sole_approver = true LIMIT 1`,
+    { replacements: { clinicId, userId, approvalType } }
+  );
+  return !!row;
+}
+
 // Mirrors allowedRoles already enforced client-side for /procurement/daily-expenses in
 // App.tsx — none of these routes had any role gate server-side, including /:id/pay,
 // which releases an actual payment once an expense is approved.
@@ -299,9 +314,14 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
     // Segregation of duties: this only counted rows, never who they belonged
     // to — a single user holding supplier_bill_approve could call this
     // endpoint three times in a row and single-handedly supply every
-    // required approval, unlocking the supplier payment alone.
+    // required approval, unlocking the supplier payment alone. A user
+    // explicitly granted sole_approver for supplier_bill_approve (see
+    // isSoleApprover above) is deliberately exempted.
     if (existing.some((a) => String(a.user_id) === String(req.user.id))) {
-      return res.status(400).json({ error: 'You have already approved this bill — a different approver is required for the next level' });
+      const clinicId = BranchQueryFilter.resolveClinicId(req);
+      if (!(await isSoleApprover(clinicId, req.user.id, 'supplier_bill_approve'))) {
+        return res.status(400).json({ error: 'You have already approved this bill — a different approver is required for the next level' });
+      }
     }
 
     const nextLevel = existing.length + 1;
@@ -749,9 +769,14 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
     if (existing.length >= 2) return res.status(400).json({ error: 'This expense already has all required approvals' });
     // Segregation of duties: this only counted rows, never who they belonged
     // to — a single user holding expense_approve could call this endpoint
-    // twice in a row and single-handedly supply both required approvals.
+    // twice in a row and single-handedly supply both required approvals. A
+    // user explicitly granted sole_approver for expense_approve (see
+    // isSoleApprover above) is deliberately exempted.
     if (existing.some((a) => String(a.user_id) === String(req.user.id))) {
-      return res.status(400).json({ error: 'You have already approved this expense — a second, different approver is required' });
+      const clinicId = BranchQueryFilter.resolveClinicId(req);
+      if (!(await isSoleApprover(clinicId, req.user.id, 'expense_approve'))) {
+        return res.status(400).json({ error: 'You have already approved this expense — a second, different approver is required' });
+      }
     }
 
     const nextLevel = existing.length + 1;

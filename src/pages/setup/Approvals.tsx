@@ -35,7 +35,14 @@ interface ApprovalGrant {
   email: string;
   granted_by_name: string | null;
   created_at: string;
+  sole_approver: boolean;
 }
+
+// The only two approval types that are multi-level chains (2-level expense,
+// 3-level supplier bill) — sole_approver only means anything for these;
+// every other approval type is a single step with no co-approval rule to
+// bypass in the first place.
+const MULTI_LEVEL_APPROVAL_TYPES = new Set(['expense_approve', 'supplier_bill_approve']);
 
 // ─── Main Component ─────────────────────────────────────────
 // Single-page dual-list transfer control — same pattern as the Roles &
@@ -138,6 +145,24 @@ const Approvals: React.FC = () => {
     }
   };
 
+  const toggleSoleApprover = async (approvalType: string, soleApprover: boolean) => {
+    if (!selectedUserId) return;
+    setSaving(true);
+    try {
+      const r = await authFetch('/api/approvals/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: selectedUserId, approval_type: approvalType, sole_approver: soleApprover }),
+      });
+      if (!r.ok) throw new Error('Failed');
+      await fetchGrants();
+    } catch {
+      toast.error('Failed to update sole-approver setting');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const revokeTypes = async (typeKeys: string[]) => {
     if (!selectedUserId || typeKeys.length === 0) return;
     setSaving(true);
@@ -197,26 +222,44 @@ const Approvals: React.FC = () => {
                 {types
                   .filter((t) => assignedKeys.has(t.key))
                   .filter((t) => !assignedSearch || t.label.toLowerCase().includes(assignedSearch.toLowerCase()))
-                  .map((t) => (
-                    <label key={t.key} className="flex items-start gap-2.5 px-3 py-2 text-sm hover:bg-muted/40 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 rounded"
-                        checked={checkedAssigned.has(t.key)}
-                        onChange={(e) => {
-                          setCheckedAssigned((prev) => {
-                            const next = new Set(prev);
-                            if (e.target.checked) next.add(t.key); else next.delete(t.key);
-                            return next;
-                          });
-                        }}
-                      />
-                      <span>
-                        {t.label}
-                        <span className="block text-[11px] text-muted-foreground">{t.module}</span>
-                      </span>
-                    </label>
-                  ))}
+                  .map((t) => {
+                    const grant = grantsForUser.find((g) => g.approval_type === t.key);
+                    return (
+                      <div key={t.key} className="px-3 py-2 text-sm hover:bg-muted/40">
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 rounded"
+                            checked={checkedAssigned.has(t.key)}
+                            onChange={(e) => {
+                              setCheckedAssigned((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(t.key); else next.delete(t.key);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span>
+                            {t.label}
+                            <span className="block text-[11px] text-muted-foreground">{t.module}</span>
+                          </span>
+                        </label>
+                        {MULTI_LEVEL_APPROVAL_TYPES.has(t.key) && (
+                          <label className="flex items-center gap-1.5 mt-1.5 ml-6 text-[11px] text-amber-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={!!grant?.sole_approver}
+                              disabled={saving}
+                              onChange={(e) => toggleSoleApprover(t.key, e.target.checked)}
+                            />
+                            Sole approver — can clear every level alone, bypassing the normal
+                            different-approver-per-level requirement
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
                 {assignedKeys.size === 0 && (
                   <div className="p-8 text-center text-sm text-muted-foreground">
                     {selectedUserId ? 'No approval permissions granted yet' : 'Select a user above to see what they can approve'}

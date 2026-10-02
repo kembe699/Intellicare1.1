@@ -68,6 +68,13 @@ beforeAll(async () => {
   approveExpenseHandler = handlerFor(dailyExpensesRouter, '/:id/approve', 'post');
   approveSupplierBillHandler = handlerFor(dailyExpensesRouter, '/supplier-bills/:po_id/approve', 'post');
 
+  // approval_permissions.sole_approver is normally added by routes/approvals.js's
+  // own self-migrating IIFE on require, against whatever the ambient default
+  // connection is at that moment — not reliably tenant_test. Ensuring it
+  // directly here, same idempotent ADD COLUMN IF NOT EXISTS, guarantees it
+  // exists against the schema this test actually runs against.
+  await sequelize.query(`ALTER TABLE approval_permissions ADD COLUMN IF NOT EXISTS sole_approver BOOLEAN NOT NULL DEFAULT FALSE`);
+
   userAId = await makeUser('A');
   userBId = await makeUser('B');
 }, 30000);
@@ -78,6 +85,7 @@ afterAll(async () => {
     await sequelize.query(`DELETE FROM daily_expenses WHERE description LIKE 'SEGTEST-%'`);
     await sequelize.query(`DELETE FROM supplier_bill_approvals WHERE po_id IN (SELECT id::text FROM purchase_orders WHERE po_number LIKE 'SEGTEST-%')`);
     await sequelize.query(`DELETE FROM purchase_orders WHERE po_number LIKE 'SEGTEST-%'`);
+    await sequelize.query(`DELETE FROM approval_permissions WHERE user_id IN (:ids)`, { replacements: { ids: [userAId, userBId] } });
     await sequelize.query(`DELETE FROM users WHERE id IN (:ids)`, { replacements: { ids: [userAId, userBId] } });
   } catch (e) { console.warn('dailyExpenseApprovalSegregation cleanup failed (non-fatal):', e.message); }
 });
@@ -96,6 +104,15 @@ async function makeSupplierBillPO(suffix) {
     total_amount: 5000, status: 'authorized', clinic_id: TEST_CLINIC_ID,
   }));
   return order.id;
+}
+
+async function grantSoleApprover(userId, approvalType) {
+  await sequelize.query(
+    `INSERT INTO approval_permissions (id, clinic_id, user_id, approval_type, sole_approver)
+     VALUES (:id, :c, :u, :type, true)
+     ON CONFLICT (clinic_id, user_id, approval_type) DO UPDATE SET sole_approver = true`,
+    { replacements: { id: uuid(), c: TEST_CLINIC_ID, u: userId, type: approvalType } }
+  );
 }
 
 describe('Expense approval (2-level) requires two different approvers', () => {
@@ -174,6 +191,78 @@ describe('Supplier bill approval (3-level) requires a different approver per lev
     } finally {
       await sequelize.query(`DELETE FROM supplier_bill_approvals WHERE po_id = :poId`, { replacements: { poId: String(poId) } });
       await sequelize.query(`DELETE FROM users WHERE id = :id`, { replacements: { id: userCId } });
+    }
+  });
+});
+
+describe('sole_approver is a deliberate, explicit, per-user/per-type exemption', () => {
+  test('a user granted sole_approver for expense_approve CAN clear both levels alone', async () => {
+    await grantSoleApprover(userAId, 'expense_approve');
+    try {
+      const expenseId = await makeExpense(`SOLE-${Date.now()}`);
+      const req = () => ({ params: { id: expenseId }, body: {}, user: { id: userAId, role: 'accountant' } });
+
+      const firstRes = mockRes();
+      await withTenant(() => approveExpenseHandler(req(), firstRes));
+      expect(firstRes.statusCode).toBe(201);
+      expect(firstRes.body.approval_level).toBe(1);
+
+      const secondRes = mockRes();
+      await withTenant(() => approveExpenseHandler(req(), secondRes));
+      expect(secondRes.statusCode).toBe(201);
+      expect(secondRes.body.approval_level).toBe(2);
+
+      const [rows] = await sequelize.query(`SELECT * FROM daily_expense_approvals WHERE expense_id = :id`, { replacements: { id: expenseId } });
+      expect(rows.length).toBe(2);
+      expect(rows.every((r) => String(r.user_id) === String(userAId))).toBe(true);
+
+      const [[reloaded]] = await sequelize.query(`SELECT status FROM daily_expenses WHERE id = :id`, { replacements: { id: expenseId } });
+      expect(reloaded.status).toBe('approved');
+    } finally {
+      await sequelize.query(`DELETE FROM approval_permissions WHERE user_id = :u AND approval_type = 'expense_approve'`, { replacements: { u: userAId } });
+    }
+  });
+
+  test('the exemption is per approval_type — sole_approver on expense_approve does not also exempt supplier_bill_approve', async () => {
+    await grantSoleApprover(userAId, 'expense_approve');
+    try {
+      const poId = await makeSupplierBillPO('SOLEBLEED');
+      const req = () => ({ params: { po_id: String(poId) }, body: {}, user: { id: userAId, role: 'accountant' } });
+
+      const firstRes = mockRes();
+      await withTenant(() => approveSupplierBillHandler(req(), firstRes));
+      expect(firstRes.statusCode).toBe(201);
+
+      const secondRes = mockRes();
+      await withTenant(() => approveSupplierBillHandler(req(), secondRes));
+      expect(secondRes.statusCode).toBe(400);
+    } finally {
+      await sequelize.query(`DELETE FROM approval_permissions WHERE user_id = :u AND approval_type = 'expense_approve'`, { replacements: { u: userAId } });
+    }
+  });
+
+  test('a user granted sole_approver for supplier_bill_approve CAN clear all three levels alone', async () => {
+    await grantSoleApprover(userAId, 'supplier_bill_approve');
+    try {
+      const poId = await makeSupplierBillPO('SOLE3');
+      const req = () => ({ params: { po_id: String(poId) }, body: {}, user: { id: userAId, role: 'accountant' } });
+
+      for (let level = 1; level <= 3; level++) {
+        const res = mockRes();
+        await withTenant(() => approveSupplierBillHandler(req(), res));
+        expect(res.statusCode).toBe(201);
+        expect(res.body.approval_level).toBe(level);
+      }
+
+      const fourthRes = mockRes();
+      await withTenant(() => approveSupplierBillHandler(req(), fourthRes));
+      expect(fourthRes.statusCode).toBe(400);
+      expect(fourthRes.body.error).toMatch(/already has 3 approvals/i);
+
+      const [rows] = await sequelize.query(`SELECT * FROM supplier_bill_approvals WHERE po_id = :poId`, { replacements: { poId: String(poId) } });
+      expect(rows.length).toBe(3);
+    } finally {
+      await sequelize.query(`DELETE FROM approval_permissions WHERE user_id = :u AND approval_type = 'supplier_bill_approve'`, { replacements: { u: userAId } });
     }
   });
 });
