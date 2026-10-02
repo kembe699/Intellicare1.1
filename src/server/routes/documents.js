@@ -2,6 +2,21 @@ const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
 const PDFGenerator = require('../services/PDFGenerator');
+const { authorize } = require('../middleware/authorize');
+const BranchQueryFilter = require('../services/BranchQueryFilter');
+
+// None of these three routes had ANY authorize() call or branch check —
+// confirmed by reading the whole file: any authenticated user, any branch,
+// could fetch any invoice/bill/receipt PDF (patient name, amounts, payment
+// method) by ID. Matches the privilege + branch-check pattern the records'
+// own GET routes already use (patientBills.js's GET /:billId).
+function assertCanAccess(req, res, record, label) {
+  if (!BranchQueryFilter.canAccessRecord(record, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+    res.status(403).json({ error: `Access denied to this ${label}` });
+    return false;
+  }
+  return true;
+}
 
 // Helper: get the tenant's real facility info (tenant-wide single row —
 // the `clinics` table this used to query doesn't exist in any tenant schema,
@@ -40,11 +55,12 @@ async function resolveCreatedByName(createdBy) {
 // ══════════════════════════════════════════════════════════════
 // GET /invoice/:id/pdf — Generate invoice PDF
 // ══════════════════════════════════════════════════════════════
-router.get('/invoice/:id/pdf', async (req, res) => {
+router.get('/invoice/:id/pdf', authorize('bills.read'), async (req, res) => {
   try {
     const [inv] = await sequelize.query(`SELECT * FROM invoices WHERE id=?`, { replacements: [req.params.id] });
     if (!inv.length) return res.status(404).json({ error: 'Invoice not found' });
     const invoice = inv[0];
+    if (!assertCanAccess(req, res, invoice, 'invoice')) return;
 
     const [items] = await sequelize.query(`SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY created_at`, { replacements: [req.params.id] });
     const [payments] = await sequelize.query(`SELECT * FROM invoice_payments WHERE invoice_id=? ORDER BY payment_date`, { replacements: [req.params.id] });
@@ -93,11 +109,12 @@ router.get('/invoice/:id/pdf', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // GET /bill/:id/pdf — Generate patient bill PDF
 // ══════════════════════════════════════════════════════════════
-router.get('/bill/:id/pdf', async (req, res) => {
+router.get('/bill/:id/pdf', authorize('bills.read'), async (req, res) => {
   try {
     const [bills] = await sequelize.query(`SELECT pb.* FROM patient_bills pb WHERE pb.id=?`, { replacements: [req.params.id] });
     if (!bills.length) return res.status(404).json({ error: 'Bill not found' });
     const bill = bills[0];
+    if (!assertCanAccess(req, res, bill, 'bill')) return;
 
     let services = [];
     try {
@@ -143,7 +160,7 @@ router.get('/bill/:id/pdf', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // GET /receipt/:id/pdf — Generate receipt PDF
 // ══════════════════════════════════════════════════════════════
-router.get('/receipt/:id/pdf', async (req, res) => {
+router.get('/receipt/:id/pdf', authorize('bills.read'), async (req, res) => {
   try {
     const [receipts] = await sequelize.query(
       `SELECT r.*, pb.patient_name as bill_patient_name, pb.services as bill_services, pb.total_amount as bill_total
@@ -154,6 +171,7 @@ router.get('/receipt/:id/pdf', async (req, res) => {
     );
     if (!receipts.length) return res.status(404).json({ error: 'Receipt not found' });
     const receipt = receipts[0];
+    if (!assertCanAccess(req, res, receipt, 'receipt')) return;
 
     let services = [];
     try {
