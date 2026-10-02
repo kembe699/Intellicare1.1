@@ -836,7 +836,12 @@ async function mirrorPrescriptionToPharmacy(clinicId, patientId, doctorId, docto
 // lis_participants are two separate registries in this app with no bridge between them, so
 // an OPD-only patient with no LIS registration is skipped rather than producing a specimen
 // row LIS can never resolve back to a person.
-async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, department) {
+//
+// Bug: this never took a branchId at all, unlike its sibling mirrorPrescriptionToPharmacy,
+// so every row it created landed with branch_id NULL — invisible to any non-admin on
+// /lis/collection (whose query is a strict `AND branch_id = :branchId`, which never matches
+// NULL) while an unscoped admin saw it regardless, since their query has no branch filter.
+async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, department, branchId) {
   try {
     const [participants] = await sequelize.query(`SELECT id FROM lis_participants WHERE id = :pid LIMIT 1`, { replacements: { pid: patientId } });
     if (participants.length === 0) {
@@ -885,8 +890,8 @@ async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, de
     if (!orderId) {
       orderId = uuidv4();
       await sequelize.query(
-        `INSERT INTO lis_test_orders (id, participant_id, clinic_id, status) VALUES (:id, :pid, :clinicId, 'ordered')`,
-        { replacements: { id: orderId, pid: patientId, clinicId: clinicId || null } }
+        `INSERT INTO lis_test_orders (id, participant_id, clinic_id, status, branch_id) VALUES (:id, :pid, :clinicId, 'ordered', :branchId)`,
+        { replacements: { id: orderId, pid: patientId, clinicId: clinicId || null, branchId: branchId || null } }
       );
     }
 
@@ -894,9 +899,9 @@ async function mirrorLabRequestToLis(patientId, clinicId, testName, testCode, de
     const barcode = Math.floor(1000000 + Math.random() * 9000000).toString();
     const code = testCode || testName.substring(0, 10).toUpperCase().replace(/[^A-Z0-9]/g, '');
     await sequelize.query(
-      `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status)
-       VALUES (:id, :orderId, :code, :name, :barcode, :department, 'pending_collection')`,
-      { replacements: { id: specimenId, orderId, code, name: testName, barcode, department: department || null } }
+      `INSERT INTO lis_specimens (id, order_id, test_code, test_name, barcode, department, status, branch_id)
+       VALUES (:id, :orderId, :code, :name, :barcode, :department, 'pending_collection', :branchId)`,
+      { replacements: { id: specimenId, orderId, code, name: testName, barcode, department: department || null, branchId: branchId || null } }
     );
   } catch (e) {
     console.error('Error mirroring inpatient lab request to LIS:', e);
@@ -1225,7 +1230,7 @@ router.post('/lab-requests', authorize('inpatient.ancillary.write'), async (req,
       }, 'Auto-billed inpatient lab request');
     }
 
-    await mirrorLabRequestToLis(patient_id, clinicId, test_type, test_code, category);
+    await mirrorLabRequestToLis(patient_id, clinicId, test_type, test_code, category, branchId);
 
     res.status(201).json({ id, message: 'Lab request created' });
   } catch (error) {
