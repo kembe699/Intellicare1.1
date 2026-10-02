@@ -788,21 +788,62 @@ async function runBackgroundMigrations() {
     ['DocumentNumberCounters', () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/migrateDocumentNumberCounters').migrateDocumentNumberCounters, 'Document Number Counters'
     )],
-    ['Accounting',        () => require('./scripts/migrateAccountingTables').setupAccountingModule()],
-    ['CashTransfers',     () => require('./scripts/migrateCashTransfers').migrateCashTransfers()],
-    ['Procurement',       () => require('./scripts/migrateProcurementTables').migrateProcurementTables()],
-    ['Inventory',         () => require('./scripts/migrateInventoryTables').migrateInventoryTables()],
-    ['Pharmacy',          () => require('./scripts/migratePharmacyTables').migratePharmacyTables()],
-    ['Billing',           () => require('./scripts/migrateBillingEnhancements').migrateBillingEnhancements()],
-    ['Schemes',           () => require('./scripts/migrateSchemes').migrateSchemes()],
-    ['Invoices',          () => require('./scripts/migrateInvoices').migrateInvoiceTables()],
-    ['InsuranceClaims',   () => require('./scripts/migrateInsuranceClaims')()],
-    ['MultiCurrency',     () => require('./scripts/migrateMultiCurrency').migrateMultiCurrency()],
-    ['Inpatient',         () => require('./scripts/migrateInpatientTables').migrateInpatientTables()],
-    ['Radiology',         () => require('./scripts/migrateRadiologyModule').migrateRadiologyModule()],
-    ['Dhis2Report',       () => require('./scripts/migrateDhis2Tables').migrateDhis2Tables()],
+    // Performance/correctness audit finding: these 12 migrations (every
+    // non-ICD10 entry below) were called with no connection argument at
+    // all, which — like PerfIndexes/Theatre/FixedAssets before this session
+    // found and fixed the same bug for them — means they only ever reached
+    // the default tenant_template connection, never an already-provisioned
+    // real tenant. migrateAcrossTenants now runs each one inside the same
+    // AsyncLocalStorage tenant context every request handler uses (see its
+    // own updated comment), which fixes this regardless of whether the
+    // migration function itself accepts a `db` parameter — most of these
+    // don't, and still work correctly through the ambient context. Icd10Reference
+    // is deliberately left unwrapped: its own default parameter is
+    // platformSequelize, a single shared reference table, not one copy per
+    // tenant — looping it per-tenant would be wrong, not just redundant.
+    ['Accounting',        () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateAccountingTables').setupAccountingModule, 'Accounting'
+    )],
+    ['CashTransfers',     () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateCashTransfers').migrateCashTransfers, 'Cash Transfers'
+    )],
+    ['Procurement',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateProcurementTables').migrateProcurementTables, 'Procurement'
+    )],
+    ['Inventory',         () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateInventoryTables').migrateInventoryTables, 'Inventory'
+    )],
+    ['Pharmacy',          () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migratePharmacyTables').migratePharmacyTables, 'Pharmacy'
+    )],
+    ['Billing',           () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateBillingEnhancements').migrateBillingEnhancements, 'Billing'
+    )],
+    ['Schemes',           () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateSchemes').migrateSchemes, 'Schemes'
+    )],
+    ['Invoices',          () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateInvoices').migrateInvoiceTables, 'Invoices'
+    )],
+    ['InsuranceClaims',   () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateInsuranceClaims'), 'Insurance Claims'
+    )],
+    ['MultiCurrency',     () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateMultiCurrency').migrateMultiCurrency, 'Multi-Currency'
+    )],
+    ['Inpatient',         () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateInpatientTables').migrateInpatientTables, 'Inpatient'
+    )],
+    ['Radiology',         () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateRadiologyModule').migrateRadiologyModule, 'Radiology'
+    )],
+    ['Dhis2Report',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateDhis2Tables').migrateDhis2Tables, 'Dhis2 Report'
+    )],
     ['Icd10Reference',    () => require('./scripts/importIcd10').migrateAndImportIcd10()],
-    ['VisitDiagnoses',    () => require('./scripts/migrateVisitDiagnosesTable').migrateVisitDiagnosesTable()],
+    ['VisitDiagnoses',    () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateVisitDiagnosesTable').migrateVisitDiagnosesTable, 'Visit Diagnoses'
+    )],
     // Every other step here only ever touches the default/tenant_template
     // connection, which is why real tenants (dpoc/demo/gudele/nationmc) needed
     // runFixedAssetsMigrationEverywhere.js run by hand after this module shipped
@@ -824,7 +865,9 @@ async function runBackgroundMigrations() {
     ['DailyExpenseAccounts', () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/ensureDailyExpenseAccounts').ensureDailyExpenseAccounts, 'Daily Expense Accounts'
     )],
-    ['Departments',       () => require('./scripts/migrateDepartments')()],
+    ['Departments',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateDepartments'), 'Departments'
+    )],
     // Was default-connection-only (so tenant_template only) — these never
     // reached any already-provisioned real tenant. Same self-heal pattern as
     // FixedAssets/Theatre above.

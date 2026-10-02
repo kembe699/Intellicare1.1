@@ -53,9 +53,14 @@ describe('privilege catalog carries the new radiology keys', () => {
 });
 
 describe('radiology_requests migration is registered like every other module migration', () => {
-  test('is included in the background migration runner', () => {
+  test('is included in the background migration runner, wrapped in migrateAcrossTenants', () => {
+    // A performance/correctness audit found this (and 12 other migrations)
+    // called with no connection argument, meaning it only ever reached the
+    // default tenant_template connection — same bug class already fixed for
+    // addPerformanceIndexes.js/migrateTheatreTables.js/etc. Now wrapped the
+    // same way, via migrateAcrossTenants.
     const src = read('src/server/index.js');
-    expect(src).toMatch(/\['Radiology',\s*\(\) => require\('\.\/scripts\/migrateRadiologyModule'\)\.migrateRadiologyModule\(\)\]/);
+    expect(src).toMatch(/\['Radiology',\s*\(\) => require\('\.\/scripts\/migrateAcrossTenants'\)\.migrateAcrossTenants\(\s*\n\s*require\('\.\/scripts\/migrateRadiologyModule'\)\.migrateRadiologyModule,\s*'Radiology'\s*\n\s*\)\]/);
   });
 
   test('is included in the manual runAllMigrations script', () => {
