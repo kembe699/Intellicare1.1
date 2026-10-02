@@ -1138,6 +1138,21 @@ router.post('/transactions', authorize('inventory.write'), async (req, res) => {
       return res.status(400).json({ error: 'item_id, transaction_type, and quantity_change required' });
     }
 
+    // Validated up front, before any row is written — a rejected transfer
+    // must never leave a dangling inventory_transactions record with no
+    // matching stock movement behind it.
+    if (transaction_type === 'transfer' && from_location_id && to_location_id) {
+      const [[source]] = await sequelize.query(
+        'SELECT quantity_on_hand FROM stock_by_location WHERE item_id = :item_id AND location_id = :loc_id',
+        { replacements: { item_id, loc_id: from_location_id } }
+      );
+      const available = parseFloat(source?.quantity_on_hand) || 0;
+      const absQty = Math.abs(quantity_change);
+      if (available < absQty) {
+        return res.status(409).json({ error: `Not enough stock at the source location to transfer ${absQty} (${available} available).` });
+      }
+    }
+
     // Generate transaction number
     const txDate = transaction_date || new Date().toISOString().split('T')[0];
     const [countResult] = await sequelize.query(
@@ -1182,30 +1197,49 @@ router.post('/transactions', authorize('inventory.write'), async (req, res) => {
       );
     }
 
-    // Update stock by location for transfers
+    // Update stock by location for transfers. The source used to be clamped
+    // with GREATEST(0, ...) — silently absorbing any shortfall — while the
+    // destination was unconditionally credited the FULL requested quantity
+    // regardless of what the source actually had. Requesting a transfer of
+    // more than a location's real stock (a typo, or a stale UI) used to
+    // conjure the difference out of nothing: source clamps to 0, destination
+    // still gains the whole amount, net stock increases for the clinic.
+    // FOR UPDATE locks the source row for the rest of this transaction so a
+    // concurrent transfer/dispense against the same location can't read a
+    // stale "available" figure and double-spend it, the same guarding this
+    // codebase already uses for inventory_batches (TheatreService.recordItemUsage).
     if (transaction_type === 'transfer' && from_location_id && to_location_id) {
       const absQty = Math.abs(quantity_change);
-      // Decrease from source
-      await sequelize.query(
-        'UPDATE stock_by_location SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE item_id = :item_id AND location_id = :loc_id',
-        { replacements: { qty: absQty, item_id, loc_id: from_location_id } }
-      );
-      // Increase at destination
-      const [existing] = await sequelize.query(
-        'SELECT id FROM stock_by_location WHERE item_id = :item_id AND location_id = :loc_id',
-        { replacements: { item_id, loc_id: to_location_id } }
-      );
-      if (existing.length > 0) {
-        await sequelize.query(
-          'UPDATE stock_by_location SET quantity_on_hand = quantity_on_hand + :qty WHERE item_id = :item_id AND location_id = :loc_id',
-          { replacements: { qty: absQty, item_id, loc_id: to_location_id } }
+      await sequelize.transaction(async (t) => {
+        const [[source]] = await sequelize.query(
+          'SELECT quantity_on_hand FROM stock_by_location WHERE item_id = :item_id AND location_id = :loc_id FOR UPDATE',
+          { replacements: { item_id, loc_id: from_location_id }, transaction: t }
         );
-      } else {
-        await sequelize.query(`
-          INSERT INTO stock_by_location (id, clinic_id, item_id, location_id, quantity_on_hand)
-          VALUES (:sbl_id, :clinic_id, :item_id, :loc_id, :qty)
-        `, { replacements: { sbl_id: uuidv4(), clinic_id, item_id, loc_id: to_location_id, qty: absQty } });
-      }
+        const available = parseFloat(source?.quantity_on_hand) || 0;
+        if (available < absQty) {
+          throw Object.assign(new Error(`Not enough stock at the source location to transfer ${absQty} (${available} available).`), { statusCode: 409 });
+        }
+
+        await sequelize.query(
+          'UPDATE stock_by_location SET quantity_on_hand = quantity_on_hand - :qty WHERE item_id = :item_id AND location_id = :loc_id',
+          { replacements: { qty: absQty, item_id, loc_id: from_location_id }, transaction: t }
+        );
+        const [existing] = await sequelize.query(
+          'SELECT id FROM stock_by_location WHERE item_id = :item_id AND location_id = :loc_id',
+          { replacements: { item_id, loc_id: to_location_id }, transaction: t }
+        );
+        if (existing.length > 0) {
+          await sequelize.query(
+            'UPDATE stock_by_location SET quantity_on_hand = quantity_on_hand + :qty WHERE item_id = :item_id AND location_id = :loc_id',
+            { replacements: { qty: absQty, item_id, loc_id: to_location_id }, transaction: t }
+          );
+        } else {
+          await sequelize.query(`
+            INSERT INTO stock_by_location (id, clinic_id, item_id, location_id, quantity_on_hand)
+            VALUES (:sbl_id, :clinic_id, :item_id, :loc_id, :qty)
+          `, { replacements: { sbl_id: uuidv4(), clinic_id, item_id, loc_id: to_location_id, qty: absQty }, transaction: t });
+        }
+      });
     }
 
     // Auto-create GL entry if settings are configured — cost_currency/exchange_rate
@@ -1227,7 +1261,10 @@ router.post('/transactions', authorize('inventory.write'), async (req, res) => {
     res.status(201).json({ id, transaction_number, gl_entry: jeNumber || null, message: 'Transaction recorded' });
   } catch (error) {
     console.error('Error creating transaction:', error);
-    res.status(500).json({ error: 'Failed to create transaction' });
+    // The FOR UPDATE stock check inside the transfer's own transaction (above)
+    // throws a 409 with a specific message if a race against the early
+    // pre-check above still leaves insufficient stock at commit time.
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to create transaction' });
   }
 });
 
@@ -1314,17 +1351,32 @@ router.post('/adjustments/:id/approve', authorize('inventory.adjustments.approve
 
     if (adj.approval_status !== 'pending') return res.status(400).json({ error: 'Adjustment not pending' });
 
-    // Apply stock change
-    await sequelize.query(
-      'UPDATE inventory_items SET quantity_on_hand = :physical_count WHERE id = :item_id',
-      { replacements: { physical_count: adj.physical_count, item_id: adj.item_id } }
-    );
-
-    // Update stock by location
+    // Apply stock change. inventory_items.quantity_on_hand is the sum of
+    // every stock_by_location row for that item — a location-specific
+    // physical count (adj.location_id set) must only change the TOTAL by
+    // the variance OBSERVED AT THAT LOCATION, never be set equal to that
+    // one location's count outright. This used to SET quantity_on_hand to
+    // adj.physical_count unconditionally, which silently discarded every
+    // other location's stock the moment a multi-location item was counted
+    // at just one of them (e.g. an item with 50 at Pharmacy-A and 30 at
+    // Pharmacy-B: counting Pharmacy-A at 48 used to set the item's total to
+    // 48, erasing Pharmacy-B's 30 units). A whole-item count with no
+    // location (adj.location_id null) has no per-location breakdown to
+    // preserve, so setting the total directly to physical_count there is
+    // still correct.
     if (adj.location_id) {
+      await sequelize.query(
+        'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand + :variance) WHERE id = :item_id',
+        { replacements: { variance: adj.variance, item_id: adj.item_id } }
+      );
       await sequelize.query(
         'UPDATE stock_by_location SET quantity_on_hand = :physical_count WHERE item_id = :item_id AND location_id = :loc_id',
         { replacements: { physical_count: adj.physical_count, item_id: adj.item_id, loc_id: adj.location_id } }
+      );
+    } else {
+      await sequelize.query(
+        'UPDATE inventory_items SET quantity_on_hand = :physical_count WHERE id = :item_id',
+        { replacements: { physical_count: adj.physical_count, item_id: adj.item_id } }
       );
     }
 
