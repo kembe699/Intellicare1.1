@@ -1083,10 +1083,27 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
 });
 
 // Update a patient bill
+//
+// Security audit finding: this used to pass req.body to currentBill.update()
+// near-verbatim (only branch_id was reset for non-admins). A caller holding
+// only bills.financial_action could set paid_amount/status directly with no
+// receipt ever created, or silently reassign clinic_id/patient_id/
+// patient_name/scheme_id/bill_number/visit_id/invoice_id. No frontend caller
+// of this bare PUT /:billId route was found anywhere in src/pages (every
+// page that edits a bill goes through add-services/payments/void-item
+// instead), so there was no legitimate use case to preserve by widening this
+// — paid_amount/status can only ever change through the real /payments
+// route (which creates a receipt and posts GL correctly), and the
+// patient/clinic/scheme identity of a bill is never meant to change after
+// creation.
+const PATIENT_BILL_UPDATABLE_FIELDS = ['total_amount', 'services', 'notes'];
 router.put('/:billId', authorize('bills.financial_action'), async (req, res) => {
   try {
     const { billId } = req.params;
-    const updateData = req.body;
+    const updateData = {};
+    for (const field of PATIENT_BILL_UPDATABLE_FIELDS) {
+      if (req.body[field] !== undefined) updateData[field] = req.body[field];
+    }
     // Whatever shape the caller sent services in (raw array, single- or
     // double-stringified from an older client build), always write back a clean array —
     // this is a genuine Sequelize JSON column, so passing it a string causes Sequelize to
@@ -1102,23 +1119,20 @@ router.put('/:billId', authorize('bills.financial_action'), async (req, res) => 
       return res.status(403).json({ error: 'Access denied to this patient bill' });
     }
 
-    // Calculate balance amount if amounts are being updated
-    if (updateData.total_amount !== undefined || updateData.paid_amount !== undefined) {
-      const totalAmount = updateData.total_amount !== undefined ? updateData.total_amount : currentBill.total_amount;
-      const paidAmount = updateData.paid_amount !== undefined ? updateData.paid_amount : currentBill.paid_amount;
-      updateData.balance_amount = totalAmount - paidAmount;
-      
-      // Update status based on payment
+    // Recompute balance/status from the bill's own paid_amount — paid_amount
+    // itself can never be set through this route (see
+    // PATIENT_BILL_UPDATABLE_FIELDS above), only through POST /:billId/payments,
+    // which creates the matching receipt and GL entry this route does not.
+    if (updateData.total_amount !== undefined) {
+      const paidAmount = parseFloat(currentBill.paid_amount) || 0;
+      updateData.balance_amount = updateData.total_amount - paidAmount;
       if (updateData.balance_amount <= 0) {
         updateData.status = 'paid';
       } else if (paidAmount > 0) {
         updateData.status = 'partial';
       }
     }
-    if (req.user?.role !== 'admin') {
-      updateData.branch_id = currentBill.branch_id;
-    }
-    
+
     const updatedBill = await currentBill.update(updateData);
 
     // This endpoint can change total_amount and the service lines outright, and
