@@ -52,6 +52,21 @@ const INDEXES = [
   // investigating a production "approving results takes forever" report.
   'CREATE INDEX IF NOT EXISTS idx_lis_results_status ON lis_results (status)',
   'CREATE INDEX IF NOT EXISTS idx_lis_results_status_branch ON lis_results (status, branch_id)',
+
+  // lis_specimens — same class of bug, one table over: GET /specimens/pending
+  // (the page every lab tech opens to work the collection/results queue)
+  // filters on status with no supporting index, and dashboard.js's own
+  // specimen counts filter on status + branch_id + updated_at on every
+  // dashboard load. Found via a full performance/load audit.
+  'CREATE INDEX IF NOT EXISTS idx_lis_specimens_status ON lis_specimens (status)',
+  'CREATE INDEX IF NOT EXISTS idx_lis_specimens_status_branch ON lis_specimens (status, branch_id)',
+  'CREATE INDEX IF NOT EXISTS idx_lis_specimens_branch ON lis_specimens (branch_id)',
+
+  // lis_participants — "the actual patient registry every real page
+  // reads/writes" (dashboard.js's own comment); its dashboard counts filter
+  // on branch_id and created_at on every load, with no index on either.
+  'CREATE INDEX IF NOT EXISTS idx_lis_participants_branch ON lis_participants (branch_id)',
+  'CREATE INDEX IF NOT EXISTS idx_lis_participants_created_at ON lis_participants (created_at)',
 ];
 
 // db param (defaulting to the module's own default-connection sequelize) so
