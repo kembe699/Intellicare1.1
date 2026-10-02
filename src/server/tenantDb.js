@@ -167,4 +167,22 @@ function evictTenantConnection(schemaName) {
   }
 }
 
-module.exports = { getTenantConnection, evictTenantConnection };
+// Test-only cleanup: each Jest test FILE gets its own fresh module registry
+// (even with maxWorkers: 1 — Jest resets modules per file regardless of
+// worker reuse), so the `connections` Map above is created fresh per file and
+// its pool is never closed by anything else. Left alone, a pool only drains
+// itself via the idle timeout (10s — see dbConnectionOptions.js), and with
+// 60+ test files running in one process, many files' pools are still within
+// that 10s window when later files open their OWN pools, so open connections
+// accumulate across the whole run far faster than they're reaped —
+// eventually exceeding Postgres's max_connections well before the suite
+// finishes. Wired into every test file via tests/setup/closeTenantConnections.js
+// (see jest.config.cjs's setupFilesAfterEnv) so each file's connection(s) are
+// released the moment that file's own tests finish, not up to 10s later.
+async function closeAllConnections() {
+  const closing = Array.from(connections.values()).map((c) => c.sequelize.close().catch(() => {}));
+  connections.clear();
+  await Promise.all(closing);
+}
+
+module.exports = { getTenantConnection, evictTenantConnection, closeAllConnections };
