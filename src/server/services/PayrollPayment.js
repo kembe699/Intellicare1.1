@@ -66,20 +66,54 @@ async function payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseC
   // payment). paid_by stays null in that case; the GL entry gets a
   // descriptive marker instead of failing its NOT NULL constraint.
   const glUserId = userId || 'employee-self-service';
-  const glEntry = await AccountingService.createGLEntry({
-    clinic_id: clinicId,
-    transaction_date: run.run_date,
-    transaction_type: 'payroll_payment',
-    description: `Payroll ${run.run_number} — ${employeeLabel}`,
-    reference_id: line.id,
-    reference_module: 'payroll_run_line',
-  }, lineItems, glUserId);
-  await AccountingService.postGLEntry(glEntry.id, glUserId);
 
-  await sequelize.query(
-    `UPDATE payroll_run_lines SET gl_entry_id = :glId, exchange_rate = :rate, base_currency_net = :baseNet, status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
-    { replacements: { id: line.id, glId: glEntry.id, rate, baseNet, userId: userId || null } }
-  );
+  // Audit finding: this used to check line.status === 'paid' in the CALLER,
+  // then post a GL entry here, then update the line's status — no row lock
+  // and no transaction spanned the gap, so two near-simultaneous calls for
+  // the same line (an admin clicking Pay while the employee submits their
+  // own QR signing link, or a double-click/retry) could both pass the
+  // status check before either write landed, producing two GL entries and
+  // two postings for the same payroll line. FOR UPDATE here serializes a
+  // concurrent call against the same line; the status re-check immediately
+  // after is what actually rejects the loser once it's their turn. The GL
+  // entry and the status flip now share one transaction, so a GL failure
+  // still leaves the line un-paid exactly as before (nothing to roll back
+  // forward) — postGLEntry runs AFTER commit, deliberately outside the
+  // lock-holding transaction, matching postGLEntry's own documented reason
+  // for never being called while a transaction holds a connection open.
+  const transaction = await sequelize.transaction();
+  let glEntry;
+  try {
+    const [[locked]] = await sequelize.query(
+      `SELECT status FROM payroll_run_lines WHERE id = :id FOR UPDATE`,
+      { replacements: { id: line.id }, transaction }
+    );
+    if (!locked || locked.status === 'paid') {
+      throw Object.assign(new Error('This employee has already been paid'), { statusCode: 409 });
+    }
+
+    glEntry = await AccountingService.createGLEntry({
+      clinic_id: clinicId,
+      branch_id: run.branch_id,
+      transaction_date: run.run_date,
+      transaction_type: 'payroll_payment',
+      description: `Payroll ${run.run_number} — ${employeeLabel}`,
+      reference_id: line.id,
+      reference_module: 'payroll_run_line',
+    }, lineItems, glUserId, transaction);
+
+    await sequelize.query(
+      `UPDATE payroll_run_lines SET gl_entry_id = :glId, exchange_rate = :rate, base_currency_net = :baseNet, status = 'paid', paid_by = :userId, paid_at = NOW(), updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: line.id, glId: glEntry.id, rate, baseNet, userId: userId || null }, transaction }
+    );
+
+    await transaction.commit();
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback().catch(() => {});
+    throw error;
+  }
+
+  await AccountingService.postGLEntry(glEntry.id, glUserId);
 
   return glEntry;
 }
