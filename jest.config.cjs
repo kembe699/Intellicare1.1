@@ -4,7 +4,11 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.js'],
   transform: {},
-  setupFilesAfterSetup: [],
+  // Was "setupFilesAfterSetup" — not a real Jest option (triggered the
+  // "Unknown option" validation warning on every single test run). Now
+  // actually wires in per-file tenant-connection cleanup — see
+  // tests/setup/closeTenantConnections.js.
+  setupFilesAfterEnv: ['<rootDir>/tests/setup/closeTenantConnections.js'],
   maxWorkers: 1,
   testTimeout: 30000,
   verbose: true,
