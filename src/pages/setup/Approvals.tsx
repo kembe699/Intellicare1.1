@@ -75,7 +75,15 @@ const Approvals: React.FC = () => {
           email: u.email || '',
           role: u.role || '',
         }))
-        .filter((u: UserOption) => u.role !== 'admin')
+        // Admins already pass requireApprovalPermission's own permission gate
+        // unconditionally, so granting one an approval_type here changes
+        // nothing by itself — the one thing it DOES let an admin pick up is
+        // sole_approver (see MULTI_LEVEL_APPROVAL_TYPES below), which an
+        // admin does NOT get for free: the segregation-of-duties check in
+        // daily-expenses.js still blocks an admin from clearing a second
+        // level of the same chain unless they hold that explicit grant too.
+        // Previously filtered out entirely, which made this screen the only
+        // way to set that exemption unreachable for an admin account.
         .sort((a: UserOption, b: UserOption) => a.displayName.localeCompare(b.displayName));
       setUsers(transformed);
     } catch (error) {
@@ -199,7 +207,9 @@ const Approvals: React.FC = () => {
             searchPlaceholder="Search users..."
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Admin accounts always have full approval authority and are not listed.
+            Admins already pass every approval permission check automatically. The only reason
+            to grant one here is the "Sole approver" exemption below, for Daily Expense Approval
+            or Supplier Bill Approval specifically.
           </p>
         </div>
 
