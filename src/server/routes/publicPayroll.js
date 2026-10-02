@@ -240,7 +240,7 @@ router.post('/:code/:token/submit', payrollSignLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting payroll signature:', error);
-    res.status(500).json({ error: error.message || 'Something went wrong. Please try again or contact HR.' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Something went wrong. Please try again or contact HR.' });
   }
 });
 

@@ -1350,7 +1350,7 @@ router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write')
     res.json({ success: true, gl_entry_id: glEntry.id, gl_number: glEntry.gl_number, run_fully_paid: runFullyPaid });
   } catch (error) {
     console.error('Error paying payroll line:', error);
-    res.status(500).json({ error: error.message || 'Failed to pay this employee' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Failed to pay this employee' });
   }
 });
 
@@ -1405,7 +1405,7 @@ router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, 
     res.json({ success: true, paid_count: paidCount });
   } catch (error) {
     console.error('Error paying payroll run:', error);
-    res.status(500).json({ error: error.message || 'Failed to pay payroll run' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Failed to pay payroll run' });
   }
 });
 
