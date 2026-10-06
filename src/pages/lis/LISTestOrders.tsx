@@ -54,6 +54,26 @@ const GENDER_OPTIONS = [
 const QUICK_REGISTER_TENANT = 'dpoc';
 const EMPTY_QUICK_REGISTER = { full_name: '', age_years: '', age_months: '', gender: '', scheme_id: '', phone: '', next_of_kin: '', army_unit: '' };
 
+// Units of measure for a prescription bought outside this pharmacy — there's
+// no drug master row to read unit_of_measure from, so the prescriber picks
+// one directly. Only used for the "Not in stock" / outside-pharmacy path;
+// a drug picked from the catalog keeps showing its own real unit_of_measure.
+const RX_EXTERNAL_UOM_OPTIONS = [
+  { value: 'Tab', label: 'Tablet(s)' }, { value: 'Cap', label: 'Capsule(s)' },
+  { value: 'Inj', label: 'Injection' }, { value: 'Amp', label: 'Ampoule(s)' },
+  { value: 'Vial', label: 'Vial(s)' }, { value: 'Syrup', label: 'Syrup' },
+  { value: 'Susp', label: 'Suspension' }, { value: 'Drop', label: 'Drop(s)' },
+  { value: 'Cream', label: 'Cream' }, { value: 'Ointment', label: 'Ointment' },
+  { value: 'Gel', label: 'Gel' }, { value: 'Lotion', label: 'Lotion' },
+  { value: 'Patch', label: 'Patch(es)' }, { value: 'Supp', label: 'Suppository/Suppositories' },
+  { value: 'Inhaler', label: 'Inhaler/Puff' }, { value: 'Spray', label: 'Spray' },
+  { value: 'Sachet', label: 'Sachet(s)' }, { value: 'Bottle', label: 'Bottle(s)' },
+  { value: 'mL', label: 'Millilitre(s)' }, { value: 'g', label: 'Gram(s)' },
+  { value: 'mg', label: 'Milligram(s)' }, { value: 'IU', label: 'International Units' },
+  { value: 'Strip', label: 'Strip(s)' }, { value: 'Pack', label: 'Pack(s)' },
+  { value: 'Unit', label: 'Unit(s)' },
+];
+
 // Same dpoc-only scoping idea as QUICK_REGISTER_TENANT above — radiology
 // ordering itself is now available to every tenant (see fetchRadiologyExamTypes
 // and the Radiology picker below), but requesting an admission straight from
@@ -201,6 +221,7 @@ export default function LISTestOrders() {
   // Out-of-stock item the patient buys outside: typed name, no inventory row.
   const [rxIsExternal, setRxIsExternal] = useState(false);
   const [rxExternalName, setRxExternalName] = useState('');
+  const [rxExternalUnit, setRxExternalUnit] = useState('');
   const [rxNotes, setRxNotes] = useState('');
   // Quantity is derived (dose x per-day x days) until a prescriber types their
   // own, at which point their number wins — PRN and STAT have no derivable
@@ -353,7 +374,7 @@ export default function LISTestOrders() {
 
   const resetRxForm = () => {
     setRxDrugId(''); setRxQty('1'); setRxDose(''); setRxFrequency(''); setRxDuration('');
-    setRxDoseAmount('1'); setRxExternalName(''); setRxNotes(''); setRxQtyTouched(false);
+    setRxDoseAmount('1'); setRxExternalName(''); setRxExternalUnit(''); setRxNotes(''); setRxQtyTouched(false);
   };
 
   const handleAddRxLine = () => {
@@ -365,10 +386,11 @@ export default function LISTestOrders() {
     // stock-checked or billed here, because this pharmacy isn't supplying it.
     if (rxIsExternal) {
       if (!rxExternalName.trim()) { toast.error('Enter the medicine name'); return; }
+      if (!rxExternalUnit) { toast.error('Select a unit of measure'); return; }
       setRxLines(prev => [...prev, {
         drug_id: null, is_external: true,
         external_drug_name: rxExternalName.trim(), drug_name: rxExternalName.trim(),
-        unit_of_measure: 'unit', quantity_prescribed: qty,
+        unit_of_measure: rxExternalUnit, quantity_prescribed: qty,
         dose_amount: parseFloat(rxDoseAmount) || null, dose_strength: rxDose,
         frequency: rxFrequency, duration_days: duration,
         notes: rxNotes.trim(), selling_price: 0,
@@ -2477,7 +2499,7 @@ export default function LISTestOrders() {
                         type="checkbox"
                         className="rounded border-input"
                         checked={rxIsExternal}
-                        onChange={e => { setRxIsExternal(e.target.checked); setRxDrugId(''); setRxExternalName(''); }}
+                        onChange={e => { setRxIsExternal(e.target.checked); setRxDrugId(''); setRxExternalName(''); setRxExternalUnit(''); }}
                       />
                       Not in stock — patient buys from an outside pharmacy
                     </label>
@@ -2533,12 +2555,23 @@ export default function LISTestOrders() {
                         value={rxQty}
                         onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
                       />
-                      <div
-                        className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
-                        title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
-                      >
-                        {rxIsExternal ? 'unit' : (rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—')}
-                      </div>
+                      {rxIsExternal ? (
+                        <Combobox
+                          options={RX_EXTERNAL_UOM_OPTIONS}
+                          value={rxExternalUnit}
+                          onChange={v => setRxExternalUnit(v)}
+                          placeholder="Unit..."
+                          searchPlaceholder="Search units..."
+                          className="h-9 text-xs"
+                        />
+                      ) : (
+                        <div
+                          className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
+                          title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
+                        >
+                          {rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—'}
+                        </div>
+                      )}
                     </div>
 
                     {rxSuggestedQty != null && (
@@ -2977,9 +3010,15 @@ export default function LISTestOrders() {
                                   {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                                   {l.duration_days ? ` · ${l.duration_days}d` : ''}
                                 </span>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize bg-slate-100 text-slate-600 whitespace-nowrap">
-                                  {l.line_status}
-                                </span>
+                                {l.is_external ? (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
+                                    Buy from outside pharmacy — not billed
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize bg-slate-100 text-slate-600 whitespace-nowrap">
+                                    {l.line_status}
+                                  </span>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -3066,7 +3105,7 @@ export default function LISTestOrders() {
                             type="checkbox"
                             className="rounded border-input"
                             checked={rxIsExternal}
-                            onChange={e => { setRxIsExternal(e.target.checked); setRxDrugId(''); setRxExternalName(''); }}
+                            onChange={e => { setRxIsExternal(e.target.checked); setRxDrugId(''); setRxExternalName(''); setRxExternalUnit(''); }}
                           />
                           Not in stock — patient buys from an outside pharmacy
                         </label>
@@ -3122,12 +3161,23 @@ export default function LISTestOrders() {
                             value={rxQty}
                             onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
                           />
-                          <div
-                            className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
-                            title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
-                          >
-                            {rxIsExternal ? 'unit' : (rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—')}
-                          </div>
+                          {rxIsExternal ? (
+                            <Combobox
+                              options={RX_EXTERNAL_UOM_OPTIONS}
+                              value={rxExternalUnit}
+                              onChange={v => setRxExternalUnit(v)}
+                              placeholder="Unit..."
+                              searchPlaceholder="Search units..."
+                              className="h-9 text-xs"
+                            />
+                          ) : (
+                            <div
+                              className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
+                              title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
+                            >
+                              {rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—'}
+                            </div>
+                          )}
                         </div>
 
                         {/* Show the arithmetic rather than silently overwriting the

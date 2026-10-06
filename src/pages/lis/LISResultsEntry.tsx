@@ -109,6 +109,10 @@ export default function LISResultsEntry() {
 
   // resultValues maps component.id to the entered value
   const [resultValues, setResultValues] = useState<Record<string, string>>({});
+  // commentValues maps component.id to a free-text note for that one analyte —
+  // separate from getRemark's auto-computed HIGH/LOW/NORMAL flag. Only shows
+  // on the printed report for analytes it's actually filled in for.
+  const [commentValues, setCommentValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchLabTests();
@@ -138,6 +142,7 @@ export default function LISResultsEntry() {
   const loadSpecimen = async (s: any) => {
     setSelectedSpecimen(s);
     setResultValues({});
+    setCommentValues({});
 
     // Attempt to load existing results if this specimen was already analyzed
     try {
@@ -146,15 +151,20 @@ export default function LISResultsEntry() {
         const existingResults = await res.json();
         if (existingResults.length > 0) {
           const loadedValues: Record<string, string> = {};
+          const loadedComments: Record<string, string> = {};
           // Map back analyte name to component ID by finding it in the test schema
           const testSchema = labTests.find(t => t.test_code === s.test_code);
           if (testSchema && testSchema.components) {
             existingResults.forEach((er: any) => {
               const comp = testSchema.components.find((c: any) => c.name === er.analyte);
-              if (comp) loadedValues[comp.id] = er.value;
+              if (comp) {
+                loadedValues[comp.id] = er.value;
+                if (er.comment) loadedComments[comp.id] = er.comment;
+              }
             });
           }
           setResultValues(loadedValues);
+          setCommentValues(loadedComments);
         }
       }
     } catch(e) {
@@ -193,7 +203,8 @@ export default function LISResultsEntry() {
     const results = testSchema.components.map((comp: any) => ({
       analyte: comp.name,
       value: resultValues[comp.id] || '',
-      unit: comp.unit || ''
+      unit: comp.unit || '',
+      comment: (commentValues[comp.id] || '').trim(),
     })).filter((r: any) => r.value !== '');
 
     if (results.length === 0) return toast.error('Enter at least one result');
@@ -217,6 +228,7 @@ export default function LISResultsEntry() {
           setSelectedSpecimen(null);
           setSelectedOrderId(null);
           setResultValues({});
+          setCommentValues({});
         }
         fetchSpecimens();
       } else {
@@ -313,12 +325,20 @@ export default function LISResultsEntry() {
       const requestedByName = currentGroup.specimens.find((s: any) => s.requested_by_name)?.requested_by_name || '—';
 
       const testSectionsHTML = withResults.map(({ specimen, results }) => {
-        const rows = sortResultsByComponentOrder(results).map((r: any) => ({
+        const sorted = sortResultsByComponentOrder(results);
+        const rows = sorted.map((r: any) => ({
           cells: [r.analyte, r.value || '—', r.unit || '—', r.reference_range || '—', getRemarkText(r.value, r.reference_range)],
         }));
+        // Only analytes a comment was actually entered for get a line here —
+        // nothing renders for this test at all if none were.
+        const commentsHTML = sorted
+          .filter((r: any) => r.comment && String(r.comment).trim())
+          .map((r: any) => `<div class="ic-notes"><strong>Comment — ${r.analyte}:</strong> ${r.comment}</div>`)
+          .join('\n');
         return [
           `<div class="ic-section-title">Test: ${specimen.test_name} <span>Barcode: ${specimen.barcode}</span></div>`,
           docTemplate.buildTable([{ label: 'Parameter' }, { label: 'Result' }, { label: 'Unit' }, { label: 'Ref Range' }, { label: 'Remark' }], rows),
+          commentsHTML,
         ].join('\n');
       }).join('\n');
 
@@ -687,6 +707,18 @@ export default function LISResultsEntry() {
                             {
                               key: '__remarks', header: 'Remarks', width: '6rem',
                               render: (_v, comp) => getRemark(resultValues[comp.id], comp.reference_range),
+                            },
+                            {
+                              key: '__comment', header: 'Comment', width: '12rem',
+                              render: (_v, comp) => (
+                                <Input
+                                  className="h-8 bg-background disabled:opacity-70 disabled:cursor-not-allowed"
+                                  placeholder="Optional note for the report..."
+                                  value={commentValues[comp.id] || ''}
+                                  onChange={(e) => setCommentValues({ ...commentValues, [comp.id]: e.target.value })}
+                                  disabled={selectedSpecimen.status === 'approved'}
+                                />
+                              ),
                             },
                           ]}
                         />
