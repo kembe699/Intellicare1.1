@@ -72,7 +72,7 @@ export default function PatientDetails() {
   const [dischargeData, setDischargeData] = useState({ discharge_reason: '', discharge_summary: '', discharge_outcome: '' });
 
   // ── Forms State ──
-  const [noteForm, setNoteForm] = useState({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' });
+  const [noteForm, setNoteForm] = useState({ clinical_assessment: '', examination_findings: '', treatment_plan: '', progress_status: 'stable' });
 
   const [rxForm, setRxForm] = useState({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '',
     dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: '' });
@@ -93,7 +93,7 @@ export default function PatientDetails() {
     setRxForm(f => (f.quantity === String(rxSuggestedQty) ? f : { ...f, quantity: String(rxSuggestedQty) }));
   }, [rxSuggestedQty, rxQtyTouched]);
 
-  const [nursingForm, setNursingForm] = useState({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' });
+  const [nursingForm, setNursingForm] = useState({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' });
 
   const [showAdminForm, setShowAdminForm] = useState(false);
   const [adminForm, setAdminForm] = useState({ prescription_id: '', medication_name: '', dosage_given: '', route: 'oral', notes: '', status: 'given' });
@@ -225,7 +225,7 @@ export default function PatientDetails() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const notesMut = useCreateMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', diagnosis: '', treatment_plan: '', progress_status: 'stable', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' }); });
+  const notesMut = useCreateMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', treatment_plan: '', progress_status: 'stable' }); });
 
   const resetRxForm = () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: '' }); setRxQtyTouched(false); setDispenseNow(false); };
 
@@ -267,7 +267,7 @@ export default function PatientDetails() {
     onSuccess: () => { toast.success('Prescription created'); resetRxForm(); invalidateAll(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const nursingMut = useCreateMutation('/api/inpatient/nursing-notes', 'Nursing note saved', () => { setNursingForm({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '' }); });
+  const nursingMut = useCreateMutation('/api/inpatient/nursing-notes', 'Nursing note saved', () => { setNursingForm({ shift: 'morning', care_activities: '', patient_condition: '', pain_level: '', mobility_status: '', fluid_intake: '', fluid_output: '', notes: '', temperature: '', blood_pressure: '', pulse: '', respiratory_rate: '' }); });
   const adminMut = useCreateMutation('/api/inpatient/drug-administrations', 'Administration recorded', () => { setShowAdminForm(false); setAdminForm({ prescription_id: '', medication_name: '', dosage_given: '', route: 'oral', notes: '', status: 'given' }); });
   const labMut = useCreateMutation('/api/inpatient/lab-requests', 'Lab request created', () => { setLabForm({ test_id: '', test_type: '', test_code: '', category: '', unit_price: 0, clinical_indication: '', sample_type: '', urgent: false }); });
   const radMut = useCreateMutation('/api/inpatient/radiology-requests', 'Radiology request created', () => { setRadForm({ service_id: '', imaging_type: '', unit_price: 0, body_part: '', clinical_indication: '', urgent: false }); });
@@ -340,15 +340,13 @@ export default function PatientDetails() {
 
     body += `<div class="ic-section-title">Doctor's Notes <span>${doctorNotes.length} entr${doctorNotes.length === 1 ? 'y' : 'ies'}</span></div>`;
     body += doctorNotes.length === 0 ? emptyMsg('No doctor notes recorded.') : docTemplate.buildTable(
-      [{ label: 'Date' }, { label: 'Doctor' }, { label: 'Vitals' }, { label: 'Assessment / Diagnosis / Plan' }, { label: 'Status' }],
+      [{ label: 'Date' }, { label: 'Doctor' }, { label: 'Assessment / Plan' }, { label: 'Status' }],
       doctorNotes.map((n: any) => ({
         cells: [
           new Date(n.note_date).toLocaleString(),
           n.doctor_name ? `Dr. ${n.doctor_name}` : '-',
-          n.vital_signs ? `T ${n.vital_signs.temperature || '-'}°C, BP ${n.vital_signs.blood_pressure || '-'}, P ${n.vital_signs.pulse || '-'}, RR ${n.vital_signs.respiratory_rate || '-'}` : '-',
           [
             n.clinical_assessment ? `<strong>Assessment:</strong> ${n.clinical_assessment}` : '',
-            n.diagnosis ? `<strong>Dx:</strong> ${n.diagnosis}` : '',
             n.treatment_plan ? `<strong>Plan:</strong> ${n.treatment_plan}` : '',
           ].filter(Boolean).join('<br/>'),
           n.progress_status || '-',
@@ -386,11 +384,13 @@ export default function PatientDetails() {
 
     body += `<div class="ic-section-title">Nursing Notes <span>${nursingNotes.length}</span></div>`;
     body += nursingNotes.length === 0 ? emptyMsg('No nursing notes recorded.') : docTemplate.buildTable(
-      [{ label: 'Date' }, { label: 'Shift' }, { label: 'Nurse' }, { label: 'Condition' }, { label: 'Pain' }, { label: 'I/O (ml)' }, { label: 'Activities / Notes' }],
+      [{ label: 'Date' }, { label: 'Shift' }, { label: 'Nurse' }, { label: 'Vitals' }, { label: 'Condition' }, { label: 'Pain' }, { label: 'I/O (ml)' }, { label: 'Activities / Notes' }],
       nursingNotes.map((n: any) => ({
         cells: [
           new Date(n.note_date).toLocaleString(),
-          n.shift || '-', n.nurse_name || '-', n.patient_condition || '-', n.pain_level ?? '-',
+          n.shift || '-', n.nurse_name || '-',
+          n.vital_signs ? `T ${n.vital_signs.temperature || '-'}°C, BP ${n.vital_signs.blood_pressure || '-'}, P ${n.vital_signs.pulse || '-'}, RR ${n.vital_signs.respiratory_rate || '-'}` : '-',
+          n.patient_condition || '-', n.pain_level ?? '-',
           `${n.fluid_intake || 0} / ${n.fluid_output || 0}`,
           [n.care_activities, n.notes].filter(Boolean).join('<br/>'),
         ],
@@ -560,15 +560,8 @@ export default function PatientDetails() {
             <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 items-start">
               <div className="lg:sticky lg:top-4">
                 <FormCard icon={Stethoscope} title="New Doctor's Note">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder="Temp °C" value={noteForm.temperature} onChange={e => setNoteForm({ ...noteForm, temperature: e.target.value })} />
-                      <Input placeholder="BP (120/80)" value={noteForm.blood_pressure} onChange={e => setNoteForm({ ...noteForm, blood_pressure: e.target.value })} />
-                      <Input placeholder="Pulse bpm" value={noteForm.pulse} onChange={e => setNoteForm({ ...noteForm, pulse: e.target.value })} />
-                      <Input placeholder="RR /min" value={noteForm.respiratory_rate} onChange={e => setNoteForm({ ...noteForm, respiratory_rate: e.target.value })} />
-                    </div>
                     <Textarea placeholder="Clinical assessment *" value={noteForm.clinical_assessment} onChange={e => setNoteForm({ ...noteForm, clinical_assessment: e.target.value })} rows={3} />
                     <Textarea placeholder="Examination findings" value={noteForm.examination_findings} onChange={e => setNoteForm({ ...noteForm, examination_findings: e.target.value })} rows={2} />
-                    <Input placeholder="Diagnosis" value={noteForm.diagnosis} onChange={e => setNoteForm({ ...noteForm, diagnosis: e.target.value })} />
                     <Combobox
                       options={[
                         { value: 'improving', label: 'Improving' },
@@ -581,24 +574,27 @@ export default function PatientDetails() {
                       searchPlaceholder="Search..."
                     />
                     <Textarea placeholder="Treatment plan" value={noteForm.treatment_plan} onChange={e => setNoteForm({ ...noteForm, treatment_plan: e.target.value })} rows={2} />
-                    <Button className="w-full gap-1.5" disabled={notesMut.isPending} onClick={() => { if (!noteForm.clinical_assessment) { toast.error('Assessment required'); return; } notesMut.mutate({ ...noteForm, vital_signs: { temperature: noteForm.temperature, blood_pressure: noteForm.blood_pressure, pulse: noteForm.pulse, respiratory_rate: noteForm.respiratory_rate } }); }}>
+                    <Button className="w-full gap-1.5" disabled={notesMut.isPending} onClick={() => { if (!noteForm.clinical_assessment) { toast.error('Assessment required'); return; } notesMut.mutate(noteForm); }}>
                       {notesMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Note
                     </Button>
                 </FormCard>
               </div>
-              <div className="space-y-3 min-w-0 max-h-[820px] overflow-y-auto scrollbar-hide">
-                {doctorNotes.length === 0 ? <p className="text-center text-muted-foreground py-12">No doctor notes yet</p> : doctorNotes.map((n: any) => (
-                  <Card key={n.id} className="border-l-4 border-l-primary/40"><CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div><p className="font-semibold text-sm text-foreground">Dr. {n.doctor_name}</p><p className="text-xs text-muted-foreground">{new Date(n.note_date).toLocaleString()}</p></div>
-                      <Badge variant={statusVariant(n.progress_status)} className="capitalize">{n.progress_status}</Badge>
-                    </div>
-                    {n.vital_signs && <div className="text-xs bg-muted/50 p-2 rounded-md mb-2">Temp: {n.vital_signs.temperature}°C • BP: {n.vital_signs.blood_pressure} • Pulse: {n.vital_signs.pulse} • RR: {n.vital_signs.respiratory_rate}</div>}
-                    <p className="text-sm mb-1"><span className="font-medium">Assessment:</span> {n.clinical_assessment}</p>
-                    {n.diagnosis && <p className="text-sm mb-1"><span className="font-medium">Dx:</span> {n.diagnosis}</p>}
-                    {n.treatment_plan && <p className="text-sm"><span className="font-medium">Plan:</span> {n.treatment_plan}</p>}
-                  </CardContent></Card>
-                ))}
+              <div className="min-w-0">
+                <Card className="overflow-hidden">
+                  <AdvancedDataTable<any>
+                    data={doctorNotes}
+                    keyExtractor={(n) => n.id}
+                    emptyMessage="No doctor notes yet"
+                    pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+                    columns={[
+                      { key: 'note_date', header: 'Date/Time', render: (v) => <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(v).toLocaleString()}</span> },
+                      { key: 'doctor_name', header: 'Doctor', render: (v) => <span className="font-medium text-foreground whitespace-nowrap">Dr. {v}</span> },
+                      { key: 'progress_status', header: 'Status', render: (v) => <Badge variant={statusVariant(v)} className="capitalize">{v}</Badge> },
+                      { key: 'clinical_assessment', header: 'Assessment', render: (v) => <span className="whitespace-pre-wrap">{v}</span> },
+                      { key: 'treatment_plan', header: 'Plan', render: (v) => <span className="text-muted-foreground whitespace-pre-wrap">{v || '-'}</span> },
+                    ]}
+                  />
+                </Card>
               </div>
             </div>
           </TabsContent>
@@ -757,6 +753,15 @@ export default function PatientDetails() {
                       onChange={v => setNursingForm({ ...nursingForm, shift: v })}
                       searchPlaceholder="Search..."
                     />
+                    {/* Vitals are recorded by the nurse, not the doctor — moved here from
+                        Doctor's Note, which used to carry this (and never actually displayed
+                        it correctly — see parseVitalSigns in inpatient.js for why). */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input placeholder="Temp °C" value={nursingForm.temperature} onChange={e => setNursingForm({ ...nursingForm, temperature: e.target.value })} />
+                      <Input placeholder="BP (120/80)" value={nursingForm.blood_pressure} onChange={e => setNursingForm({ ...nursingForm, blood_pressure: e.target.value })} />
+                      <Input placeholder="Pulse bpm" value={nursingForm.pulse} onChange={e => setNursingForm({ ...nursingForm, pulse: e.target.value })} />
+                      <Input placeholder="RR /min" value={nursingForm.respiratory_rate} onChange={e => setNursingForm({ ...nursingForm, respiratory_rate: e.target.value })} />
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <Input placeholder="Patient condition" value={nursingForm.patient_condition} onChange={e => setNursingForm({ ...nursingForm, patient_condition: e.target.value })} />
                       <Input placeholder="Pain (0-10)" type="number" min="0" max="10" value={nursingForm.pain_level} onChange={e => setNursingForm({ ...nursingForm, pain_level: e.target.value })} />
@@ -768,24 +773,38 @@ export default function PatientDetails() {
                     </div>
                     <Input placeholder="Mobility status" value={nursingForm.mobility_status} onChange={e => setNursingForm({ ...nursingForm, mobility_status: e.target.value })} />
                     <Textarea placeholder="Additional notes" value={nursingForm.notes} onChange={e => setNursingForm({ ...nursingForm, notes: e.target.value })} rows={2} />
-                    <Button className="w-full gap-1.5" disabled={nursingMut.isPending} onClick={() => { if (!nursingForm.care_activities) { toast.error('Care activities required'); return; } nursingMut.mutate(nursingForm); }}>
+                    <Button className="w-full gap-1.5" disabled={nursingMut.isPending} onClick={() => { if (!nursingForm.care_activities) { toast.error('Care activities required'); return; } nursingMut.mutate({ ...nursingForm, vital_signs: { temperature: nursingForm.temperature, blood_pressure: nursingForm.blood_pressure, pulse: nursingForm.pulse, respiratory_rate: nursingForm.respiratory_rate } }); }}>
                       {nursingMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Note
                     </Button>
                 </FormCard>
               </div>
-              <div className="space-y-3 min-w-0 max-h-[820px] overflow-y-auto scrollbar-hide">
-                {nursingNotes.length === 0 ? <p className="text-center text-muted-foreground py-12">No nursing notes yet</p> : nursingNotes.map((n: any) => (
-                  <Card key={n.id} className="border-l-4 border-l-primary/40"><CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div><p className="font-semibold text-sm text-foreground">{n.nurse_name}</p><p className="text-xs text-muted-foreground">{new Date(n.note_date).toLocaleString()}</p></div>
-                      <Badge variant="outline" className="capitalize">{n.shift} shift</Badge>
-                    </div>
-                    <p className="text-sm mb-1"><span className="font-medium">Activities:</span> {n.care_activities}</p>
-                    {n.patient_condition && <p className="text-xs text-muted-foreground">Condition: {n.patient_condition}</p>}
-                    {(n.fluid_intake || n.fluid_output) && <p className="text-xs text-muted-foreground">I/O: {n.fluid_intake || 0}ml / {n.fluid_output || 0}ml</p>}
-                    {n.notes && <p className="text-xs text-muted-foreground mt-1">{n.notes}</p>}
-                  </CardContent></Card>
-                ))}
+              <div className="min-w-0">
+                <Card className="overflow-hidden">
+                  <AdvancedDataTable<any>
+                    data={nursingNotes}
+                    keyExtractor={(n) => n.id}
+                    emptyMessage="No nursing notes yet"
+                    pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+                    columns={[
+                      { key: 'note_date', header: 'Date/Time', render: (v) => <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(v).toLocaleString()}</span> },
+                      { key: 'nurse_name', header: 'Nurse', render: (v) => <span className="font-medium text-foreground whitespace-nowrap">{v}</span> },
+                      { key: 'shift', header: 'Shift', render: (v) => <Badge variant="outline" className="capitalize">{v} shift</Badge> },
+                      {
+                        key: 'vital_signs', header: 'Vitals', width: '14rem',
+                        render: (v) => v ? (
+                          <span className="text-xs whitespace-nowrap">Temp: {v.temperature || '-'}°C • BP: {v.blood_pressure || '-'} • Pulse: {v.pulse || '-'} • RR: {v.respiratory_rate || '-'}</span>
+                        ) : <span className="text-muted-foreground">-</span>,
+                      },
+                      { key: 'patient_condition', header: 'Condition', render: (v) => v || '-' },
+                      { key: 'pain_level', header: 'Pain', render: (v) => v ?? '-' },
+                      {
+                        key: '__io', header: 'I/O (ml)',
+                        render: (_v, n) => (n.fluid_intake || n.fluid_output) ? `${n.fluid_intake || 0} / ${n.fluid_output || 0}` : '-',
+                      },
+                      { key: 'care_activities', header: 'Activities / Notes', render: (v, n) => <span className="whitespace-pre-wrap">{[v, n.notes].filter(Boolean).join(' — ')}</span> },
+                    ]}
+                  />
+                </Card>
               </div>
             </div>
           </TabsContent>
