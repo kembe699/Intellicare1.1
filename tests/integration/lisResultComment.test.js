@@ -1,16 +1,21 @@
 /**
- * Requested: the Result Entry screen (/lis/results-entry) gets a per-analyte
- * "Comment" field, distinct from the existing auto-computed Remarks (HIGH/
- * LOW/NORMAL) flag — a free-text note the tech can optionally add, which
- * should appear on the printed lab report only for the analytes it was
- * actually filled in for, and not show up at all (not even a blank line)
- * for ones it wasn't.
+ * Requested: the Result Entry screen (/lis/results-entry) gets a comment
+ * field for the report — but ONE per test (specimen), not one per analyte.
+ * A CBC panel has 20 components; the first cut of this feature put a
+ * "Comment" input on every one of those 20 rows, which was wrong — the
+ * correction asked for exactly one comment box representing the whole
+ * test, the same regardless of how many components that test has.
  *
- * lis_results had no column to hold this at all. Added `comment` (nullable
- * text) and threaded it through POST /specimens/:id/results (now accepts
- * `comment` per result line) — GET /specimens/:id/results and the
- * pending-review/history endpoints already `SELECT r.*`, so they pick it up
- * automatically with no query change.
+ * lis_specimens gets a nullable `comment` column (not lis_results — a
+ * per-analyte column was the wrong place for a per-test note). POST
+ * /specimens/:id/results now takes a single top-level `comment` alongside
+ * the `results` array and writes it onto the specimen row; GET
+ * /specimens/:id/results, /results/pending-review and /results/history all
+ * join lis_specimens already (or now do) and return it as `test_comment`
+ * on every one of that specimen's result rows — same value on every row,
+ * by construction, since there's exactly one source (the specimen itself).
+ * Only shows on the printed report when filled in (see handlePrintResults
+ * in LISResultsEntry.tsx / LISManagerReview.tsx), never as a blank line.
  *
  * Calls the REAL route handlers directly (see receiptStatusTerminal.test.js
  * for why — no HTTP test harness in this app), against tenant_test.
@@ -76,7 +81,7 @@ beforeAll(async () => {
   testConn = await getTenantConnection(TEST_SCHEMA);
   sequelize = testConn.sequelize;
   sequelize.options.logging = false;
-  await sequelize.query(`ALTER TABLE lis_results ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT NULL`);
+  await sequelize.query(`ALTER TABLE lis_specimens ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT NULL`);
 
   const lisRouter = require('../../src/server/routes/lisModule');
   postResultsHandler = handlerFor(lisRouter, '/specimens/:id/results', 'post');
@@ -92,38 +97,42 @@ afterAll(async () => {
   } catch (e) { console.warn('lisResultComment cleanup failed (non-fatal):', e.message); }
 });
 
-describe('POST /specimens/:id/results persists a per-analyte comment', () => {
-  test('a result saved with a comment comes back with it on GET', async () => {
+describe('POST /specimens/:id/results persists ONE comment per test, not per analyte', () => {
+  test('a single-component test saved with a comment comes back with it', async () => {
     const { specimenId } = await makeOrderWithSpecimen('RESULTCOMMENT-A');
     const postRes = mockRes();
     await withTenant(() => postResultsHandler(req({
       params: { id: specimenId },
-      body: { test_code: 'RESULTCOMMENT-A-CODE', results: [{ analyte: 'Total Bilirubin', value: '2.1', unit: 'mg/dL', comment: 'Slight hemolysis noted' }] },
+      body: {
+        test_code: 'RESULTCOMMENT-A-CODE',
+        results: [{ analyte: 'Total Bilirubin', value: '2.1', unit: 'mg/dL' }],
+        comment: 'Slight hemolysis noted',
+      },
     }), postRes));
     expect(postRes.statusCode).toBe(200);
 
     const getRes = mockRes();
     await withTenant(() => getResultsHandler(req({ params: { id: specimenId } }), getRes));
     expect(getRes.body.length).toBe(1);
-    expect(getRes.body[0].comment).toBe('Slight hemolysis noted');
+    expect(getRes.body[0].test_comment).toBe('Slight hemolysis noted');
   });
 
-  test('a result saved with no comment stores it as NULL, not an empty string placeholder', async () => {
+  test('a test saved with no comment stores it as NULL, not an empty string placeholder', async () => {
     const { specimenId } = await makeOrderWithSpecimen('RESULTCOMMENT-B');
     const postRes = mockRes();
     await withTenant(() => postResultsHandler(req({
       params: { id: specimenId },
-      body: { test_code: 'RESULTCOMMENT-B-CODE', results: [{ analyte: 'Urea', value: '5.0', unit: 'mmol/L', comment: '' }] },
+      body: { test_code: 'RESULTCOMMENT-B-CODE', results: [{ analyte: 'Urea', value: '5.0', unit: 'mmol/L' }], comment: '' },
     }), postRes));
     expect(postRes.statusCode).toBe(200);
 
     const getRes = mockRes();
     await withTenant(() => getResultsHandler(req({ params: { id: specimenId } }), getRes));
     expect(getRes.body.length).toBe(1);
-    expect(getRes.body[0].comment == null).toBe(true);
+    expect(getRes.body[0].test_comment == null).toBe(true);
   });
 
-  test('a multi-analyte test can have a comment on just one analyte', async () => {
+  test('a multi-component test (CBC-style) gets exactly ONE comment, carried identically on every analyte row — not a separate comment per component', async () => {
     const { specimenId } = await makeOrderWithSpecimen('RESULTCOMMENT-C');
     const postRes = mockRes();
     await withTenant(() => postResultsHandler(req({
@@ -131,19 +140,21 @@ describe('POST /specimens/:id/results persists a per-analyte comment', () => {
       body: {
         test_code: 'RESULTCOMMENT-C-CODE',
         results: [
-          { analyte: 'WBC', value: '7.2', unit: '10^9/L', comment: '' },
-          { analyte: 'Platelets', value: '450', unit: '10^9/L', comment: 'Mild thrombocytosis, repeat in 1 week' },
+          { analyte: 'WBC', value: '7.2', unit: '10^9/L' },
+          { analyte: 'Lymph#', value: '2.1', unit: '10^9/L' },
+          { analyte: 'Platelets', value: '450', unit: '10^9/L' },
         ],
+        comment: 'Mild thrombocytosis, repeat in 1 week',
       },
     }), postRes));
     expect(postRes.statusCode).toBe(200);
 
     const getRes = mockRes();
     await withTenant(() => getResultsHandler(req({ params: { id: specimenId } }), getRes));
-    expect(getRes.body.length).toBe(2);
-    const wbc = getRes.body.find((r) => r.analyte === 'WBC');
-    const plt = getRes.body.find((r) => r.analyte === 'Platelets');
-    expect(wbc.comment == null).toBe(true);
-    expect(plt.comment).toBe('Mild thrombocytosis, repeat in 1 week');
+    expect(getRes.body.length).toBe(3);
+    // Every single row — not just one of them — carries the SAME test-level comment.
+    for (const row of getRes.body) {
+      expect(row.test_comment).toBe('Mild thrombocytosis, repeat in 1 week');
+    }
   });
 });

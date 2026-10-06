@@ -109,10 +109,11 @@ export default function LISResultsEntry() {
 
   // resultValues maps component.id to the entered value
   const [resultValues, setResultValues] = useState<Record<string, string>>({});
-  // commentValues maps component.id to a free-text note for that one analyte —
-  // separate from getRemark's auto-computed HIGH/LOW/NORMAL flag. Only shows
-  // on the printed report for analytes it's actually filled in for.
-  const [commentValues, setCommentValues] = useState<Record<string, string>>({});
+  // ONE free-text note for the whole test currently open (a CBC panel has 20
+  // components and one comment box, not 20) — separate from getRemark's
+  // auto-computed per-analyte HIGH/LOW/NORMAL flag. Only shows on the
+  // printed report when it's actually filled in.
+  const [testComment, setTestComment] = useState('');
 
   useEffect(() => {
     fetchLabTests();
@@ -142,7 +143,7 @@ export default function LISResultsEntry() {
   const loadSpecimen = async (s: any) => {
     setSelectedSpecimen(s);
     setResultValues({});
-    setCommentValues({});
+    setTestComment('');
 
     // Attempt to load existing results if this specimen was already analyzed
     try {
@@ -151,20 +152,18 @@ export default function LISResultsEntry() {
         const existingResults = await res.json();
         if (existingResults.length > 0) {
           const loadedValues: Record<string, string> = {};
-          const loadedComments: Record<string, string> = {};
           // Map back analyte name to component ID by finding it in the test schema
           const testSchema = labTests.find(t => t.test_code === s.test_code);
           if (testSchema && testSchema.components) {
             existingResults.forEach((er: any) => {
               const comp = testSchema.components.find((c: any) => c.name === er.analyte);
-              if (comp) {
-                loadedValues[comp.id] = er.value;
-                if (er.comment) loadedComments[comp.id] = er.comment;
-              }
+              if (comp) loadedValues[comp.id] = er.value;
             });
           }
           setResultValues(loadedValues);
-          setCommentValues(loadedComments);
+          // test_comment is the same on every row of this specimen (see
+          // GET /specimens/:id/results' sp.comment join) — one test, one note.
+          setTestComment(existingResults[0]?.test_comment || '');
         }
       }
     } catch(e) {
@@ -204,7 +203,6 @@ export default function LISResultsEntry() {
       analyte: comp.name,
       value: resultValues[comp.id] || '',
       unit: comp.unit || '',
-      comment: (commentValues[comp.id] || '').trim(),
     })).filter((r: any) => r.value !== '');
 
     if (results.length === 0) return toast.error('Enter at least one result');
@@ -215,7 +213,7 @@ export default function LISResultsEntry() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ results, test_code: selectedSpecimen.test_code })
+        body: JSON.stringify({ results, test_code: selectedSpecimen.test_code, comment: testComment.trim() })
       });
       if (res.ok) {
         toast.success('Results saved successfully');
@@ -228,7 +226,7 @@ export default function LISResultsEntry() {
           setSelectedSpecimen(null);
           setSelectedOrderId(null);
           setResultValues({});
-          setCommentValues({});
+          setTestComment('');
         }
         fetchSpecimens();
       } else {
@@ -329,16 +327,14 @@ export default function LISResultsEntry() {
         const rows = sorted.map((r: any) => ({
           cells: [r.analyte, r.value || '—', r.unit || '—', r.reference_range || '—', getRemarkText(r.value, r.reference_range)],
         }));
-        // Only analytes a comment was actually entered for get a line here —
-        // nothing renders for this test at all if none were.
-        const commentsHTML = sorted
-          .filter((r: any) => r.comment && String(r.comment).trim())
-          .map((r: any) => `<div class="ic-notes"><strong>Comment — ${r.analyte}:</strong> ${r.comment}</div>`)
-          .join('\n');
+        // One comment for the whole test (test_comment is the same on every
+        // row — see GET /specimens/:id/results' sp.comment join) — renders
+        // nothing at all here if it wasn't filled in.
+        const testCommentText = sorted[0]?.test_comment;
         return [
           `<div class="ic-section-title">Test: ${specimen.test_name} <span>Barcode: ${specimen.barcode}</span></div>`,
           docTemplate.buildTable([{ label: 'Parameter' }, { label: 'Result' }, { label: 'Unit' }, { label: 'Ref Range' }, { label: 'Remark' }], rows),
-          commentsHTML,
+          testCommentText ? docTemplate.buildNotes(`Comment (${specimen.test_name}): ${testCommentText}`) : '',
         ].join('\n');
       }).join('\n');
 
@@ -708,20 +704,23 @@ export default function LISResultsEntry() {
                               key: '__remarks', header: 'Remarks', width: '6rem',
                               render: (_v, comp) => getRemark(resultValues[comp.id], comp.reference_range),
                             },
-                            {
-                              key: '__comment', header: 'Comment', width: '12rem',
-                              render: (_v, comp) => (
-                                <Input
-                                  className="h-8 bg-background disabled:opacity-70 disabled:cursor-not-allowed"
-                                  placeholder="Optional note for the report..."
-                                  value={commentValues[comp.id] || ''}
-                                  onChange={(e) => setCommentValues({ ...commentValues, [comp.id]: e.target.value })}
-                                  disabled={selectedSpecimen.status === 'approved'}
-                                />
-                              ),
-                            },
                           ]}
                         />
+
+                        {/* ONE comment box for the whole test, not one per analyte —
+                            a CBC has 20 components and one note, not 20. */}
+                        <div className="mt-4">
+                          <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                            Comment for this test (optional — appears on the printed report only if filled in)
+                          </label>
+                          <textarea
+                            className="w-full min-h-[70px] text-sm border rounded-md p-2 bg-background disabled:opacity-70 disabled:cursor-not-allowed"
+                            placeholder="e.g. Slight hemolysis noted, patient fasting, repeat in 1 week..."
+                            value={testComment}
+                            onChange={(e) => setTestComment(e.target.value)}
+                            disabled={selectedSpecimen.status === 'approved'}
+                          />
+                        </div>
                       </div>
                     ) : (
                       <div className="text-muted-foreground">This test has no components defined in the database.</div>
