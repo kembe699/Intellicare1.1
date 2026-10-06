@@ -8,6 +8,21 @@ const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const redisCache = require('../services/RedisCache');
 
+// doctor_notes.vital_signs / nursing_notes.vital_signs are stored via
+// JSON.stringify() on write (see POST handlers below), but this schema's
+// column type doesn't come back auto-parsed on read the way a real
+// json/jsonb column would — confirmed live: GET returned it as the raw
+// string `"{\"temperature\":...}"`, so every `vital_signs.temperature`-style
+// read on the frontend silently evaluated to undefined (a string has no
+// such property) — the vitals line rendered with every value blank
+// ("Temp: °C • BP: ..."), never an error, so it went unnoticed until now.
+function parseVitalSigns(row) {
+  if (typeof row.vital_signs === 'string') {
+    try { row.vital_signs = JSON.parse(row.vital_signs); } catch { /* leave as-is */ }
+  }
+  return row;
+}
+
 // Non-admin users only see/touch rows from their own branch; admins see everything
 // clinic-wide. Written inline with named replacements (not branchFilter.js's
 // getBranchConditionSQL, which uses positional `?` placeholders that can't mix with
@@ -981,7 +996,7 @@ router.get('/doctor-notes', authorize('inpatient.clinical.write'), async (req, r
        WHERE dn.admission_id = :admissionId AND dn.clinic_id = :clinicId ORDER BY dn.note_date DESC`,
       { replacements: { admissionId, clinicId } }
     );
-    res.json(rows);
+    res.json(rows.map(parseVitalSigns));
   } catch (error) {
     console.error('Error fetching doctor notes:', error);
     res.status(500).json({ error: 'Failed to fetch doctor notes' });
@@ -1159,7 +1174,7 @@ router.get('/nursing-notes', authorize('inpatient.clinical.write'), async (req, 
        WHERE nn.admission_id = :admissionId AND nn.clinic_id = :clinicId ORDER BY nn.note_date DESC`,
       { replacements: { admissionId, clinicId } }
     );
-    res.json(rows);
+    res.json(rows.map(parseVitalSigns));
   } catch (error) {
     console.error('Error fetching nursing notes:', error);
     res.status(500).json({ error: 'Failed to fetch nursing notes' });
