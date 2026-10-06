@@ -23,6 +23,29 @@ function parseVitalSigns(row) {
   return row;
 }
 
+// doctor_notes/nursing_notes.vital_signs only lives inside
+// migrateInpatientTables.js's CREATE TABLE statements, which are a no-op
+// for a tenant whose table already existed before that column was added —
+// confirmed live: POST /nursing-notes 500'd in tenant_nation the moment
+// the nursing form actually started sending vital_signs (previously the
+// column had simply never been written to, so the gap stayed invisible).
+// migrateAcrossTenants now also runs an explicit ALTER for this on every
+// boot, but that only takes effect on the next deploy/restart — this
+// self-heals immediately, using the REQUEST-scoped connection (correctly
+// resolved to the calling tenant). Cached per schema, not globally — one
+// tenant succeeding can't mask another's still-missing column.
+const vitalSignsColumnEnsuredSchemas = new Set();
+async function ensureVitalSignsColumns(db, schema) {
+  if (schema && vitalSignsColumnEnsuredSchemas.has(schema)) return;
+  try {
+    await db.query(`ALTER TABLE doctor_notes ADD COLUMN IF NOT EXISTS vital_signs JSON`);
+    await db.query(`ALTER TABLE nursing_notes ADD COLUMN IF NOT EXISTS vital_signs JSON`);
+    if (schema) vitalSignsColumnEnsuredSchemas.add(schema);
+  } catch (e) {
+    // Try again next call — don't cache a failure as done.
+  }
+}
+
 // Non-admin users only see/touch rows from their own branch; admins see everything
 // clinic-wide. Written inline with named replacements (not branchFilter.js's
 // getBranchConditionSQL, which uses positional `?` placeholders that can't mix with
@@ -987,6 +1010,7 @@ router.put('/admissions/:id/discharge', authorize('inpatient.admissions.write'),
 // GET doctor notes for admission
 router.get('/doctor-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
+    await ensureVitalSignsColumns(sequelize, req.tenantSchema);
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1006,6 +1030,7 @@ router.get('/doctor-notes', authorize('inpatient.clinical.write'), async (req, r
 // POST create doctor note
 router.post('/doctor-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
+    await ensureVitalSignsColumns(sequelize, req.tenantSchema);
     const { admission_id, patient_id, note_type, clinical_assessment, examination_findings, vital_signs, diagnosis, diagnosis_code, treatment_plan, progress_status } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const doctorId = req.user?.id;
@@ -1165,6 +1190,7 @@ router.post('/drug-administrations', authorize('inpatient.clinical.write'), asyn
 // GET nursing notes
 router.get('/nursing-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
+    await ensureVitalSignsColumns(sequelize, req.tenantSchema);
     const admissionId = req.query.admission_id;
     if (!admissionId) return res.status(400).json({ error: 'admission_id required' });
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -1184,6 +1210,7 @@ router.get('/nursing-notes', authorize('inpatient.clinical.write'), async (req, 
 // POST create nursing note
 router.post('/nursing-notes', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
+    await ensureVitalSignsColumns(sequelize, req.tenantSchema);
     const { admission_id, patient_id, shift, care_activities, patient_condition, vital_signs, fluid_intake, fluid_output, wound_care, pain_level, mobility_status, notes } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const nurseId = req.user?.id;

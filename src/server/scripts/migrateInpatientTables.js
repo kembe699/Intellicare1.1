@@ -235,6 +235,27 @@ async function migrateInpatientTables() {
     reportSchemaGuardFailure('rooms.ward_id nullable', err);
   }
 
+  // vital_signs only lives inside the CREATE TABLE statements above, which
+  // are a no-op for a tenant whose doctor_notes/nursing_notes table already
+  // existed before that column was added to this script — CREATE TABLE IF
+  // NOT EXISTS never retrofits an existing table. Confirmed live: POST
+  // /nursing-notes 500'd in tenant_nation the moment the nursing form
+  // actually started sending vital_signs (previously the column had simply
+  // never been written to, so the gap stayed invisible). Explicit ALTERs
+  // here run through this same per-tenant migrateAcrossTenants loop, so
+  // every tenant — not just brand-new ones — gets the column.
+  for (const [table, column, def] of [
+    ['doctor_notes', 'vital_signs', 'JSON'],
+    ['nursing_notes', 'vital_signs', 'JSON'],
+  ]) {
+    try {
+      await sequelize.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${def}`);
+      console.log(`  ✅ ${table}.${column} ensured`);
+    } catch (err) {
+      reportSchemaGuardFailure(`${table}.${column}`, err);
+    }
+  }
+
   // Create indexes
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_ip_admission_patient ON inpatient_admissions(patient_id, status)',
