@@ -102,6 +102,17 @@ function parseJSONField(v, fallback = {}) {
     // Ignore error if column already exists
   }
   try {
+    // A free-text note the tech enters alongside a result value — distinct
+    // from `flag`/getRemarkText's auto-computed HIGH/LOW/NORMAL. Shows up on
+    // the printed report only for the analytes it was actually filled in
+    // for (see handlePrintResults in LISResultsEntry.tsx), not as a blank
+    // line on every row.
+    await db.query(`ALTER TABLE lis_results ADD COLUMN comment TEXT DEFAULT NULL`);
+    console.log('✅ Added comment to lis_results');
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+  try {
     await db.query(`ALTER TABLE lis_test_orders ADD COLUMN triaged_by INT DEFAULT NULL`);
     console.log('✅ Added triaged_by to lis_test_orders');
   } catch (e) {
@@ -1359,7 +1370,7 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { results, test_code } = req.body;
-  // results is an array of { analyte, value, unit }
+  // results is an array of { analyte, value, unit, comment }
   const recordedBy = req.user?.id || null;
   // A result must carry the SAME branch as the specimen it belongs to, not
   // whichever branch the person entering it happens to be scoped to right
@@ -1378,9 +1389,9 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
     for (const result of results) {
       const resultId = uuidv4();
       await db.query(
-        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, recorded_by, branch_id)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_review', ?, ?)`,
-        { replacements: [resultId, id, test_code, result.analyte, result.value, result.unit || '', recordedBy, branchId], transaction: t }
+        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, recorded_by, branch_id, comment)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_review', ?, ?, ?)`,
+        { replacements: [resultId, id, test_code, result.analyte, result.value, result.unit || '', recordedBy, branchId, result.comment || null], transaction: t }
       );
     }
     

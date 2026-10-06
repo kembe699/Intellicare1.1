@@ -300,12 +300,20 @@ export default function LISManagerReview() {
       const requestedByName = allResults.find((r: any) => r.requested_by_name)?.requested_by_name || '—';
 
       const testSectionsHTML = withResults.map((s: any) => {
-        const rows = sortResultsByComponentOrder(s.results).map((r: any) => ({
+        const sortedResults = sortResultsByComponentOrder(s.results);
+        const rows = sortedResults.map((r: any) => ({
           cells: [r.analyte, r.value || '—', r.unit || '—', r.reference_range || '—', getRemarkText(r.value, r.reference_range)],
         }));
+        // Only analytes a comment was actually entered for (at Result Entry)
+        // get a line here — nothing renders for this test if none were.
+        const commentsHTML = sortedResults
+          .filter((r: any) => r.comment && String(r.comment).trim())
+          .map((r: any) => `<div class="ic-notes"><strong>Comment — ${r.analyte}:</strong> ${r.comment}</div>`)
+          .join('\n');
         return [
           `<div class="ic-section-title">Test: ${s.test_name} <span>Barcode: ${s.barcode}</span></div>`,
           docTemplate.buildTable([{ label: 'Parameter' }, { label: 'Result' }, { label: 'Unit' }, { label: 'Ref Range' }, { label: 'Remark' }], rows),
+          commentsHTML,
           s.manager_notes ? docTemplate.buildNotes(`Manager Notes (${s.test_name}): ${s.manager_notes}`) : '',
         ].join('\n');
       }).join('\n');
