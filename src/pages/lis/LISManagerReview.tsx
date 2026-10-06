@@ -304,16 +304,14 @@ export default function LISManagerReview() {
         const rows = sortedResults.map((r: any) => ({
           cells: [r.analyte, r.value || '—', r.unit || '—', r.reference_range || '—', getRemarkText(r.value, r.reference_range)],
         }));
-        // Only analytes a comment was actually entered for (at Result Entry)
-        // get a line here — nothing renders for this test if none were.
-        const commentsHTML = sortedResults
-          .filter((r: any) => r.comment && String(r.comment).trim())
-          .map((r: any) => `<div class="ic-notes"><strong>Comment — ${r.analyte}:</strong> ${r.comment}</div>`)
-          .join('\n');
+        // One comment for the whole test, entered once at Result Entry (not
+        // per analyte) — test_comment is the same on every row of this
+        // specimen. Renders nothing at all if it wasn't filled in.
+        const testCommentText = sortedResults[0]?.test_comment;
         return [
           `<div class="ic-section-title">Test: ${s.test_name} <span>Barcode: ${s.barcode}</span></div>`,
           docTemplate.buildTable([{ label: 'Parameter' }, { label: 'Result' }, { label: 'Unit' }, { label: 'Ref Range' }, { label: 'Remark' }], rows),
-          commentsHTML,
+          testCommentText ? docTemplate.buildNotes(`Comment (${s.test_name}): ${testCommentText}`) : '',
           s.manager_notes ? docTemplate.buildNotes(`Manager Notes (${s.test_name}): ${s.manager_notes}`) : '',
         ].join('\n');
       }).join('\n');

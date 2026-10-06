@@ -102,13 +102,15 @@ function parseJSONField(v, fallback = {}) {
     // Ignore error if column already exists
   }
   try {
-    // A free-text note the tech enters alongside a result value — distinct
-    // from `flag`/getRemarkText's auto-computed HIGH/LOW/NORMAL. Shows up on
-    // the printed report only for the analytes it was actually filled in
-    // for (see handlePrintResults in LISResultsEntry.tsx), not as a blank
-    // line on every row.
-    await db.query(`ALTER TABLE lis_results ADD COLUMN comment TEXT DEFAULT NULL`);
-    console.log('✅ Added comment to lis_results');
+    // One free-text note per TEST (specimen), not per analyte — a CBC has 20
+    // components and one comment box for the whole panel, not 20. Lives on
+    // lis_specimens rather than lis_results so there's exactly one place to
+    // read/write it regardless of how many analytes the test has. Shows up
+    // on the printed report only when it was actually filled in (see
+    // handlePrintResults in LISResultsEntry.tsx / LISManagerReview.tsx), not
+    // as a blank line otherwise.
+    await db.query(`ALTER TABLE lis_specimens ADD COLUMN comment TEXT DEFAULT NULL`);
+    console.log('✅ Added comment to lis_specimens');
   } catch (e) {
     // Ignore error if column already exists
   }
@@ -1346,9 +1348,14 @@ router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, 
   const { id } = req.params;
   try {
     const branchFilter = getBranchConditionSQL(req, 'r');
+    // sp.comment is the ONE test-level comment (see lis_specimens.comment) —
+    // aliased test_comment, not comment, so it can't collide with anything
+    // r.* might carry under that name.
     const [results] = await db.query(
-      `SELECT r.*, c.reference_range, c.display_order, rec_u.display_name as recorded_by_name, mgr_u.display_name as manager_review_by_name
+      `SELECT r.*, c.reference_range, c.display_order, rec_u.display_name as recorded_by_name, mgr_u.display_name as manager_review_by_name,
+              sp.comment as test_comment
        FROM lis_results r
+       JOIN lis_specimens sp ON sp.id = r.specimen_id
        LEFT JOIN lab_tests t ON r.test_code = t.test_code AND (t.branch_id = r.branch_id OR t.branch_id IS NULL)
        LEFT JOIN lab_test_components c ON t.id = c.lab_test_id AND r.analyte = c.component_name
        LEFT JOIN users rec_u ON rec_u.id = r.recorded_by
@@ -1369,8 +1376,9 @@ router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, 
 router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
-  const { results, test_code } = req.body;
-  // results is an array of { analyte, value, unit, comment }
+  const { results, test_code, comment } = req.body;
+  // results is an array of { analyte, value, unit }. comment is ONE
+  // free-text note for the whole test (specimen), not per analyte.
   const recordedBy = req.user?.id || null;
   // A result must carry the SAME branch as the specimen it belongs to, not
   // whichever branch the person entering it happens to be scoped to right
@@ -1389,15 +1397,15 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
     for (const result of results) {
       const resultId = uuidv4();
       await db.query(
-        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, recorded_by, branch_id, comment)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_review', ?, ?, ?)`,
-        { replacements: [resultId, id, test_code, result.analyte, result.value, result.unit || '', recordedBy, branchId, result.comment || null], transaction: t }
+        `INSERT INTO lis_results (id, specimen_id, test_code, analyte, value, unit, status, recorded_by, branch_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_review', ?, ?)`,
+        { replacements: [resultId, id, test_code, result.analyte, result.value, result.unit || '', recordedBy, branchId], transaction: t }
       );
     }
-    
+
     await db.query(
-      `UPDATE lis_specimens SET status = 'analyzed' WHERE id = ?`,
-      { replacements: [id], transaction: t }
+      `UPDATE lis_specimens SET status = 'analyzed', comment = ? WHERE id = ?`,
+      { replacements: [comment || null, id], transaction: t }
     );
     
     await t.commit();
@@ -1416,7 +1424,7 @@ router.get('/results/pending-review', authorize('lis.results.review'), async (re
   try {
     const branchFilter = getBranchConditionSQL(req, 'r');
     const [results] = await db.query(`
-      SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, p.first_name, p.last_name, p.participant_number,
+      SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, s.comment as test_comment, p.first_name, p.last_name, p.participant_number,
         o.id as order_id, o.created_at as order_time,
         COALESCE(req_u.display_name, req_ce.first_name || ' ' || req_ce.last_name) as requested_by_name, rec_u.display_name as recorded_by_name
       FROM lis_results r
@@ -1444,7 +1452,7 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
     const { dateFrom, dateTo } = req.query;
     const branchFilter = getBranchConditionSQL(req, 'r');
     let sql = `
-      SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, p.first_name, p.last_name, p.participant_number,
+      SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, s.comment as test_comment, p.first_name, p.last_name, p.participant_number,
         o.id as order_id, o.created_at as order_time,
         COALESCE(req_u.display_name, req_ce.first_name || ' ' || req_ce.last_name) as requested_by_name, rec_u.display_name as recorded_by_name,
         mgr_u.display_name as manager_review_by_name
