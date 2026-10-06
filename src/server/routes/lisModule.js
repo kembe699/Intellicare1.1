@@ -1343,10 +1343,37 @@ router.post('/specimens/:id/simulate', authorize('lis.specimen.write'), async (r
   }
 });
 
+// The boot-time IIFE near the top of this file that ADD COLUMNs onto
+// lis_results/lis_test_orders/lis_specimens runs once, at module require
+// time, through the ambient tenant-aware `db` — with no request's
+// AsyncLocalStorage context active yet, that Proxy falls back to the
+// single default tenant (tenant_template), not every real tenant schema.
+// A column added there lands in tenant_template (so a BRAND-NEW tenant
+// cloned from it afterwards has it from day one) but never retroactively
+// in a tenant that already existed — confirmed live: /specimens/:id/results
+// 500'd on every call in tenant_nation right after lis_specimens.comment
+// shipped this way. Call this with the REQUEST-scoped `db` (req.models.
+// sequelize, correctly resolved to the calling tenant) to self-heal on the
+// very next real request, rather than waiting on a separate per-tenant
+// migration run. Cached per schema (req.tenantSchema), not globally — a
+// cache keyed with no schema would mark every OTHER tenant "done" the
+// moment the first one succeeds.
+const specimenCommentColumnEnsuredSchemas = new Set();
+async function ensureSpecimenCommentColumn(db, schema) {
+  if (schema && specimenCommentColumnEnsuredSchemas.has(schema)) return;
+  try {
+    await db.query(`ALTER TABLE lis_specimens ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT NULL`);
+    if (schema) specimenCommentColumnEnsuredSchemas.add(schema);
+  } catch (e) {
+    // Try again next call — don't cache a failure as done.
+  }
+}
+
 router.get('/specimens/:id/results', authorize('lis.results.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   const { id } = req.params;
   try {
+    await ensureSpecimenCommentColumn(db, req.tenantSchema);
     const branchFilter = getBranchConditionSQL(req, 'r');
     // sp.comment is the ONE test-level comment (see lis_specimens.comment) —
     // aliased test_comment, not comment, so it can't collide with anything
@@ -1379,6 +1406,7 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
   const { results, test_code, comment } = req.body;
   // results is an array of { analyte, value, unit }. comment is ONE
   // free-text note for the whole test (specimen), not per analyte.
+  await ensureSpecimenCommentColumn(db, req.tenantSchema);
   const recordedBy = req.user?.id || null;
   // A result must carry the SAME branch as the specimen it belongs to, not
   // whichever branch the person entering it happens to be scoped to right
@@ -1422,6 +1450,7 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
 router.get('/results/pending-review', authorize('lis.results.review'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
+    await ensureSpecimenCommentColumn(db, req.tenantSchema);
     const branchFilter = getBranchConditionSQL(req, 'r');
     const [results] = await db.query(`
       SELECT r.*, c.reference_range, c.display_order, s.barcode, s.test_name, s.comment as test_comment, p.first_name, p.last_name, p.participant_number,
@@ -1449,6 +1478,7 @@ router.get('/results/pending-review', authorize('lis.results.review'), async (re
 router.get('/results/history', authorize('lis.results.read'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
+    await ensureSpecimenCommentColumn(db, req.tenantSchema);
     const { dateFrom, dateTo } = req.query;
     const branchFilter = getBranchConditionSQL(req, 'r');
     let sql = `
