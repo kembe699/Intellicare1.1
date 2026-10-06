@@ -708,7 +708,22 @@ export default function PatientDetails() {
                         Dispense now from {rxForm.location_id ? (locationOptions.find((l: any) => l.value === rxForm.location_id)?.label || 'selected store') : 'clinic-wide stock'}
                       </label>
                     )}
-                    <Button className="w-full gap-1.5" disabled={rxMut.isPending} onClick={() => { if (!rxForm.medication_name || !rxForm.frequency) { toast.error('Medicine and frequency are required'); return; } rxMut.mutate(rxForm); }}>
+                    <Button className="w-full gap-1.5" disabled={rxMut.isPending} onClick={() => {
+                      if (!rxForm.medication_name || !rxForm.frequency) { toast.error('Medicine and frequency are required'); return; }
+                      // Heads-up before the round trip — the server enforces this for
+                      // real (see findInsufficientStockLine in inpatient.js), so this
+                      // is just a faster "no" than waiting for that response.
+                      if (!rxForm.is_external && rxForm.drug_id) {
+                        const drug = drugCatalog.find((d: any) => String(d.id) === rxForm.drug_id);
+                        const stockOnHand = drug?.stock_on_hand != null ? parseInt(drug.stock_on_hand, 10) : null;
+                        const qty = parseInt(rxForm.quantity, 10) || 0;
+                        if (drug && stockOnHand != null && !isNaN(stockOnHand) && qty > stockOnHand) {
+                          toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock — reduce the quantity, or tick "Not in stock" to prescribe it for purchase outside.`);
+                          return;
+                        }
+                      }
+                      rxMut.mutate(rxForm);
+                    }}>
                       {rxMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Prescription{dispenseNow && !rxForm.is_external && rxForm.drug_id ? ' & Dispense' : ''}
                     </Button>
                 </FormCard>

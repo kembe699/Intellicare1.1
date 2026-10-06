@@ -8,6 +8,7 @@ const redisCache = require('../services/RedisCache');
 const { authorize } = require('../middleware/authorize');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
+const { findInsufficientStockLine } = require('../utils/checkDrugStock');
 
 // This entire file had no authorize() calls at all — every route (including controlled-
 // substance dispensing, price edits, and drug-interaction deletes) was reachable by any
@@ -682,6 +683,17 @@ router.post('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) 
     } = req.body;
 
     if (!patient_id) return res.status(400).json({ error: 'patient_id is required' });
+
+    if (lines && lines.length > 0) {
+      const insufficient = await findInsufficientStockLine(sequelize, lines.map((l) => ({
+        drugId: l.drug_id, quantity: l.quantity_prescribed, isExternal: !!l.is_external || (!l.drug_id && !!l.external_drug_name),
+      })));
+      if (insufficient) {
+        return res.status(400).json({
+          error: `Only ${insufficient.available} ${insufficient.drugName ? `of ${insufficient.drugName} ` : ''}in stock — reduce the quantity, or mark it as bought from an outside pharmacy.`,
+        });
+      }
+    }
 
     // Generate RX number
     const now = new Date();
