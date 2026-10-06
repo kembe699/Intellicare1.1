@@ -7,6 +7,7 @@ const { authorize } = require('../middleware/authorize');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const redisCache = require('../services/RedisCache');
+const { findInsufficientStockLine } = require('../utils/checkDrugStock');
 
 // doctor_notes.vital_signs / nursing_notes.vital_signs are stored via
 // JSON.stringify() on write (see POST handlers below), but this schema's
@@ -1076,7 +1077,7 @@ router.get('/prescriptions', authorize('inpatient.medications.manage'), async (r
 router.post('/prescriptions', authorize('inpatient.clinical.write'), async (req, res) => {
   try {
     const { admission_id, patient_id, drug_id, medication_name, dosage, frequency, duration, route, instructions, quantity, unit_of_measure, start_date, end_date, unit_price,
-            duration_days, dose_amount, is_external, external_drug_name } = req.body;
+            duration_days, dose_amount, is_external, external_drug_name, location_id } = req.body;
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const doctorId = req.user?.id;
     const id = uuidv4();
@@ -1086,6 +1087,15 @@ router.post('/prescriptions', authorize('inpatient.clinical.write'), async (req,
     const isExternal = !!is_external || (!drug_id && !!external_drug_name);
     const medName = isExternal ? (external_drug_name || medication_name) : medication_name;
     const branchId = getCreateBranchId(req);
+
+    const insufficient = await findInsufficientStockLine(sequelize, [
+      { drugId: isExternal ? null : drug_id, quantity, isExternal, locationId: location_id || null },
+    ]);
+    if (insufficient) {
+      return res.status(400).json({
+        error: `Only ${insufficient.available} ${insufficient.drugName ? `of ${insufficient.drugName} ` : ''}in stock — reduce the quantity, or tick "Not in stock" to prescribe it for purchase outside.`,
+      });
+    }
 
     await sequelize.query(
       `INSERT INTO inpatient_prescriptions (id, clinic_id, admission_id, patient_id, doctor_id, drug_id, medication_name, prescription_date, dosage, frequency, duration, route, instructions, quantity, start_date, end_date, duration_days, dose_amount, is_external, external_drug_name, branch_id)
