@@ -311,7 +311,10 @@ export default function LISManagerReview() {
         return [
           `<div class="ic-section-title">Test: ${s.test_name} <span>Barcode: ${s.barcode}</span></div>`,
           docTemplate.buildTable([{ label: 'Parameter' }, { label: 'Result' }, { label: 'Unit' }, { label: 'Ref Range' }, { label: 'Remark' }], rows),
-          testCommentText ? docTemplate.buildNotes(`Comment (${s.test_name}): ${testCommentText}`) : '',
+          // Plain text, no ic-notes highlight box — that shared style (amber
+          // background/border) is used by many other document types across
+          // the app; a lab comment reads more professionally as plain text.
+          testCommentText ? `<div style="margin-top:10px;font-size:11px;"><strong>Comment (${s.test_name}):</strong> ${testCommentText}</div>` : '',
           s.manager_notes ? docTemplate.buildNotes(`Manager Notes (${s.test_name}): ${s.manager_notes}`) : '',
         ].join('\n');
       }).join('\n');

@@ -334,7 +334,10 @@ export default function LISResultsEntry() {
         return [
           `<div class="ic-section-title">Test: ${specimen.test_name} <span>Barcode: ${specimen.barcode}</span></div>`,
           docTemplate.buildTable([{ label: 'Parameter' }, { label: 'Result' }, { label: 'Unit' }, { label: 'Ref Range' }, { label: 'Remark' }], rows),
-          testCommentText ? docTemplate.buildNotes(`Comment (${specimen.test_name}): ${testCommentText}`) : '',
+          // Plain text, no ic-notes highlight box — that shared style (amber
+          // background/border) is used by many other document types across
+          // the app; a lab comment reads more professionally as plain text.
+          testCommentText ? `<div style="margin-top:10px;font-size:11px;"><strong>Comment (${specimen.test_name}):</strong> ${testCommentText}</div>` : '',
         ].join('\n');
       }).join('\n');
 
