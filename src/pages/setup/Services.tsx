@@ -111,6 +111,7 @@ interface Department {
 const serviceCategories = [
   'Consultation',
   'Procedure',
+  'Nursing',
   'Surgery',
   'Diagnostic',
   'Therapy',
@@ -133,9 +134,13 @@ const normalizeCategory = (input: string): string | null => {
   if (normalized.includes('surgery') || normalized.includes('surgical') || normalized.includes('operation')) {
     return 'Surgery';
   }
+  if (normalized.includes('nursing') || normalized.includes('injection') || normalized.includes('dressing') ||
+      normalized.includes('dress') || normalized.includes('wound') || normalized.includes('im/iv')) {
+    return 'Nursing';
+  }
   if (normalized.includes('procedure') || normalized.includes('treatment') || normalized.includes('ward') ||
       normalized.includes('room') || normalized.includes('bed') || normalized.includes('admission') ||
-      normalized.includes('stitch') || normalized.includes('dress') || normalized.includes('wound')) {
+      normalized.includes('stitch')) {
     return 'Procedure';
   }
   if (normalized.includes('diagnostic') || normalized.includes('test') || normalized.includes('scan') ||

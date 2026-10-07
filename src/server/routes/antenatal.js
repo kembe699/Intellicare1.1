@@ -14,31 +14,79 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 
 // Finds (or, when `gynae` carries real registration data, creates) this
-// patient's active ANC registration. Called from lisModule.js whenever a
-// saved vitals/clinical-notes payload carries gynae.antenatal_enabled — "let
-// it register straight" per the user's own words. Never overwrites an
-// existing active registration's lmp/edd/gravida/para once created; a nurse
-// or doctor edits those from the Antenatal module itself if they change.
-async function ensureAntenatalRegistration(db, { participantId, clinicId, branchId, gynae, registeredBy }) {
+// patient's active ANC registration, AND — when the antenatal sub-section
+// (gestational age / fundal height / FHR / presentation / notes) actually
+// carries anything — records it as a visit against that registration. Called
+// from lisModule.js whenever a saved vitals/clinical-notes payload carries
+// gynae.antenatal_enabled — "let it register straight" per the user's own
+// words, and "make sure everything captured ... appears" for the visit log
+// too. Never overwrites an existing active registration's lmp/edd/gravida/para
+// once created; a nurse or doctor edits those from the Antenatal module
+// itself if they change.
+//
+// `orderId` (the lis_test_orders row this came from) dedupes the visit: a
+// second save of the same visit's clinical notes (e.g. triage then an edit)
+// updates the one visit already created for that order instead of appending
+// a duplicate every time the form is saved.
+async function ensureAntenatalRegistration(db, { participantId, clinicId, branchId, orderId, vitals, registeredBy }) {
+  const gynae = vitals?.gynae;
   if (!participantId || !gynae?.antenatal_enabled) return null;
   try {
+    let registrationId;
     const [[existing]] = await db.query(
       `SELECT id FROM antenatal_registrations WHERE participant_id = ? AND status = 'active' LIMIT 1`,
       { replacements: [participantId] }
     );
-    if (existing) return existing.id;
+    if (existing) {
+      registrationId = existing.id;
+    } else {
+      registrationId = uuidv4();
+      await db.query(
+        `INSERT INTO antenatal_registrations
+           (id, clinic_id, branch_id, participant_id, registration_number, lmp, edd, gravida, para, registered_by, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'auto')`,
+        { replacements: [
+          registrationId, clinicId || 1, branchId || null, participantId, `ANC-${Date.now().toString().slice(-8)}`,
+          gynae.lmp || null, gynae.edd || null, gynae.gravida || null, gynae.para || null, registeredBy || null,
+        ] }
+      );
+    }
 
-    const id = uuidv4();
-    await db.query(
-      `INSERT INTO antenatal_registrations
-         (id, clinic_id, branch_id, participant_id, registration_number, lmp, edd, gravida, para, registered_by, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'auto')`,
-      { replacements: [
-        id, clinicId || 1, branchId || null, participantId, `ANC-${Date.now().toString().slice(-8)}`,
-        gynae.lmp || null, gynae.edd || null, gynae.gravida || null, gynae.para || null, registeredBy || null,
-      ] }
-    );
-    return id;
+    const anc = gynae.antenatal || {};
+    const hasVisitData = [anc.gestational_age_weeks, anc.fundal_height_cm, anc.fetal_heart_rate, anc.fetal_presentation, anc.notes, vitals?.blood_pressure, vitals?.weight]
+      .some((v) => v !== undefined && v !== null && v !== '');
+    if (hasVisitData) {
+      const visitFields = [
+        anc.gestational_age_weeks || null, vitals?.blood_pressure || null, vitals?.weight || null,
+        anc.fundal_height_cm || null, anc.fetal_heart_rate || null, anc.fetal_presentation || null, anc.notes || null,
+      ];
+      let existingVisit = null;
+      if (orderId) {
+        [[existingVisit]] = await db.query(
+          `SELECT id FROM antenatal_visits WHERE registration_id = ? AND order_id = ? LIMIT 1`,
+          { replacements: [registrationId, orderId] }
+        );
+      }
+      if (existingVisit) {
+        await db.query(
+          `UPDATE antenatal_visits SET
+             gestational_age_weeks = ?, blood_pressure = ?, weight = ?, fundal_height = ?,
+             fetal_heart_rate = ?, fetal_presentation = ?, notes = ?
+           WHERE id = ?`,
+          { replacements: [...visitFields, existingVisit.id] }
+        );
+      } else {
+        await db.query(
+          `INSERT INTO antenatal_visits
+             (id, registration_id, participant_id, order_id, gestational_age_weeks, blood_pressure, weight,
+              fundal_height, fetal_heart_rate, fetal_presentation, notes, recorded_by, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'auto')`,
+          { replacements: [uuidv4(), registrationId, participantId, orderId || null, ...visitFields, registeredBy || null] }
+        );
+      }
+    }
+
+    return registrationId;
   } catch (error) {
     console.error('Error auto-registering antenatal patient:', error);
     return null;

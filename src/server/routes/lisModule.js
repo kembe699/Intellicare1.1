@@ -576,7 +576,7 @@ router.put('/orders/:id/triage', authorize('lis.triage.write'), async (req, res)
     const { ensureAntenatalRegistration } = require('./antenatal');
     await ensureAntenatalRegistration(db, {
       participantId: order.participant_id, clinicId: order.clinic_id, branchId: order.branch_id,
-      gynae: vitals?.gynae, registeredBy: req.user?.id,
+      orderId: id, vitals, registeredBy: req.user?.id,
     });
     res.json({ success: true });
   } catch (error) {
@@ -612,7 +612,7 @@ router.put('/orders/:id/clinical-notes', authorize('lis.clinical.write'), async 
     const { ensureAntenatalRegistration } = require('./antenatal');
     await ensureAntenatalRegistration(db, {
       participantId: order.participant_id, clinicId: order.clinic_id, branchId: order.branch_id,
-      gynae: vitals?.gynae, registeredBy: req.user?.id,
+      orderId: id, vitals, registeredBy: req.user?.id,
     });
     res.json({ success: true });
   } catch (error) {
@@ -851,7 +851,7 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
       const { ensureAntenatalRegistration } = require('./antenatal');
       await ensureAntenatalRegistration(db, {
         participantId: participant_id, clinicId: req.user?.clinicId || 1, branchId: getCreateBranchId(req),
-        gynae: vitals?.gynae, registeredBy: req.user?.id,
+        orderId, vitals, registeredBy: req.user?.id,
       });
     } catch (e) { /* non-blocking */ }
 

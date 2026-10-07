@@ -61,6 +61,15 @@ async function ensureAntenatalTables(sequelize) {
   // nursing_procedures's entry_type ALTER.
   await sequelize.query(`ALTER TABLE antenatal_registrations ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'manual'`);
 
+  // Links a visit auto-captured from Triage/LIS clinical notes back to the
+  // lis_test_orders row it came from, so re-saving that same visit's vitals
+  // (e.g. editing clinical notes after triage) updates the one visit it
+  // already created instead of appending a duplicate every save. Nullable —
+  // a visit added directly from the Antenatal module has no order to link.
+  await sequelize.query(`ALTER TABLE antenatal_visits ADD COLUMN IF NOT EXISTS order_id VARCHAR(36)`);
+  await sequelize.query(`ALTER TABLE antenatal_visits ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'manual'`);
+  await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_antenatal_visits_order ON antenatal_visits(order_id)`);
+
   await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_antenatal_registrations_participant ON antenatal_registrations(participant_id)`);
   await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_antenatal_registrations_clinic ON antenatal_registrations(clinic_id, created_at DESC)`);
   await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_antenatal_registrations_status ON antenatal_registrations(status)`);

@@ -20,6 +20,7 @@ let getProfileHandler;
 let postVisitHandler;
 let ensureAntenatalRegistration;
 let participantId;
+let visitTestParticipantId;
 
 function withTenant(fn) {
   return tenantContext.run(testConn, fn);
@@ -64,28 +65,42 @@ beforeAll(async () => {
     `INSERT INTO lis_participants (id, participant_number, first_name, last_name, gender) VALUES (?, ?, 'Antenatal', 'Patient', 'Female')`,
     { replacements: [participantId, `ANTENATAL-${Date.now()}`] }
   );
+
+  // Kept separate from `participantId` above — the GET/POST visits describes
+  // below assert an exact visit count on that patient's one registration, so
+  // the visit-upsert assertions here (which deliberately create visits) get
+  // their own patient to avoid polluting that count.
+  visitTestParticipantId = uuid();
+  await sequelize.query(
+    `INSERT INTO lis_participants (id, participant_number, first_name, last_name, gender) VALUES (?, ?, 'AntenatalVisit', 'Patient', 'Female')`,
+    { replacements: [visitTestParticipantId, `ANTENATALVISIT-${Date.now()}`] }
+  );
 }, 30000);
 
 afterAll(async () => {
   try {
-    await sequelize.query(
-      `DELETE FROM antenatal_visits WHERE registration_id IN (SELECT id FROM antenatal_registrations WHERE participant_id = :id)`,
-      { replacements: { id: participantId } }
-    );
-    await sequelize.query(`DELETE FROM antenatal_registrations WHERE participant_id = :id`, { replacements: { id: participantId } });
-    await sequelize.query(`DELETE FROM lis_participants WHERE id = :id`, { replacements: { id: participantId } });
+    for (const pid of [participantId, visitTestParticipantId]) {
+      await sequelize.query(
+        `DELETE FROM antenatal_visits WHERE registration_id IN (SELECT id FROM antenatal_registrations WHERE participant_id = :id)`,
+        { replacements: { id: pid } }
+      );
+      await sequelize.query(`DELETE FROM antenatal_registrations WHERE participant_id = :id`, { replacements: { id: pid } });
+      await sequelize.query(`DELETE FROM lis_participants WHERE id = :id`, { replacements: { id: pid } });
+    }
   } catch (e) { console.warn('antenatal cleanup failed (non-fatal):', e.message); }
 });
 
 describe('ensureAntenatalRegistration (Triage/LIS trigger)', () => {
   test('does nothing when antenatal_enabled is not set', async () => {
-    const id = await ensureAntenatalRegistration(sequelize, { participantId, clinicId: 1, gynae: { antenatal_enabled: false } });
+    const id = await ensureAntenatalRegistration(sequelize, { participantId, clinicId: 1, vitals: { gynae: { antenatal_enabled: false } } });
     expect(id).toBeNull();
   });
 
   test('registers the patient straight away when antenatal_enabled is ticked', async () => {
     const id = await ensureAntenatalRegistration(sequelize, {
-      participantId, clinicId: 1, gynae: { antenatal_enabled: true, lmp: '2026-01-01', edd: '2026-10-08', gravida: '2', para: '1' }, registeredBy: 1,
+      participantId, clinicId: 1,
+      vitals: { gynae: { antenatal_enabled: true, lmp: '2026-01-01', edd: '2026-10-08', gravida: '2', para: '1' } },
+      registeredBy: 1,
     });
     expect(id).toBeTruthy();
 
@@ -97,10 +112,48 @@ describe('ensureAntenatalRegistration (Triage/LIS trigger)', () => {
 
   test('is idempotent — a second tick finds the existing active registration instead of duplicating', async () => {
     const [[before]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM antenatal_registrations WHERE participant_id = ?`, { replacements: [participantId] });
-    const id = await ensureAntenatalRegistration(sequelize, { participantId, clinicId: 1, gynae: { antenatal_enabled: true, lmp: '2026-02-01' } });
+    const id = await ensureAntenatalRegistration(sequelize, { participantId, clinicId: 1, vitals: { gynae: { antenatal_enabled: true, lmp: '2026-02-01' } } });
     const [[after]] = await sequelize.query(`SELECT COUNT(*) as cnt FROM antenatal_registrations WHERE participant_id = ?`, { replacements: [participantId] });
     expect(after.cnt).toBe(before.cnt);
     expect(id).toBeTruthy();
+  });
+
+  test('also records a visit when the antenatal sub-fields carry real data, pulling BP/weight from the outer vitals', async () => {
+    const orderId = uuid();
+    const id = await ensureAntenatalRegistration(sequelize, {
+      participantId: visitTestParticipantId, clinicId: 1, orderId,
+      vitals: {
+        blood_pressure: '118/76', weight: '64.2',
+        gynae: { antenatal_enabled: true, antenatal: { gestational_age_weeks: '20', fundal_height_cm: '20', fetal_heart_rate: '142', fetal_presentation: 'Cephalic', notes: 'Mother and baby well' } },
+      },
+      registeredBy: 1,
+    });
+
+    const [visits] = await sequelize.query(`SELECT * FROM antenatal_visits WHERE registration_id = ? AND order_id = ?`, { replacements: [id, orderId] });
+    expect(visits.length).toBe(1);
+    expect(visits[0].blood_pressure).toBe('118/76');
+    expect(Number(visits[0].weight)).toBe(64.2);
+    expect(visits[0].fetal_presentation).toBe('Cephalic');
+    expect(visits[0].source).toBe('auto');
+  });
+
+  test('re-saving the same order updates that one visit instead of duplicating it', async () => {
+    const orderId = uuid();
+    await ensureAntenatalRegistration(sequelize, {
+      participantId: visitTestParticipantId, clinicId: 1, orderId,
+      vitals: { blood_pressure: '110/70', gynae: { antenatal_enabled: true, antenatal: { gestational_age_weeks: '24' } } },
+      registeredBy: 1,
+    });
+    const id = await ensureAntenatalRegistration(sequelize, {
+      participantId: visitTestParticipantId, clinicId: 1, orderId,
+      vitals: { blood_pressure: '112/72', gynae: { antenatal_enabled: true, antenatal: { gestational_age_weeks: '25' } } },
+      registeredBy: 1,
+    });
+
+    const [visits] = await sequelize.query(`SELECT * FROM antenatal_visits WHERE registration_id = ? AND order_id = ?`, { replacements: [id, orderId] });
+    expect(visits.length).toBe(1);
+    expect(visits[0].blood_pressure).toBe('112/72');
+    expect(Number(visits[0].gestational_age_weeks)).toBe(25);
   });
 });
 
