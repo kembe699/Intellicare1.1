@@ -21,10 +21,12 @@ interface DepositReceiptProps {
 const DIVIDER = '--------------------------------';
 const THICK_DIVIDER = '================================';
 
+// Font/color choices mirror PaymentReceipt.tsx's own fix for the same
+// "fading on thermal paper" complaint — see the comment there.
 const row = (label: string, value: string, bold = false): React.ReactNode => (
   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-    <span style={{ fontSize: '11px' }}>{label}</span>
-    <span style={{ fontSize: '11px', fontWeight: bold ? 700 : 400, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
+    <span style={{ fontSize: '12px', fontWeight: 600 }}>{label}</span>
+    <span style={{ fontSize: '12px', fontWeight: bold ? 700 : 600, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
   </div>
 );
 
@@ -41,18 +43,18 @@ export const DepositReceipt: React.FC<DepositReceiptProps> = ({
   const label = kind === 'refund' ? 'Deposit Refund' : 'Patient Deposit';
 
   const thermal: React.CSSProperties = {
-    width: '302px', margin: '0 auto', fontFamily: "'Courier New', Courier, monospace",
-    fontSize: '11px', lineHeight: '1.45', color: '#111', backgroundColor: '#fff',
+    width: '302px', margin: '0 auto', fontFamily: "Arial, Helvetica, sans-serif",
+    fontSize: '12px', lineHeight: '1.5', color: '#000', backgroundColor: '#fff',
     padding: '12px 10px 16px', boxSizing: 'border-box',
   };
   const center: React.CSSProperties = { textAlign: 'center' };
-  const divStyle: React.CSSProperties = { fontSize: '10px', color: '#555', textAlign: 'center', margin: '4px 0', letterSpacing: '0.5px' };
+  const divStyle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#000', textAlign: 'center', margin: '4px 0', letterSpacing: '0.5px' };
 
   return (
     <div className="thermal-receipt" style={thermal}>
       <div style={center}>
         <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '1px' }}>{displayName}</div>
-        {branchName && <div style={{ fontSize: '10px', marginTop: '1px' }}>{branchName}</div>}
+        {branchName && <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '1px' }}>{branchName}</div>}
         <div style={{ fontSize: '10px', marginTop: '6px', fontWeight: 700, letterSpacing: '2px' }}>
           {kind === 'refund' ? 'DEPOSIT REFUND RECEIPT' : 'DEPOSIT RECEIPT'}
         </div>
@@ -74,7 +76,7 @@ export const DepositReceipt: React.FC<DepositReceiptProps> = ({
       <div style={{ marginBottom: '5px' }}>
         <div style={{ fontSize: '11px', fontWeight: 600 }}>{label}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '10px', color: '#555' }}>{currency || ''}</span>
+          <span style={{ fontSize: '10px', fontWeight: 600, color: '#000' }}>{currency || ''}</span>
           <span style={{ fontSize: '13px', fontWeight: 700 }}>{fmt(amount)}</span>
         </div>
       </div>
@@ -94,7 +96,7 @@ export const DepositReceipt: React.FC<DepositReceiptProps> = ({
       {notes && (
         <>
           <div style={divStyle}>{DIVIDER}</div>
-          <div style={{ fontSize: '10px', fontStyle: 'italic', marginTop: '2px' }}>Note: {notes}</div>
+          <div style={{ fontSize: '10px', fontWeight: 600, fontStyle: 'italic', marginTop: '2px' }}>Note: {notes}</div>
         </>
       )}
 
@@ -102,8 +104,8 @@ export const DepositReceipt: React.FC<DepositReceiptProps> = ({
 
       <div style={{ textAlign: 'center', marginTop: '4px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700 }}>Thank you for your visit!</div>
-        <div style={{ fontSize: '10px', marginTop: '2px' }}>Please keep this receipt for your records.</div>
-        <div style={{ fontSize: '9px', color: '#555', marginTop: '6px' }}>
+        <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '2px' }}>Please keep this receipt for your records.</div>
+        <div style={{ fontSize: '10px', fontWeight: 600, color: '#000', marginTop: '6px' }}>
           Ref: {receiptId} · {new Date().toLocaleDateString('en-GB')}
         </div>
       </div>
