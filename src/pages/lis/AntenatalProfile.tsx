@@ -110,17 +110,25 @@ export default function AntenatalProfile() {
     }
   };
 
-  // WHO-style antenatal card: patient/registration header, then one row per
-  // visit across the standard ANC measurements — printed as a visit-history
-  // report, not the full WHO 8-contact scheduling model (per the agreed
-  // first-version scope).
+  // WHO/MOH-pattern antenatal card — laid out the way the standard
+  // "Integrated Antenatal Care Record" is structured on real ANC cards:
+  // identification block, then risk/eligibility assessment from booking
+  // (shown right after identification, since that's assessed at
+  // registration — before any contact happens, not after), then one row
+  // per contact across the standard measurements PLUS the columns those
+  // cards always carry that this one was missing — a contact/visit number,
+  // who saw the patient, and a remarks column (the visit's own free-text
+  // notes were being captured but never printed) — then the standard
+  // danger-signs advisory every WHO-pattern card carries. Still a
+  // visit-history report, not the full WHO 8-contact scheduling/enforcement
+  // model (per the agreed first-version scope).
   const handlePrint = () => {
     if (!profile) return;
     const age = profile.date_of_birth ? Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / 31557600000) : null;
 
     const infoHTML = docTemplate.buildInfoGrid(
       {
-        title: 'Patient', rows: [
+        title: 'Patient Identification', rows: [
           { label: 'Name', value: `${profile.first_name} ${profile.last_name}`, bold: true },
           { label: 'Patient No.', value: profile.participant_number },
           { label: 'Age', value: age != null ? `${age} yrs` : '-' },
@@ -129,45 +137,54 @@ export default function AntenatalProfile() {
       },
       {
         title: 'Antenatal Registration', rows: [
-          { label: 'Reg. No.', value: profile.registration_number },
+          { label: 'ANC Reg. No.', value: profile.registration_number, bold: true },
+          { label: 'Date Registered', value: docTemplate.formatDate(profile.created_at) },
           { label: 'LMP', value: docTemplate.formatDate(profile.lmp) },
           { label: 'EDD', value: docTemplate.formatDate(profile.edd) },
-          { label: 'Gravida / Para', value: `G${profile.gravida || '-'} P${profile.para || '-'}` },
+          { label: 'Gravida', value: profile.gravida || '-' },
+          { label: 'Para', value: profile.para || '-' },
           { label: 'Blood Group', value: profile.blood_group || '-' },
         ],
       }
     );
 
+    const riskHTML = `<div class="ic-notes" style="border-color:#dc2626;"><strong>Risk Factors / Eligibility Assessment:</strong> ${profile.risk_notes ? profile.risk_notes : 'None identified at registration.'}</div>`;
+
+    const sortedVisits = [...profile.visits].sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
     const visitsHTML = docTemplate.buildTable(
       [
-        { label: 'Date' }, { label: 'GA (wks)' }, { label: 'BP' }, { label: 'Weight (kg)' },
+        { label: 'No.', width: '28px' }, { label: 'Date' }, { label: 'GA (wks)' }, { label: 'Weight (kg)' }, { label: 'BP (mmHg)' },
         { label: 'Fundal Ht (cm)' }, { label: 'FHR' }, { label: 'Presentation' },
-        { label: 'Urine (P/G)' }, { label: 'Hb' }, { label: 'Next Appt.' },
+        { label: 'Urine Protein' }, { label: 'Urine Glucose' }, { label: 'Hb' }, { label: 'Remarks' }, { label: 'Next Appt.' }, { label: 'Seen By' },
       ],
-      [...profile.visits].reverse().map((v) => ({
+      sortedVisits.map((v, i) => ({
         cells: [
+          i + 1,
           docTemplate.formatDate(v.visit_date),
-          v.gestational_age_weeks || '-', v.blood_pressure || '-', v.weight || '-',
+          v.gestational_age_weeks || '-', v.weight || '-', v.blood_pressure || '-',
           v.fundal_height || '-', v.fetal_heart_rate || '-', v.fetal_presentation || '-',
-          `${v.urine_protein || '-'} / ${v.urine_glucose || '-'}`, v.hb_level || '-',
+          v.urine_protein || '-', v.urine_glucose || '-', v.hb_level || '-',
+          v.notes || '-',
           v.next_appointment ? docTemplate.formatDate(v.next_appointment) : '-',
+          v.recorded_by_name || '-',
         ],
       }))
     );
 
-    const riskHTML = profile.risk_notes ? docTemplate.buildNotes(`Risk factors: ${profile.risk_notes}`) : '';
+    const dangerSignsHTML = `<div class="ic-notes"><strong>Danger Signs — Return Immediately If:</strong> Severe headache or blurred vision &middot; Vaginal bleeding &middot; Severe abdominal pain &middot; Convulsions/fits &middot; High fever &middot; Reduced or no fetal movement &middot; Swelling of face/hands &middot; Breaking of waters</div>`;
 
     const bodyHTML = [
       infoHTML,
+      riskHTML,
       '<div class="ic-section-title">Antenatal Visit History</div>',
       profile.visits.length > 0 ? visitsHTML : '<p style="color:#64748b;font-size:13px;">No visits recorded yet.</p>',
-      riskHTML,
+      dangerSignsHTML,
       docTemplate.buildSignatures([{ label: 'Attending Nurse / Midwife', name: user?.displayName || '' }]),
     ].join('\n');
 
     const html = docTemplate.buildDocument({
       title: 'Antenatal Card',
-      docType: 'WHO Antenatal Care Record',
+      docType: 'Antenatal Care Record (WHO Model)',
       docNumber: profile.registration_number,
       date: new Date(),
       bodyHTML,

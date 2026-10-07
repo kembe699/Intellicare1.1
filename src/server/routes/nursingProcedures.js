@@ -131,25 +131,38 @@ router.post('/notes', authorize('nursing.procedures.write'), async (req, res) =>
   }
 });
 
-// POST /orders — a doctor or receptionist orders a billable procedure.
-// Bills immediately (same pattern as TheatreService.createRequest), inserts
-// it 'pending' for a nurse to fulfill via PUT /:id/complete.
+// POST /orders — a doctor or receptionist orders one OR SEVERAL billable
+// procedures for the same patient in one go (`items: [{ service_id,
+// procedure_type, notes }, ...]` — a single `service_id`/`procedure_type`/
+// `notes` at the top level is still accepted as shorthand for one item).
+// All priced items bill together as one bill update (same pattern as
+// TheatreService.createRequest's single-item version), each inserted
+// 'pending' for a nurse to fulfill individually via PUT /:id/complete.
 router.post('/orders', authorize('nursing.procedures.order'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
-    const { participant_id, order_id, service_id, procedure_type, notes } = req.body;
+    const { participant_id, order_id } = req.body;
+    const items = Array.isArray(req.body.items) && req.body.items.length > 0
+      ? req.body.items
+      : [{ service_id: req.body.service_id, procedure_type: req.body.procedure_type, notes: req.body.notes }];
+
     if (!participant_id) return res.status(400).json({ error: 'participant_id is required' });
-    if (!service_id) return res.status(400).json({ error: 'service_id is required — pick a service from the Nursing catalog' });
-    if (!PROCEDURE_TYPES.includes(procedure_type)) {
-      return res.status(400).json({ error: `procedure_type must be one of: ${PROCEDURE_TYPES.join(', ')}` });
+    for (const item of items) {
+      if (!item.service_id) return res.status(400).json({ error: 'service_id is required for every procedure — pick a service from the Nursing catalog' });
+      if (!PROCEDURE_TYPES.includes(item.procedure_type)) {
+        return res.status(400).json({ error: `procedure_type must be one of: ${PROCEDURE_TYPES.join(', ')}` });
+      }
     }
 
-    const [[service]] = await db.query(
-      `SELECT id, service_name, price FROM services WHERE id = ? AND category = 'Nursing' AND is_active = true`,
-      { replacements: [service_id] }
+    const serviceIds = [...new Set(items.map((i) => i.service_id))];
+    const [services] = await db.query(
+      `SELECT id, service_name, price FROM services WHERE id IN (:serviceIds) AND category = 'Nursing' AND is_active = true`,
+      { replacements: { serviceIds } }
     );
-    if (!service) return res.status(404).json({ error: 'Service not found in the Nursing catalog' });
-    const fee = parseFloat(service.price) || 0;
+    const serviceById = new Map(services.map((s) => [s.id, s]));
+    for (const item of items) {
+      if (!serviceById.has(item.service_id)) return res.status(404).json({ error: 'One or more services were not found in the Nursing catalog' });
+    }
 
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const branchId = getCreateBranchId(req);
@@ -160,30 +173,41 @@ router.post('/orders', authorize('nursing.procedures.order'), async (req, res) =
     );
     const patientName = participant ? `${participant.first_name} ${participant.last_name}` : 'Patient';
 
+    const lines = items.map((item) => {
+      const service = serviceById.get(item.service_id);
+      return { item, service, fee: parseFloat(service.price) || 0 };
+    });
+
+    const billableLines = lines.filter((l) => l.fee > 0);
     let billId = null;
-    if (fee > 0) {
+    if (billableLines.length > 0) {
       const bill = await addLineItemsToBill({
         patientId: participant_id, patientName, clinicId, branchId,
-        lineItems: [{ serviceId: service.id, serviceName: service.service_name, quantity: 1, unitPrice: fee, totalPrice: fee, revenueCategory: 'Nursing Procedure' }],
-        notes: `Nursing procedure — ${service.service_name}`,
+        lineItems: billableLines.map((l) => ({ serviceId: l.service.id, serviceName: l.service.service_name, quantity: 1, unitPrice: l.fee, totalPrice: l.fee, revenueCategory: 'Nursing Procedure' })),
+        notes: `Nursing procedures — ${billableLines.map((l) => l.service.service_name).join(', ')}`,
         createdBy: req.user?.displayName || String(req.user?.id || 'System'),
       });
       billId = bill?.id || null;
     }
 
-    const id = uuidv4();
-    await db.query(
-      `INSERT INTO nursing_procedures
-         (id, clinic_id, branch_id, participant_id, order_id, ordered_by, ordered_at, entry_type, status,
-          procedure_type, service_id, fee_amount, fee_currency, bill_id, description, notes, performed_at)
-       VALUES (?, ?, ?, ?, ?, ?, NOW(), 'procedure', 'pending',
-               ?, ?, ?, 'SSP', ?, ?, ?, NOW())`,
-      { replacements: [
-        id, clinicId, branchId, participant_id, order_id || null, req.user?.id || null,
-        procedure_type, service.id, fee, billId, service.service_name, notes || null,
-      ] }
-    );
-    res.status(201).json({ id, bill_id: billId, message: 'Nursing procedure ordered' });
+    const ids = [];
+    for (const { item, service, fee } of lines) {
+      const id = uuidv4();
+      await db.query(
+        `INSERT INTO nursing_procedures
+           (id, clinic_id, branch_id, participant_id, order_id, ordered_by, ordered_at, entry_type, status,
+            procedure_type, service_id, fee_amount, fee_currency, bill_id, description, notes, performed_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), 'procedure', 'pending',
+                 ?, ?, ?, 'SSP', ?, ?, ?, NOW())`,
+        { replacements: [
+          id, clinicId, branchId, participant_id, order_id || null, req.user?.id || null,
+          item.procedure_type, service.id, fee, fee > 0 ? billId : null, service.service_name, item.notes || null,
+        ] }
+      );
+      ids.push(id);
+    }
+
+    res.status(201).json({ ids, id: ids[0], bill_id: billId, message: `${ids.length} procedure${ids.length > 1 ? 's' : ''} ordered` });
   } catch (error) {
     console.error('Error ordering nursing procedure:', error);
     res.status(500).json({ error: 'Failed to order nursing procedure' });

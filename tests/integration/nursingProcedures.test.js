@@ -24,6 +24,7 @@ let postOrderHandler;
 let putCompleteHandler;
 let participantId;
 let serviceId;
+let serviceId2;
 let freeServiceId;
 
 function withTenant(fn) {
@@ -76,6 +77,11 @@ beforeAll(async () => {
     `INSERT INTO services (id, service_name, category, price, is_active) VALUES (?, ?, 'Nursing', 15000, true)`,
     { replacements: [serviceId, `Wound Dressing Test ${Date.now()}`] }
   );
+  serviceId2 = uuid();
+  await sequelize.query(
+    `INSERT INTO services (id, service_name, category, price, is_active) VALUES (?, ?, 'Nursing', 8000, true)`,
+    { replacements: [serviceId2, `IM Injection Test ${Date.now()}`] }
+  );
   freeServiceId = uuid();
   await sequelize.query(
     `INSERT INTO services (id, service_name, category, price, is_active) VALUES (?, ?, 'Nursing', 0, true)`,
@@ -87,7 +93,7 @@ afterAll(async () => {
   try {
     await sequelize.query(`DELETE FROM nursing_procedures WHERE participant_id = :id`, { replacements: { id: participantId } });
     await sequelize.query(`DELETE FROM patient_bills WHERE patient_id = :id`, { replacements: { id: participantId } });
-    await sequelize.query(`DELETE FROM services WHERE id IN (:a, :b)`, { replacements: { a: serviceId, b: freeServiceId } });
+    await sequelize.query(`DELETE FROM services WHERE id IN (:a, :b, :c)`, { replacements: { a: serviceId, b: freeServiceId, c: serviceId2 } });
     await sequelize.query(`DELETE FROM lis_participants WHERE id = :id`, { replacements: { id: participantId } });
   } catch (e) { console.warn('nursingProcedures cleanup failed (non-fatal):', e.message); }
 });
@@ -166,6 +172,47 @@ describe('POST /api/nursing-procedures/orders', () => {
     await withTenant(() => postOrderHandler(req({ body: { participant_id: participantId, service_id: freeServiceId, procedure_type: 'other' } }, 'reception'), res));
     expect(res.statusCode).toBe(201);
     expect(res.body.bill_id).toBeNull();
+  });
+});
+
+describe('POST /api/nursing-procedures/orders — multiple items in one order', () => {
+  test('a doctor orders several procedures for the same patient in one submission, billed together on one bill', async () => {
+    const res = mockRes();
+    await withTenant(() => postOrderHandler(req({
+      body: {
+        participant_id: participantId,
+        items: [
+          { service_id: serviceId, procedure_type: 'dressing', notes: 'Left leg' },
+          { service_id: serviceId2, procedure_type: 'injection', notes: 'IM Diclofenac' },
+          { service_id: freeServiceId, procedure_type: 'other' },
+        ],
+      },
+    }, 'doctor'), res));
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.ids.length).toBe(3);
+    expect(res.body.bill_id).toBeTruthy();
+
+    const [[bill]] = await sequelize.query(`SELECT services FROM patient_bills WHERE id = ?`, { replacements: [res.body.bill_id] });
+    const billedNames = JSON.parse(typeof bill.services === 'string' ? bill.services : JSON.stringify(bill.services)).map((s) => s.serviceName);
+    expect(billedNames.some((n) => n.includes('Wound Dressing Test'))).toBe(true);
+    expect(billedNames.some((n) => n.includes('IM Injection Test'))).toBe(true);
+
+    const getRes = mockRes();
+    await withTenant(() => getParticipantHandler(req({ params: { participantId } }), getRes));
+    const rows = res.body.ids.map((id) => getRes.body.find((r) => r.id === id));
+    expect(rows.every((r) => r.status === 'pending')).toBe(true);
+    // The two priced items share the one bill; the zero-priced item isn't billed at all.
+    expect(rows.filter((r) => r.bill_id === res.body.bill_id).length).toBe(2);
+    expect(rows.find((r) => r.service_id === freeServiceId).bill_id).toBeNull();
+  });
+
+  test('rejects the whole batch if any one item has an invalid procedure_type', async () => {
+    const res = mockRes();
+    await withTenant(() => postOrderHandler(req({
+      body: { participant_id: participantId, items: [{ service_id: serviceId, procedure_type: 'dressing' }, { service_id: serviceId2, procedure_type: 'surgery' }] },
+    }, 'doctor'), res));
+    expect(res.statusCode).toBe(400);
   });
 });
 
