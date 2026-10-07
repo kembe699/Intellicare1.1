@@ -1,40 +1,67 @@
 /**
- * Outpatient/triage nursing procedures log — a standalone record of care a
- * nurse gives directly, outside the doctor's prescription pipeline and
- * outside an inpatient admission: an injection given, a minor procedure
- * performed, a dressing changed. Separate from inpatient's own
- * drug_administrations (that's for an admitted patient's prescribed
- * medications; this is for a nurse's own direct outpatient care, with or
- * without a prescription behind it).
+ * Outpatient/triage nursing procedures log — separate from the doctor's
+ * prescription pipeline and from inpatient's own drug_administrations
+ * (admitted patients). Two kinds of entry:
  *
- * Keyed on lis_participants.id, same convention as patient_referrals.js —
- * the app's real, actively-used patient record. order_id optionally links
- * the visit this happened under so it can surface on that visit's Visit
- * Summary alongside everything else done for the patient that day.
+ *  - A free-form, unbilled NOTE a nurse adds directly (entry_type='note'),
+ *    always already 'completed' — nothing here is charged for, so no
+ *    ordering step is needed.
+ *  - A billable PROCEDURE (entry_type='procedure') — an injection, a
+ *    dressing, a minor procedure — which must start as a doctor- or
+ *    reception-placed ORDER (status='pending'), billed immediately the
+ *    same way a theatre request bills (see TheatreService.createRequest —
+ *    identical pattern: pick a catalog service, bill it via
+ *    addLineItemsToBill, store the resulting bill_id), and which a nurse
+ *    later fulfills (status='completed'), filling in what was actually
+ *    done. A nurse never decides to bill something themselves.
+ *
+ * Keyed on lis_participants.id, same convention as patient_referrals.js.
  */
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
-const { authorize } = require('../middleware/authorize');
+const { authorize, getRolePrivileges } = require('../middleware/authorize');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+const { addLineItemsToBill } = require('../utils/billingResolver');
 
 const PROCEDURE_TYPES = ['injection', 'minor_procedure', 'dressing', 'other'];
 
-// GET / — recent log, clinic-wide (branch-scoped for a non-admin), newest first.
-router.get('/', authorize('nursing.procedures.write'), async (req, res) => {
+// authorize() takes either ONE privilege key or a literal ROLE array — there's
+// no "any of these privilege keys" shape, so the patient-history read (which
+// the nurse who fulfills AND the doctor/reception who orders both need) gets
+// its own small OR-of-privileges middleware instead of misusing either shape.
+const authorizeAny = (keys) => async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (req.user.role === 'admin') return next();
+  const roles = [req.user.role, ...(req.user.additionalRoles || [])];
+  try {
+    const grants = await getRolePrivileges(req.models.sequelize, req.tenantSchema);
+    const ok = keys.some((key) => roles.some((r) => grants.get(r)?.has(key)));
+    if (!ok) return res.status(403).json({ error: 'Insufficient permissions', required: keys, current: req.user.role });
+    return next();
+  } catch (err) {
+    console.error('authorizeAny lookup failed:', err.message);
+    return res.status(503).json({ error: 'Could not verify permissions, please try again' });
+  }
+};
+
+// GET / — recent log (orders + notes, pending + completed), branch-scoped.
+router.get('/', authorizeAny(['nursing.procedures.write', 'nursing.procedures.order']), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const branchFilter = getBranchConditionSQL(req, 'np');
     const [rows] = await db.query(
-      `SELECT np.*, p.first_name, p.last_name, p.participant_number, u.display_name as nurse_name
+      `SELECT np.*, p.first_name, p.last_name, p.participant_number,
+              nu.display_name as nurse_name, ou.display_name as ordered_by_name
        FROM nursing_procedures np
        LEFT JOIN lis_participants p ON p.id = np.participant_id
-       LEFT JOIN users u ON u.id = np.nurse_id
+       LEFT JOIN users nu ON nu.id = np.nurse_id
+       LEFT JOIN users ou ON ou.id = np.ordered_by
        WHERE np.clinic_id = ? ${branchFilter.sql}
-       ORDER BY np.performed_at DESC
-       LIMIT 200`,
+       ORDER BY np.created_at DESC
+       LIMIT 300`,
       { replacements: [clinicId, ...branchFilter.params] }
     );
     res.json(rows);
@@ -44,20 +71,35 @@ router.get('/', authorize('nursing.procedures.write'), async (req, res) => {
   }
 });
 
-// GET /participant/:participantId — this one patient's history, for the
-// nursing procedures page's own patient view. (Visit Summary gets this
-// same data through GET /lis/visit-summaries instead, which already
-// aggregates everything for a visit in one response under lis.clinical.read
-// — a doctor viewing Visit Summary doesn't need nursing.procedures.write.)
-router.get('/participant/:participantId', authorize('nursing.procedures.write'), async (req, res) => {
+// GET /catalog — Nursing-category billable services, for the order form.
+// Set up by the clinic at /setup/services the same way Procedure/Laboratory
+// services already are — nothing seeded by default here.
+router.get('/catalog', authorize('nursing.procedures.order'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
     const [rows] = await db.query(
-      `SELECT np.*, u.display_name as nurse_name
+      `SELECT id, service_name, price FROM services WHERE category = 'Nursing' AND is_active = true ORDER BY service_name`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching nursing service catalog:', error);
+    res.status(500).json({ error: 'Failed to fetch nursing service catalog' });
+  }
+});
+
+// GET /participant/:participantId — this one patient's full history (orders + notes).
+router.get('/participant/:participantId', authorizeAny(['nursing.procedures.write', 'nursing.procedures.order']), async (req, res) => {
+  const { sequelize: db } = req.models;
+  try {
+    const [rows] = await db.query(
+      `SELECT np.*, p.first_name, p.last_name, p.participant_number, p.gender,
+              ou.display_name as ordered_by_name, nu.display_name as nurse_name
        FROM nursing_procedures np
-       LEFT JOIN users u ON u.id = np.nurse_id
+       LEFT JOIN lis_participants p ON p.id = np.participant_id
+       LEFT JOIN users ou ON ou.id = np.ordered_by
+       LEFT JOIN users nu ON nu.id = np.nurse_id
        WHERE np.participant_id = ?
-       ORDER BY np.performed_at DESC`,
+       ORDER BY np.created_at DESC`,
       { replacements: [req.params.participantId] }
     );
     res.json(rows);
@@ -67,31 +109,108 @@ router.get('/participant/:participantId', authorize('nursing.procedures.write'),
   }
 });
 
-// POST / — log a new entry.
-router.post('/', authorize('nursing.procedures.write'), async (req, res) => {
+// POST /notes — a nurse's free-form, unbilled note. No order, no billing.
+router.post('/notes', authorize('nursing.procedures.write'), async (req, res) => {
   const { sequelize: db } = req.models;
   try {
-    const { participant_id, order_id, procedure_type, description, notes, performed_at } = req.body;
+    const { participant_id, order_id, note } = req.body;
     if (!participant_id) return res.status(400).json({ error: 'participant_id is required' });
-    if (!PROCEDURE_TYPES.includes(procedure_type)) {
-      return res.status(400).json({ error: `procedure_type must be one of: ${PROCEDURE_TYPES.join(', ')}` });
-    }
-    if (!description || !description.trim()) return res.status(400).json({ error: 'description is required' });
+    if (!note || !note.trim()) return res.status(400).json({ error: 'note is required' });
 
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const id = uuidv4();
     await db.query(
-      `INSERT INTO nursing_procedures (id, clinic_id, branch_id, participant_id, order_id, nurse_id, procedure_type, description, notes, performed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nursing_procedures (id, clinic_id, branch_id, participant_id, order_id, nurse_id, entry_type, status, description, performed_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'note', 'completed', ?, NOW())`,
+      { replacements: [id, clinicId, getCreateBranchId(req), participant_id, order_id || null, req.user?.id || null, note.trim()] }
+    );
+    res.status(201).json({ id, message: 'Note added' });
+  } catch (error) {
+    console.error('Error adding nursing note:', error);
+    res.status(500).json({ error: 'Failed to add note' });
+  }
+});
+
+// POST /orders — a doctor or receptionist orders a billable procedure.
+// Bills immediately (same pattern as TheatreService.createRequest), inserts
+// it 'pending' for a nurse to fulfill via PUT /:id/complete.
+router.post('/orders', authorize('nursing.procedures.order'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  try {
+    const { participant_id, order_id, service_id, procedure_type, notes } = req.body;
+    if (!participant_id) return res.status(400).json({ error: 'participant_id is required' });
+    if (!service_id) return res.status(400).json({ error: 'service_id is required — pick a service from the Nursing catalog' });
+    if (!PROCEDURE_TYPES.includes(procedure_type)) {
+      return res.status(400).json({ error: `procedure_type must be one of: ${PROCEDURE_TYPES.join(', ')}` });
+    }
+
+    const [[service]] = await db.query(
+      `SELECT id, service_name, price FROM services WHERE id = ? AND category = 'Nursing' AND is_active = true`,
+      { replacements: [service_id] }
+    );
+    if (!service) return res.status(404).json({ error: 'Service not found in the Nursing catalog' });
+    const fee = parseFloat(service.price) || 0;
+
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const branchId = getCreateBranchId(req);
+
+    const [[participant]] = await db.query(
+      `SELECT first_name, last_name FROM lis_participants WHERE id = ?`,
+      { replacements: [participant_id] }
+    );
+    const patientName = participant ? `${participant.first_name} ${participant.last_name}` : 'Patient';
+
+    let billId = null;
+    if (fee > 0) {
+      const bill = await addLineItemsToBill({
+        patientId: participant_id, patientName, clinicId, branchId,
+        lineItems: [{ serviceId: service.id, serviceName: service.service_name, quantity: 1, unitPrice: fee, totalPrice: fee, revenueCategory: 'Nursing Procedure' }],
+        notes: `Nursing procedure — ${service.service_name}`,
+        createdBy: req.user?.displayName || String(req.user?.id || 'System'),
+      });
+      billId = bill?.id || null;
+    }
+
+    const id = uuidv4();
+    await db.query(
+      `INSERT INTO nursing_procedures
+         (id, clinic_id, branch_id, participant_id, order_id, ordered_by, ordered_at, entry_type, status,
+          procedure_type, service_id, fee_amount, fee_currency, bill_id, description, notes, performed_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), 'procedure', 'pending',
+               ?, ?, ?, 'SSP', ?, ?, ?, NOW())`,
       { replacements: [
-        id, clinicId, getCreateBranchId(req), participant_id, order_id || null, req.user?.id || null,
-        procedure_type, description.trim(), notes || null, performed_at || new Date(),
+        id, clinicId, branchId, participant_id, order_id || null, req.user?.id || null,
+        procedure_type, service.id, fee, billId, service.service_name, notes || null,
       ] }
     );
-    res.status(201).json({ id, message: 'Nursing procedure logged' });
+    res.status(201).json({ id, bill_id: billId, message: 'Nursing procedure ordered' });
   } catch (error) {
-    console.error('Error logging nursing procedure:', error);
-    res.status(500).json({ error: 'Failed to log nursing procedure' });
+    console.error('Error ordering nursing procedure:', error);
+    res.status(500).json({ error: 'Failed to order nursing procedure' });
+  }
+});
+
+// PUT /:id/complete — a nurse fulfills a pending order, recording what was
+// actually done (defaults to the ordered service's name if left blank).
+router.put('/:id/complete', authorize('nursing.procedures.write'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  try {
+    const { description, notes } = req.body;
+    const [[row]] = await db.query(`SELECT * FROM nursing_procedures WHERE id = ?`, { replacements: [req.params.id] });
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (row.entry_type !== 'procedure') return res.status(400).json({ error: 'Only an ordered procedure can be completed' });
+    if (row.status !== 'pending') return res.status(400).json({ error: 'This procedure is not pending' });
+
+    await db.query(
+      `UPDATE nursing_procedures SET status = 'completed', nurse_id = ?, performed_at = NOW(), updated_at = NOW(),
+              description = COALESCE(?, description), notes = COALESCE(?, notes)
+       WHERE id = ?`,
+      { replacements: [req.user?.id || null, description || null, notes || null, req.params.id] }
+    );
+    res.json({ success: true, message: 'Procedure marked complete' });
+  } catch (error) {
+    console.error('Error completing nursing procedure:', error);
+    res.status(500).json({ error: 'Failed to complete nursing procedure' });
   }
 });
 

@@ -103,6 +103,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureNursingProceduresTable } = require('./config/ensureNursingProceduresTable');
   ensureNursingProceduresTable(sequelize).catch(() => {});
 
+  // antenatal_registrations/antenatal_visits (ANC care), ensured per-tenant
+  // the same way.
+  const { ensureAntenatalTables } = require('./config/ensureAntenatalTables');
+  ensureAntenatalTables(sequelize).catch(() => {});
+
   // lis_test_orders.consultant_id, ensured per-tenant the same way — lets a
   // visit be attributed to a consultant with no linked user account.
   const { ensureLisConsultantSupport } = require('./config/ensureLisConsultantSupport');

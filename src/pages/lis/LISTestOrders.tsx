@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send, Scan } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send, Scan, Syringe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -996,6 +996,22 @@ export default function LISTestOrders() {
       (s.tests || []).map((t: any) => ({ cells: [t.test_name, t.status.replace(/_/g, ' ')] }))
     );
 
+    const nursingProcedures = s.nursing_procedures || [];
+    const nursingHTML = nursingProcedures.length > 0 ? [
+      '<div class="ic-section-title">Nursing Procedures</div>',
+      docTemplate.buildTable(
+        [{ label: 'Procedure' }, { label: 'By' }, { label: 'Date/Time' }, { label: 'Status' }],
+        nursingProcedures.map((np: any) => ({
+          cells: [
+            np.description,
+            np.status === 'completed' ? (np.nurse_name || '—') : `Ordered: ${np.ordered_by_name || '—'}`,
+            new Date(np.performed_at).toLocaleString(),
+            (np.status || '—').replace(/_/g, ' '),
+          ],
+        }))
+      ),
+    ].join('\n') : '';
+
     const prescriptions = s.prescriptions || [];
     const prescriptionsHTML = prescriptions.length > 0 ? [
       '<div class="ic-section-title">Medications Prescribed</div>',
@@ -1101,6 +1117,7 @@ export default function LISTestOrders() {
       '<div class="ic-section-title">Tests Ordered</div>',
       testsHTML,
       resultSectionsHTML,
+      nursingHTML,
       prescriptionsHTML,
       radiologyHTML,
       docTemplate.buildSignatures([
@@ -3161,6 +3178,34 @@ export default function LISTestOrders() {
                           </div>
                         ) : (
                           <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg">No medications prescribed on this visit.</div>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                          <Syringe className="w-3.5 h-3.5" /> Nursing Procedures ({(selectedSummary.nursing_procedures || []).length})
+                        </p>
+                        {(selectedSummary.nursing_procedures || []).length > 0 ? (
+                          <div className="border rounded-lg divide-y">
+                            {selectedSummary.nursing_procedures.map((np: any) => (
+                              <div key={np.id} className="flex justify-between items-start gap-2 px-3 py-2 text-sm">
+                                <div>
+                                  <span className="font-medium">{np.description}</span>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {np.status === 'completed' ? `By ${np.nurse_name || 'Unknown'}` : `Ordered by ${np.ordered_by_name || 'Unknown'}`} · {new Date(np.performed_at).toLocaleString()}
+                                  </p>
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
+                                  np.status === 'completed' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                )}>
+                                  {np.status === 'completed' ? 'Completed' : 'Pending'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg">No nursing procedures logged on this visit.</div>
                         )}
                       </div>
 

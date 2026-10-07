@@ -47,6 +47,9 @@ const RadiologyRequestDetail = lazyWithRetry(() => import('./pages/radiology/Rad
 const LISQueue = lazyWithRetry(() => import('./pages/lis/LISQueue'));
 const Triage = lazyWithRetry(() => import('./pages/lis/Triage'));
 const NursingProcedures = lazyWithRetry(() => import('./pages/lis/NursingProcedures'));
+const NursingProcedureDetail = lazyWithRetry(() => import('./pages/lis/NursingProcedureDetail'));
+const Antenatal = lazyWithRetry(() => import('./pages/lis/Antenatal'));
+const AntenatalProfile = lazyWithRetry(() => import('./pages/lis/AntenatalProfile'));
 const LISCollection = lazyWithRetry(() => import('./pages/lis/LISCollection'));
 const LISResultsEntry = lazyWithRetry(() => import('./pages/lis/LISResultsEntry'));
 const LISManagerReview = lazyWithRetry(() => import('./pages/lis/LISManagerReview'));
@@ -373,8 +376,23 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/nursing/procedures" element={
-        <ProtectedRoute requiredPrivilege="nursing.procedures.write">
+        <ProtectedRoute requiredPrivilege={["nursing.procedures.write", "nursing.procedures.order"]}>
           <NursingProcedures />
+        </ProtectedRoute>
+      } />
+      <Route path="/nursing/procedures/:participantId" element={
+        <ProtectedRoute requiredPrivilege={["nursing.procedures.write", "nursing.procedures.order"]}>
+          <NursingProcedureDetail />
+        </ProtectedRoute>
+      } />
+      <Route path="/nursing/antenatal" element={
+        <ProtectedRoute requiredPrivilege="antenatal.write">
+          <Antenatal />
+        </ProtectedRoute>
+      } />
+      <Route path="/nursing/antenatal/:id" element={
+        <ProtectedRoute requiredPrivilege="antenatal.write">
+          <AntenatalProfile />
         </ProtectedRoute>
       } />
       <Route path="/lis/orders" element={
