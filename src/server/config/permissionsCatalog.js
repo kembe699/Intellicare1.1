@@ -110,6 +110,7 @@ const CATALOG = [
   ['lis.clinical.write', 'Manage LIS orders', 'lis', 'Create an order, add tests, notes, close an order', ['admin', 'doctor', 'reception']],
   ['lis.clinical.read', 'View LIS orders', 'lis', 'View orders and visit summaries', ['admin', 'doctor', 'reception', 'lab']],
   ['lis.triage.write', 'Enter triage vitals', 'lis', 'Record nurse triage vitals on an order', ['admin', 'nurse']],
+  ['nursing.procedures.write', 'Manage nursing procedures', 'lis', 'Record injections, minor procedures, and dressings performed by a nurse', ['admin', 'nurse']],
   ['lis.specimen.write', 'Manage specimens', 'lis', 'Collect, dispatch, QC, route specimens; enter results', ['admin', 'lab']],
   ['lis.results.review', 'Review LIS results', 'lis', 'Manager review of pending results', ['admin', 'lab']],
   ['lis.results.read', 'View LIS result history', 'lis', 'View specimen/result history', ['admin', 'lab', 'doctor']],
