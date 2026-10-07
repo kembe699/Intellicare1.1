@@ -54,7 +54,8 @@ import {
   CalendarDays,
   HelpCircle,
   Scissors,
-  CalendarClock
+  CalendarClock,
+  Syringe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -86,7 +87,6 @@ const navItems: NavItem[] = [
   { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read' },
   { label: 'Radiology', href: '/radiology', icon: Scan, privilege: 'radiology.read' },
   { label: 'Queue Display', href: '/lis/queue', icon: Users, privilege: 'lis.queue.write' },
-  { label: 'Triage', href: '/triage', icon: Activity, privilege: 'lis.triage.write' },
   { label: 'Patient Referral', href: '/patient-referrals', icon: ArrowLeftRight, privilege: 'pages.patient_referral.view' },
   // "Laboratory" (legacy /laboratory page) intentionally removed — it's a
   // disconnected, effectively-unused parallel system (lab_requests/lab_results
@@ -196,6 +196,18 @@ const theatreDropdown: NavDropdown = {
   ]
 };
 
+// Triage moved here from a flat top-level link — grouping it with the new
+// Nursing Procedures page gives nursing staff one place for both, instead
+// of a single-item "Triage" link sitting loose in the main list.
+const nursingStationDropdown: NavDropdown = {
+  label: 'Nursing Station',
+  icon: Syringe,
+  items: [
+    { label: 'Triage', href: '/triage', icon: Activity, privilege: 'lis.triage.write' },
+    { label: 'Nursing Procedures', href: '/nursing/procedures', icon: Syringe, privilege: 'nursing.procedures.write' },
+  ]
+};
+
 const inpatientDropdown: NavDropdown = {
   label: 'Inpatient',
   icon: BedDouble,
@@ -247,6 +259,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const [lisOpen, setLisOpen] = useState(lisDropdown.items.some(item => location.pathname.startsWith(item.href)));
   const [theatreOpen, setTheatreOpen] = useState(theatreDropdown.items.some(item => location.pathname.startsWith(item.href)));
   const [inpatientOpen, setInpatientOpen] = useState(location.pathname.startsWith('/inpatient'));
+  const [nursingStationOpen, setNursingStationOpen] = useState(nursingStationDropdown.items.some(item => location.pathname.startsWith(item.href)));
   const [pendingRxCount, setPendingRxCount] = useState(0);
 
   // Fetch pending prescription count for pharmacy badge
@@ -333,13 +346,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const showAccounting = dropdownVisible(accountingDropdown);
   const showInventory = dropdownVisible(inventoryDropdown);
   const showInpatient = dropdownVisible(inpatientDropdown);
+  const showNursingStation = dropdownVisible(nursingStationDropdown);
   const showTheatre = dropdownVisible(theatreDropdown);
   const hasNavLink = (href: string) => filteredNavItems.some(i => i.href === href);
 
   // A section label (e.g. "CLINICAL WORKFLOW") should never render on its own with nothing
   // visible underneath it — that reads as "you almost have access" to a role that has none.
   // Each flag mirrors exactly the set of items rendered under that heading below.
-  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || hasNavLink('/triage') || showInpatient || showTheatre || showLIS || showPharmacy);
+  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || showNursingStation || showInpatient || showTheatre || showLIS || showPharmacy);
   const showBillingFinanceSection = !!(showPatientsBill || showAccounting);
   const showSupplyChainSection = !!(showInventory || showProcurement);
   const showAnalyticsAdminSection = !!(hasNavLink('/reports') || showSetup);
@@ -451,8 +465,44 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   {/* 2.1 Queue Display (flat link) — patient waits here after registration, before being seen */}
                   {renderNavLink('/lis/queue')}
 
-                  {/* 2.2 Triage (flat link) — nurse records vitals on a queued patient before the doctor sees them */}
-                  {renderNavLink('/triage')}
+                  {/* 2.2 Nursing Station — Triage (vitals on a queued patient before the doctor
+                      sees them) + Nursing Procedures (injections, minor procedures, dressings) */}
+                  {showNursingStation && (
+                    <div className="pt-0.5">
+                      <button
+                        onClick={() => setNursingStationOpen(!nursingStationOpen)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          nursingStationDropdown.items.some(item => location.pathname.startsWith(item.href))
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Syringe className="w-4 h-4" />
+                          <span className="font-medium leading-none">{nursingStationDropdown.label}</span>
+                        </div>
+                        <ChevronDown className={cn("w-4 h-4 transition-transform", nursingStationOpen && "rotate-180")} />
+                      </button>
+                      {nursingStationOpen && (
+                        <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
+                          {nursingStationDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname.startsWith(item.href);
+                            return (
+                              <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                  isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                                )}
+                              >
+                                <Icon className="w-4 h-4" /><span>{item.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* 3. Clinical (flat link) — the doctor's encounter */}
                   {renderNavLink('/lis/orders')}
