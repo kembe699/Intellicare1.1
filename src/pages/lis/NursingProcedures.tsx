@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Syringe, Check, Loader2, ListChecks } from 'lucide-react';
+import { Syringe, Check, Loader2, ListChecks, Plus, X } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,7 @@ interface NursingProcedure {
 }
 
 interface NursingService { id: string; service_name: string; price: string; }
+interface OrderItem { key: string; service_id: string; service_name: string; price: string; procedure_type: string; notes: string; }
 
 function StatusPill({ status }: { status: string }) {
   const done = status === 'completed';
@@ -73,11 +74,14 @@ export default function NursingProcedures() {
   const [loadingLog, setLoadingLog] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Order form (doctor / reception)
+  // Order form (doctor / reception) — a patient can need several things done
+  // at once (e.g. a dressing AND an injection), so items are built up into a
+  // cart before one submission orders and bills all of them together.
   const [orderParticipantId, setOrderParticipantId] = useState('');
   const [orderServiceId, setOrderServiceId] = useState('');
   const [orderProcedureType, setOrderProcedureType] = useState('injection');
   const [orderNotes, setOrderNotes] = useState('');
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
   // Quick note form (nurse)
   const [noteParticipantId, setNoteParticipantId] = useState('');
@@ -113,27 +117,43 @@ export default function NursingProcedures() {
 
   useEffect(() => { fetchLog(); }, []);
 
-  const handleOrder = async () => {
-    if (!orderParticipantId) { toast.error('Select a patient'); return; }
+  const handleAddItem = () => {
     if (!orderServiceId) { toast.error('Select a procedure from the catalog'); return; }
+    const service = services.find(s => s.id === orderServiceId);
+    if (!service) return;
+    setOrderItems(prev => [...prev, {
+      key: `${orderServiceId}-${Date.now()}`, service_id: orderServiceId, service_name: service.service_name,
+      price: service.price, procedure_type: orderProcedureType, notes: orderNotes.trim(),
+    }]);
+    setOrderServiceId(''); setOrderProcedureType('injection'); setOrderNotes('');
+  };
+
+  const removeOrderItem = (key: string) => setOrderItems(prev => prev.filter(i => i.key !== key));
+
+  const handlePlaceOrder = async () => {
+    if (!orderParticipantId) { toast.error('Select a patient'); return; }
+    if (orderItems.length === 0) { toast.error('Add at least one procedure to the order'); return; }
     setSaving(true);
     try {
       const res = await authFetch('/api/nursing-procedures/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ participant_id: orderParticipantId, service_id: orderServiceId, procedure_type: orderProcedureType, notes: orderNotes.trim() || undefined }),
+        body: JSON.stringify({
+          participant_id: orderParticipantId,
+          items: orderItems.map(i => ({ service_id: i.service_id, procedure_type: i.procedure_type, notes: i.notes || undefined })),
+        }),
       });
       if (res.ok) {
-        toast.success('Procedure ordered — billed and queued for a nurse to carry out');
-        setOrderParticipantId(''); setOrderServiceId(''); setOrderProcedureType('injection'); setOrderNotes('');
+        toast.success(`${orderItems.length} procedure${orderItems.length > 1 ? 's' : ''} ordered — billed and queued for a nurse to carry out`);
+        setOrderParticipantId(''); setOrderItems([]);
         fetchLog();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to order procedure');
+        toast.error(err.error || 'Failed to order procedures');
       }
     } catch {
-      toast.error('Network error ordering procedure');
+      toast.error('Network error ordering procedures');
     } finally {
       setSaving(false);
     }
@@ -185,8 +205,8 @@ export default function NursingProcedures() {
           <div className="lg:col-span-1 space-y-6">
             {canOrder && (
               <div className="bg-card rounded-lg border shadow-sm p-5 space-y-3">
-                <h3 className="text-sm font-semibold flex items-center gap-1.5"><Syringe className="w-4 h-4" /> Order a Procedure</h3>
-                <p className="text-xs text-muted-foreground">Billed immediately — a nurse will carry it out and mark it complete.</p>
+                <h3 className="text-sm font-semibold flex items-center gap-1.5"><Syringe className="w-4 h-4" /> Order Procedures</h3>
+                <p className="text-xs text-muted-foreground">Add everything this patient needs done, then place one order — billed immediately, a nurse carries it out and marks each one complete.</p>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground">Patient</label>
                   <Combobox
@@ -198,28 +218,52 @@ export default function NursingProcedures() {
                     className="mt-1 h-9"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Procedure (catalog)</label>
-                  <Combobox
-                    options={services.map(s => ({ value: s.id, label: `${s.service_name} — ${parseFloat(s.price).toLocaleString()}` }))}
-                    value={orderServiceId}
-                    onChange={setOrderServiceId}
-                    placeholder={services.length === 0 ? 'No Nursing services set up' : 'Select procedure...'}
-                    searchPlaceholder="Search..."
-                    className="mt-1 h-9"
-                  />
-                  {services.length === 0 && <p className="text-[11px] text-muted-foreground mt-1">Set these up under Setup → Services (category: Nursing).</p>}
+
+                {orderItems.length > 0 && (
+                  <div className="space-y-1.5 border rounded-lg p-2 bg-muted/20">
+                    {orderItems.map(item => (
+                      <div key={item.key} className="flex items-start justify-between gap-2 text-xs bg-card rounded-md border px-2.5 py-1.5">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{item.service_name} <span className="text-muted-foreground">({PROCEDURE_TYPE_LABEL[item.procedure_type]})</span></p>
+                          {item.notes && <p className="text-muted-foreground truncate italic">"{item.notes}"</p>}
+                        </div>
+                        <button type="button" onClick={() => removeOrderItem(item.key)} className="text-muted-foreground hover:text-foreground shrink-0">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2 border-t pt-3">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Procedure (catalog)</label>
+                    <Combobox
+                      options={services.map(s => ({ value: s.id, label: `${s.service_name} — ${parseFloat(s.price).toLocaleString()}` }))}
+                      value={orderServiceId}
+                      onChange={setOrderServiceId}
+                      placeholder={services.length === 0 ? 'No Nursing services set up' : 'Select procedure...'}
+                      searchPlaceholder="Search..."
+                      className="mt-1 h-9"
+                    />
+                    {services.length === 0 && <p className="text-[11px] text-muted-foreground mt-1">Set these up under Setup → Services (category: Nursing).</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Type</label>
+                    <Combobox options={PROCEDURE_TYPE_OPTIONS} value={orderProcedureType} onChange={setOrderProcedureType} searchPlaceholder="Search..." className="mt-1 h-9" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Notes</label>
+                    <Textarea placeholder="Optional instructions for the nurse" value={orderNotes} onChange={e => setOrderNotes(e.target.value)} rows={2} className="mt-1" />
+                  </div>
+                  <Button type="button" variant="outline" className="w-full gap-1.5" onClick={handleAddItem}>
+                    <Plus className="w-4 h-4" /> Add to Order
+                  </Button>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Type</label>
-                  <Combobox options={PROCEDURE_TYPE_OPTIONS} value={orderProcedureType} onChange={setOrderProcedureType} searchPlaceholder="Search..." className="mt-1 h-9" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Notes</label>
-                  <Textarea placeholder="Optional instructions for the nurse" value={orderNotes} onChange={e => setOrderNotes(e.target.value)} rows={2} className="mt-1" />
-                </div>
-                <Button className="w-full gap-1.5" disabled={saving} onClick={handleOrder}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Place Order
+
+                <Button className="w-full gap-1.5" disabled={saving || orderItems.length === 0} onClick={handlePlaceOrder}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Place Order{orderItems.length > 0 ? ` (${orderItems.length})` : ''}
                 </Button>
               </div>
             )}
