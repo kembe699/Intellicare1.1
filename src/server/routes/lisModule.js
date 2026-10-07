@@ -580,6 +580,37 @@ router.put('/orders/:id/triage', authorize('lis.triage.write'), async (req, res)
   }
 });
 
+// Clinical Notes, editable directly from Visit Summary — same vitals JSON
+// blob the "New Order" form and triage both write to (history of
+// presenting illness, past history fields, allergies, impressions, and
+// optionally gynae/antenatal fields), but — like triage above, and
+// deliberately unlike POST /orders — never touches status/doctor_id, so
+// editing notes after the fact can't silently reopen a closed visit.
+// Follows this file's established convention: the client loads the
+// existing vitals object, merges its own fields into it in form state, and
+// submits the WHOLE object back — same as how "New Order" already updates
+// an existing order without clobbering what triage put there first.
+router.put('/orders/:id/clinical-notes', authorize('lis.clinical.write'), async (req, res) => {
+  const { sequelize: db } = req.models;
+  const { id } = req.params;
+  const { vitals } = req.body;
+  try {
+    const [[order]] = await db.query(`SELECT status FROM lis_test_orders WHERE id = ?`, { replacements: [id] });
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    if (order.status === 'closed') {
+      return res.status(409).json({ success: false, error: 'This visit is closed and can no longer be edited.' });
+    }
+    await db.query(
+      `UPDATE lis_test_orders SET vitals = ?, updated_at = NOW() WHERE id = ?`,
+      { replacements: [JSON.stringify(vitals || {}), id] }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving clinical notes:', error);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
 // MySQL's affectedRows (without the CLIENT_FOUND_ROWS connection flag, which this app
 // doesn't set) reflects rows actually *changed*, not rows *matched* — so relying on it to
 // distinguish "no such id" from "id exists, nothing to change" produces a false 404 on any

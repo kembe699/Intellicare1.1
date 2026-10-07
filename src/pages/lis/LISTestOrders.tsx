@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
+import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo, GynaeFieldsReadOnly } from '@/components/clinical/GynaeFields';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 const toLocalDateStr = (d: Date) => {
@@ -44,6 +45,33 @@ const GENDER_OPTIONS = [
   { value: 'Female', label: 'Female' },
   { value: 'Other', label: 'Other' },
 ];
+
+const EMPTY_CLINICAL_NOTES_FORM = {
+  history_of_presenting_illness: '', medical_history: '', surgical_history: '',
+  family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '',
+  gynae: EMPTY_GYNAE_INFO as GynaeInfo,
+};
+
+// Visit Summary's editable Clinical Notes form only ever carries the notes/
+// history-style subset of the full vitals object (never the numeric vitals
+// triage/Record Vitals write) — pulling just that subset out, pre-filled
+// from whatever's already saved, is what lets Save merge its own fields
+// back into the order's vitals without touching anything else already there.
+function buildClinicalNotesForm(existingVitals: any) {
+  const v = existingVitals || {};
+  return {
+    ...EMPTY_CLINICAL_NOTES_FORM,
+    history_of_presenting_illness: v.history_of_presenting_illness || '',
+    medical_history: v.medical_history || '',
+    surgical_history: v.surgical_history || '',
+    family_history: v.family_history || '',
+    social_history: v.social_history || '',
+    economic_history: v.economic_history || '',
+    allergies: v.allergies || '',
+    impressions: v.impressions || '',
+    gynae: { ...EMPTY_GYNAE_INFO, ...(v.gynae || {}) },
+  };
+}
 
 // dpoc-only quick registration (see the "Register New Patient" button/dialog below): a
 // deliberately minimal, all-mandatory form for fast walk-in intake — full name, age,
@@ -127,8 +155,15 @@ export default function LISTestOrders() {
     height: '', respiratory_rate: '', spo2: '', fasting_status: 'No', chief_complaints: [] as string[],
     history_of_presenting_illness: '', medical_history: '', surgical_history: '',
     family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '',
+    gynae: EMPTY_GYNAE_INFO as GynaeInfo,
   };
   const [vitals, setVitals] = useState(EMPTY_VITALS);
+  // Visit Summary's own editable Clinical Notes (separate from the "Place
+  // Order" vitals form's own `vitals` state above) — see openVisitSummary
+  // and buildClinicalNotesForm.
+  const [editingClinicalNotes, setEditingClinicalNotes] = useState(false);
+  const [clinicalNotesForm, setClinicalNotesForm] = useState(EMPTY_CLINICAL_NOTES_FORM);
+  const [savingClinicalNotes, setSavingClinicalNotes] = useState(false);
   // Set only when the currently-selected queued patient's vitals came from a nurse's
   // triage (not typed by the doctor themselves) — purely informational, shown next to the
   // Vitals section so the doctor knows where the pre-filled numbers came from.
@@ -334,6 +369,8 @@ export default function LISTestOrders() {
     setRxLines([]);
     setRxDrugId(''); setRxQty('1'); setRxDose(''); setRxFrequency(''); setRxDuration('');
     setReqServiceSelected([]); setReqServiceQuery('');
+    setEditingClinicalNotes(false);
+    setClinicalNotesForm(buildClinicalNotesForm(summary.vitals));
     fetchPharmacyDrugs();
     if (labTests.length === 0) fetchLabTests();
     if (services.length === 0) fetchServices();
@@ -549,6 +586,37 @@ export default function LISTestOrders() {
       }
     } catch (e) {
       console.error('Failed to refresh visit summary', e);
+    }
+  };
+
+  // Merges clinicalNotesForm's fields into whatever's already in this order's
+  // vitals (triage's own numeric BP/pulse/etc, if any) rather than replacing
+  // the whole object — see PUT /orders/:id/clinical-notes's own comment in
+  // lisModule.js for why the server does a plain overwrite and the client is
+  // what's responsible for carrying the rest of vitals forward.
+  const handleSaveClinicalNotes = async () => {
+    if (!selectedSummary || savingClinicalNotes) return;
+    setSavingClinicalNotes(true);
+    try {
+      const mergedVitals = { ...(selectedSummary.vitals || {}), ...clinicalNotesForm };
+      const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/clinical-notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ vitals: mergedVitals }),
+      });
+      if (res.ok) {
+        toast.success('Clinical notes saved');
+        setEditingClinicalNotes(false);
+        await refreshSelectedSummary();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to save clinical notes');
+      }
+    } catch {
+      toast.error('Network error saving clinical notes');
+    } finally {
+      setSavingClinicalNotes(false);
     }
   };
 
@@ -2153,6 +2221,10 @@ export default function LISTestOrders() {
                     />
                   </div>
 
+                  {selectedParticipant?.gender?.toLowerCase() === 'female' && (
+                    <GynaeFields value={vitals.gynae} onChange={(gynae) => setVitals({ ...vitals, gynae })} />
+                  )}
+
                   <div className="sticky bottom-0 -mx-4 -mb-4 px-4 pb-4 pt-4 flex justify-end border-t mt-4 bg-background">
                     <Button onClick={() => setMiddleStep(2)} className="w-full sm:w-auto">
                       Next: Select Tests <ArrowRight className="w-4 h-4 ml-2" />
@@ -2877,7 +2949,70 @@ export default function LISTestOrders() {
                         </div>
                       )}
 
-                      {[
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">Clinical Notes</p>
+                        {selectedSummary.status !== 'closed' && !editingClinicalNotes && (
+                          <Button variant="outline" size="sm" onClick={() => setEditingClinicalNotes(true)}>Edit Clinical Notes</Button>
+                        )}
+                      </div>
+
+                      {editingClinicalNotes && (
+                        <div className="space-y-3 border rounded-lg p-3 bg-card">
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">History of Presenting Illness</label>
+                            <Textarea
+                              placeholder="Enter history of presenting illness"
+                              className="resize-none mt-1"
+                              rows={2}
+                              value={clinicalNotesForm.history_of_presenting_illness}
+                              onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, history_of_presenting_illness: e.target.value })}
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Medical History</label>
+                              <Textarea placeholder="Enter medical history" className="resize-none mt-1" rows={2} value={clinicalNotesForm.medical_history} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, medical_history: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Surgical History</label>
+                              <Textarea placeholder="Enter surgical history" className="resize-none mt-1" rows={2} value={clinicalNotesForm.surgical_history} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, surgical_history: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Family History</label>
+                              <Textarea placeholder="Enter family history" className="resize-none mt-1" rows={2} value={clinicalNotesForm.family_history} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, family_history: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Social History</label>
+                              <Textarea placeholder="Enter social history" className="resize-none mt-1" rows={2} value={clinicalNotesForm.social_history} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, social_history: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Economic History</label>
+                              <Textarea placeholder="Enter economic history" className="resize-none mt-1" rows={2} value={clinicalNotesForm.economic_history} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, economic_history: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Allergies</label>
+                              <Textarea placeholder="Enter allergy" className="resize-none mt-1" rows={2} value={clinicalNotesForm.allergies} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, allergies: e.target.value })} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
+                            <Textarea placeholder="Enter your impression..." className="resize-none mt-1" rows={2} value={clinicalNotesForm.impressions} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, impressions: e.target.value })} />
+                          </div>
+
+                          {selectedSummary.gender?.toLowerCase() === 'female' && (
+                            <GynaeFields value={clinicalNotesForm.gynae} onChange={(gynae) => setClinicalNotesForm({ ...clinicalNotesForm, gynae })} />
+                          )}
+
+                          <div className="flex justify-end gap-2 pt-1">
+                            <Button variant="outline" onClick={() => { setEditingClinicalNotes(false); setClinicalNotesForm(buildClinicalNotesForm(selectedSummary.vitals)); }}>Cancel</Button>
+                            <Button onClick={handleSaveClinicalNotes} disabled={savingClinicalNotes}>
+                              {savingClinicalNotes ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />} Save
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!editingClinicalNotes && [
                         ['History of Presenting Illness', selectedSummary.vitals?.history_of_presenting_illness],
                         ['Medical History', selectedSummary.vitals?.medical_history],
                         ['Surgical History', selectedSummary.vitals?.surgical_history],
@@ -2943,12 +3078,14 @@ export default function LISTestOrders() {
                         </div>
                       )}
 
-                      {selectedSummary.vitals?.impressions && (
+                      {!editingClinicalNotes && selectedSummary.vitals?.impressions && (
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Impressions</p>
                           <p className="text-sm p-3 border rounded-lg bg-card">{selectedSummary.vitals.impressions}</p>
                         </div>
                       )}
+
+                      {!editingClinicalNotes && <GynaeFieldsReadOnly value={selectedSummary.vitals?.gynae || {}} />}
 
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
