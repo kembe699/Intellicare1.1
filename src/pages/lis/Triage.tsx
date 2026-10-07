@@ -4,13 +4,16 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { toast } from 'sonner';
+import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo } from '@/components/clinical/GynaeFields';
 
 const EMPTY_VITALS = {
   blood_pressure: '', pulse: '', temperature: '', respiratory_rate: '',
-  weight: '', height: '', spo2: '', fasting_status: 'No',
+  weight: '', height: '', spo2: '', fasting_status: 'No', allergies: '',
+  gynae: EMPTY_GYNAE_INFO as GynaeInfo,
 };
 
 // Same field set/names as the doctor's "New Order" vitals form (LISTestOrders.tsx) so a
@@ -25,7 +28,7 @@ const formatWaitTime = (createdAt: string) => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
-const hasVitals = (v: any) => !!v && Object.entries(v).some(([k, val]) => k !== 'fasting_status' && val !== '' && val != null);
+const hasVitals = (v: any) => !!v && Object.entries(v).some(([k, val]) => k !== 'fasting_status' && k !== 'gynae' && val !== '' && val != null);
 
 export default function Triage() {
   const [queue, setQueue] = useState<any[]>([]);
@@ -196,6 +199,21 @@ export default function Triage() {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Allergies</label>
+                <Textarea
+                  placeholder="Enter allergy"
+                  className="resize-none mt-1"
+                  rows={2}
+                  value={vitals.allergies}
+                  onChange={e => setVitals({ ...vitals, allergies: e.target.value })}
+                />
+              </div>
+
+              {selected?.gender?.toLowerCase() === 'female' && (
+                <GynaeFields value={vitals.gynae} onChange={(gynae) => setVitals({ ...vitals, gynae })} />
+              )}
 
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button variant="outline" disabled={!selected} onClick={() => { setSelected(null); setVitals(EMPTY_VITALS); }}>Cancel</Button>
