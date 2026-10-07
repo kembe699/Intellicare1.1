@@ -3253,8 +3253,12 @@ export default function LISTestOrders() {
                       </div>
                     </div>
 
-                    {/* RIGHT: Prescribe Medicine & Diagnosis */}
-                    <div className="lg:col-span-1 space-y-6">
+                    {/* RIGHT: Prescribe Medicine & Diagnosis — sticky so it stays in view
+                        while the (usually longer) Visit details column on the left scrolls;
+                        its own max-height + overflow-y-auto is a safety net for when its own
+                        content (diagnosis + prescribe + request service) runs taller than the
+                        visible viewport, so nothing in it becomes permanently unreachable. */}
+                    <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-0 lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto lg:pr-1">
                     {selectedSummary.status === 'closed' ? (
                       <div className="border border-dashed rounded-lg p-4 text-center text-sm text-muted-foreground bg-card">
                         <CheckCircle2 className="w-5 h-5 mx-auto mb-2 text-slate-400" />
