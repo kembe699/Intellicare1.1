@@ -55,7 +55,8 @@ import {
   HelpCircle,
   Scissors,
   CalendarClock,
-  Syringe
+  Syringe,
+  HeartPulse
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -204,7 +205,8 @@ const nursingStationDropdown: NavDropdown = {
   icon: Syringe,
   items: [
     { label: 'Triage', href: '/triage', icon: Activity, privilege: 'lis.triage.write' },
-    { label: 'Nursing Procedures', href: '/nursing/procedures', icon: Syringe, privilege: 'nursing.procedures.write' },
+    { label: 'Nursing Procedures', href: '/nursing/procedures', icon: Syringe, privilege: ['nursing.procedures.write', 'nursing.procedures.order'] },
+    { label: 'Antenatal Care', href: '/nursing/antenatal', icon: HeartPulse, privilege: 'antenatal.write' },
   ]
 };
 

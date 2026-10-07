@@ -564,7 +564,7 @@ router.put('/orders/:id/triage', authorize('lis.triage.write'), async (req, res)
   const { id } = req.params;
   const { vitals } = req.body;
   try {
-    const [[order]] = await db.query(`SELECT status FROM lis_test_orders WHERE id = ?`, { replacements: [id] });
+    const [[order]] = await db.query(`SELECT status, participant_id, clinic_id, branch_id FROM lis_test_orders WHERE id = ?`, { replacements: [id] });
     if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
     if (order.status === 'closed') {
       return res.status(409).json({ success: false, error: 'This visit is closed and can no longer be triaged.' });
@@ -573,6 +573,11 @@ router.put('/orders/:id/triage', authorize('lis.triage.write'), async (req, res)
       `UPDATE lis_test_orders SET vitals = ?, triaged_by = ?, triaged_at = NOW(), updated_at = NOW() WHERE id = ?`,
       { replacements: [JSON.stringify(vitals || {}), req.user?.id || null, id] }
     );
+    const { ensureAntenatalRegistration } = require('./antenatal');
+    await ensureAntenatalRegistration(db, {
+      participantId: order.participant_id, clinicId: order.clinic_id, branchId: order.branch_id,
+      gynae: vitals?.gynae, registeredBy: req.user?.id,
+    });
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving triage:', error);
@@ -595,7 +600,7 @@ router.put('/orders/:id/clinical-notes', authorize('lis.clinical.write'), async 
   const { id } = req.params;
   const { vitals } = req.body;
   try {
-    const [[order]] = await db.query(`SELECT status FROM lis_test_orders WHERE id = ?`, { replacements: [id] });
+    const [[order]] = await db.query(`SELECT status, participant_id, clinic_id, branch_id FROM lis_test_orders WHERE id = ?`, { replacements: [id] });
     if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
     if (order.status === 'closed') {
       return res.status(409).json({ success: false, error: 'This visit is closed and can no longer be edited.' });
@@ -604,6 +609,11 @@ router.put('/orders/:id/clinical-notes', authorize('lis.clinical.write'), async 
       `UPDATE lis_test_orders SET vitals = ?, updated_at = NOW() WHERE id = ?`,
       { replacements: [JSON.stringify(vitals || {}), id] }
     );
+    const { ensureAntenatalRegistration } = require('./antenatal');
+    await ensureAntenatalRegistration(db, {
+      participantId: order.participant_id, clinicId: order.clinic_id, branchId: order.branch_id,
+      gynae: vitals?.gynae, registeredBy: req.user?.id,
+    });
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving clinical notes:', error);
@@ -835,6 +845,16 @@ router.post('/orders', authorize('lis.clinical.write'), async (req, res) => {
 
     await t.commit();
 
+    // Antenatal auto-registration — non-blocking, after commit so a failure
+    // here can never roll back an order that actually succeeded.
+    try {
+      const { ensureAntenatalRegistration } = require('./antenatal');
+      await ensureAntenatalRegistration(db, {
+        participantId: participant_id, clinicId: req.user?.clinicId || 1, branchId: getCreateBranchId(req),
+        gynae: vitals?.gynae, registeredBy: req.user?.id,
+      });
+    } catch (e) { /* non-blocking */ }
+
     // Notify lab staff — non-blocking, and after commit so a notification
     // failure can never roll back an order that actually succeeded. Skipped
     // entirely when no tests were ordered (a doctor saving vitals/notes/a
@@ -1033,11 +1053,34 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
       `, { replacements: { participantIds } });
     }
 
+    // Nursing Procedures (injections, dressings, minor procedures) — matched
+    // the same best-effort way as prescriptions above: by order_id when the
+    // entry was tied to this specific visit, else by patient + same calendar
+    // day (most entries today have no order_id, since they're logged from
+    // the standalone /nursing/procedures queue, not from this visit screen).
+    let nursingProcedures = [];
+    if (participantIds.length > 0) {
+      [nursingProcedures] = await db.query(`
+        SELECT np.id, np.order_id, np.participant_id, np.entry_type, np.status, np.procedure_type,
+               np.description, np.notes, np.performed_at, np.created_at,
+               nu.display_name as nurse_name, ou.display_name as ordered_by_name
+        FROM nursing_procedures np
+        LEFT JOIN users nu ON nu.id = np.nurse_id
+        LEFT JOIN users ou ON ou.id = np.ordered_by
+        WHERE np.participant_id IN (:participantIds)
+        ORDER BY np.created_at DESC
+      `, { replacements: { participantIds } });
+    }
+
     const summaries = orders.map(o => {
       const tests = specimensByOrder[o.order_id] || [];
       const orderDay = new Date(o.created_at).toISOString().split('T')[0];
       const prescriptions = prescriptionLines.filter(pl =>
         pl.patient_id === o.participant_id && new Date(pl.prescription_date).toISOString().split('T')[0] === orderDay
+      );
+      const nursing = nursingProcedures.filter(np =>
+        np.order_id === o.order_id ||
+        (!np.order_id && np.participant_id === o.participant_id && new Date(np.created_at).toISOString().split('T')[0] === orderDay)
       );
       return {
         ...o,
@@ -1046,6 +1089,7 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
         tests_total: tests.length,
         tests_ready: tests.filter(t => t.status === 'approved').length,
         prescriptions,
+        nursing_procedures: nursing,
       };
     });
 
