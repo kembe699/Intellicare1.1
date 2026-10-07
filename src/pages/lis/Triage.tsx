@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Clock, Check, Loader2, X } from 'lucide-react';
+import { Activity, Clock, Check, Loader2, User } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -120,49 +120,56 @@ export default function Triage() {
 
   return (
     <AppLayout>
-      <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col gap-6">
-      <PageHeader title="Triage" icon={<Activity />} className="mb-0" />
+      <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
+      <PageHeader title="Triage" icon={<Activity />} className="mb-3" />
 
-      {/* Waiting area */}
-      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-primary" />
-          <h4 className="font-semibold text-sm text-foreground">Waiting Area ({sortedQueue.length})</h4>
-        </div>
-        <AdvancedDataTable<any>
-          data={sortedQueue}
-          keyExtractor={(p) => p.order_id}
-          loading={loading}
-          emptyMessage="No patients waiting"
-          searchable
-          pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
-          onRowClick={(p) => selectPatient(p)}
-          columns={columns}
-        />
-      </div>
-
-      {/* Vitals form — only once a patient is picked from the table above */}
-      {selected && (
-        <div className="bg-card rounded-lg border shadow-sm p-6 space-y-5">
-          <div className="flex justify-between items-start border-b pb-3">
-            <div>
-              <h3 className="font-semibold text-lg">{selected.first_name} {selected.last_name}</h3>
-              <p className="text-xs text-muted-foreground font-mono">{selected.participant_number}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Waiting area — list, left */}
+        <div className="lg:col-span-1">
+          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary" />
+              <h4 className="font-semibold text-sm text-foreground">Waiting ({sortedQueue.length})</h4>
             </div>
-            <div className="flex items-center gap-3">
-              {selected.triaged_by_name && (
+            <AdvancedDataTable<any>
+              data={sortedQueue}
+              keyExtractor={(p) => p.order_id}
+              loading={loading}
+              emptyMessage="No patients waiting"
+              searchable
+              pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+              onRowClick={(p) => selectPatient(p)}
+              columns={columns}
+            />
+          </div>
+        </div>
+
+        {/* Vitals form — right */}
+        <div className="lg:col-span-2">
+          <div className="bg-card rounded-lg border shadow-sm p-6 space-y-5">
+            <div className="flex justify-between items-start border-b pb-3">
+              <div>
+                {selected ? (
+                  <>
+                    <h3 className="font-semibold text-lg">{selected.first_name} {selected.last_name}</h3>
+                    <p className="text-xs text-muted-foreground font-mono">{selected.participant_number}</p>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <User className="w-4 h-4" />
+                    <p className="text-sm">Select a patient from the waiting list to record vitals.</p>
+                  </div>
+                )}
+              </div>
+              {selected?.triaged_by_name && (
                 <span className="text-[11px] text-muted-foreground text-right">
                   Previously triaged by {selected.triaged_by_name}
                   {selected.triaged_at && <><br />{new Date(selected.triaged_at).toLocaleString()}</>}
                 </span>
               )}
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSelected(null); setVitals(EMPTY_VITALS); }}>
-                <X className="w-4 h-4" />
-              </Button>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold text-muted-foreground">Blood Pressure (mmHg)</label>
               <Input placeholder="e.g. 120/80" value={vitals.blood_pressure} onChange={e => setVitals({ ...vitals, blood_pressure: e.target.value })} className="mt-1" />
@@ -203,30 +210,31 @@ export default function Triage() {
             </div>
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Allergies</label>
-            <Textarea
-              placeholder="Enter allergy"
-              className="resize-none mt-1"
-              rows={2}
-              value={vitals.allergies}
-              onChange={e => setVitals({ ...vitals, allergies: e.target.value })}
-            />
-          </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Allergies</label>
+              <Textarea
+                placeholder="Enter allergy"
+                className="resize-none mt-1"
+                rows={2}
+                value={vitals.allergies}
+                onChange={e => setVitals({ ...vitals, allergies: e.target.value })}
+              />
+            </div>
 
-          {selected?.gender?.toLowerCase() === 'female' && (
-            <GynaeFields value={vitals.gynae} onChange={(gynae) => setVitals({ ...vitals, gynae })} />
-          )}
+            {selected?.gender?.toLowerCase() === 'female' && (
+              <GynaeFields value={vitals.gynae} onChange={(gynae) => setVitals({ ...vitals, gynae })} />
+            )}
 
-          <div className="flex justify-end gap-2 pt-2 border-t">
-            <Button variant="outline" onClick={() => { setSelected(null); setVitals(EMPTY_VITALS); }}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-              Save Vitals
-            </Button>
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <Button variant="outline" disabled={!selected} onClick={() => { setSelected(null); setVitals(EMPTY_VITALS); }}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving || !selected}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                Save Vitals
+              </Button>
+            </div>
           </div>
         </div>
-      )}
+      </div>
       </div>
     </AppLayout>
   );
