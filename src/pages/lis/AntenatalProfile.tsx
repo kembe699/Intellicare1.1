@@ -148,14 +148,14 @@ export default function AntenatalProfile() {
       }
     );
 
-    const riskHTML = `<div class="ic-notes" style="border-color:#dc2626;"><strong>Risk Factors / Eligibility Assessment:</strong> ${profile.risk_notes ? profile.risk_notes : 'None identified at registration.'}</div>`;
+    const riskHTML = `<div style="margin-top:8px;font-size:9.5px;line-height:1.4;"><strong>Risk Factors / Eligibility Assessment:</strong> ${profile.risk_notes ? profile.risk_notes : 'None identified at registration.'}</div>`;
 
     const sortedVisits = [...profile.visits].sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
     const visitsHTML = docTemplate.buildTable(
       [
-        { label: 'No.', width: '28px' }, { label: 'Date' }, { label: 'GA (wks)' }, { label: 'Weight (kg)' }, { label: 'BP (mmHg)' },
-        { label: 'Fundal Ht (cm)' }, { label: 'FHR' }, { label: 'Presentation' },
-        { label: 'Urine Protein' }, { label: 'Urine Glucose' }, { label: 'Hb' }, { label: 'Remarks' }, { label: 'Next Appt.' }, { label: 'Seen By' },
+        { label: 'No.', width: '20px' }, { label: 'Date' }, { label: 'GA' }, { label: 'Wt (kg)' }, { label: 'BP' },
+        { label: 'Fundal Ht' }, { label: 'FHR' }, { label: 'Presentation' },
+        { label: 'U.Prot' }, { label: 'U.Gluc' }, { label: 'Hb' }, { label: 'Remarks' }, { label: 'Next Appt.' }, { label: 'Seen By' },
       ],
       sortedVisits.map((v, i) => ({
         cells: [
@@ -171,7 +171,7 @@ export default function AntenatalProfile() {
       }))
     );
 
-    const dangerSignsHTML = `<div class="ic-notes"><strong>Danger Signs — Return Immediately If:</strong> Severe headache or blurred vision &middot; Vaginal bleeding &middot; Severe abdominal pain &middot; Convulsions/fits &middot; High fever &middot; Reduced or no fetal movement &middot; Swelling of face/hands &middot; Breaking of waters</div>`;
+    const dangerSignsHTML = `<div style="margin-top:10px;font-size:9.5px;line-height:1.4;border-top:1px solid #e2e8f0;padding-top:8px;"><strong>Danger Signs — Return Immediately If:</strong> Severe headache or blurred vision &middot; Vaginal bleeding &middot; Severe abdominal pain &middot; Convulsions/fits &middot; High fever &middot; Reduced or no fetal movement &middot; Swelling of face/hands &middot; Breaking of waters</div>`;
 
     const bodyHTML = [
       infoHTML,
@@ -182,12 +182,29 @@ export default function AntenatalProfile() {
       docTemplate.buildSignatures([{ label: 'Attending Nurse / Midwife', name: user?.displayName || '' }]),
     ].join('\n');
 
+    // Scoped to just this document (buildDocument appends extraCSS after the
+    // shared stylesheet, so it never touches any other print — invoices,
+    // prescriptions, lab results, etc.). A WHO-style visit table runs wide
+    // (14 columns); the default sizes used for an invoice/prescription made
+    // this spill onto a second page, so everything here is sized down to
+    // keep the whole card on one.
     const html = docTemplate.buildDocument({
       title: 'Antenatal Card',
       docType: 'Antenatal Care Record (WHO Model)',
       docNumber: profile.registration_number,
       date: new Date(),
       bodyHTML,
+      extraCSS: `
+        body { font-size: 10px; }
+        .ic-info-box { padding: 8px 10px; }
+        .ic-info-row { font-size: 9px; margin-bottom: 2px; }
+        .ic-info-label { min-width: 80px; }
+        .ic-section-title { font-size: 10px; margin: 10px 0 6px 0; padding-bottom: 3px; }
+        .ic-table { margin-bottom: 6px; }
+        .ic-table th { font-size: 6.5px; padding: 4px 4px; }
+        .ic-table td { font-size: 7.5px; padding: 4px 4px; }
+        .ic-signatures { padding: 14px 20px 4px; margin-top: 10px; }
+      `,
       logoUrl: facilityInfo.facilityLogo || `${window.location.origin}/hjd-icon.png`,
       facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
       branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
