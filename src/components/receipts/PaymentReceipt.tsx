@@ -45,10 +45,19 @@ interface PaymentReceiptProps {
 const DIVIDER = '--------------------------------';
 const THICK_DIVIDER = '================================';
 
+// A client complaint that thermal receipts print faded led to two changes
+// here and in the matching print-window CSS below: light gray (#555/#666)
+// text barely registers on a thermal head — these printers are effectively
+// 1-bit (burn a dot dark or don't), so a mid-gray often prints as nearly
+// nothing rather than an actual visible gray — and regular (400) weight
+// strokes are thin enough to fade as the printhead wears. Every color here
+// is now solid black, and the default row weight is 600 instead of 400 —
+// still visually lighter than the explicit bold rows, but with strokes
+// thick enough to hold up on worn thermal hardware.
 const row = (label: string, value: string, bold = false): React.ReactNode => (
   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-    <span style={{ fontSize: '11px' }}>{label}</span>
-    <span style={{ fontSize: '11px', fontWeight: bold ? 700 : 400, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
+    <span style={{ fontSize: '12px', fontWeight: 600 }}>{label}</span>
+    <span style={{ fontSize: '12px', fontWeight: bold ? 700 : 600, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
   </div>
 );
 
@@ -74,17 +83,23 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
   const thermal: React.CSSProperties = {
     width: '302px',
     margin: '0 auto',
-    fontFamily: "'Courier New', Courier, monospace",
-    fontSize: '11px',
-    lineHeight: '1.45',
-    color: '#111',
+    // Courier New's thin, serif-ish strokes are part of what was fading on
+    // thermal paper — a plain bold sans-serif lays down a thicker, more
+    // uniform dot pattern per character, which holds up far better on a
+    // worn or lower-quality thermal head. Nothing on this receipt depends
+    // on monospace column alignment (it's all flex rows), so there's no
+    // layout cost to dropping it.
+    fontFamily: "Arial, Helvetica, sans-serif",
+    fontSize: '12px',
+    lineHeight: '1.5',
+    color: '#000',
     backgroundColor: '#fff',
     padding: '12px 10px 16px',
     boxSizing: 'border-box',
   };
 
   const center: React.CSSProperties = { textAlign: 'center' };
-  const divStyle: React.CSSProperties = { fontSize: '10px', color: '#555', textAlign: 'center', margin: '4px 0', letterSpacing: '0.5px' };
+  const divStyle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#000', textAlign: 'center', margin: '4px 0', letterSpacing: '0.5px' };
 
   return (
     <div className="thermal-receipt" style={thermal}>
@@ -92,14 +107,14 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       {/* ── Header ── */}
       <div style={center}>
         <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '1px' }}>{displayName}</div>
-        {branchName && <div style={{ fontSize: '10px', marginTop: '1px' }}>{branchName}</div>}
+        {branchName && <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '1px' }}>{branchName}</div>}
         <div style={{ fontSize: '10px', marginTop: '6px', fontWeight: 700, letterSpacing: '2px' }}>
           {isDepositOffset ? 'DEPOSIT SETTLEMENT CONFIRMATION' : 'PAYMENT RECEIPT'}
         </div>
       </div>
 
       {isDepositOffset && (
-        <div style={{ textAlign: 'center', fontSize: '10px', fontWeight: 700, border: '1px solid #111', padding: '3px 4px', margin: '6px 0 2px', letterSpacing: '0.5px' }}>
+        <div style={{ textAlign: 'center', fontSize: '10px', fontWeight: 700, border: '1px solid #000', padding: '3px 4px', margin: '6px 0 2px', letterSpacing: '0.5px' }}>
           NO CASH COLLECTED — SETTLED FROM PATIENT DEPOSIT
         </div>
       )}
@@ -131,16 +146,16 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
           <div key={(svc as any).id || i} style={{ marginBottom: '5px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600 }}>{name}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '10px', color: '#555' }}>{qty} x {fmt(unitPrice)}</span>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: '#000' }}>{qty} x {fmt(unitPrice)}</span>
               <span style={{ fontSize: '11px', fontWeight: 700 }}>{fmt(total)}</span>
             </div>
             {svc.discountLabel && (
-              <div style={{ fontSize: '10px', color: '#555' }}>Discount applied: {svc.discountLabel}</div>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: '#000' }}>Discount applied: {svc.discountLabel}</div>
             )}
           </div>
         );
       }) : (
-        <div style={{ fontSize: '10px', color: '#666', fontStyle: 'italic' }}>No service details available</div>
+        <div style={{ fontSize: '10px', fontWeight: 600, color: '#000', fontStyle: 'italic' }}>No service details available</div>
       )}
 
       <div style={divStyle}>{THICK_DIVIDER}</div>
@@ -158,7 +173,7 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       </div>
 
       {isPaid && (
-        <div style={{ textAlign: 'center', fontSize: '11px', fontWeight: 700, border: '1px solid #111', padding: '2px 0', margin: '4px 0', letterSpacing: '2px' }}>
+        <div style={{ textAlign: 'center', fontSize: '11px', fontWeight: 700, border: '1px solid #000', padding: '2px 0', margin: '4px 0', letterSpacing: '2px' }}>
           *** PAID IN FULL ***
         </div>
       )}
@@ -174,7 +189,7 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       {(payment.notes || payment.lease_details) && (
         <>
           <div style={divStyle}>{DIVIDER}</div>
-          <div style={{ fontSize: '10px', fontStyle: 'italic', marginTop: '2px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, fontStyle: 'italic', marginTop: '2px' }}>
             {payment.notes && <div>Note: {payment.notes}</div>}
             {payment.lease_details && <div>{payment.lease_details}</div>}
           </div>
@@ -186,8 +201,8 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       {/* ── Footer ── */}
       <div style={{ textAlign: 'center', marginTop: '4px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700 }}>Thank you for your visit!</div>
-        <div style={{ fontSize: '10px', marginTop: '2px' }}>Please keep this receipt for your records.</div>
-        <div style={{ fontSize: '9px', color: '#555', marginTop: '6px' }}>
+        <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '2px' }}>Please keep this receipt for your records.</div>
+        <div style={{ fontSize: '10px', fontWeight: 600, color: '#000', marginTop: '6px' }}>
           Ref: {receiptId} · {new Date().toLocaleDateString('en-GB')}
         </div>
       </div>
@@ -198,18 +213,23 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
 
 // ── Thermal Print ────────────────────────────────────────────────
 export const printThermalReceipt = (receiptElement: HTMLElement) => {
+  // Matches the on-screen styles above — a bold sans-serif, solid black, and
+  // a 600-weight floor instead of 400 — so what actually reaches the thermal
+  // printer isn't thinner than what the cashier previewed. print-color-adjust
+  // is kept forced to exact so the browser never lightens "black" for ink
+  // economy on what's already a 1-bit thermal head.
   const css = `
     @page { size: 80mm auto; margin: 3mm 2mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     html, body {
       margin: 0; padding: 0; background: #fff;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 11px; color: #111;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px; font-weight: 600; color: #000;
     }
     .thermal-receipt {
       width: 76mm; margin: 0 auto;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 11px; line-height: 1.45; color: #111;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px; font-weight: 600; line-height: 1.5; color: #000;
     }
     @media print {
       html, body { background: #fff; }

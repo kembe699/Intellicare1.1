@@ -35,6 +35,14 @@ interface POLineItem { line_number: number; item_name: string; description?: str
 interface UserProfile { id: string; displayName: string; email: string; role: string; signature: string | null; }
 const today = () => new Date().toISOString().split('T')[0];
 const APPROVAL_LEVELS = ['Approval 1', 'Authorization'];
+// Supplier bills / PO payments go through a separate, 3-level approval chain
+// (see approvalCount >= 3 below) — a distinct array because APPROVAL_LEVELS
+// above only has 2 entries for the daily-expense flow's 2-level chain.
+// Indexing APPROVAL_LEVELS[2] for the 3rd PO approval level used to resolve
+// to undefined, which printed as the literal word "UNDEFINED" on the voucher
+// (buildSignatures renders `${s.label}` with no guard, and .ic-sig-label is
+// text-transform: uppercase).
+const PO_APPROVAL_LEVELS = ['Checked By', 'Reviewed By', 'Approved By'];
 
 const EXPENSE_CATEGORIES = ['Doctor Fees','Allowance','Office Supplies','Administrative Expenses','Utilities','Maintenance','Transport','Catering','Medical Supplies','Cleaning','Security','Other'];
 const PAYMENT_METHODS = ['Cash','Bank Transfer','Cheque','Mobile Money'];
@@ -663,7 +671,7 @@ const DailyExpenses: React.FC = () => {
           ['', 'TOTAL', '', '', '', '', fmtC(parseFloat(String(bill.total_amount || 0)))]
         )
       : '';
-    const approvalsTableRows = approvals.map(a => ({ cells: [APPROVAL_LEVELS[a.approval_level - 1] || `Level ${a.approval_level}`, a.approved_by, new Date(a.approved_at).toLocaleDateString()] }));
+    const approvalsTableRows = approvals.map(a => ({ cells: [PO_APPROVAL_LEVELS[a.approval_level - 1] || `Level ${a.approval_level}`, a.approved_by, new Date(a.approved_at).toLocaleDateString()] }));
     const approvalsTable = approvals.length > 0
       ? `<div class="ic-section-title">Approvals</div>` + docTemplate.buildTable(
           [{ label: 'Level' }, { label: 'Approved By' }, { label: 'Date' }],
@@ -672,9 +680,9 @@ const DailyExpenses: React.FC = () => {
       : '';
     const signers = [
       { label: 'Prepared By', name: pay.paid_by || '' },
-      ...(approvals[0] ? [{ label: APPROVAL_LEVELS[0], name: approvals[0].approved_by, signature: approvals[0].signature || undefined }] : [{ label: APPROVAL_LEVELS[0], name: '' }]),
-      ...(approvals[1] ? [{ label: APPROVAL_LEVELS[1], name: approvals[1].approved_by, signature: approvals[1].signature || undefined }] : [{ label: APPROVAL_LEVELS[1], name: '' }]),
-      ...(approvals[2] ? [{ label: APPROVAL_LEVELS[2], name: approvals[2].approved_by, signature: approvals[2].signature || undefined }] : [{ label: APPROVAL_LEVELS[2], name: '' }]),
+      ...(approvals[0] ? [{ label: PO_APPROVAL_LEVELS[0], name: approvals[0].approved_by, signature: approvals[0].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[0], name: '' }]),
+      ...(approvals[1] ? [{ label: PO_APPROVAL_LEVELS[1], name: approvals[1].approved_by, signature: approvals[1].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[1], name: '' }]),
+      ...(approvals[2] ? [{ label: PO_APPROVAL_LEVELS[2], name: approvals[2].approved_by, signature: approvals[2].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[2], name: '' }]),
     ];
     const body = docTemplate.buildInfoGrid(
       { title: 'Payment Details', rows: [{ label: 'Voucher No', value: voucherNo, bold: true }, { label: 'PO Number', value: bill.po_number }, { label: 'Payment Date', value: new Date(pay.payment_date).toLocaleDateString() }, { label: 'Method', value: pay.payment_method }, { label: 'Reference', value: pay.reference_number || '-' }] },
@@ -701,7 +709,7 @@ const DailyExpenses: React.FC = () => {
       const a = approvals.find(ap => ap.approval_level === level);
       return {
         cells: [
-          APPROVAL_LEVELS[level - 1],
+          PO_APPROVAL_LEVELS[level - 1],
           a ? a.approved_by : '—',
           a ? new Date(a.approved_at).toLocaleDateString() : '—',
           a ? '✓ Approved' : 'Pending',
@@ -715,7 +723,7 @@ const DailyExpenses: React.FC = () => {
       ...[1, 2, 3].map(level => {
         const a = approvals.find(ap => ap.approval_level === level);
         return {
-          label: APPROVAL_LEVELS[level - 1],
+          label: PO_APPROVAL_LEVELS[level - 1],
           name: a?.approved_by || '',
           signature: a?.signature || undefined,
         };
@@ -1464,7 +1472,7 @@ const DailyExpenses: React.FC = () => {
                             {a ? '✓' : level}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-xs">{APPROVAL_LEVELS[level - 1]}</span>
+                            <span className="font-medium text-xs">{PO_APPROVAL_LEVELS[level - 1]}</span>
                             {a && <span className="text-xs text-green-700 ml-2">— {a.approved_by}{a.approved_by_title ? ` (${a.approved_by_title})` : ''}</span>}
                             {isNext && !a && <span className="text-xs text-primary ml-2">← Your approval</span>}
                           </div>
@@ -1477,7 +1485,7 @@ const DailyExpenses: React.FC = () => {
                     <>
                       <div className="text-sm font-medium text-primary bg-primary/10 border border-primary/30 rounded px-3 py-2 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 shrink-0" />
-                        Submitting: <strong>{APPROVAL_LEVELS[nextLevel - 1]}</strong>
+                        Submitting: <strong>{PO_APPROVAL_LEVELS[nextLevel - 1]}</strong>
                       </div>
 
                       {/* Auto-captured identity */}
