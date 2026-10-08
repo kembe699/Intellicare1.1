@@ -5,18 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
-  Users, Package, Pill, FlaskConical,
+  Users, Package,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
-  TrendingUp, LayoutDashboard, ClipboardList, Building2,
-  Stethoscope, BedDouble, ShieldCheck, FileSpreadsheet, Scissors, Truck,
-  Landmark, Boxes,
+  TrendingUp, LayoutDashboard, ShieldCheck, FileSpreadsheet,
 } from 'lucide-react';
 
+// Trimmed down to just these 6 at the user's request — Income Statement,
+// Accounting Reports, Fixed Assets Reports, Clinic/Department Performance,
+// Bed/Ward Occupancy, Theatre Report, Procurement Report, Laboratory
+// Report, Pharmacy Report, Doctor Performance and AR Aging were all pulled
+// out of the sidebar AND their routes (see App.tsx) — not deleted, just
+// unlinked, since a future pass will rebuild reporting in a more organized
+// way. Their page/route files are untouched on disk.
 const REPORT_GROUPS = [
   { label: 'Overview', color: 'text-white' },
   { label: 'Patients & Billing', color: 'text-white' },
-  { label: 'Clinical', color: 'text-white' },
-  { label: 'Operations', color: 'text-white' },
   { label: 'Inventory', color: 'text-white' },
   { label: 'Financial', color: 'text-white' },
   { label: 'Ministry of Health', color: 'text-white' },
@@ -26,33 +29,8 @@ const REPORT_GROUPS = [
 const REPORT_CATEGORIES = [
   { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, desc: 'Hospital-wide analytics at a glance', group: 'Overview' },
   { id: 'patients', label: 'Patient Report', icon: Users, desc: 'Visit volume, paid vs. owed', group: 'Patients & Billing' },
-  // Billing by User and Cancelled/Refunded dropped from the sidebar — both
-  // are now just one dropdown option inside Revenue Report (Revenue by User,
-  // Cancelled Receipts, Cancelled Invoices), same data, no separate page
-  // needed. Their routes/pages are untouched in case anything still links
-  // to them directly.
-  { id: 'ar-aging', label: 'Accounts Receivable Aging', icon: ClipboardList, desc: 'Outstanding balances by age', group: 'Patients & Billing' },
-  { id: 'laboratory', label: 'Laboratory Report', icon: FlaskConical, desc: 'By test, by patient, cash value', group: 'Clinical' },
-  { id: 'pharmacy', label: 'Pharmacy Report', icon: Pill, desc: 'Dispensing volume, cash value', group: 'Clinical' },
-  { id: 'doctor-performance', label: 'Doctor Performance', icon: Stethoscope, desc: 'Patients seen, revenue generated', group: 'Clinical' },
-  { id: 'clinic-performance', label: 'Clinic / Department Performance', icon: Building2, desc: 'Volume & revenue by clinic and category', group: 'Operations' },
-  { id: 'occupancy', label: 'Bed / Ward Occupancy', icon: BedDouble, desc: 'Current occupancy & admissions trend', group: 'Operations' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
-  { id: 'theatre', label: 'Theatre Report', icon: Scissors, desc: 'Operations by procedure and by surgeon', group: 'Operations' },
-  // Procurement already has its own full-featured report page (purchase,
-  // delivery, orders, requisitions, receipts, consultant bills, its own CSV
-  // export and date presets) at /procurement/reports — this entry surfaces
-  // it from the single Reports Center nav instead of duplicating ~400 lines
-  // of already-working tabs and queries here.
-  { id: 'procurement', label: 'Procurement Report', icon: Truck, desc: 'Purchase orders, deliveries, requisitions', group: 'Operations', external: '/procurement/reports' },
   { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
-  { id: 'income-statement', label: 'Income Statement', icon: TrendingUp, desc: 'Revenue, expenses, net income', group: 'Financial' },
-  // Accounting already has its own full reports page (trial balance, GL,
-  // receivables aging, etc.) at /accounting/reports — surfaced here the same
-  // way Procurement is, instead of duplicating it.
-  { id: 'accounting', label: 'Accounting Reports', icon: Landmark, desc: 'Trial balance, general ledger, receivables', group: 'Financial', external: '/accounting/reports' },
-  // Same pattern for Fixed Assets' own register/depreciation reports.
-  { id: 'fixed-assets', label: 'Fixed Assets Reports', icon: Boxes, desc: 'Asset register, depreciation schedules', group: 'Financial', external: '/accounting/fixed-assets/reports' },
   { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
   { id: 'audit-summary', label: 'Staff Activity / Audit Log', icon: ShieldCheck, desc: 'Who did what, and when', group: 'Administration' },
 ];

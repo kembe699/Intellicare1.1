@@ -109,17 +109,9 @@ const PasswordVerification = lazyWithRetry(() => import('./pages/reports/Passwor
 const ReportsDashboard = lazyWithRetry(() => import('./pages/reports/ReportsDashboard'));
 const RptPatients = lazyWithRetry(() => import('./pages/reports/PatientReport'));
 const RptBillingByUser = lazyWithRetry(() => import('./pages/reports/BillingByUserReport'));
-const RptLaboratory = lazyWithRetry(() => import('./pages/reports/LabReport'));
-const RptPharmacy = lazyWithRetry(() => import('./pages/reports/PharmacyReport'));
 const RptInventory = lazyWithRetry(() => import('./pages/reports/InventoryReport'));
-const RptIncomeStatement = lazyWithRetry(() => import('./pages/reports/IncomeStatementReport'));
 const RptRevenue = lazyWithRetry(() => import('./pages/reports/RevenueReport'));
-const RptTheatre = lazyWithRetry(() => import('./pages/reports/TheatreReport'));
 const RptOverview = lazyWithRetry(() => import('./pages/reports/DashboardOverview'));
-const RptARAging = lazyWithRetry(() => import('./pages/reports/ARAgingReport'));
-const RptClinicPerformance = lazyWithRetry(() => import('./pages/reports/ClinicPerformanceReport'));
-const RptDoctorPerformance = lazyWithRetry(() => import('./pages/reports/DoctorPerformanceReport'));
-const RptOccupancy = lazyWithRetry(() => import('./pages/reports/OccupancyReport'));
 const RptDhis2 = lazyWithRetry(() => import('./pages/reports/Dhis2Report'));
 const RptCancelledTransactions = lazyWithRetry(() => import('./pages/reports/CancelledTransactionsReport'));
 const RptAuditSummary = lazyWithRetry(() => import('./pages/reports/AuditSummaryReport'));
@@ -454,16 +446,8 @@ const AppRoutes = () => {
         <Route path="overview" element={<RptOverview />} />
         <Route path="patients" element={<RptPatients />} />
         <Route path="billing-by-user" element={<RptBillingByUser />} />
-        <Route path="laboratory" element={<RptLaboratory />} />
-        <Route path="pharmacy" element={<RptPharmacy />} />
         <Route path="inventory" element={<RptInventory />} />
         <Route path="revenue" element={<RptRevenue />} />
-        <Route path="theatre" element={<RptTheatre />} />
-        <Route path="income-statement" element={<RptIncomeStatement />} />
-        <Route path="ar-aging" element={<RptARAging />} />
-        <Route path="clinic-performance" element={<RptClinicPerformance />} />
-        <Route path="doctor-performance" element={<RptDoctorPerformance />} />
-        <Route path="occupancy" element={<RptOccupancy />} />
         <Route path="dhis2" element={<RptDhis2 />} />
         <Route path="cancelled-transactions" element={<RptCancelledTransactions />} />
         <Route path="audit-summary" element={<RptAuditSummary />} />
