@@ -43,6 +43,7 @@ export default function PayrollRunDetail() {
   const [qrLine, setQrLine] = useState<any>(null);
   const [qrData, setQrData] = useState<{ token: string; path: string; qr_data_url: string } | null>(null);
   const [generatingQr, setGeneratingQr] = useState(false);
+  const [currencyFilter, setCurrencyFilter] = useState(''); // '' = all currencies
 
   const fetchRun = async () => {
     setLoading(true);
@@ -408,12 +409,26 @@ export default function PayrollRunDetail() {
 
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <AdvancedDataTable<any>
-              data={(run.lines || []).map((l: any) => ({ ...l, employee_name: `${l.first_name} ${l.last_name}` }))}
+              data={(run.lines || [])
+                .filter((l: any) => !currencyFilter || l.currency === currencyFilter)
+                .map((l: any) => ({ ...l, employee_name: `${l.first_name} ${l.last_name}` }))}
               keyExtractor={(l) => l.id}
               loading={false}
               emptyMessage="No employees in this run"
               searchable
               searchPlaceholder="Search by employee name or ID..."
+              toolbarExtra={totalsByCurrency.length > 1 && (
+                <select
+                  value={currencyFilter}
+                  onChange={e => setCurrencyFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+                >
+                  <option value="">All Currencies</option>
+                  {totalsByCurrency.map(t => (
+                    <option key={t.currency} value={t.currency}>{t.currency}</option>
+                  ))}
+                </select>
+              )}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
                 { key: 'employee_number', header: 'ID', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v}</span> },
