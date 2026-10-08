@@ -112,6 +112,7 @@ const RptBillingByUser = lazyWithRetry(() => import('./pages/reports/BillingByUs
 const RptInventory = lazyWithRetry(() => import('./pages/reports/InventoryReport'));
 const RptRevenue = lazyWithRetry(() => import('./pages/reports/RevenueReport'));
 const RptClinical = lazyWithRetry(() => import('./pages/reports/ClinicalReport'));
+const RptProcurementNew = lazyWithRetry(() => import('./pages/reports/ProcurementReport'));
 const RptOverview = lazyWithRetry(() => import('./pages/reports/DashboardOverview'));
 const RptDhis2 = lazyWithRetry(() => import('./pages/reports/Dhis2Report'));
 const RptCancelledTransactions = lazyWithRetry(() => import('./pages/reports/CancelledTransactionsReport'));
@@ -450,6 +451,7 @@ const AppRoutes = () => {
         <Route path="inventory" element={<RptInventory />} />
         <Route path="revenue" element={<RptRevenue />} />
         <Route path="clinical" element={<RptClinical />} />
+        <Route path="procurement" element={<RptProcurementNew />} />
         <Route path="dhis2" element={<RptDhis2 />} />
         <Route path="cancelled-transactions" element={<RptCancelledTransactions />} />
         <Route path="audit-summary" element={<RptAuditSummary />} />

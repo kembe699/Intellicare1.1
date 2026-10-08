@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
-  Package, Stethoscope,
+  Package, Stethoscope, Truck,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
   TrendingUp, LayoutDashboard, ShieldCheck, FileSpreadsheet,
 } from 'lucide-react';
@@ -28,6 +28,7 @@ const REPORT_CATEGORIES = [
   { id: 'clinical', label: 'Clinical Reports', icon: Stethoscope, desc: 'Registers, workload, morbidity, inpatient/outpatient', group: 'Clinical' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
   { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
+  { id: 'procurement', label: 'Procurement Report', icon: Truck, desc: 'Supplier bills, A/P aging, consultant bills, purchases', group: 'Financial' },
   { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
   { id: 'audit-summary', label: 'Staff Activity / Audit Log', icon: ShieldCheck, desc: 'Who did what, and when', group: 'Administration' },
 ];
