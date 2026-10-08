@@ -74,6 +74,7 @@ const authenticateToken = (req, res, next) => {
         id: decoded.userId,
         userId: decoded.userId,
         email: decoded.email,
+        displayName: cached.displayName,
         role: cached.role,
         additionalRoles: cached.additionalRoles || [],
         clinicId: decoded.clinicId,
@@ -91,7 +92,7 @@ const authenticateToken = (req, res, next) => {
     // Cache miss — fetch from this tenant's own database
     try {
       const [[dbUser]] = await tenantConnection.sequelize.query(
-        'SELECT role, is_active FROM users WHERE id = ? LIMIT 1',
+        'SELECT role, is_active, display_name FROM users WHERE id = ? LIMIT 1',
         { replacements: [decoded.userId] }
       );
       if (!dbUser || !dbUser.is_active) {
@@ -110,11 +111,12 @@ const authenticateToken = (req, res, next) => {
         );
         additionalRoles = rows.map((r) => r.role_key);
       } catch (_e) { /* table not ensured yet on this tenant — treat as none */ }
-      userAuthCache.set(cacheKey, { role: dbUser.role, is_active: dbUser.is_active, additionalRoles });
+      userAuthCache.set(cacheKey, { role: dbUser.role, is_active: dbUser.is_active, additionalRoles, displayName: dbUser.display_name });
       req.user = {
         id: decoded.userId,
         userId: decoded.userId,
         email: decoded.email,
+        displayName: dbUser.display_name,
         role: dbUser.role,
         additionalRoles,
         clinicId: decoded.clinicId,
@@ -123,7 +125,12 @@ const authenticateToken = (req, res, next) => {
         isAdmin: dbUser.role === 'admin'
       };
     } catch (dbErr) {
-      // Fallback to JWT role if DB lookup fails
+      // Fallback to JWT role if DB lookup fails. The JWT itself never carries
+      // display_name (see auth.js's login handler — only userId/email/role/
+      // clinicId/branchId/schemaName/clientCode are signed into it), so this
+      // one rare path still falls through to email downstream — same as
+      // every consumer's own `req.user?.displayName || req.user?.email`
+      // fallback already expects.
       req.user = {
         id: decoded.userId,
         userId: decoded.userId,
