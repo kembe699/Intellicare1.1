@@ -297,9 +297,10 @@ export default function RevenueReport() {
       { key: 'patientName', header: 'Patient', sortable: true },
       { key: 'serviceName', header: 'Voided Service', sortable: true },
       { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+      { key: 'reason', header: 'Reason', render: v => v || '—' },
       { key: 'updatedBy', header: 'Voided By', sortable: true, render: v => v || '—' },
     ];
-    csvColumns = [{ header: 'Bill Date', key: 'billDate', transform: v => fmtDate(v) }, { header: 'Bill #', key: 'billNumber' }, { header: 'Patient', key: 'patientName' }, { header: 'Voided Service', key: 'serviceName' }, { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) }, { header: 'Voided By', key: 'updatedBy' }];
+    csvColumns = [{ header: 'Bill Date', key: 'billDate', transform: v => fmtDate(v) }, { header: 'Bill #', key: 'billNumber' }, { header: 'Patient', key: 'patientName' }, { header: 'Voided Service', key: 'serviceName' }, { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) }, { header: 'Reason', key: 'reason' }, { header: 'Voided By', key: 'updatedBy' }];
     emptyMessage = 'No voided line items in this period.';
   } else if (option.mode === 'cost-analysis') {
     columns = [

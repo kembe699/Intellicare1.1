@@ -1718,7 +1718,18 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       );
       const cfg = settings.length > 0 ? settings[0] : null;
       const revenueAcct = drug.revenue_account_id || cfg?.pharmacy_revenue_account_id;
-      const cogsAcct = drug.cogs_account_id || cfg?.pharmacy_cogs_account_id;
+      // COGS used to require pharmacy_settings.pharmacy_cogs_account_id to be
+      // explicitly configured, with no fallback — on any tenant where nobody
+      // had set that up, every dispense posted revenue but silently skipped
+      // COGS entirely (no entry, no warning), understating Cost of Goods Sold
+      // on the Income Statement with no visible trace of why. Falls back to
+      // the standard Pharmaceutical Cost of Sales account (5210) by code, the
+      // same account initializeChartOfAccounts.js seeds by default.
+      let cogsAcct = drug.cogs_account_id || cfg?.pharmacy_cogs_account_id;
+      if (!cogsAcct) {
+        const fallback = await AccountingService.getAccountByCode(cid, '5210');
+        cogsAcct = fallback?.id || null;
+      }
       const receivablesAcct = cfg?.pharmacy_receivables_account_id;
 
       // Revenue GL entry
@@ -1747,12 +1758,19 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       if (cogsAcct && selectedBatch && selectedBatch.unit_cost > 0) {
         const cogsAmount = selectedBatch.unit_cost * quantity_dispensed;
 
-        // Get inventory GL account
+        // Get inventory GL account — same fallback reasoning as cogsAcct
+        // above: default to Pharmaceutical Inventory (1310), the account
+        // BillingIntegrationService.js already credits for an analogous
+        // pharmacy sale, rather than silently skipping the whole entry.
         const [invSettings] = await sequelize.query(
           'SELECT inventory_account_id FROM inventory_settings WHERE clinic_id = :cid LIMIT 1',
           { replacements: { cid }, transaction: t }
         );
-        const invAcct = invSettings.length > 0 ? invSettings[0].inventory_account_id : null;
+        let invAcct = invSettings.length > 0 ? invSettings[0].inventory_account_id : null;
+        if (!invAcct) {
+          const fallback = await AccountingService.getAccountByCode(cid, '1310');
+          invAcct = fallback?.id || null;
+        }
 
         if (invAcct) {
           const glEntry = await AccountingService.createGLEntry({
@@ -1775,7 +1793,13 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
 
           cogsJE = glEntry.gl_number;
           await sequelize.query('UPDATE dispensing_records SET cogs_gl_entry_id = :je WHERE id = :id', { replacements: { je: glEntry.id, id: dispId }, transaction: t });
+        } else {
+          console.warn(`Dispensing ${dispId}: COGS not posted — Pharmaceutical Inventory account (1310) not found/active for clinic ${cid}.`);
         }
+      } else if (!cogsAcct) {
+        console.warn(`Dispensing ${dispId}: COGS not posted — Pharmaceutical Cost of Sales account (5210) not found/active for clinic ${cid}.`);
+      } else if (!selectedBatch || !(selectedBatch.unit_cost > 0)) {
+        console.warn(`Dispensing ${dispId}: COGS not posted — dispensed batch has no unit_cost recorded.`);
       }
     } catch (glError) {
       console.error('GL entry creation warning (non-blocking):', glError.message);
