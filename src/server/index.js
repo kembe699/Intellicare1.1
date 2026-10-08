@@ -619,6 +619,7 @@ app.use('/api/receipts', receiptsRouter);
 app.use('/api/visits', visitsRouter);
 app.use('/api/reports-v2/patients', require('./routes/reportPatients'));
 app.use('/api/reports-v2/billing-by-user', require('./routes/reportBillingByUser'));
+app.use('/api/reports-v2/revenue', require('./routes/reportRevenue'));
 app.use('/api/reports-v2/laboratory', require('./routes/reportLaboratory'));
 app.use('/api/reports-v2/pharmacy', require('./routes/reportPharmacy'));
 app.use('/api/reports-v2/inventory', require('./routes/reportInventory'));
