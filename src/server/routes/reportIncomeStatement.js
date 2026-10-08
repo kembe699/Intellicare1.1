@@ -82,6 +82,7 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo, req) {
        coa.id AS account_id,
        coa.account_code,
        coa.account_name,
+       coa.sub_account_type,
        ${amountExpr} AS amount
      FROM chart_of_accounts coa
      LEFT JOIN account_ledger al
@@ -93,7 +94,7 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo, req) {
      WHERE coa.clinic_id = :clinicId
        AND coa.is_active = true
        AND coa.account_type = :accountType
-     GROUP BY coa.id, coa.account_code, coa.account_name
+     GROUP BY coa.id, coa.account_code, coa.account_name, coa.sub_account_type
      -- The aggregate is repeated rather than referenced by its output alias:
      -- MySQL let HAVING use a SELECT alias, PostgreSQL allows that only in
      -- GROUP BY and ORDER BY, so the alias form failed with
@@ -109,6 +110,11 @@ async function fetchSection(clinicId, accountType, dateFrom, dateTo, req) {
     account_id: r.account_id,
     account_code: r.account_code,
     account_name: r.account_name,
+    // Lets the frontend group expense rows into real sections — Cost of
+    // Sales (e.g. Pharmaceutical COGS 5210) vs Operating Expenses vs
+    // Financial Expenses — instead of one flat list where a huge
+    // Miscellaneous line has nothing next to it explaining what it isn't.
+    subAccountType: r.sub_account_type || null,
     amount: parseFloat(r.amount) || 0,
   }));
 }
@@ -191,7 +197,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
         GROUP BY 1, 2
        HAVING SUM(al.credit_amount - al.debit_amount) <> 0
      )
-     SELECT br.bill_id, coa.id AS account_id, coa.account_code, coa.account_name, br.amount
+     SELECT br.bill_id, coa.id AS account_id, coa.account_code, coa.account_name, coa.sub_account_type, br.amount
        FROM bill_revenue br
        JOIN chart_of_accounts coa ON coa.id = br.account_id
       WHERE coa.is_active = true
@@ -245,7 +251,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
   const linesByBill = new Map();
   for (const r of billRevenueRows) {
     const bill = linesByBill.get(r.bill_id) || [];
-    bill.push({ key: r.account_id, capacity: Number(r.amount) || 0, account_code: r.account_code, account_name: r.account_name });
+    bill.push({ key: r.account_id, capacity: Number(r.amount) || 0, account_code: r.account_code, account_name: r.account_name, sub_account_type: r.sub_account_type });
     linesByBill.set(r.bill_id, bill);
   }
 
@@ -257,7 +263,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
     for (const a of allocated) {
       if (a.amount === 0) continue;
       const line = lines.find((l) => l.key === a.key);
-      const running = totalsByAccount.get(a.key) || { account_id: a.key, account_code: line.account_code, account_name: line.account_name, amount: 0 };
+      const running = totalsByAccount.get(a.key) || { account_id: a.key, account_code: line.account_code, account_name: line.account_name, sub_account_type: line.sub_account_type, amount: 0 };
       running.amount = round2(running.amount + a.amount);
       totalsByAccount.set(a.key, running);
     }
@@ -271,6 +277,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
     account_id: r.account_id,
     account_code: r.account_code,
     account_name: r.account_name,
+    subAccountType: r.sub_account_type || null,
     exact: parseFloat(r.amount) || 0,
     amount: Math.round((parseFloat(r.amount) || 0) * 100) / 100,
   }));
@@ -298,6 +305,79 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
   return lines.map(({ exact, ...line }) => line);
 }
 
+// Splits the flat expense-account list into the three sections a reader
+// actually wants to see apart: Cost of Goods Sold (sub_account_type =
+// 'cost_of_sales' — e.g. Pharmaceutical Cost of Sales 5210), Miscellaneous
+// (account 5900 specifically — called out on its own, not folded into
+// "other", precisely because a client complaint was a surprisingly large
+// Miscellaneous balance going unnoticed inside one flat list), and
+// everything else as Operating Expenses. Revenue has no such split today —
+// there is currently no "services cost of sales" account in the chart of
+// accounts at all (a real gap, not something this endpoint can paper over).
+function splitExpenseSections(expenses) {
+  const cogs = [];
+  const miscellaneous = [];
+  const operating = [];
+  for (const line of expenses) {
+    if (line.account_code === '5900') miscellaneous.push(line);
+    else if (line.subAccountType === 'cost_of_sales') cogs.push(line);
+    else operating.push(line);
+  }
+  const sum = (lines) => lines.reduce((s, l) => s + l.amount, 0);
+  return {
+    costOfGoodsSold: { lines: cogs, total: sum(cogs) },
+    operatingExpenses: { lines: operating, total: sum(operating) },
+    miscellaneous: { lines: miscellaneous, total: sum(miscellaneous) },
+  };
+}
+
+function dateRangeDays(dateFrom, dateTo, maxDays) {
+  const days = [];
+  const d = new Date(`${dateFrom}T00:00:00Z`);
+  const end = new Date(`${dateTo}T00:00:00Z`);
+  while (d <= end && days.length < maxDays) {
+    days.push(d.toISOString().split('T')[0]);
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return days;
+}
+
+// One row per calendar day in the range — a trend line, not a full
+// per-account breakdown per day (that would be a very wide, very expensive
+// table for little extra benefit; drill into a single day via the normal
+// dateFrom=dateTo=that day for its own account-level detail). Reuses
+// fetchSection/fetchCashRevenue exactly as the whole-range totals do, one
+// day at a time, rather than rewriting the cash-basis waterfall allocation
+// to be date-bucket-aware — that logic is intricate enough (see its own
+// comments) that re-deriving a day-grouped version risks a subtly different
+// answer from the range total for the same data. Capped at 92 days (~3
+// months) since this is N sequential queries per day, not a huge concern
+// for an admin report but not something to let run unbounded either.
+const MAX_DAILY_RANGE = 92;
+async function fetchDailyBreakdown(clinicId, dateFrom, dateTo, basis, req) {
+  const days = dateRangeDays(dateFrom, dateTo, MAX_DAILY_RANGE);
+  const out = [];
+  for (const day of days) {
+    const [revenue, expenses] = await Promise.all([
+      basis === 'cash' ? fetchCashRevenue(clinicId, day, day, req) : fetchSection(clinicId, 'revenue', day, day, req),
+      fetchSection(clinicId, 'expense', day, day, req),
+    ]);
+    const totalRevenue = revenue.reduce((sum, r) => sum + r.amount, 0);
+    const sections = splitExpenseSections(expenses);
+    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+    out.push({
+      date: day,
+      totalRevenue,
+      totalCostOfGoodsSold: sections.costOfGoodsSold.total,
+      totalOperatingExpenses: sections.operatingExpenses.total,
+      totalMiscellaneous: sections.miscellaneous.total,
+      totalExpenses,
+      netIncome: totalRevenue - totalExpenses,
+    });
+  }
+  return out;
+}
+
 router.get('/', async (req, res) => {
   try {
     const clinicId = req.user?.clinicId || req.query.clinic_id || 1;
@@ -308,23 +388,29 @@ router.get('/', async (req, res) => {
     // Cash unless explicitly asked otherwise: what was collected is the figure
     // people compare against the cashier and the dashboard.
     const basis = String(req.query.basis || 'cash').toLowerCase() === 'accrual' ? 'accrual' : 'cash';
+    const wantsDaily = String(req.query.daily || '').toLowerCase() === 'true';
 
-    const [revenue, expenses] = await Promise.all([
+    const [revenue, expenses, dailyBreakdown] = await Promise.all([
       basis === 'cash'
         ? fetchCashRevenue(clinicId, dateFrom, dateTo, req)
         : fetchSection(clinicId, 'revenue', dateFrom, dateTo, req),
       fetchSection(clinicId, 'expense', dateFrom, dateTo, req),
+      wantsDaily ? fetchDailyBreakdown(clinicId, dateFrom, dateTo, basis, req) : Promise.resolve(null),
     ]);
 
     const totalRevenue = revenue.reduce((sum, r) => sum + r.amount, 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
     const netIncome = totalRevenue - totalExpenses;
+    const expenseSections = splitExpenseSections(expenses);
 
     res.json({
       period: { dateFrom, dateTo },
       basis,
       revenue,
       expenses,
+      expenseSections,
+      dailyBreakdown,
+      dailyRangeTruncated: wantsDaily && dateRangeDays(dateFrom, dateTo, MAX_DAILY_RANGE + 1).length > MAX_DAILY_RANGE,
       totals: {
         totalRevenue,
         totalExpenses,
