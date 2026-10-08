@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { LoadingState } from '@/components/common';
@@ -13,13 +14,14 @@ import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn } from '@/utils/repor
 // inpatient/discharged filter, a chronological revenue journal, weekly/
 // monthly trends, cancelled receipts/invoices, service cost analysis, and a
 // patient register by scheme) lives behind one selector instead of a
-// four-button tab strip. Picking a report loads it automatically; most
-// report types also offer a Summary (grouped totals) / Detail (every
-// underlying transaction) toggle.
+// four-button tab strip. Picking a report loads it automatically, as a
+// letterheaded report (facility logo/name, title bar, From/To/Report
+// DateTime) on top of the standard data table — every group/bills-group
+// report always shows its full breakdown (no separate Summary/Detail
+// toggle to flip between).
 
 type Mode = 'group' | 'bills-group' | 'detail-only' | 'trend' | 'cancelled-receipts' | 'cancelled-invoices' | 'cost-analysis' | 'register';
 type PatientType = 'all' | 'outpatient' | 'inpatient' | 'discharged';
-type View = 'summary' | 'detail';
 
 interface ReportOption {
   value: string;
@@ -79,25 +81,25 @@ function fmtBucket(iso: string, interval: 'week' | 'month'): string {
 
 export default function RevenueReport() {
   const { user } = useAuth();
+  const facility = useFacilityInfo();
   const defaults = thisMonthRange();
   const [dateFrom, setDateFrom] = useState(defaults.from);
   const [dateTo, setDateTo] = useState(defaults.to);
   const [reportType, setReportType] = useState('user');
-  const [view, setView] = useState<View>('summary');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<any[]>([]);
-  const [note, setNote] = useState<string | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [costSummary, setCostSummary] = useState<{ totalRevenue: number; totalCOGS: number; grossMargin: number; grossMarginPct: number } | null>(null);
   const [cogsByAccount, setCogsByAccount] = useState<{ accountName: string; amount: number }[]>([]);
 
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
-  const supportsView = option.mode === 'group' || option.mode === 'bills-group';
+  // Every group/bills-group report always shows its full aggregated
+  // breakdown — there is no separate Summary/Detail toggle to flip between.
+  const effectiveView: 'summary' | 'detail' = (option.mode === 'group' || option.mode === 'bills-group') ? 'summary' : 'detail';
   const metric: 'receipts' | 'invoices' = option.mode === 'bills-group' ? 'invoices' : 'receipts';
-  const effectiveView: View = supportsView ? view : 'detail';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setNote(null);
     setCostSummary(null);
     setCogsByAccount([]);
     try {
@@ -115,13 +117,11 @@ export default function RevenueReport() {
           if (!res.ok) throw new Error('Failed to load');
           const json = await res.json();
           setRows((json.byCategory || []).map((c: any) => ({ key: c.category, label: c.category, totalCollected: c.totalCollected })));
-          if (json.categorization?.note) setNote(json.categorization.note);
         } else if (option.value === 'doctor') {
           const res = await authFetch(`/api/reports-v2/doctor-performance?${params}`);
           if (!res.ok) throw new Error('Failed to load');
           const json = await res.json();
           setRows((json.doctors || []).map((d: any) => ({ key: d.doctorId, label: d.doctorName, transactionCount: d.visits, totalCollected: d.revenueCollected })));
-          if (json.revenueAttribution?.note) setNote(json.revenueAttribution.note);
         } else {
           const res = await authFetch(`/api/reports-v2/revenue?${params}&groupBy=${option.value}`);
           if (!res.ok) throw new Error('Failed to load');
@@ -135,7 +135,6 @@ export default function RevenueReport() {
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
-        if (json.note) setNote(json.note);
       } else if (metric === 'receipts' && (effectiveView === 'detail' || option.mode === 'detail-only')) {
         const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=receipts`);
         if (!res.ok) throw new Error('Failed to load');
@@ -147,7 +146,6 @@ export default function RevenueReport() {
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
-        if (json.note) setNote(json.note);
       } else if (option.mode === 'trend') {
         const interval = option.value === 'trend_month' ? 'month' : 'week';
         const res = await authFetch(`/api/reports-v2/revenue/trend?${params}&interval=${interval}`);
@@ -166,13 +164,13 @@ export default function RevenueReport() {
         setRows(json.byCategory || []);
         setCostSummary(json.summary || null);
         setCogsByAccount(json.cogsByAccount || []);
-        if (json.note) setNote(json.note);
       } else if (option.mode === 'register') {
         const res = await authFetch(`/api/reports-v2/revenue/patient-register?${params}`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
       }
+      setGeneratedAt(new Date());
     } catch (err: any) {
       toast.error(err.message || 'Failed to load revenue report');
       setRows([]);
@@ -183,8 +181,6 @@ export default function RevenueReport() {
   }, [dateFrom, dateTo, user?.clinic, reportType, effectiveView]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  // Reset to Summary whenever the report type changes away from one that supports it.
-  useEffect(() => { if (!supportsView) setView('summary'); }, [reportType, supportsView]);
 
   const sortedGroupRows = useMemo(
     () => (option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary'
@@ -336,7 +332,19 @@ export default function RevenueReport() {
     csvColumns = [{ header: 'Patient', key: 'patientName' }, { header: 'Scheme', key: 'schemeName' }, { header: 'Bills', key: 'billCount' }, { header: 'Total Billed', key: 'totalBilled', transform: v => fmtCurrency(v) }, { header: 'Total Paid', key: 'totalPaid', transform: v => fmtCurrency(v) }, { header: 'Balance', key: 'totalBalance', transform: v => fmtCurrency(v) }];
   }
 
-  const displayRows = (option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary' ? sortedGroupRows : rows;
+  // Row number, computed over the full (unpaginated) result so it stays
+  // correct across pages, not reset to 1 on every page like the table's own
+  // local row index would.
+  const numberedRows = useMemo(
+    () => ((option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary' ? sortedGroupRows : rows)
+      .map((r, i) => ({ ...r, no: i + 1 })),
+    [sortedGroupRows, rows, option.mode, effectiveView]
+  );
+  const displayRows = numberedRows;
+  const columnsWithNo: Column<any>[] = [
+    { key: 'no', header: 'No', width: '56px', render: v => <span className="text-muted-foreground tabular-nums">{v}</span> },
+    ...columns,
+  ];
 
   return (
     <ReportSubPageShell
@@ -350,9 +358,9 @@ export default function RevenueReport() {
       loading={loading}
       csvData={displayRows}
       csvColumns={csvColumns}
-      csvFilename={`revenue-${option.value}-${effectiveView}-${dateFrom}-${dateTo}.csv`}
+      csvFilename={`revenue-${option.value}-${dateFrom}-${dateTo}.csv`}
     >
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4">
         <select
           value={reportType}
           onChange={e => setReportType(e.target.value)}
@@ -366,27 +374,34 @@ export default function RevenueReport() {
             </optgroup>
           ))}
         </select>
-
-        {supportsView && (
-          <div className="inline-flex rounded-md border overflow-hidden" role="group" aria-label="Summary or detail">
-            {(['summary', 'detail'] as View[]).map(v => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                aria-pressed={view === v}
-                className={`px-3 py-1.5 text-[13px] font-medium capitalize transition-colors ${view === v ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {note && (
-        <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">{note}</div>
-      )}
+      {/* Letterhead — facility logo/name/website, report title, and the
+          period/generated-at line, matching how the facility's other
+          printed documents (receipts, invoices) identify themselves. */}
+      <div className="mb-4 rounded-md border border-border overflow-hidden bg-card">
+        <div className="bg-sky-100 dark:bg-sky-950/40 text-center py-2 border-b border-border">
+          <h2 className="text-sm font-bold tracking-wide text-foreground">{option.label}</h2>
+        </div>
+        <div className="p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            {facility.facilityLogo ? (
+              <img src={facility.facilityLogo} alt={facility.facilityName} className="h-12 w-12 object-contain rounded border border-border flex-shrink-0" />
+            ) : (
+              <div className="h-12 w-12 rounded border border-border flex-shrink-0" />
+            )}
+            <div>
+              <p className="font-semibold text-sm">{facility.facilityName || '—'}</p>
+              {facility.facilityWebsite && <p className="text-xs text-muted-foreground">{facility.facilityWebsite}</p>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
+            <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
+            <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
+            <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
+          </div>
+        </div>
+      </div>
 
       {option.mode === 'cost-analysis' && costSummary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -419,7 +434,7 @@ export default function RevenueReport() {
           <AdvancedDataTable
             data={displayRows}
             keyExtractor={keyExtractor}
-            columns={columns}
+            columns={columnsWithNo}
             emptyMessage={emptyMessage}
             pagination={{ enabled: true, pageSize: 25, pageSizeOptions: [25, 50, 100] }}
             searchable
