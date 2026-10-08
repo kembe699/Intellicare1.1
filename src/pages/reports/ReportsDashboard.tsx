@@ -8,7 +8,7 @@ import {
   Users, Package, Pill, FlaskConical,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
   TrendingUp, Receipt, LayoutDashboard, ClipboardList, Building2,
-  Stethoscope, BedDouble, Undo2, ShieldCheck, FileSpreadsheet,
+  Stethoscope, BedDouble, Undo2, ShieldCheck, FileSpreadsheet, Scissors, Truck,
 } from 'lucide-react';
 
 const REPORT_GROUPS = [
@@ -34,6 +34,13 @@ const REPORT_CATEGORIES = [
   { id: 'clinic-performance', label: 'Clinic / Department Performance', icon: Building2, desc: 'Volume & revenue by clinic and category', group: 'Operations' },
   { id: 'occupancy', label: 'Bed / Ward Occupancy', icon: BedDouble, desc: 'Current occupancy & admissions trend', group: 'Operations' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
+  { id: 'theatre', label: 'Theatre Report', icon: Scissors, desc: 'Operations by procedure and by surgeon', group: 'Operations' },
+  // Procurement already has its own full-featured report page (purchase,
+  // delivery, orders, requisitions, receipts, consultant bills, its own CSV
+  // export and date presets) at /procurement/reports — this entry surfaces
+  // it from the single Reports Center nav instead of duplicating ~400 lines
+  // of already-working tabs and queries here.
+  { id: 'procurement', label: 'Procurement Report', icon: Truck, desc: 'Purchase orders, deliveries, requisitions', group: 'Operations', external: '/procurement/reports' },
   { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
   { id: 'income-statement', label: 'Income Statement', icon: TrendingUp, desc: 'Revenue, expenses, net income', group: 'Financial' },
   { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
@@ -113,7 +120,7 @@ export default function ReportsDashboard() {
                   return (
                     <button
                       key={category.id}
-                      onClick={() => navigate(`/reports/dashboard/${category.id}`)}
+                      onClick={() => navigate((category as any).external || `/reports/dashboard/${category.id}`)}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group ${
                         isActive
                           ? 'bg-white/10 text-white border border-white/20'
