@@ -280,11 +280,11 @@ export default function ClinicalReport() {
       { key: 'prescriptionDate', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
       { key: 'patientName', header: 'Patient', sortable: true },
       { key: 'drugName', header: 'Drug', sortable: true },
-      { key: 'frequency', header: 'Frequency', render: v => v || '—' },
+      { key: 'dosage', header: 'Dosage', render: v => v || '—' },
       { key: 'prescriberName', header: 'Prescriber', sortable: true },
       { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
     ];
-    csvColumns = [{ header: 'Date', key: 'prescriptionDate', transform: v => fmtDate(v) }, { header: 'Patient', key: 'patientName' }, { header: 'Drug', key: 'drugName' }, { header: 'Frequency', key: 'frequency' }, { header: 'Prescriber', key: 'prescriberName' }, { header: 'Branch', key: 'branchName' }];
+    csvColumns = [{ header: 'Date', key: 'prescriptionDate', transform: v => fmtDate(v) }, { header: 'Patient', key: 'patientName' }, { header: 'Drug', key: 'drugName' }, { header: 'Dosage', key: 'dosage' }, { header: 'Prescriber', key: 'prescriberName' }, { header: 'Branch', key: 'branchName' }];
   } else if (option.mode === 'inpatient-register') {
     columns = [
       { key: 'admissionDate', header: 'Admitted', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
