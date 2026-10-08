@@ -6,7 +6,8 @@ const { authorize } = require('../middleware/authorize');
 // App.tsx allows on /receipts, so the API enforces what the client already assumes.
 const router = express.Router();
 const { Receipt, PatientBill, ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger, sequelize } = require('../models');
-const { normalizeServices } = require('../utils/normalizeServices');
+const { normalizeServices, ensureLineIds } = require('../utils/normalizeServices');
+const { resolveRevenueAccountForLine } = require('../utils/resolveRevenueAccount');
 const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const BillingIntegrationService = require('../services/BillingIntegrationService');
@@ -377,7 +378,18 @@ router.get('/clinic/:clinicId/date-range', async (req, res) => {
 // path (a requester who already holds receipt_void_approve) and the separate
 // /approve-void endpoint (someone else approving a pending request) run the
 // exact same logic rather than two copies that could drift apart.
-async function applyVoidReversal(receipt, status, reason, req, t) {
+//
+// cancelItems (set by whoever actually executes the reversal — the immediate
+// voider, or the approver on a pending request): a plain void/refund leaves
+// a reversed line simply unpaid again, free to be billed and collected a
+// second time — the right behavior for "wrong payment method, let me redo
+// it". cancelItems instead marks each reversed line isVoided (the same
+// marker and visual treatment /void-item already uses — red, struck
+// through, "Voided" — see BillDetails.tsx), shrinks the bill's total_amount
+// to exclude it, and reverses the line's own revenue posting, so the
+// cancelled charge can never be paid again while leaving the rest of the
+// bill (and any new items added afterward) normal and payable.
+async function applyVoidReversal(receipt, status, reason, req, t, cancelItems = false) {
   let reversedServices = [];
   let billForInventoryRestore = null;
 
@@ -385,20 +397,33 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
     const bill = await PatientBill.findByPk(receipt.bill_id, { transaction: t, lock: t.LOCK.UPDATE });
     if (bill) {
       // Deep clone the array so Sequelize detects the mutation
-      let updatedServices = JSON.parse(JSON.stringify(normalizeServices(bill.services)));
+      let updatedServices = ensureLineIds(JSON.parse(JSON.stringify(normalizeServices(bill.services))));
+
+      const reverseLine = (index) => {
+        const item = updatedServices[index];
+        if (!item || !item.paid) return;
+        if (cancelItems) {
+          const cancelled = {
+            ...item,
+            isVoided: true,
+            voidedAt: new Date().toISOString(),
+            voidedBy: req.user?.displayName || req.user?.email || null,
+            voidReason: reason || `Payment ${status}`,
+          };
+          updatedServices[index] = cancelled;
+          reversedServices.push(cancelled);
+        } else {
+          item.paid = false;
+          delete item.paidAt;
+          delete item.status;
+          reversedServices.push(item);
+        }
+      };
 
       // Reverse paid status for specific services
       const paidServiceIndexes = normalizeServices(receipt.paid_services);
       if (paidServiceIndexes.length > 0) {
-        paidServiceIndexes.forEach(idx => {
-          const index = parseInt(idx, 10);
-          if (updatedServices[index] && updatedServices[index].paid) {
-            reversedServices.push(updatedServices[index]);
-            updatedServices[index].paid = false;
-            delete updatedServices[index].paidAt;
-            delete updatedServices[index].status;
-          }
-        });
+        paidServiceIndexes.forEach(idx => reverseLine(parseInt(idx, 10)));
       } else {
         // R1: receipt.paid_services came back empty — an older receipt
         // predating paidServiceIndexes being reliably sent, or a payment
@@ -423,14 +448,7 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
           { replacements: { billId: bill.id, receiptId: receipt.id }, transaction: t }
         );
         if (parseInt(otherActive.cnt, 10) === 0) {
-          updatedServices.forEach(item => {
-            if (item && item.paid) {
-              reversedServices.push(item);
-              item.paid = false;
-              delete item.paidAt;
-              delete item.status;
-            }
-          });
+          updatedServices.forEach((item, idx) => reverseLine(idx));
         } else {
           console.warn(`applyVoidReversal: receipt ${receipt.id} has no paid_services recorded, and other active receipts exist on bill ${bill.id} — cannot safely tell which lines this receipt covered. Line items left unchanged; needs manual review.`);
         }
@@ -438,7 +456,17 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
 
       const receiptAmount = parseFloat(receipt.payment_amount) || 0;
       let newPaidAmount = Math.max(0, parseFloat(bill.paid_amount) - receiptAmount);
-      let newBalanceAmount = parseFloat(bill.total_amount) - newPaidAmount;
+
+      // cancelItems shrinks the bill's own payable total by whatever just
+      // got voided — same recompute /void-item uses — so a cancelled line
+      // disappears from what's owed instead of merely going back to unpaid.
+      let newTotalAmount = parseFloat(bill.total_amount);
+      if (cancelItems) {
+        newTotalAmount = updatedServices
+          .filter(s => !s.isVoided)
+          .reduce((sum, s) => sum + (parseFloat(s.totalPrice) || 0), 0);
+      }
+      let newBalanceAmount = newTotalAmount - newPaidAmount;
 
       let newBillStatus = bill.status;
       if (newBalanceAmount > 0) {
@@ -449,6 +477,7 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
 
       await bill.update({
         services: updatedServices,
+        total_amount: newTotalAmount,
         paid_amount: newPaidAmount,
         balance_amount: newBalanceAmount,
         status: newBillStatus,
@@ -456,6 +485,10 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
       }, { transaction: t });
 
       if (reversedServices.length > 0) billForInventoryRestore = bill;
+      // cancelItems's own revenue-side GL reversal (Dr Revenue / Cr
+      // Receivable) runs AFTER this transaction commits — see
+      // reverseCancelledItemsRevenueGL below, called from both route
+      // handlers once `t.commit()` has actually happened.
     }
   }
 
@@ -483,6 +516,73 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
   return { reversedServices, billForInventoryRestore };
 }
 
+// cancelItems's revenue-side reversal (Dr Revenue / Cr Receivable) for each
+// item the void/refund just cancelled — reversePaymentGL above only
+// reverses the PAYMENT (cash/bank <-> receivable); without this, the income
+// statement would keep reporting revenue for a service that's now fully
+// cancelled, the exact bug /void-item's own route exists to avoid.
+//
+// Deliberately posted via AccountingService.createGLEntry + postGLEntry
+// (the general_ledger/gl_line_items pipeline), NOT postJournalEntry (the
+// journal_entries pipeline reversePaymentGL uses) — ledgerSweeper.js's
+// background reconciliation (AccountingService.syncBillRevenueToGL) only
+// recognizes revenue already posted under reference_module 'patient_billing'
+// / 'bill_item_void' / 'bill_revenue_adjustment' via a join through
+// general_ledger. A postJournalEntry-based reversal would be invisible to
+// that scan, so the sweeper would see the bill's (now correctly lower)
+// total_amount against the ORIGINAL, unreversed revenue and "fix" the
+// apparent shortfall by posting ANOTHER reversal — double-reversing it.
+// Tagging this reference_module: 'bill_item_void' (same as /void-item) keeps
+// it visible to that same reconciliation, so it stays in agreement instead.
+//
+// Called AFTER the caller's transaction has committed — same reason
+// /void-item's own route never wraps this in a transaction: postGLEntry has
+// no transaction parameter, so running it before commit would have it
+// (and the sweeper, if it raced in) look for a GL entry row that isn't
+// visible outside the still-open transaction yet.
+async function reverseCancelledItemsRevenueGL(bill, cancelledItems, req) {
+  if (!bill || !Array.isArray(cancelledItems) || cancelledItems.length === 0) return;
+  const AccountingService = require('../services/AccountingService');
+  for (const item of cancelledItems) {
+    if (!item || !item.isVoided) continue; // only cancelItems-marked lines need this; a plain unpaid reversal doesn't
+    const voidedAmount = parseFloat(item.totalPrice) || 0;
+    if (voidedAmount <= 0) continue;
+    try {
+      const revenueAccountId = item.revenue_account_id || await resolveRevenueAccountForLine(item, bill.clinic_id);
+      const revenueAccount = revenueAccountId ? await ChartOfAccounts.findByPk(revenueAccountId) : null;
+      const receivableAccount = await ChartOfAccounts.findOne({
+        where: { clinic_id: bill.clinic_id, account_code: bill.scheme_id ? '1210' : '1200', is_active: true },
+      }) || await ChartOfAccounts.findOne({
+        where: { clinic_id: bill.clinic_id, account_code: '1200', is_active: true },
+      });
+
+      if (revenueAccount && receivableAccount) {
+        const glEntry = await AccountingService.createGLEntry({
+          clinic_id: bill.clinic_id,
+          branch_id: bill.branch_id,
+          transaction_date: new Date().toISOString().split('T')[0],
+          transaction_type: 'bill_item_void',
+          description: `Cancelled item on ${bill.bill_number} — ${item.serviceName || item.name || 'item'}`,
+          reference_id: bill.id,
+          reference_module: 'bill_item_void',
+          transaction_currency: bill.bill_currency,
+        }, [
+          { account_id: revenueAccount.id, debit_amount: voidedAmount, credit_amount: 0, description: `Reversal — cancelled item on ${bill.bill_number}` },
+          { account_id: receivableAccount.id, debit_amount: 0, credit_amount: voidedAmount, description: `Receivable reversed — cancelled item on ${bill.bill_number}` },
+        ], req.user?.id || 'system');
+        await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
+      } else {
+        console.error(`Cancel item on ${bill.bill_number}: could not reverse ${voidedAmount} — revenue account ${!!revenueAccount}, receivable ${!!receivableAccount}.`);
+      }
+    } catch (e) {
+      // Non-fatal: the void/cancel itself already committed and the bill is
+      // correct. Logged loudly because the ledger now needs reconciling —
+      // same tolerance /void-item's own route accepts for this exact step.
+      console.error(`Cancel item on ${bill.bill_number}: revenue reversal failed —`, e.message);
+    }
+  }
+}
+
 const PENDING_FOR = { voided: 'pending_void', refunded: 'pending_refund' };
 const TARGET_FOR_PENDING = { pending_void: 'voided', pending_refund: 'refunded' };
 
@@ -497,7 +597,7 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
   let t;
   try {
     const { receiptId } = req.params;
-    const { status, reason } = req.body;
+    const { status, reason, cancelItems } = req.body;
 
     if (!['active', 'voided', 'refunded'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
@@ -593,7 +693,7 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     let reversedServices = [];
     let billForInventoryRestore = null;
     if (previousStatus === 'active' && ['voided', 'refunded'].includes(status)) {
-      ({ reversedServices, billForInventoryRestore } = await applyVoidReversal(receipt, status, reason, req, t));
+      ({ reversedServices, billForInventoryRestore } = await applyVoidReversal(receipt, status, reason, req, t, !!cancelItems));
     }
 
     await t.commit();
@@ -603,6 +703,9 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     if (billForInventoryRestore) {
       await restoreInventoryForVoidedServices(billForInventoryRestore, reversedServices, reason, req.user?.displayName || req.user?.email).catch((e) =>
         console.error(`Receipt ${receipt.receipt_number}: status changed but inventory restore failed —`, e.message));
+      if (cancelItems) {
+        await reverseCancelledItemsRevenueGL(billForInventoryRestore, reversedServices, req);
+      }
     }
 
     if (previousStatus !== status) {
@@ -638,7 +741,7 @@ router.post('/:receiptId/approve-void', requireApprovalPermission('receipt_void_
   let t;
   try {
     const { receiptId } = req.params;
-    const { reason } = req.body;
+    const { reason, cancelItems } = req.body;
 
     t = await sequelize.transaction();
     const receipt = await Receipt.findByPk(receiptId, { transaction: t, lock: t.LOCK.UPDATE });
@@ -663,12 +766,15 @@ router.post('/:receiptId/approve-void', requireApprovalPermission('receipt_void_
       updated_at: new Date(),
     }, { transaction: t });
 
-    const { reversedServices, billForInventoryRestore } = await applyVoidReversal(receipt, targetStatus, reason, req, t);
+    const { reversedServices, billForInventoryRestore } = await applyVoidReversal(receipt, targetStatus, reason, req, t, !!cancelItems);
     await t.commit();
 
     if (billForInventoryRestore) {
       await restoreInventoryForVoidedServices(billForInventoryRestore, reversedServices, reason, req.user?.displayName || req.user?.email).catch((e) =>
         console.error(`Receipt ${receipt.receipt_number}: approved but inventory restore failed —`, e.message));
+      if (cancelItems) {
+        await reverseCancelledItemsRevenueGL(billForInventoryRestore, reversedServices, req);
+      }
     }
 
     try {

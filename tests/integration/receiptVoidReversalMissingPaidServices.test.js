@@ -148,3 +148,74 @@ describe('R1: void reversal fallback when receipt.paid_services is empty', () =>
     }
   });
 });
+
+describe('cancelItems: voiding a receipt can also permanently cancel the item(s) it paid for', () => {
+  test('marks the paid line isVoided, shrinks total_amount, and it cannot be paid again', async () => {
+    const suffix = `CANCEL-${Date.now()}`;
+    const services = [
+      { serviceName: 'Pediatric Consultation', totalPrice: PAYMENT_AMOUNT, paid: true },
+    ];
+    const bill = await makeBill(suffix, { totalAmount: PAYMENT_AMOUNT, paidAmount: PAYMENT_AMOUNT, services });
+    const receipt = await makeReceipt(suffix, { billId: bill.id, amount: PAYMENT_AMOUNT, paidServices: [0] });
+
+    const req = { params: { receiptId: receipt.id }, body: { status: 'voided', reason: 'Visit cancelled — never happened', cancelItems: true }, user: { id: adminUserId, role: 'admin', displayName: 'Admin' } };
+    const res = mockRes();
+    await withTenant(() => statusHandler(req, res));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.receipt.status).toBe('voided');
+
+    const reloadedBill = await withTenant(() => PatientBill.findByPk(bill.id));
+    const reloadedServices = normalizeServices(reloadedBill.services);
+    expect(reloadedServices[0].isVoided).toBe(true);
+    expect(reloadedServices[0].voidReason).toBe('Visit cancelled — never happened');
+    // The cancelled item disappears from what's owed entirely — not just "unpaid".
+    expect(parseFloat(reloadedBill.total_amount)).toBe(0);
+    expect(parseFloat(reloadedBill.paid_amount)).toBe(0);
+    expect(parseFloat(reloadedBill.balance_amount)).toBe(0);
+
+    // The revenue side was actually reversed in the ledger too (Dr Revenue /
+    // Cr Receivable), posted post-commit under the same reference_module
+    // /void-item uses, so ledgerSweeper's reconciliation sees it and doesn't
+    // double-reverse it later.
+    const [[glRow]] = await sequelize.query(
+      `SELECT gl.id, SUM(gli.debit_amount) AS total_debit, SUM(gli.credit_amount) AS total_credit
+       FROM general_ledger gl JOIN gl_line_items gli ON gli.gl_id = gl.id
+       WHERE gl.reference_id = :billId AND gl.reference_module = 'bill_item_void'
+       GROUP BY gl.id`,
+      { replacements: { billId: bill.id } }
+    );
+    expect(glRow).toBeTruthy();
+    expect(parseFloat(glRow.total_debit)).toBe(PAYMENT_AMOUNT);
+    expect(parseFloat(glRow.total_credit)).toBe(PAYMENT_AMOUNT);
+  });
+
+  test('a new item added to the same bill afterward is normal and payable', async () => {
+    const suffix = `CANCELADD-${Date.now()}`;
+    const services = [
+      { serviceName: 'Pediatric Consultation', totalPrice: PAYMENT_AMOUNT, paid: true },
+    ];
+    const bill = await makeBill(suffix, { totalAmount: PAYMENT_AMOUNT, paidAmount: PAYMENT_AMOUNT, services });
+    const receipt = await makeReceipt(suffix, { billId: bill.id, amount: PAYMENT_AMOUNT, paidServices: [0] });
+
+    const req = { params: { receiptId: receipt.id }, body: { status: 'voided', reason: 'cancelled', cancelItems: true }, user: { id: adminUserId, role: 'admin', displayName: 'Admin' } };
+    await withTenant(() => statusHandler(req, mockRes()));
+
+    // Simulate adding a brand-new, unrelated item to the same bill afterward.
+    const reloadedBill = await withTenant(() => PatientBill.findByPk(bill.id));
+    const servicesWithNewItem = [
+      ...normalizeServices(reloadedBill.services),
+      { serviceName: 'Lab Test', totalPrice: 20000, paid: false },
+    ];
+    const newTotal = servicesWithNewItem.filter(s => !s.isVoided).reduce((sum, s) => sum + (parseFloat(s.totalPrice) || 0), 0);
+    await withTenant(() => reloadedBill.update({
+      services: servicesWithNewItem, total_amount: newTotal, balance_amount: newTotal - parseFloat(reloadedBill.paid_amount), status: 'pending',
+    }));
+
+    const finalBill = await withTenant(() => PatientBill.findByPk(bill.id));
+    const finalServices = normalizeServices(finalBill.services);
+    expect(finalServices[0].isVoided).toBe(true); // still cancelled
+    expect(finalServices[1].isVoided).toBeFalsy(); // new item unaffected, normal and payable
+    expect(parseFloat(finalBill.total_amount)).toBe(20000);
+  });
+});

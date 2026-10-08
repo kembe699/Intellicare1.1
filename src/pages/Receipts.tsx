@@ -114,6 +114,13 @@ export default function Receipts() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  // Off by default: a plain cancel just reverses the payment, leaving the
+  // billed item(s) unpaid and payable again (e.g. wrong payment method,
+  // redo the same charge). Checking this also marks those item(s) voided —
+  // same red/struck-through "Voided" treatment as /void-item — so they can
+  // never be paid for again, while the rest of the bill (and anything added
+  // to it afterward) stays normal and payable.
+  const [cancelItemsOnVoid, setCancelItemsOnVoid] = useState(false);
 
   // Live bill state for the selected receipt — used to know which line items are
   // already voided (a receipt itself never changes after the fact) and to void one.
@@ -175,7 +182,7 @@ export default function Receipts() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ status: 'voided', reason: cancellationReason }),
+        body: JSON.stringify({ status: 'voided', reason: cancellationReason, cancelItems: cancelItemsOnVoid }),
       });
       if (res.ok) {
         const result = await res.json();
@@ -184,6 +191,7 @@ export default function Receipts() {
         toast.success(result.pendingApproval ? 'Void request submitted for approval' : 'Receipt cancelled successfully');
         setShowCancelModal(false);
         setCancellationReason('');
+        setCancelItemsOnVoid(false);
         setSelectedReceipt(null);
         fetchReceipts();
       } else {
@@ -508,9 +516,21 @@ export default function Receipts() {
                   className="w-full mt-1 p-3 border border-input rounded-md resize-none h-24 text-sm bg-transparent shadow-sm"
                 />
               </div>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cancelItemsOnVoid}
+                  onChange={e => setCancelItemsOnVoid(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Also cancel the billed item(s) — they will show as Voided and cannot be paid for again.
+                  Leave unchecked if you just need to redo this payment (the item becomes payable again).
+                </span>
+              </label>
             </div>
             <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancellationReason(''); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancellationReason(''); setCancelItemsOnVoid(false); }}>Cancel</Button>
               <Button
                 variant="outline"
                 className="text-red-600 hover:text-red-700"
