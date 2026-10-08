@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
+const { QueryTypes } = require('sequelize');
 const { getBranchConditionSQL } = require('../middleware/branchFilter');
 
 // ═══════════════════════════════════════════════════
@@ -191,6 +192,388 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error building inventory report:', error);
     res.status(500).json({ error: 'Failed to build inventory report' });
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// Inventory Reports — the dropdown-driven register reports below, same
+// pattern as Revenue/Clinical Reports. GET / above (the original endpoint)
+// stays as-is — its `items`/`categoryBreakdown` back the "Stock Analysis"
+// and "Stock Analysis Grouped by Category" dropdown options directly.
+//
+// `inventory_transactions.branch_id` exists directly on the table (added
+// via the generic branch-isolation backfill, not the original migration
+// file) — branch scoping below filters it directly, no join needed.
+// ═══════════════════════════════════════════════════
+
+function isoDaysAgo(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().split('T')[0];
+}
+function asDateStr(v) {
+  if (!v || typeof v !== 'string') return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+function boolParam(v) { return v === 'true' || v === '1' || v === true; }
+
+function branchScope(req, replacements, alias = '', skip = false) {
+  if (skip) return '';
+  if (req.user?.role === 'admin' && !req.branchContext?.adminScoped) return '';
+  const branchId = req.branchContext?.branchId || req.user?.branchId;
+  if (!branchId) return '';
+  replacements.branchId = branchId;
+  const col = alias ? `${alias}.branch_id` : 'branch_id';
+  return ` AND ${col} = :branchId`;
+}
+
+function clinicIdFor(req) {
+  return parseInt(req.query.clinic_id, 10) || req.user?.clinicId || 1;
+}
+
+// ── GET /stock-movement-detail ───────────────────────────────────────────
+// Row-level inventory_transactions. locationId/itemId optionally narrow to
+// the "(By Storage Location)"/"(By Item)" dropdown variants.
+router.get('/stock-movement-detail', async (req, res) => {
+  try {
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId, dateFrom, dateTo };
+    const branchSql = branchScope(req, repl, 't', allBranches);
+    const locationSql = req.query.locationId ? ' AND (t.from_location_id = :locationId OR t.to_location_id = :locationId)' : '';
+    if (req.query.locationId) repl.locationId = req.query.locationId;
+    const itemSql = req.query.itemId ? ' AND t.item_id = :itemId' : '';
+    if (req.query.itemId) repl.itemId = req.query.itemId;
+
+    const rows = await sequelize.query(
+      `SELECT t.id, t.transaction_number AS "transactionNumber", t.transaction_type AS "transactionType",
+              t.transaction_date AS "transactionDate", t.quantity_change AS "quantityChange",
+              t.unit_cost AS "unitCost", t.total_cost AS "totalCost", t.cost_currency AS "costCurrency",
+              i.item_name AS "itemName", i.item_code AS "itemCode",
+              fl.location_name AS "fromLocation", tl.location_name AS "toLocation",
+              b.name AS "branchName", t.notes
+       FROM inventory_transactions t
+       LEFT JOIN inventory_items i ON i.id = t.item_id
+       LEFT JOIN stock_locations fl ON fl.id = t.from_location_id
+       LEFT JOIN stock_locations tl ON tl.id = t.to_location_id
+       LEFT JOIN branches b ON b.id = t.branch_id
+       WHERE t.clinic_id = :clinicId AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}${locationSql}${itemSql}
+       ORDER BY t.transaction_date DESC, t.created_at DESC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ period: { dateFrom, dateTo }, rows });
+  } catch (err) {
+    console.error('Inventory stock-movement-detail error:', err);
+    res.status(500).json({ error: 'Failed to generate stock movement detail' });
+  }
+});
+
+// ── GET /stock-movement-summary ──────────────────────────────────────────
+// groupBy=branch|location — aggregated quantity/value moved.
+router.get('/stock-movement-summary', async (req, res) => {
+  try {
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const groupBy = req.query.groupBy === 'location' ? 'location' : 'branch';
+    const repl = { clinicId, dateFrom, dateTo };
+    const branchSql = branchScope(req, repl, 't', allBranches);
+
+    const rows = groupBy === 'branch'
+      ? await sequelize.query(
+          `SELECT COALESCE(b.name, 'Unassigned') AS "groupLabel",
+                  COUNT(*) AS "transactionCount",
+                  SUM(ABS(t.quantity_change)) AS "totalQuantity",
+                  SUM(ABS(t.total_cost)) AS "totalValue"
+           FROM inventory_transactions t
+           LEFT JOIN branches b ON b.id = t.branch_id
+           WHERE t.clinic_id = :clinicId AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
+           GROUP BY b.name ORDER BY "totalValue" DESC`,
+          { replacements: repl, type: QueryTypes.SELECT }
+        )
+      : await sequelize.query(
+          `SELECT COALESCE(sl.location_name, 'Unassigned') AS "groupLabel",
+                  COUNT(*) AS "transactionCount",
+                  SUM(ABS(t.quantity_change)) AS "totalQuantity",
+                  SUM(ABS(t.total_cost)) AS "totalValue"
+           FROM inventory_transactions t
+           LEFT JOIN stock_locations sl ON sl.id = COALESCE(t.from_location_id, t.to_location_id)
+           WHERE t.clinic_id = :clinicId AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
+           GROUP BY sl.location_name ORDER BY "totalValue" DESC`,
+          { replacements: repl, type: QueryTypes.SELECT }
+        );
+
+    res.json({
+      period: { dateFrom, dateTo }, groupBy,
+      rows: rows.map(r => ({ ...r, transactionCount: parseInt(r.transactionCount, 10) || 0, totalQuantity: parseInt(r.totalQuantity, 10) || 0, totalValue: parseFloat(r.totalValue) || 0 })),
+    });
+  } catch (err) {
+    console.error('Inventory stock-movement-summary error:', err);
+    res.status(500).json({ error: 'Failed to generate stock movement summary' });
+  }
+});
+
+// ── GET /fast-moving & /slow-moving ──────────────────────────────────────
+// Ranked by total quantity moved out (dispense/usage) in the period.
+// fast = top 20 (highest volume); slow = every active item, ascending
+// (items that never moved at all sort first — that IS the slowest case).
+function movingItemsQuery(direction) {
+  return `
+    SELECT i.id, i.item_code AS "itemCode", i.item_name AS "itemName", i.item_category AS "itemCategory",
+           COALESCE(SUM(ABS(t.quantity_change)), 0) AS "totalMoved",
+           COALESCE(COUNT(t.id), 0) AS "transactionCount"
+    FROM inventory_items i
+    LEFT JOIN inventory_transactions t
+      ON t.item_id = i.id AND t.transaction_type IN ('dispense', 'usage')
+      AND t.transaction_date BETWEEN :dateFrom AND :dateTo
+    WHERE i.clinic_id = :clinicId AND i.is_active = true __BRANCH__
+    GROUP BY i.id, i.item_code, i.item_name, i.item_category
+    ORDER BY "totalMoved" ${direction === 'fast' ? 'DESC' : 'ASC'}
+    ${direction === 'fast' ? 'LIMIT 20' : ''}
+  `;
+}
+
+router.get('/fast-moving', async (req, res) => {
+  try {
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId, dateFrom, dateTo };
+    const branchSql = branchScope(req, repl, 'i', allBranches);
+    const rows = await sequelize.query(movingItemsQuery('fast').replace('__BRANCH__', branchSql), { replacements: repl, type: QueryTypes.SELECT });
+    res.json({ period: { dateFrom, dateTo }, rows: rows.map(r => ({ ...r, totalMoved: parseInt(r.totalMoved, 10) || 0, transactionCount: parseInt(r.transactionCount, 10) || 0 })) });
+  } catch (err) {
+    console.error('Inventory fast-moving error:', err);
+    res.status(500).json({ error: 'Failed to generate fast-moving items report' });
+  }
+});
+
+router.get('/slow-moving', async (req, res) => {
+  try {
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId, dateFrom, dateTo };
+    const branchSql = branchScope(req, repl, 'i', allBranches);
+    const rows = await sequelize.query(movingItemsQuery('slow').replace('__BRANCH__', branchSql), { replacements: repl, type: QueryTypes.SELECT });
+    res.json({ period: { dateFrom, dateTo }, rows: rows.map(r => ({ ...r, totalMoved: parseInt(r.totalMoved, 10) || 0, transactionCount: parseInt(r.transactionCount, 10) || 0 })) });
+  } catch (err) {
+    console.error('Inventory slow-moving error:', err);
+    res.status(500).json({ error: 'Failed to generate slow-moving items report' });
+  }
+});
+
+// ── GET /retired-batches ─────────────────────────────────────────────────
+router.get('/retired-batches', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId };
+    const branchSql = branchScope(req, repl, 'bt', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT bt.id, bt.batch_number AS "batchNumber", bt.quantity_received AS "quantityReceived",
+              bt.quantity_used AS "quantityUsed", bt.expiry_date AS "expiryDate", bt.receipt_date AS "receiptDate",
+              i.item_name AS "itemName", i.item_code AS "itemCode",
+              b.name AS "branchName"
+       FROM inventory_batches bt
+       LEFT JOIN inventory_items i ON i.id = bt.item_id
+       LEFT JOIN branches b ON b.id = bt.branch_id
+       WHERE bt.clinic_id = :clinicId AND bt.status = 'retired' ${branchSql}
+       ORDER BY bt.updated_at DESC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ rows });
+  } catch (err) {
+    console.error('Inventory retired-batches error:', err);
+    res.status(500).json({ error: 'Failed to generate retired batches report' });
+  }
+});
+
+// ── GET /near-expiry & /stock-expiry ─────────────────────────────────────
+// near-expiry: not yet expired, expiring within `days` (default 90).
+// stock-expiry: already past expiry_date (or flagged is_expired).
+router.get('/near-expiry', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const days = parseInt(req.query.days, 10) || 90;
+    const repl = { clinicId, days };
+    const branchSql = branchScope(req, repl, 'bt', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT bt.id, bt.batch_number AS "batchNumber", bt.quantity_received AS "quantityReceived",
+              bt.quantity_used AS "quantityUsed", (bt.quantity_received - bt.quantity_used) AS "quantityRemaining",
+              bt.expiry_date AS "expiryDate", (bt.expiry_date - CURRENT_DATE) AS "daysToExpiry",
+              i.item_name AS "itemName", i.item_code AS "itemCode",
+              b.name AS "branchName"
+       FROM inventory_batches bt
+       LEFT JOIN inventory_items i ON i.id = bt.item_id
+       LEFT JOIN branches b ON b.id = bt.branch_id
+       WHERE bt.clinic_id = :clinicId AND bt.status IN ('active', 'partial_use')
+         AND bt.is_expired IS NOT TRUE AND bt.expiry_date IS NOT NULL
+         AND bt.expiry_date >= CURRENT_DATE AND bt.expiry_date <= CURRENT_DATE + (:days || ' days')::interval
+         ${branchSql}
+       ORDER BY bt.expiry_date ASC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ days, rows });
+  } catch (err) {
+    console.error('Inventory near-expiry error:', err);
+    res.status(500).json({ error: 'Failed to generate near-expiry report' });
+  }
+});
+
+router.get('/stock-expiry', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId };
+    const branchSql = branchScope(req, repl, 'bt', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT bt.id, bt.batch_number AS "batchNumber", bt.quantity_received AS "quantityReceived",
+              bt.quantity_used AS "quantityUsed", (bt.quantity_received - bt.quantity_used) AS "quantityRemaining",
+              bt.expiry_date AS "expiryDate",
+              i.item_name AS "itemName", i.item_code AS "itemCode",
+              b.name AS "branchName"
+       FROM inventory_batches bt
+       LEFT JOIN inventory_items i ON i.id = bt.item_id
+       LEFT JOIN branches b ON b.id = bt.branch_id
+       WHERE bt.clinic_id = :clinicId AND (bt.is_expired = true OR bt.expiry_date < CURRENT_DATE) ${branchSql}
+       ORDER BY bt.expiry_date DESC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ rows });
+  } catch (err) {
+    console.error('Inventory stock-expiry error:', err);
+    res.status(500).json({ error: 'Failed to generate stock expiry report' });
+  }
+});
+
+// ── GET /stock-valuation-by-location ─────────────────────────────────────
+// Stock Valuation (All) reuses GET / 's `items` directly (same weighted-
+// average logic) — this is only the (By Storage Location) breakdown.
+router.get('/stock-valuation-by-location', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId };
+    const branchSql = branchScope(req, repl, 'i', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT sl.id AS "locationId", sl.location_name AS "locationName",
+              i.item_name AS "itemName", i.item_code AS "itemCode",
+              sbl.quantity_on_hand AS "quantityOnHand", i.average_unit_cost AS "averageUnitCost",
+              (sbl.quantity_on_hand * i.average_unit_cost) AS "stockValue", i.cost_currency AS "costCurrency",
+              b.name AS "branchName"
+       FROM stock_by_location sbl
+       JOIN inventory_items i ON i.id = sbl.item_id
+       LEFT JOIN stock_locations sl ON sl.id = sbl.location_id
+       LEFT JOIN branches b ON b.id = i.branch_id
+       WHERE i.clinic_id = :clinicId AND sbl.quantity_on_hand > 0 ${branchSql}
+       ORDER BY "stockValue" DESC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ rows: rows.map(r => ({ ...r, quantityOnHand: parseInt(r.quantityOnHand, 10) || 0, stockValue: parseFloat(r.stockValue) || 0 })) });
+  } catch (err) {
+    console.error('Inventory stock-valuation-by-location error:', err);
+    res.status(500).json({ error: 'Failed to generate stock valuation by location' });
+  }
+});
+
+// ── GET /out-of-stock ─────────────────────────────────────────────────────
+router.get('/out-of-stock', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId };
+    const branchSql = branchScope(req, repl, 'i', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT i.id, i.item_code AS "itemCode", i.item_name AS "itemName", i.item_category AS "itemCategory",
+              i.minimum_stock_level AS "minimumStockLevel", b.name AS "branchName"
+       FROM inventory_items i
+       LEFT JOIN branches b ON b.id = i.branch_id
+       WHERE i.clinic_id = :clinicId AND i.is_active = true AND i.quantity_on_hand = 0 ${branchSql}
+       ORDER BY i.item_name ASC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ rows });
+  } catch (err) {
+    console.error('Inventory out-of-stock error:', err);
+    res.status(500).json({ error: 'Failed to generate out-of-stock report' });
+  }
+});
+
+// ── GET /below-reorder-level ─────────────────────────────────────────────
+// This app's reorder trigger is `minimum_stock_level` — there is no column
+// literally named "reorder_level" (confirmed against the real schema).
+router.get('/below-reorder-level', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId };
+    const branchSql = branchScope(req, repl, 'i', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT i.id, i.item_code AS "itemCode", i.item_name AS "itemName", i.item_category AS "itemCategory",
+              i.quantity_on_hand AS "quantityOnHand", i.minimum_stock_level AS "minimumStockLevel",
+              i.reorder_quantity AS "reorderQuantity", b.name AS "branchName"
+       FROM inventory_items i
+       LEFT JOIN branches b ON b.id = i.branch_id
+       WHERE i.clinic_id = :clinicId AND i.is_active = true
+         AND i.minimum_stock_level > 0 AND i.quantity_on_hand <= i.minimum_stock_level ${branchSql}
+       ORDER BY (i.quantity_on_hand - i.minimum_stock_level) ASC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({ rows: rows.map(r => ({ ...r, quantityOnHand: parseInt(r.quantityOnHand, 10) || 0, minimumStockLevel: parseInt(r.minimumStockLevel, 10) || 0 })) });
+  } catch (err) {
+    console.error('Inventory below-reorder-level error:', err);
+    res.status(500).json({ error: 'Failed to generate below-reorder-level report' });
+  }
+});
+
+// ── GET /material-consumption ────────────────────────────────────────────
+// "Not Committed" = stock actually deducted (dispense/usage/waste
+// transactions) — real data. "Committed" (reserved but not yet deducted)
+// has no live data behind it: `inventory_items.reserved_quantity` and the
+// whole `inventory_reservations` table exist in schema but are never
+// written to anywhere in this codebase (confirmed) — the frontend shows a
+// message for that variant instead of calling this endpoint.
+router.get('/material-consumption', async (req, res) => {
+  try {
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId, dateFrom, dateTo };
+    const branchSql = branchScope(req, repl, 't', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT i.item_name AS "itemName", i.item_code AS "itemCode", i.item_category AS "itemCategory",
+              SUM(ABS(t.quantity_change)) AS "quantityConsumed", SUM(ABS(t.total_cost)) AS "totalValue",
+              COUNT(*) AS "transactionCount"
+       FROM inventory_transactions t
+       JOIN inventory_items i ON i.id = t.item_id
+       WHERE t.clinic_id = :clinicId AND t.transaction_type IN ('dispense', 'usage', 'waste')
+         AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
+       GROUP BY i.item_name, i.item_code, i.item_category
+       ORDER BY "totalValue" DESC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    res.json({
+      period: { dateFrom, dateTo },
+      rows: rows.map(r => ({ ...r, quantityConsumed: parseInt(r.quantityConsumed, 10) || 0, totalValue: parseFloat(r.totalValue) || 0, transactionCount: parseInt(r.transactionCount, 10) || 0 })),
+    });
+  } catch (err) {
+    console.error('Inventory material-consumption error:', err);
+    res.status(500).json({ error: 'Failed to generate material consumption report' });
   }
 });
 
