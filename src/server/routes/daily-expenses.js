@@ -58,6 +58,68 @@ const CATEGORY_EXPENSE_CODE = {
 };
 const DEFAULT_EXPENSE_CODE = '5900'; // Miscellaneous Expenses — fallback for Catering/Cleaning/Security/Other/unknown
 
+// Same 7-value vocabulary ItemMaster.tsx offers for inventory_items.item_category
+// (drugs/consumables/equipment/supplies/reagents/surgical/general). 'equipment' is
+// deliberately NOT mapped here — an equipment purchase is capital spend, not a
+// recurring operating expense, and posting it as one would just trade a clearer
+// mislabel (Miscellaneous) for a worse one (overstating opex); it still falls
+// through to Miscellaneous below, same as 'general' and anything unmatched.
+const PO_ITEM_CATEGORY_EXPENSE_CODE = {
+  drugs: '5210',       // Pharmaceutical Cost of Sales
+  reagents: '5220',    // Laboratory Supplies Expense
+  consumables: '5200', // Medical Supplies Expense
+  supplies: '5200',    // Medical Supplies Expense
+  surgical: '5200',    // Medical Supplies Expense
+};
+
+/**
+ * A PO paid before its Goods Receipt Note is accepted has no per-line
+ * inventory_item_id yet (that match only happens at GRN acceptance — see
+ * procurement.js's GRN accept handler) — but its line items' free-text
+ * item_name usually matches something already in the inventory catalog, the
+ * same way reportClinicPerformance.js fuzzy-matches bill line items against
+ * the services catalog to recover a department breakdown. Tallies each PO
+ * line's value under whichever catalog item_category its name matches (by
+ * ILIKE, picking the catalog item with the longest/most specific name match
+ * when several partially match), and returns the account code for whichever
+ * category carried the most value — i.e. "what is this PO mostly for" —
+ * rather than attempting a line-by-line split, which would turn one payment
+ * into a multi-way GL entry for comparatively little extra accuracy. Returns
+ * null (caller falls back to Miscellaneous, same as before) when nothing
+ * matches at all.
+ */
+async function inferExpenseAccountFromPOItems(sequelize, poId) {
+  try {
+    const [lines] = await sequelize.query(
+      `SELECT item_name, total_price FROM purchase_order_items WHERE purchase_order_id = :poId`,
+      { replacements: { poId } }
+    );
+    if (lines.length === 0) return null;
+
+    const valueByCategory = {};
+    for (const line of lines) {
+      const name = (line.item_name || '').trim();
+      if (!name) continue;
+      const [matches] = await sequelize.query(
+        `SELECT item_category FROM inventory_items
+         WHERE is_active = true AND item_name ILIKE :pattern
+         ORDER BY length(item_name) DESC LIMIT 1`,
+        { replacements: { pattern: `%${name}%` } }
+      );
+      const category = matches[0]?.item_category;
+      const code = category && PO_ITEM_CATEGORY_EXPENSE_CODE[category];
+      if (code) valueByCategory[code] = (valueByCategory[code] || 0) + (parseFloat(line.total_price) || 0);
+    }
+
+    const codes = Object.keys(valueByCategory);
+    if (codes.length === 0) return null;
+    return codes.reduce((best, code) => (valueByCategory[code] > valueByCategory[best] ? code : best), codes[0]);
+  } catch (e) {
+    console.warn('inferExpenseAccountFromPOItems failed, falling back to Miscellaneous:', e.message);
+    return null;
+  }
+}
+
 // MySQL 8 does not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (it's Postgres-only
 // syntax and throws a 1064 syntax error). This helper checks information_schema first so
 // column additions are actually idempotent AND actually happen on MySQL.
@@ -502,10 +564,16 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
         }, lineItems, req.user.id);
         await AccountingService.postGLEntry(glEntry.id, req.user.id);
       } else if (!hasGrnLiability) {
-        const expenseAccount = await AccountingService.getAccountByCode(clinicIdNum, '5900');
+        // Infer a real expense/COGS account from the PO's own line items before
+        // falling back to Miscellaneous — see inferExpenseAccountFromPOItems's
+        // own comment for why this is possible even with no GRN on file yet.
+        const inferredCode = await inferExpenseAccountFromPOItems(sequelize, parseInt(po_id));
+        const expenseAccount = await AccountingService.getAccountByCode(clinicIdNum, inferredCode || '5900')
+          || (inferredCode ? await AccountingService.getAccountByCode(clinicIdNum, '5900') : null);
         if (expenseAccount) {
+          const matchedNote = expenseAccount.account_code === '5900' ? ' — no catalog match for its line items' : '';
           const lineItems = [
-            { account_id: expenseAccount.id, debit_amount: paymentBaseAmount, credit_amount: 0, description: `Supplier payment (no goods receipt on file) — PO ${po_number || po.po_number} to ${supplier_name || 'supplier'}` },
+            { account_id: expenseAccount.id, debit_amount: paymentBaseAmount, credit_amount: 0, description: `Supplier payment (no goods receipt on file${matchedNote}) — PO ${po_number || po.po_number} to ${supplier_name || 'supplier'}` },
             { account_id: String(account_id), debit_amount: 0, credit_amount: paymentBaseAmount, description: `Payment via ${account_name || payment_method || 'cash'} (${poCurrency} ${payAmt} @ ${rateNow})` },
           ];
           const glEntry = await AccountingService.createGLEntry({
@@ -519,7 +587,7 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
           }, lineItems, req.user.id);
           await AccountingService.postGLEntry(glEntry.id, req.user.id);
         } else {
-          console.warn(`Supplier bill payment ${insertedId}: skipped GL posting — Miscellaneous Expenses account (5900) not found for clinic ${clinicIdNum}`);
+          console.warn(`Supplier bill payment ${insertedId}: skipped GL posting — expense account (${inferredCode || '5900'}) not found for clinic ${clinicIdNum}`);
         }
       } else {
         console.warn(`Supplier bill payment ${insertedId}: skipped GL posting — Accounts Payable account (2100) not found for clinic ${clinicIdNum}`);
