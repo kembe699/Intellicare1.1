@@ -416,17 +416,19 @@ router.get('/radiology-register', async (req, res) => {
     const branchSql2 = branchScope(req, repl2, 'irr', allBranches);
     const inpatient = await sequelize.query(
       `SELECT irr.id, irr.imaging_type AS "examName", irr.status, irr.request_date AS "requestDate",
-              COALESCE(p.first_name || ' ' || p.last_name, 'Unknown') AS "patientName",
+              NULLIF(TRIM(COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')), '') AS "rawPatientName",
               b.name AS "branchName", 'Inpatient' AS setting
        FROM inpatient_radiology_requests irr
        LEFT JOIN patients p ON p.id = irr.patient_id
+       LEFT JOIN lis_participants lp ON lp.id = irr.patient_id
        LEFT JOIN branches b ON b.id = irr.branch_id
        WHERE irr.request_date BETWEEN :fromTs AND :toTs ${branchSql2}
        ORDER BY irr.request_date DESC`,
       { replacements: repl2, type: QueryTypes.SELECT }
     );
 
-    const rows = [...outpatient, ...inpatient].sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
+    const rows = [...outpatient, ...inpatient.map(r => ({ ...r, patientName: r.rawPatientName || 'Unknown' }))]
+      .sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
     res.json({ period: { dateFrom, dateTo }, rows });
   } catch (err) {
     console.error('Clinical radiology-register error:', err);
@@ -455,14 +457,15 @@ router.get('/prescription-register', async (req, res) => {
       `SELECT pp.id, pp.prescription_number AS "prescriptionNumber", pp.prescription_date AS "prescriptionDate",
               COALESCE(pp.prescribed_by_name, u.display_name, 'Unknown') AS "prescriberName",
               COALESCE(ii.item_name, pl.external_drug_name, 'Unknown drug') AS "drugName",
-              pl.frequency, pl.duration_days AS "durationDays",
-              COALESCE(p.first_name || ' ' || p.last_name, 'Unknown') AS "patientName",
+              pl.dose_strength AS "doseStrength", pl.frequency, pl.duration_days AS "durationDays",
+              NULLIF(TRIM(COALESCE(lp.first_name, p.first_name, '') || ' ' || COALESCE(lp.last_name, p.last_name, '')), '') AS "rawPatientName",
               b.name AS "branchName"
        FROM pharmacy_prescriptions pp
        JOIN prescription_lines pl ON pl.prescription_id = pp.id
        LEFT JOIN inventory_items ii ON ii.id = pl.drug_id
        LEFT JOIN users u ON u.id = pp.doctor_id
        LEFT JOIN patients p ON p.id = pp.patient_id
+       LEFT JOIN lis_participants lp ON lp.id = pp.patient_id
        LEFT JOIN branches b ON b.id = pp.branch_id
        WHERE pp.prescription_date BETWEEN :fromTs AND :toTs ${branchSql1}${clinicianSql1}
        ORDER BY pp.prescription_date DESC`,
@@ -477,8 +480,8 @@ router.get('/prescription-register', async (req, res) => {
       `SELECT rx.id, NULL AS "prescriptionNumber", rx.prescribed_at AS "prescriptionDate",
               COALESCE(u.display_name, 'Unknown') AS "prescriberName",
               COALESCE(rx.medication_name, rx.drug_name, 'Unknown drug') AS "drugName",
-              rx.frequency, NULL AS "durationDays",
-              COALESCE(rx.patient_name, 'Unknown') AS "patientName",
+              rx.dosage AS "doseStrength", rx.frequency, NULL AS "durationDays",
+              NULLIF(TRIM(rx.patient_name), '') AS "rawPatientName",
               b.name AS "branchName"
        FROM prescriptions rx
        LEFT JOIN users u ON u.id = rx.prescribed_by
@@ -488,7 +491,17 @@ router.get('/prescription-register', async (req, res) => {
       { replacements: repl2, type: QueryTypes.SELECT }
     );
 
-    const rows = [...structured, ...legacy].sort((a, b) => new Date(b.prescriptionDate).getTime() - new Date(a.prescriptionDate).getTime());
+    // "Dosage" combines dose + frequency the same way the prescribing UI
+    // itself displays a line ("{dose} · {frequency}") — neither field alone
+    // is reliably filled in (prescribers often free-text just one of them),
+    // so showing only `frequency` left real prescriptions looking blank.
+    const rows = [...structured, ...legacy]
+      .map(r => ({
+        ...r,
+        patientName: r.rawPatientName || 'Unknown',
+        dosage: [r.doseStrength, r.frequency].filter(Boolean).join(' · ') || '—',
+      }))
+      .sort((a, b) => new Date(b.prescriptionDate).getTime() - new Date(a.prescriptionDate).getTime());
     res.json({ period: { dateFrom, dateTo }, rows });
   } catch (err) {
     console.error('Clinical prescription-register error:', err);
@@ -513,13 +526,14 @@ router.get('/inpatient-register', async (req, res) => {
     const rows = await sequelize.query(
       `SELECT ia.id, ia.admission_date AS "admissionDate", ia.discharge_date AS "dischargeDate",
               ia.status, ia.diagnosis, ia.admission_type AS "admissionType", ia.discharge_outcome AS "dischargeOutcome",
-              COALESCE(p.first_name || ' ' || p.last_name, 'Unknown') AS "patientName",
-              p.gender, p.date_of_birth AS "dateOfBirth",
+              NULLIF(TRIM(COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')), '') AS "rawPatientName",
+              COALESCE(p.gender, lp.gender) AS gender, COALESCE(p.date_of_birth, lp.date_of_birth) AS "dateOfBirth",
               COALESCE(w.name, 'Unassigned') AS "wardName",
               COALESCE(u.display_name, 'Unassigned') AS "attendingDoctor",
               b.name AS "branchName"
        FROM inpatient_admissions ia
        LEFT JOIN patients p ON p.id = ia.patient_id
+       LEFT JOIN lis_participants lp ON lp.id = ia.patient_id
        LEFT JOIN wards w ON w.id = ia.ward_id
        LEFT JOIN users u ON u.id = ia.attending_doctor_id
        LEFT JOIN branches b ON b.id = ia.branch_id
@@ -528,7 +542,10 @@ router.get('/inpatient-register', async (req, res) => {
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
-    res.json({ period: { dateFrom, dateTo }, rows: rows.map(r => ({ ...r, age: calcAgeYears(r.dateOfBirth, r.admissionDate) })) });
+    res.json({
+      period: { dateFrom, dateTo },
+      rows: rows.map(r => ({ ...r, patientName: r.rawPatientName || 'Unknown', age: calcAgeYears(r.dateOfBirth, r.admissionDate) })),
+    });
   } catch (err) {
     console.error('Clinical inpatient-register error:', err);
     res.status(500).json({ error: 'Failed to generate inpatient register' });
@@ -548,11 +565,12 @@ router.get('/inpatient-admissions-attending-doctor', async (req, res) => {
 
     const rows = await sequelize.query(
       `SELECT ia.id, ia.admission_date AS "admissionDate", ia.status,
-              COALESCE(p.first_name || ' ' || p.last_name, 'Unknown') AS "patientName",
+              NULLIF(TRIM(COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')), '') AS "rawPatientName",
               COALESCE(u.display_name, 'Unassigned') AS "attendingDoctor",
               b.name AS "branchName"
        FROM inpatient_admissions ia
        LEFT JOIN patients p ON p.id = ia.patient_id
+       LEFT JOIN lis_participants lp ON lp.id = ia.patient_id
        LEFT JOIN users u ON u.id = ia.attending_doctor_id
        LEFT JOIN branches b ON b.id = ia.branch_id
        WHERE ia.admission_date BETWEEN :fromTs AND :toTs ${branchSql} AND ia.attending_doctor_id IS NOT NULL
@@ -560,7 +578,7 @@ router.get('/inpatient-admissions-attending-doctor', async (req, res) => {
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
-    res.json({ period: { dateFrom, dateTo }, rows });
+    res.json({ period: { dateFrom, dateTo }, rows: rows.map(r => ({ ...r, patientName: r.rawPatientName || 'Unknown' })) });
   } catch (err) {
     console.error('Clinical inpatient-admissions-attending-doctor error:', err);
     res.status(500).json({ error: 'Failed to generate inpatient admissions report' });
