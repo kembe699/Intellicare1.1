@@ -113,6 +113,7 @@ const RptLaboratory = lazyWithRetry(() => import('./pages/reports/LabReport'));
 const RptPharmacy = lazyWithRetry(() => import('./pages/reports/PharmacyReport'));
 const RptInventory = lazyWithRetry(() => import('./pages/reports/InventoryReport'));
 const RptIncomeStatement = lazyWithRetry(() => import('./pages/reports/IncomeStatementReport'));
+const RptRevenue = lazyWithRetry(() => import('./pages/reports/RevenueReport'));
 const RptOverview = lazyWithRetry(() => import('./pages/reports/DashboardOverview'));
 const RptARAging = lazyWithRetry(() => import('./pages/reports/ARAgingReport'));
 const RptClinicPerformance = lazyWithRetry(() => import('./pages/reports/ClinicPerformanceReport'));
@@ -455,6 +456,7 @@ const AppRoutes = () => {
         <Route path="laboratory" element={<RptLaboratory />} />
         <Route path="pharmacy" element={<RptPharmacy />} />
         <Route path="inventory" element={<RptInventory />} />
+        <Route path="revenue" element={<RptRevenue />} />
         <Route path="income-statement" element={<RptIncomeStatement />} />
         <Route path="ar-aging" element={<RptARAging />} />
         <Route path="clinic-performance" element={<RptClinicPerformance />} />

@@ -34,6 +34,7 @@ const REPORT_CATEGORIES = [
   { id: 'clinic-performance', label: 'Clinic / Department Performance', icon: Building2, desc: 'Volume & revenue by clinic and category', group: 'Operations' },
   { id: 'occupancy', label: 'Bed / Ward Occupancy', icon: BedDouble, desc: 'Current occupancy & admissions trend', group: 'Operations' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
+  { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
   { id: 'income-statement', label: 'Income Statement', icon: TrendingUp, desc: 'Revenue, expenses, net income', group: 'Financial' },
   { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
   { id: 'audit-summary', label: 'Staff Activity / Audit Log', icon: ShieldCheck, desc: 'Who did what, and when', group: 'Administration' },
