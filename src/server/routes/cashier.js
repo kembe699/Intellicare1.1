@@ -377,7 +377,7 @@ router.post('/start-shift', authorize('cashier.write'), async (req, res) => {
 
     const shift = await CashierShift.create({
       cashier_id: userId,
-      cashier_name: req.user?.email || 'Cashier',
+      cashier_name: req.user?.displayName || req.user?.email || 'Cashier',
       opening_balance: req.body.opening_balance || 0,
       status: 'open',
       branch_id: getCreateBranchId(req)

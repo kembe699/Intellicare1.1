@@ -56,8 +56,8 @@ const THICK_DIVIDER = '================================';
 // thick enough to hold up on worn thermal hardware.
 const row = (label: string, value: string, bold = false): React.ReactNode => (
   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-    <span style={{ fontSize: '12px', fontWeight: 600 }}>{label}</span>
-    <span style={{ fontSize: '12px', fontWeight: bold ? 700 : 600, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
+    <span style={{ fontSize: '13px', fontWeight: 600 }}>{label}</span>
+    <span style={{ fontSize: '13px', fontWeight: bold ? 700 : 600, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
   </div>
 );
 
@@ -90,8 +90,8 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
     // on monospace column alignment (it's all flex rows), so there's no
     // layout cost to dropping it.
     fontFamily: "Arial, Helvetica, sans-serif",
-    fontSize: '12px',
-    lineHeight: '1.5',
+    fontSize: '13px',
+    lineHeight: '1.55',
     color: '#000',
     backgroundColor: '#fff',
     padding: '12px 10px 16px',
@@ -129,9 +129,13 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       <div style={divStyle}>{DIVIDER}</div>
 
       {/* ── Patient ── */}
+      {/* No "ID:" row — it only ever had the internal record UUID to show
+          (nothing human-readable is passed through at any call site), and a
+          long opaque string nobody can act on just adds clutter and another
+          thing to misread on a low-quality thermal print. Bill # above
+          already gives a short, real reference to quote back. */}
       <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1px', marginBottom: '3px' }}>PATIENT</div>
       {row('Name:', bill.patientName)}
-      {row('ID:', bill.patientId)}
 
       <div style={divStyle}>{DIVIDER}</div>
 
@@ -224,12 +228,12 @@ export const printThermalReceipt = (receiptElement: HTMLElement) => {
     html, body {
       margin: 0; padding: 0; background: #fff;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 12px; font-weight: 600; color: #000;
+      font-size: 13px; font-weight: 600; color: #000;
     }
     .thermal-receipt {
       width: 76mm; margin: 0 auto;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 12px; font-weight: 600; line-height: 1.5; color: #000;
+      font-size: 13px; font-weight: 600; line-height: 1.55; color: #000;
     }
     @media print {
       html, body { background: #fff; }

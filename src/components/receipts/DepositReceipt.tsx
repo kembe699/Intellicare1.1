@@ -25,8 +25,8 @@ const THICK_DIVIDER = '================================';
 // "fading on thermal paper" complaint — see the comment there.
 const row = (label: string, value: string, bold = false): React.ReactNode => (
   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-    <span style={{ fontSize: '12px', fontWeight: 600 }}>{label}</span>
-    <span style={{ fontSize: '12px', fontWeight: bold ? 700 : 600, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
+    <span style={{ fontSize: '13px', fontWeight: 600 }}>{label}</span>
+    <span style={{ fontSize: '13px', fontWeight: bold ? 700 : 600, textAlign: 'right', maxWidth: '55%', wordBreak: 'break-word' }}>{value}</span>
   </div>
 );
 
@@ -44,7 +44,7 @@ export const DepositReceipt: React.FC<DepositReceiptProps> = ({
 
   const thermal: React.CSSProperties = {
     width: '302px', margin: '0 auto', fontFamily: "Arial, Helvetica, sans-serif",
-    fontSize: '12px', lineHeight: '1.5', color: '#000', backgroundColor: '#fff',
+    fontSize: '13px', lineHeight: '1.55', color: '#000', backgroundColor: '#fff',
     padding: '12px 10px 16px', boxSizing: 'border-box',
   };
   const center: React.CSSProperties = { textAlign: 'center' };
