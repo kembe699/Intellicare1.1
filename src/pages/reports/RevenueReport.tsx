@@ -99,10 +99,7 @@ export default function RevenueReport() {
   const [cogsByAccount, setCogsByAccount] = useState<{ accountName: string; amount: number }[]>([]);
 
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
-  // Every group/bills-group report always shows its full aggregated
-  // breakdown — there is no separate Summary/Detail toggle to flip between.
-  const effectiveView: 'summary' | 'detail' = (option.mode === 'group' || option.mode === 'bills-group') ? 'summary' : 'detail';
-  const metric: 'receipts' | 'invoices' = option.mode === 'bills-group' ? 'invoices' : 'receipts';
+  const isGroupShaped = option.mode === 'group' || option.mode === 'bills-group';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -112,7 +109,7 @@ export default function RevenueReport() {
       const params = new URLSearchParams({ dateFrom, dateTo });
       if (user?.clinic) params.append('clinic_id', user.clinic);
 
-      if (option.mode === 'group' && effectiveView === 'summary') {
+      if (option.mode === 'group') {
         if (option.value === 'user') {
           const res = await authFetch(`/api/reports-v2/billing-by-user?${params}`);
           if (!res.ok) throw new Error('Failed to load');
@@ -122,7 +119,7 @@ export default function RevenueReport() {
           const res = await authFetch(`/api/reports-v2/clinic-performance?${params}`);
           if (!res.ok) throw new Error('Failed to load');
           const json = await res.json();
-          setRows((json.byCategory || []).map((c: any) => ({ key: c.category, label: c.category, totalCollected: c.totalCollected })));
+          setRows((json.byCategory || []).map((c: any) => ({ key: c.category, label: c.category, transactionCount: c.volume, totalCollected: c.totalCollected })));
         } else if (option.value === 'doctor') {
           const res = await authFetch(`/api/reports-v2/doctor-performance?${params}`);
           if (!res.ok) throw new Error('Failed to load');
@@ -134,21 +131,21 @@ export default function RevenueReport() {
           const json = await res.json();
           setRows((json.rows || []).map((r: any) => ({ key: r.key, label: r.label, transactionCount: r.transactionCount, totalCollected: r.totalCollected })));
         }
-      } else if (option.mode === 'bills-group' && effectiveView === 'summary') {
+      } else if (option.mode === 'bills-group') {
         params.set('groupBy', option.billsGroupBy!);
         params.set('patientType', option.patientType!);
         const res = await authFetch(`/api/reports-v2/revenue/bills?${params}`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
-      } else if (metric === 'receipts' && (effectiveView === 'detail' || option.mode === 'detail-only')) {
-        const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=receipts`);
+      } else if (option.mode === 'detail-only' && option.value === 'bills_detail') {
+        const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=bills`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
-      } else if (metric === 'invoices' && (effectiveView === 'detail' || option.mode === 'detail-only')) {
-        if (option.patientType && option.patientType !== 'all') params.set('patientType', option.patientType);
-        const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=bills`);
+      } else if (option.mode === 'detail-only') {
+        // 'journal' — the only other detail-only option.
+        const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=receipts`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
@@ -185,13 +182,13 @@ export default function RevenueReport() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, user?.clinic, reportType, effectiveView]);
+  }, [dateFrom, dateTo, user?.clinic, reportType]);
 
   const sortedGroupRows = useMemo(
-    () => (option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary'
+    () => isGroupShaped
       ? [...rows].sort((a, b) => (b.totalCollected ?? b.totalBilled ?? 0) - (a.totalCollected ?? a.totalBilled ?? 0))
       : rows,
-    [rows, option.mode, effectiveView]
+    [rows, isGroupShaped]
   );
 
   const groupTotal = sortedGroupRows.reduce((s, r) => s + (r.totalCollected ?? 0), 0);
@@ -202,7 +199,7 @@ export default function RevenueReport() {
   let keyExtractor: (row: any, i: number) => string | number = (r, i) => r.key ?? r.id ?? i;
   let emptyMessage = 'No activity in this period.';
 
-  if (option.mode === 'group' && effectiveView === 'summary') {
+  if (option.mode === 'group') {
     columns = [
       { key: 'label', header: option.label.replace('Revenue by ', '').replace('Revenue Detailed (By ', '').replace(')', ''), sortable: true },
       { key: 'transactionCount', header: 'Transactions', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{v != null ? fmtCount(v) : '—'}</span> },
@@ -213,7 +210,7 @@ export default function RevenueReport() {
       { header: 'Transactions', key: 'transactionCount' },
       { header: 'Revenue Collected', key: 'totalCollected', transform: v => fmtCurrency(v) },
     ];
-  } else if (option.mode === 'bills-group' && effectiveView === 'summary') {
+  } else if (option.mode === 'bills-group') {
     columns = [
       { key: 'label', header: option.billsGroupBy === 'status' ? 'Status' : option.billsGroupBy === 'scheme' ? 'Scheme' : 'Branch', sortable: true },
       { key: 'billCount', header: 'Bills', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{fmtCount(v)}</span> },
@@ -227,25 +224,7 @@ export default function RevenueReport() {
       { header: 'Total Paid', key: 'totalPaid', transform: v => fmtCurrency(v) },
       { header: 'Balance', key: 'totalBalance', transform: v => fmtCurrency(v) },
     ];
-  } else if (metric === 'receipts' && effectiveView === 'detail') {
-    keyExtractor = r => r.id;
-    columns = [
-      { key: 'date', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
-      { key: 'receiptNumber', header: 'Receipt #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
-      { key: 'patientName', header: 'Patient', sortable: true },
-      { key: 'branch', header: 'Branch', sortable: true },
-      { key: 'scheme', header: 'Scheme', sortable: true },
-      { key: 'cashierName', header: 'Cashier', sortable: true },
-      { key: 'paymentMethod', header: 'Payment Mode', sortable: true, render: v => <span className="capitalize">{v}</span> },
-      { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
-    ];
-    csvColumns = [
-      { header: 'Date', key: 'date', transform: v => fmtDate(v) }, { header: 'Receipt #', key: 'receiptNumber' },
-      { header: 'Patient', key: 'patientName' }, { header: 'Branch', key: 'branch' }, { header: 'Scheme', key: 'scheme' },
-      { header: 'Cashier', key: 'cashierName' }, { header: 'Payment Mode', key: 'paymentMethod' },
-      { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) },
-    ];
-  } else if (metric === 'invoices' && effectiveView === 'detail') {
+  } else if (option.mode === 'detail-only' && option.value === 'bills_detail') {
     keyExtractor = r => r.id;
     columns = [
       { key: 'date', header: 'Bill Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
@@ -266,6 +245,25 @@ export default function RevenueReport() {
       { header: 'Total', key: 'totalAmount', transform: v => fmtCurrency(v) },
       { header: 'Paid', key: 'paidAmount', transform: v => fmtCurrency(v) },
       { header: 'Balance', key: 'balanceAmount', transform: v => fmtCurrency(v) },
+    ];
+  } else if (option.mode === 'detail-only') {
+    // 'journal' — the only other detail-only option.
+    keyExtractor = r => r.id;
+    columns = [
+      { key: 'date', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'receiptNumber', header: 'Receipt #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'branch', header: 'Branch', sortable: true },
+      { key: 'scheme', header: 'Scheme', sortable: true },
+      { key: 'cashierName', header: 'Cashier', sortable: true },
+      { key: 'paymentMethod', header: 'Payment Mode', sortable: true, render: v => <span className="capitalize">{v}</span> },
+      { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [
+      { header: 'Date', key: 'date', transform: v => fmtDate(v) }, { header: 'Receipt #', key: 'receiptNumber' },
+      { header: 'Patient', key: 'patientName' }, { header: 'Branch', key: 'branch' }, { header: 'Scheme', key: 'scheme' },
+      { header: 'Cashier', key: 'cashierName' }, { header: 'Payment Mode', key: 'paymentMethod' },
+      { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) },
     ];
   } else if (option.mode === 'trend') {
     keyExtractor = r => r.bucket;
@@ -326,9 +324,9 @@ export default function RevenueReport() {
   // correct across pages, not reset to 1 on every page like the table's own
   // local row index would.
   const numberedRows = useMemo(
-    () => ((option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary' ? sortedGroupRows : rows)
+    () => (isGroupShaped ? sortedGroupRows : rows)
       .map((r, i) => ({ ...r, no: i + 1 })),
-    [sortedGroupRows, rows, option.mode, effectiveView]
+    [sortedGroupRows, rows, isGroupShaped]
   );
   const displayRows = numberedRows;
   const columnsWithNo: Column<any>[] = [
@@ -484,7 +482,7 @@ export default function RevenueReport() {
             searchable
             searchPlaceholder="Search this report..."
           />
-          {(option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary' && sortedGroupRows.length > 0 && (
+          {isGroupShaped && sortedGroupRows.length > 0 && (
             <div className="flex justify-between items-center px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-semibold -mt-px">
               <span>Total</span>
               <span className="flex gap-8">
