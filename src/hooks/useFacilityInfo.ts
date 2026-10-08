@@ -12,6 +12,7 @@ export interface FacilityInfo {
   facilityPhone: string;
   facilityEmail: string;
   facilityLicenseNo: string;
+  facilityWebsite: string;
   branchName: string;
   branchAddress: string;
   branchPhone: string;
@@ -29,6 +30,7 @@ const DEFAULTS: FacilityInfo = {
   facilityPhone: '',
   facilityEmail: '',
   facilityLicenseNo: '',
+  facilityWebsite: '',
   branchName: '',
   branchAddress: '',
   branchPhone: '',
@@ -67,6 +69,7 @@ async function loadFacilityInfo(branchId?: number | null): Promise<FacilityInfo>
       if (d.phone)           update.facilityPhone     = d.phone;
       if (d.email)           update.facilityEmail     = d.email;
       if (d.license_number)  update.facilityLicenseNo = d.license_number;
+      if (d.website)         update.facilityWebsite   = d.website;
       if (d.logo)            update.facilityLogo      = d.logo;
     }
   }
