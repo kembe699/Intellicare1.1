@@ -7,8 +7,8 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
   Users, Package, Pill, FlaskConical,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
-  TrendingUp, Receipt, LayoutDashboard, ClipboardList, Building2,
-  Stethoscope, BedDouble, Undo2, ShieldCheck, FileSpreadsheet, Scissors, Truck,
+  TrendingUp, LayoutDashboard, ClipboardList, Building2,
+  Stethoscope, BedDouble, ShieldCheck, FileSpreadsheet, Scissors, Truck,
   Landmark, Boxes,
 } from 'lucide-react';
 
@@ -26,9 +26,12 @@ const REPORT_GROUPS = [
 const REPORT_CATEGORIES = [
   { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, desc: 'Hospital-wide analytics at a glance', group: 'Overview' },
   { id: 'patients', label: 'Patient Report', icon: Users, desc: 'Visit volume, paid vs. owed', group: 'Patients & Billing' },
-  { id: 'billing-by-user', label: 'Billing by User', icon: Receipt, desc: 'Collections per cashier', group: 'Patients & Billing' },
+  // Billing by User and Cancelled/Refunded dropped from the sidebar — both
+  // are now just one dropdown option inside Revenue Report (Revenue by User,
+  // Cancelled Receipts, Cancelled Invoices), same data, no separate page
+  // needed. Their routes/pages are untouched in case anything still links
+  // to them directly.
   { id: 'ar-aging', label: 'Accounts Receivable Aging', icon: ClipboardList, desc: 'Outstanding balances by age', group: 'Patients & Billing' },
-  { id: 'cancelled-transactions', label: 'Cancelled / Refunded', icon: Undo2, desc: 'Voided and refunded transactions', group: 'Patients & Billing' },
   { id: 'laboratory', label: 'Laboratory Report', icon: FlaskConical, desc: 'By test, by patient, cash value', group: 'Clinical' },
   { id: 'pharmacy', label: 'Pharmacy Report', icon: Pill, desc: 'Dispensing volume, cash value', group: 'Clinical' },
   { id: 'doctor-performance', label: 'Doctor Performance', icon: Stethoscope, desc: 'Patients seen, revenue generated', group: 'Clinical' },

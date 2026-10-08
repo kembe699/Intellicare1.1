@@ -12,7 +12,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
-  ArrowLeft, Plus, DollarSign, X, Loader2, Check,
+  ArrowLeft, Plus, DollarSign, X, Loader2, Check, Ban,
   AlertTriangle, Shield, CreditCard, UserPlus, FileText, Wallet, ChevronsUpDown, PackageX,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -118,7 +118,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function BillDetails() {
-  const { confirm, confirmDialog } = useConfirmDialog();
+  const { confirmDialog } = useConfirmDialog();
   const { billId } = useParams<{ billId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -142,6 +142,8 @@ export default function BillDetails() {
   const [discountAmount, setDiscountAmount] = useState('');
   const [addingItem, setAddingItem] = useState(false);
   const [voidingIndex, setVoidingIndex] = useState<number | null>(null);
+  const [voidPromptIndex, setVoidPromptIndex] = useState<number | null>(null);
+  const [voidReason, setVoidReason] = useState('');
   const [itemPopoverOpen, setItemPopoverOpen] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
 
@@ -414,10 +416,10 @@ export default function BillDetails() {
     }
   };
 
-  const handleVoidItem = async (index: number) => {
-    if (voidingIndex !== null) return;
+  const handleVoidItem = async () => {
+    const index = voidPromptIndex;
+    if (index === null || voidingIndex !== null) return;
     if (!bill) return;
-    if (!(await confirm({ description: 'Void this line item? It will be removed from the bill total.' }))) return;
     setVoidingIndex(index);
     try {
       // B1: lineId identifies the exact line clicked; serviceIndex is sent only
@@ -426,11 +428,13 @@ export default function BillDetails() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ serviceIndex: index, lineId: bill.services[index]?.line_id }),
+        body: JSON.stringify({ serviceIndex: index, lineId: bill.services[index]?.line_id, reason: voidReason }),
       });
       if (res.ok) {
         toast.success('Item voided/removed');
         setSelectedItems(new Set()); // Clear selection because indexes may have shifted
+        setVoidPromptIndex(null);
+        setVoidReason('');
         fetchBill(true);
       } else {
         const err = await res.json();
@@ -824,6 +828,46 @@ export default function BillDetails() {
   return (
     <AppLayout>
       {confirmDialog}
+      {voidPromptIndex !== null && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+              <h3 className="font-semibold text-lg flex items-center gap-2 text-red-600">
+                <Ban className="w-5 h-5" /> Void Line Item
+              </h3>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setVoidPromptIndex(null); setVoidReason(''); }}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to void this item? It will be removed from the bill total.
+              </p>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Void Reason</label>
+                <textarea
+                  value={voidReason}
+                  onChange={e => setVoidReason(e.target.value)}
+                  placeholder="Please provide a reason..."
+                  className="w-full mt-1 p-3 border border-input rounded-md resize-none h-24 text-sm bg-transparent shadow-sm"
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setVoidPromptIndex(null); setVoidReason(''); }}>Cancel</Button>
+              <Button
+                variant="outline"
+                className="text-red-600 hover:text-red-700"
+                onClick={handleVoidItem}
+                disabled={voidingIndex !== null || !voidReason.trim()}
+              >
+                {voidingIndex !== null ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Ban className="w-4 h-4 mr-2" />}
+                Void Item
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="w-full flex flex-col">
         <PageHeader
@@ -1345,7 +1389,7 @@ export default function BillDetails() {
                 render: (_v, s) => {
                   const realIndex = bill.services.indexOf(s);
                   return !s.paid && !s.isVoided && !s.invoiced ? (
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleVoidItem(realIndex)} disabled={voidingIndex !== null} title="Void item">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setVoidPromptIndex(realIndex)} disabled={voidingIndex !== null} title="Void item">
                       {voidingIndex === realIndex ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : <X className="w-3.5 h-3.5 text-muted-foreground" />}
                     </Button>
                   ) : null;

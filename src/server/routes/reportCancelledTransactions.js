@@ -132,6 +132,7 @@ router.get('/', async (req, res) => {
             lineIndex: idx,
             serviceName: svc.serviceName || svc.name || 'Unknown service',
             amount: parseFloat(svc.totalPrice) || 0,
+            reason: svc.voidReason || null,
             billDate: bill.bill_date,
             updatedBy: bill.updated_by || null,
             updatedAt: bill.updated_at,

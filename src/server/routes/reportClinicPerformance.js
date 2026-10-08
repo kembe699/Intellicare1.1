@@ -259,6 +259,23 @@ router.get('/', async (req, res) => {
       if (n) nameToCategory.set(n, s.category || UNCATEGORIZED);
     }
 
+    // Most of "Uncategorized" is pharmacy/drug line items — they were never
+    // in the `services` catalog to begin with (see header note), but they ARE
+    // in the inventory catalog. A second, same-convention exact-normalized-
+    // name match against active inventory_items recovers those specifically,
+    // labeled "Pharmacy / Inventory" rather than left anonymous. Anything
+    // matching neither catalog still falls to Uncategorized.
+    const PHARMACY_LABEL = 'Pharmacy / Inventory';
+    const inventoryItems = await sequelize.query(
+      `SELECT item_name AS "itemName" FROM inventory_items WHERE is_active = true`,
+      { type: QueryTypes.SELECT }
+    );
+    const pharmacyNames = new Set();
+    for (const it of inventoryItems) {
+      const n = normalizeName(it.itemName);
+      if (n) pharmacyNames.add(n);
+    }
+
     // ── 5. Bills in period (all clinics — see header note) ──────────────
     const bills = await sequelize.query(
       `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services,
@@ -294,7 +311,7 @@ router.get('/', async (req, res) => {
         const n = normalizeName(rawName);
         if (!n) continue; // no usable name on this line item at all — skip
 
-        const category = nameToCategory.get(n) || UNCATEGORIZED;
+        const category = nameToCategory.get(n) || (pharmacyNames.has(n) ? PHARMACY_LABEL : UNCATEGORIZED);
         if (category === UNCATEGORIZED) unmatchedItemCount++; else matchedItemCount++;
 
         const { amount: itemTotal, isInsurance } = await resolveItemAmount(item, bill, rateCache, clinicId);
@@ -370,7 +387,7 @@ router.get('/', async (req, res) => {
         unmatchedItems: unmatchedItemCount,
         uncategorizedShare,
         note:
-          'Category is assigned by matching a bill line item\'s normalized name exactly against the `services` catalog\'s service_name (same approach as the Laboratory report). The catalog only covers a subset of billed items in live data — line items with no exact catalog match (e.g. pharmacy/drug items, or clinical items whose billed name differs from the catalog entry, such as "Complete Blood Count" vs. catalog "CBC") are grouped under "Uncategorized" rather than dropped or fuzzy-matched, so revenue totals still reconcile to 100% of billed line items.',
+          'Category is assigned by matching a bill line item\'s normalized name exactly against the `services` catalog\'s service_name (same approach as the Laboratory report). Items that don\'t match the services catalog are checked a second time against the active inventory catalog and labeled "Pharmacy / Inventory" when found there — this is where most previously-"Uncategorized" revenue comes from (dispensed drugs were never in the `services` catalog to begin with). Anything matching neither catalog (e.g. a clinical item whose billed name differs from the catalog entry, such as "Complete Blood Count" vs. catalog "CBC") is grouped under "Uncategorized" rather than dropped or fuzzy-matched, so revenue totals still reconcile to 100% of billed line items.',
       },
     });
   } catch (err) {

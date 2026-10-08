@@ -204,7 +204,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
         AND br.bill_id IN (
               SELECT DISTINCT bill_id::text FROM (
                 SELECT r.bill_id FROM receipts r
-                 WHERE r.clinic_id = :clinicId AND COALESCE(r.is_voided, false) = false
+                 WHERE r.clinic_id = :clinicId AND r.status = 'active'
                    AND r.bill_id IS NOT NULL AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
                    ${branchSqlReceipts}
                 UNION
@@ -228,7 +228,7 @@ async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
               SUM(COALESCE(NULLIF(r.base_currency_amount, 0), r.payment_amount)) AS amount
          FROM receipts r
         WHERE r.clinic_id = :clinicId
-          AND COALESCE(r.is_voided, false) = false
+          AND r.status = 'active'
           AND r.bill_id IS NOT NULL
           AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
           ${branchSqlCollected}
