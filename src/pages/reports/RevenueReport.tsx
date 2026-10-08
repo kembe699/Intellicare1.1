@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
@@ -6,7 +6,11 @@ import { toast } from 'sonner';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { LoadingState } from '@/components/common';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
-import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn } from '@/utils/reportUtils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Combobox } from '@/components/ui/combobox';
+import { Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
+import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn, getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
 
 // One Revenue Report page, one report-type dropdown — every variant the
 // hospital asked for (by user/department/scheme/branch/payment mode/doctor/
@@ -14,11 +18,12 @@ import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn } from '@/utils/repor
 // inpatient/discharged filter, a chronological revenue journal, weekly/
 // monthly trends, cancelled receipts/invoices, service cost analysis, and a
 // patient register by scheme) lives behind one selector instead of a
-// four-button tab strip. Picking a report loads it automatically, as a
-// letterheaded report (facility logo/name, title bar, From/To/Report
-// DateTime) on top of the standard data table — every group/bills-group
-// report always shows its full breakdown (no separate Summary/Detail
-// toggle to flip between).
+// four-button tab strip. Picking a report type or date range only updates
+// the form — nothing loads until "View" is clicked, so a report never
+// fetches while someone is still choosing what they want. The selector,
+// date range and letterhead stay pinned at the top (sticky) while a long
+// table scrolls underneath, capped to a fixed height so it scrolls inside
+// itself rather than growing the page.
 
 type Mode = 'group' | 'bills-group' | 'detail-only' | 'trend' | 'cancelled-receipts' | 'cancelled-invoices' | 'cost-analysis' | 'register';
 type PatientType = 'all' | 'outpatient' | 'inpatient' | 'discharged';
@@ -86,7 +91,8 @@ export default function RevenueReport() {
   const [dateFrom, setDateFrom] = useState(defaults.from);
   const [dateTo, setDateTo] = useState(defaults.to);
   const [reportType, setReportType] = useState('user');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [costSummary, setCostSummary] = useState<{ totalRevenue: number; totalCOGS: number; grossMargin: number; grossMarginPct: number } | null>(null);
@@ -171,6 +177,7 @@ export default function RevenueReport() {
         setRows(json.rows || []);
       }
       setGeneratedAt(new Date());
+      setHasLoaded(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load revenue report');
       setRows([]);
@@ -179,8 +186,6 @@ export default function RevenueReport() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, user?.clinic, reportType, effectiveView]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
 
   const sortedGroupRows = useMemo(
     () => (option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary'
@@ -202,17 +207,6 @@ export default function RevenueReport() {
       { key: 'label', header: option.label.replace('Revenue by ', '').replace('Revenue Detailed (By ', '').replace(')', ''), sortable: true },
       { key: 'transactionCount', header: 'Transactions', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{v != null ? fmtCount(v) : '—'}</span> },
       { key: 'totalCollected', header: 'Revenue Collected', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
-      {
-        key: 'share', header: 'Share', align: 'right', render: (_v, row) => {
-          const share = groupTotal > 0 ? (row.totalCollected / groupTotal) * 100 : 0;
-          return (
-            <div className="flex items-center gap-2 justify-end">
-              <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, share)}%` }} /></div>
-              <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{share.toFixed(0)}%</span>
-            </div>
-          );
-        },
-      },
     ];
     csvColumns = [
       { header: 'Label', key: 'label' },
@@ -279,11 +273,6 @@ export default function RevenueReport() {
       { key: 'label', header: option.value === 'trend_month' ? 'Month' : 'Week' },
       { key: 'transactionCount', header: 'Transactions', align: 'right', render: v => <span className="text-muted-foreground">{fmtCount(v)}</span> },
       { key: 'totalCollected', header: 'Revenue Collected', align: 'right', render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
-      {
-        key: 'share', header: 'Trend', render: (_v, row) => (
-          <div className="w-40 h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, row.share * 100)}%` }} /></div>
-        ),
-      },
     ];
     csvColumns = [{ header: option.value === 'trend_month' ? 'Month' : 'Week', key: 'label' }, { header: 'Transactions', key: 'transactionCount' }, { header: 'Revenue Collected', key: 'totalCollected', transform: v => fmtCurrency(v) }];
   } else if (option.mode === 'cancelled-receipts') {
@@ -346,59 +335,108 @@ export default function RevenueReport() {
     ...columns,
   ];
 
+  const presets = getDatePresets();
+  const handlePreset = (label: string) => {
+    const p = presets.find(x => x.label === label);
+    if (!p) return;
+    setDateFrom(p.from);
+    setDateTo(p.to);
+  };
+  const handleExportCSV = () => exportCSV(displayRows, csvColumns, `revenue-${option.value}-${dateFrom}-${dateTo}.csv`);
+
   return (
     <ReportSubPageShell
       title="Revenue Report"
-      description="Pick a report type below — it loads automatically for the selected date range."
+      description="Pick a report type and date range, then click View."
       dateFrom={dateFrom}
       dateTo={dateTo}
       onDateFromChange={setDateFrom}
       onDateToChange={setDateTo}
       onRefresh={fetchData}
       loading={loading}
-      csvData={displayRows}
-      csvColumns={csvColumns}
-      csvFilename={`revenue-${option.value}-${dateFrom}-${dateTo}.csv`}
+      hideControls
     >
-      <div className="mb-4">
-        <select
-          value={reportType}
-          onChange={e => setReportType(e.target.value)}
-          className="h-9 min-w-[280px] rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {OPTION_GROUPS.map(group => (
-            <optgroup key={group} label={group}>
-              {REPORT_OPTIONS.filter(o => o.group === group).map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
+      {/* Selector, date range, and letterhead stay pinned while the table
+          scrolls beneath — matches the standard page background so content
+          scrolling underneath never shows through. */}
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:hidden">
+        <div className="flex flex-wrap items-end gap-3 mb-4">
+          <select
+            value={reportType}
+            onChange={e => setReportType(e.target.value)}
+            className="h-9 min-w-[280px] rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {OPTION_GROUPS.map(group => (
+              <optgroup key={group} label={group}>
+                {REPORT_OPTIONS.filter(o => o.group === group).map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
 
-      {/* Letterhead — facility logo/name/website, report title, and the
-          period/generated-at line, matching how the facility's other
-          printed documents (receipts, invoices) identify themselves. */}
-      <div className="mb-4 rounded-md border border-border overflow-hidden bg-card">
-        <div className="bg-sky-100 dark:bg-sky-950/40 text-center py-2 border-b border-border">
-          <h2 className="text-sm font-bold tracking-wide text-foreground">{option.label}</h2>
-        </div>
-        <div className="p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            {facility.facilityLogo ? (
-              <img src={facility.facilityLogo} alt={facility.facilityName} className="h-12 w-12 object-contain rounded border border-border flex-shrink-0" />
-            ) : (
-              <div className="h-12 w-12 rounded border border-border flex-shrink-0" />
-            )}
-            <div>
-              <p className="font-semibold text-sm">{facility.facilityName || '—'}</p>
-              {facility.facilityWebsite && <p className="text-xs text-muted-foreground">{facility.facilityWebsite}</p>}
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center gap-1">
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px] h-9 text-sm" />
+              <span className="text-muted-foreground text-sm">—</span>
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px] h-9 text-sm" />
             </div>
           </div>
-          <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
-            <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
-            <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
-            <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
+          <Combobox
+            options={presets.map(p => ({ value: p.label, label: p.label }))}
+            value=""
+            onChange={handlePreset}
+            placeholder="Quick range"
+            searchPlaceholder="Search..."
+            className="w-[130px] h-9 text-sm"
+          />
+
+          <Button size="sm" onClick={fetchData} disabled={loading} className="h-9 gap-1.5">
+            <Eye className="w-3.5 h-3.5" />
+            View
+          </Button>
+
+          <div className="ml-auto flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={fetchData} disabled={loading} className="h-9 gap-1.5">
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-9 gap-1.5">
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={triggerPrint} disabled={!hasLoaded} className="h-9 gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </Button>
+          </div>
+        </div>
+
+        {/* Letterhead — facility logo/name/website, report title, and the
+            period/generated-at line, matching how the facility's other
+            printed documents (receipts, invoices) identify themselves. */}
+        <div className="rounded-md border border-border overflow-hidden bg-card">
+          <div className="bg-sky-100 dark:bg-sky-950/40 text-center py-2 border-b border-border">
+            <h2 className="text-sm font-bold tracking-wide text-foreground">{option.label}</h2>
+          </div>
+          <div className="p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              {facility.facilityLogo ? (
+                <img src={facility.facilityLogo} alt={facility.facilityName} className="h-16 w-16 object-contain rounded border border-border flex-shrink-0" />
+              ) : (
+                <div className="h-16 w-16 rounded border border-border flex-shrink-0" />
+              )}
+              <div>
+                <p className="font-semibold text-sm">{facility.facilityName || '—'}</p>
+                {facility.facilityWebsite && <p className="text-xs text-muted-foreground">{facility.facilityWebsite}</p>}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
+              <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
+              <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
+              <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -427,8 +465,12 @@ export default function RevenueReport() {
         </div>
       )}
 
-      {loading && rows.length === 0 ? (
+      {loading ? (
         <LoadingState message="Loading report..." />
+      ) : !hasLoaded ? (
+        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">
+          Pick a report type and date range above, then click View.
+        </div>
       ) : (
         <>
           <AdvancedDataTable
@@ -437,6 +479,7 @@ export default function RevenueReport() {
             columns={columnsWithNo}
             emptyMessage={emptyMessage}
             pagination={{ enabled: true, pageSize: 25, pageSizeOptions: [25, 50, 100] }}
+            maxRows={15}
             searchable
             searchPlaceholder="Search this report..."
           />

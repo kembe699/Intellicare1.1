@@ -18,6 +18,8 @@ interface ReportShellProps {
   csvColumns?: CsvColumn[];
   csvFilename?: string;
   hideDateRange?: boolean;
+  /** Skip the whole built-in controls row (date range, quick range, Refresh/CSV/Print) — for a page that builds its own toolbar instead. */
+  hideControls?: boolean;
   children: React.ReactNode;
 }
 
@@ -28,6 +30,7 @@ export function ReportSubPageShell({
   onRefresh, loading = false,
   csvData, csvColumns, csvFilename,
   hideDateRange = false,
+  hideControls = false,
   children,
 }: ReportShellProps) {
   const presets = getDatePresets();
@@ -52,7 +55,7 @@ export function ReportSubPageShell({
   return (
     <div className="space-y-0">
       {/* ── Controls bar (hidden on print) ── */}
-      <div className="print:hidden flex flex-wrap items-end gap-3 pb-5">
+      {!hideControls && <div className="print:hidden flex flex-wrap items-end gap-3 pb-5">
         {!hideDateRange && (
           <>
             <div className="flex items-center gap-2">
@@ -101,7 +104,7 @@ export function ReportSubPageShell({
             Print
           </Button>
         </div>
-      </div>
+      </div>}
 
       {/* ── Print header (visible only on print) ── */}
       <div className="hidden print:block mb-6 border-b pb-4">
