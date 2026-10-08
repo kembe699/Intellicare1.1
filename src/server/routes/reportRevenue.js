@@ -427,11 +427,17 @@ router.get('/service-cost-analysis', async (req, res) => {
 
     // Revenue by category — identical fuzzy-match-against-catalog approach as
     // reportClinicPerformance.js's byCategory (see that file's header for why
-    // this is the honest option; unmatched items, including all pharmacy/drug
-    // lines, fall into "Uncategorized").
+    // this is the honest option). A second pass against the active inventory
+    // catalog recovers pharmacy/drug lines specifically (labeled "Pharmacy /
+    // Inventory") since they were never in the `services` catalog to begin
+    // with — anything matching neither catalog still falls to "Uncategorized".
     const services = await sequelize.query(`SELECT service_name AS "serviceName", category FROM services`, { type: QueryTypes.SELECT });
     const nameToCategory = new Map();
     for (const s of services) { const n = normalizeName(s.serviceName); if (n) nameToCategory.set(n, s.category || 'Uncategorized'); }
+    const PHARMACY_LABEL = 'Pharmacy / Inventory';
+    const inventoryItems = await sequelize.query(`SELECT item_name AS "itemName" FROM inventory_items WHERE is_active = true`, { type: QueryTypes.SELECT });
+    const pharmacyNames = new Set();
+    for (const it of inventoryItems) { const n = normalizeName(it.itemName); if (n) pharmacyNames.add(n); }
 
     const bills = await sequelize.query(
       `SELECT total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDay", services, scheme_id AS "schemeId", bill_currency AS "billCurrency"
@@ -448,7 +454,7 @@ router.get('/service-cost-analysis', async (req, res) => {
       for (const item of items) {
         const n = normalizeName(item?.serviceName || item?.name || item?.service_name);
         if (!n) continue;
-        const category = nameToCategory.get(n) || 'Uncategorized';
+        const category = nameToCategory.get(n) || (pharmacyNames.has(n) ? PHARMACY_LABEL : 'Uncategorized');
         const { amount: itemTotal } = await resolveItemAmount(item, bill, rateCache, clinicId);
         const collected = collectedForItem(item, bill, itemTotal, billPaidRatio);
         const row = byCategory.get(category) || { category, totalBilled: 0, totalCollected: 0 };
@@ -483,7 +489,7 @@ router.get('/service-cost-analysis', async (req, res) => {
       byCategory: categoryRows,
       cogsByAccount: cogsRows.map(r => ({ accountName: r.account_name, amount: parseFloat(r.amount) || 0 })),
       summary: { totalRevenue, totalCOGS, grossMargin, grossMarginPct: totalRevenue > 0 ? (grossMargin / totalRevenue) * 100 : 0 },
-      note: 'Cost of Goods Sold is tracked in aggregate from the chart of accounts (currently just Pharmaceutical Cost of Sales) — not yet broken out per service category above, since no per-category COGS account exists yet. Revenue-by-category uses the same catalog match as the Revenue by Department report; unmatched items (including pharmacy/drug lines) fall under "Uncategorized".',
+      note: 'Cost of Goods Sold is tracked in aggregate from the chart of accounts (currently just Pharmaceutical Cost of Sales) — not yet broken out per service category above, since no per-category COGS account exists yet. Revenue-by-category uses the same two-catalog match as the Revenue by Department report (services catalog, then the inventory catalog for "Pharmacy / Inventory"); anything matching neither still falls under "Uncategorized".',
     });
   } catch (err) {
     console.error('Service cost analysis report error:', err);

@@ -1,4 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
+} from 'recharts';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
@@ -82,6 +85,25 @@ function fmtBucket(iso: string, interval: 'week' | 'month'): string {
   return interval === 'month'
     ? d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
     : `Week of ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+const TREND_COLOR = '#1A7A75'; // app primary teal — hsl(var(--primary)), same as DashboardOverview.tsx's revenue chart
+
+function formatCompact(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return `${Math.round(n)}`;
+}
+
+function TrendTooltip({ active, payload, label }: any) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="bg-card border rounded-lg shadow-md px-3 py-2 text-xs">
+      <p className="text-muted-foreground mb-1">{label}</p>
+      <p className="font-semibold text-foreground">{fmtCurrency(payload[0]?.value)}</p>
+      <p className="text-muted-foreground">{fmtCount(payload[0]?.payload?.transactionCount)} transaction{payload[0]?.payload?.transactionCount === 1 ? '' : 's'}</p>
+    </div>
+  );
 }
 
 export default function RevenueReport() {
@@ -461,6 +483,32 @@ export default function RevenueReport() {
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Gross Margin %</p>
             <p className="text-2xl font-bold mt-1">{fmtNum(costSummary.grossMarginPct, 1)}%</p>
           </div>
+        </div>
+      )}
+
+      {option.mode === 'trend' && hasLoaded && rows.length > 0 && (
+        <div className="bg-card rounded-lg border shadow-sm p-4 mb-4">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+              <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="0" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+                tickLine={false}
+                interval={rows.length > 14 ? Math.ceil(rows.length / 10) : 0}
+              />
+              <YAxis
+                tickFormatter={formatCompact}
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+                width={44}
+              />
+              <RTooltip content={<TrendTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }} />
+              <Bar dataKey="totalCollected" fill={TREND_COLOR} radius={[4, 4, 0, 0]} maxBarSize={48} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 

@@ -175,6 +175,18 @@ beforeAll(async () => {
     );
   }
 
+  // 'Panadol Extra' (billed above, not in the services catalog) IS in the
+  // inventory catalog — proves service-cost-analysis labels it "Pharmacy /
+  // Inventory" instead of leaving it in "Uncategorized".
+  const [[existingDrug]] = await sequelize.query(`SELECT id FROM inventory_items WHERE item_name = 'Panadol Extra' LIMIT 1`);
+  if (!existingDrug) {
+    await sequelize.query(
+      `INSERT INTO inventory_items (id, clinic_id, item_code, item_name, item_category, is_active, created_at, updated_at)
+       VALUES (:id, :clinicId, :code, 'Panadol Extra', 'drugs', true, NOW(), NOW())`,
+      { replacements: { id: uuid(), clinicId: TEST_CLINIC_ID, code: `REVEXT-PANADOL-${Date.now()}` } }
+    );
+  }
+
   // Chart of accounts for the service-cost-analysis COGS figure.
   await ensureAccount('5210', 'Pharmaceutical Cost of Sales', 'expense', 'debit', 'cost_of_sales');
   const cogsEntryId = uuid();
@@ -196,6 +208,7 @@ afterAll(async () => {
     if (admissionIds.length > 0) await sequelize.query(`DELETE FROM inpatient_admissions WHERE id IN (:ids)`, { replacements: { ids: admissionIds } });
     await sequelize.query(`DELETE FROM account_ledger WHERE clinic_id = :c AND source_module = 'test' AND transaction_date = :d`, { replacements: { c: TEST_CLINIC_ID, d: TEST_DATE } });
     await sequelize.query(`DELETE FROM patient_schemes WHERE id = :id`, { replacements: { id: schemeId } });
+    await sequelize.query(`DELETE FROM inventory_items WHERE item_name = 'Panadol Extra' AND item_code LIKE 'REVEXT-PANADOL-%'`);
   } catch (e) { console.warn('reportRevenueExtended cleanup failed (non-fatal):', e.message); }
 });
 
@@ -321,6 +334,16 @@ describe('GET /api/reports-v2/revenue/service-cost-analysis', () => {
     expect(res.body.summary.grossMargin).toBe(res.body.summary.totalRevenue - res.body.summary.totalCOGS);
     const consultRow = res.body.byCategory.find(c => c.category === 'Consultation');
     expect(consultRow).toBeTruthy();
+  });
+
+  test('a line item matching the inventory catalog (not the services catalog) is labeled "Pharmacy / Inventory", not left in "Uncategorized"', async () => {
+    const handler = handlerFor(revenueRouter, '/service-cost-analysis', 'get');
+    const res = mockRes();
+    await withTenant(() => handler(req({ dateFrom: TEST_DATE, dateTo: TEST_DATE, clinic_id: String(TEST_CLINIC_ID) }), res));
+    expect(res.statusCode).toBe(200);
+    const pharmacyRow = res.body.byCategory.find(c => c.category === 'Pharmacy / Inventory');
+    expect(pharmacyRow).toBeTruthy();
+    expect(pharmacyRow.totalBilled).toBeGreaterThanOrEqual(2000);
   });
 });
 
