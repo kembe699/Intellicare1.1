@@ -614,94 +614,126 @@ export default function PrescriptionManagement() {
                   Not in stock — patient buys from an outside pharmacy
                 </label>
 
-                {rxIsExternal ? (
-                  <Input
-                    placeholder="Medicine name e.g. Amoxicillin 500mg caps"
-                    value={rxExternalName}
-                    onChange={e => setRxExternalName(e.target.value)}
-                  />
-                ) : (
-                <Combobox
-                  options={billingMode === 'scheme' ? (
-                    drugCatalog.map((d: any) => ({
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Drug *</label>
+                  {rxIsExternal ? (
+                    <Input
+                      placeholder="Medicine name e.g. Amoxicillin 500mg caps"
+                      value={rxExternalName}
+                      onChange={e => setRxExternalName(e.target.value)}
+                      className="mt-1"
+                    />
+                  ) : (
+                  <Combobox
+                    options={billingMode === 'scheme' ? (
+                      drugCatalog.map((d: any) => ({
+                        value: d.id,
+                        label: `${d.product_name} — ${d.unit_of_measure || 'unit'} — stock ${d.stock_on_hand ?? 0} — ${parseFloat(d.scheme_price || 0).toFixed(2)} ${d.scheme_currency || 'SSP'}`,
+                      }))
+                    ) : drugs.map((d: any) => ({
                       value: d.id,
-                      label: `${d.product_name} — ${d.unit_of_measure || 'unit'} — stock ${d.stock_on_hand ?? 0} — ${parseFloat(d.scheme_price || 0).toFixed(2)} ${d.scheme_currency || 'SSP'}`,
-                    }))
-                  ) : drugs.map((d: any) => ({
-                    value: d.id,
-                    label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''} — ${d.unit_of_measure || 'unit'} — stock ${d.stock_on_hand ?? 0} — ${parseFloat(d.selling_price) > 0 ? `SSP ${parseFloat(d.selling_price).toLocaleString()}` : 'NO PRICE SET'}`,
-                  }))}
-                  value={rxDrugId}
-                  onChange={setRxDrugId}
-                  placeholder="Select drug..."
-                  searchPlaceholder="Search drugs..."
-                  className="h-9"
-                />
-                )}
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number" min="0.25" step="0.25"
-                    placeholder="Dose e.g. 1"
-                    title="How much is taken each time — the multiplier for the quantity"
-                    value={rxDoseAmount}
-                    onChange={e => setRxDoseAmount(e.target.value)}
+                      label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''} — ${d.unit_of_measure || 'unit'} — stock ${d.stock_on_hand ?? 0} — ${parseFloat(d.selling_price) > 0 ? `SSP ${parseFloat(d.selling_price).toLocaleString()}` : 'NO PRICE SET'}`,
+                    }))}
+                    value={rxDrugId}
+                    onChange={setRxDrugId}
+                    placeholder="Select drug..."
+                    searchPlaceholder="Search drugs..."
+                    className="mt-1 h-9"
                   />
-                  <Input placeholder="Strength e.g. 500mg" value={rxDose} onChange={e => setRxDose(e.target.value)} />
+                  )}
                 </div>
 
-                <Combobox
-                  options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
-                  value={rxFrequency}
-                  onChange={v => setRxFrequency(v)}
-                  placeholder="Frequency..."
-                  searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
-                  className="h-9"
-                />
-
-                <div className="grid grid-cols-3 gap-2">
-                  <Input
-                    type="number" min="0" placeholder="Days"
-                    value={rxDuration}
-                    onChange={e => setRxDuration(e.target.value)}
-                  />
-                  <Input
-                    type="number" min="1" placeholder="Qty"
-                    value={rxQty}
-                    onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
-                  />
-                  <div
-                    className="flex items-center justify-center text-xs text-muted-foreground border rounded-md px-2 h-9 bg-muted/30 truncate"
-                    title="Unit of measure — what one unit of this qty actually is (tablet, strip, bottle, etc.)"
-                  >
-                    {rxUnit}
+                {/* Reads as the Rx itself, in order: dose + unit, strength,
+                    frequency, duration — e.g. "2 tabs, 200mg, twice a day, for 5
+                    days". Total quantity to dispense (for stock/billing) is a
+                    separate, derived field further down, not part of that reading. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Dose Amount *</label>
+                    <Input
+                      type="number" min="0.25" step="0.25"
+                      placeholder="e.g. 2"
+                      title="How much is taken each time — e.g. 2 tablets per dose"
+                      value={rxDoseAmount}
+                      onChange={e => setRxDoseAmount(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Unit</label>
+                    <div
+                      className="mt-1 flex items-center text-xs text-muted-foreground border rounded-md px-3 h-9 bg-muted/30 truncate"
+                      title="Unit of measure — what one dose amount actually is (tablet, capsule, ml, etc.)"
+                    >
+                      {rxUnit}
+                    </div>
                   </div>
                 </div>
 
-                {/* Show the arithmetic rather than silently overwriting the
-                    prescriber's number, so a computed total is always traceable
-                    back to dose x frequency x days. */}
-                {rxSuggestedQty != null && (
-                  <p className="text-[11px] text-muted-foreground">
-                    {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
-                    {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
-                      <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
-                        use this
-                      </button>
-                    )}
-                  </p>
-                )}
-                {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                  <p className="text-[11px] text-muted-foreground">
-                    {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
-                  </p>
-                )}
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Strength</label>
+                  <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                </div>
 
-                <Input
-                  placeholder={rxIsExternal ? 'Instructions for the patient (required for outside purchase)' : 'Instructions (optional)'}
-                  value={rxNotes}
-                  onChange={e => setRxNotes(e.target.value)}
-                />
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
+                  <Combobox
+                    options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
+                    value={rxFrequency}
+                    onChange={v => setRxFrequency(v)}
+                    placeholder="e.g. twice a day"
+                    searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                    className="mt-1 h-9"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
+                  <Input
+                    type="number" min="0" placeholder="e.g. 5"
+                    value={rxDuration}
+                    onChange={e => setRxDuration(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
+                  <Input
+                    type="number" min="1" placeholder="Total units to give out"
+                    value={rxQty}
+                    onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
+                    className="mt-1"
+                  />
+                  {/* Show the arithmetic rather than silently overwriting the
+                      prescriber's number, so a computed total is always traceable
+                      back to dose x frequency x days. */}
+                  {rxSuggestedQty != null && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
+                      {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
+                        <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
+                          use this
+                        </button>
+                      )}
+                    </p>
+                  )}
+                  {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Instructions{rxIsExternal ? ' *' : ''}</label>
+                  <Input
+                    placeholder={rxIsExternal ? 'Instructions for the patient (required for outside purchase)' : 'Optional'}
+                    value={rxNotes}
+                    onChange={e => setRxNotes(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
 
                 <Button type="button" variant="outline" className="w-full" onClick={handleAddRxLine}>
                   <Plus className="w-4 h-4 mr-2" /> Add
