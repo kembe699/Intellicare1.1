@@ -652,56 +652,94 @@ export default function PatientDetails() {
                       </div>
                     )}
 
+                    {/* Reads as the Rx itself, in order: dose + unit, strength,
+                        frequency, duration — e.g. "2 tabs, 200mg, twice a day, for 5
+                        days". Total quantity to dispense (for stock/billing) is a
+                        separate, derived field further down, not part of that reading. */}
                     <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        type="number" min="0.25" step="0.25"
-                        placeholder="Dose e.g. 1"
-                        title="How much is given each time — the multiplier for the quantity"
-                        value={rxForm.dose_amount}
-                        onChange={e => setRxForm({ ...rxForm, dose_amount: e.target.value })}
-                      />
-                      <Input placeholder="Strength (e.g., 500mg)" value={rxForm.dosage} onChange={e => setRxForm({ ...rxForm, dosage: e.target.value })} />
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Dose Amount *</label>
+                        <Input
+                          type="number" min="0.25" step="0.25"
+                          placeholder="e.g. 2"
+                          title="How much is given each time — e.g. 2 tablets per dose"
+                          value={rxForm.dose_amount}
+                          onChange={e => setRxForm({ ...rxForm, dose_amount: e.target.value })}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Unit</label>
+                        <div
+                          className="mt-1 flex items-center text-xs text-muted-foreground border rounded-md px-3 h-9 bg-muted/30 truncate"
+                          title="Unit of measure — what one dose amount actually is (tablet, capsule, ml, etc.)"
+                        >
+                          {rxForm.unit_of_measure || (rxForm.is_external ? '—' : 'tablet')}
+                        </div>
+                      </div>
                     </div>
 
-                    <Combobox
-                      options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
-                      value={rxForm.frequency}
-                      onChange={v => setRxForm({ ...rxForm, frequency: v })}
-                      placeholder="Frequency *"
-                      searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
-                      emptyText="No matching frequency"
-                    />
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Strength</label>
+                      <Input placeholder="e.g. 200mg" value={rxForm.dosage} onChange={e => setRxForm({ ...rxForm, dosage: e.target.value })} className="mt-1" />
+                    </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
+                      <Combobox
+                        options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
+                        value={rxForm.frequency}
+                        onChange={v => setRxForm({ ...rxForm, frequency: v })}
+                        placeholder="e.g. twice a day"
+                        searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                        emptyText="No matching frequency"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
                       <Input
-                        type="number" min="0" placeholder="Days"
+                        type="number" min="0" placeholder="e.g. 5"
                         value={rxForm.duration_days}
                         onChange={e => setRxForm({ ...rxForm, duration_days: e.target.value, duration: e.target.value ? `${e.target.value} days` : '' })}
+                        className="mt-1"
                       />
-                      <Input
-                        type="number" placeholder="Quantity"
-                        value={rxForm.quantity}
-                        onChange={e => { setRxQtyTouched(true); setRxForm({ ...rxForm, quantity: e.target.value }); }}
-                      />
-                      <Combobox options={routes.map(r => ({ value: r, label: r.toUpperCase() }))} value={rxForm.route} onChange={v => setRxForm({ ...rxForm, route: v })} searchPlaceholder="Search..." />
                     </div>
 
-                    {rxSuggestedQty != null && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {rxForm.dose_amount} × {findFrequency(rxForm.frequency)?.perDay}/day × {rxForm.duration_days} days = <strong>{rxSuggestedQty}</strong>
-                        {rxQtyTouched && String(rxSuggestedQty) !== rxForm.quantity && (
-                          <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxForm({ ...rxForm, quantity: String(rxSuggestedQty) }); }}>
-                            use this
-                          </button>
-                        )}
-                      </p>
-                    )}
-                    {rxForm.frequency && !findFrequency(rxForm.frequency)?.perDay && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {rxForm.frequency === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
-                      </p>
-                    )}
-                    <Textarea placeholder="Instructions" value={rxForm.instructions} onChange={e => setRxForm({ ...rxForm, instructions: e.target.value })} rows={2} />
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
+                      <Input
+                        type="number" placeholder="Total units to give out"
+                        value={rxForm.quantity}
+                        onChange={e => { setRxQtyTouched(true); setRxForm({ ...rxForm, quantity: e.target.value }); }}
+                        className="mt-1"
+                      />
+                      {rxSuggestedQty != null && (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          {rxForm.dose_amount} × {findFrequency(rxForm.frequency)?.perDay}/day × {rxForm.duration_days} days = <strong>{rxSuggestedQty}</strong>
+                          {rxQtyTouched && String(rxSuggestedQty) !== rxForm.quantity && (
+                            <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxForm({ ...rxForm, quantity: String(rxSuggestedQty) }); }}>
+                              use this
+                            </button>
+                          )}
+                        </p>
+                      )}
+                      {rxForm.frequency && !findFrequency(rxForm.frequency)?.perDay && (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          {rxForm.frequency === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Route</label>
+                      <Combobox options={routes.map(r => ({ value: r, label: r.toUpperCase() }))} value={rxForm.route} onChange={v => setRxForm({ ...rxForm, route: v })} searchPlaceholder="Search..." className="mt-1" />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Instructions</label>
+                      <Textarea placeholder="Optional" value={rxForm.instructions} onChange={e => setRxForm({ ...rxForm, instructions: e.target.value })} rows={2} className="mt-1" />
+                    </div>
                     {!rxForm.is_external && rxForm.drug_id && hasPrivilege('pharmacy.write') && (
                       <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                         <input type="checkbox" className="rounded border-input" checked={dispenseNow} onChange={e => setDispenseNow(e.target.checked)} />

@@ -113,6 +113,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureAppointmentsTable } = require('./config/ensureAppointmentsTable');
   ensureAppointmentsTable(sequelize).catch(() => {});
 
+  // lis_test_orders.appointment_id (links a queued visit back to the
+  // appointment it came from), ensured per-tenant the same way.
+  const { ensureLisAppointmentLink } = require('./config/ensureLisAppointmentLink');
+  ensureLisAppointmentLink(sequelize).catch(() => {});
+
   // lis_test_orders.consultant_id, ensured per-tenant the same way — lets a
   // visit be attributed to a consultant with no linked user account.
   const { ensureLisConsultantSupport } = require('./config/ensureLisConsultantSupport');

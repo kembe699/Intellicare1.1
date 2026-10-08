@@ -508,7 +508,7 @@ router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
     const branchFilter = getBranchConditionSQL(req, 'o');
     const [queue] = await db.query(`
       SELECT o.id as order_id, o.doctor_id, o.consultant_id, o.room_number, o.clinic_id, o.clinic_name, o.status, o.created_at, o.updated_at,
-             o.vitals, o.triaged_by, o.triaged_at,
+             o.vitals, o.triaged_by, o.triaged_at, o.appointment_id, ap.reason as appointment_reason,
              p.id as participant_id, p.participant_number, p.first_name, p.last_name, p.gender,
              COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as doctor_name, tu.display_name as triaged_by_name
       FROM lis_test_orders o
@@ -516,6 +516,7 @@ router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
       LEFT JOIN users u ON o.doctor_id = u.id
       LEFT JOIN employees ce ON ce.id = o.consultant_id
       LEFT JOIN users tu ON o.triaged_by = tu.id
+      LEFT JOIN appointments ap ON ap.id = o.appointment_id
       WHERE o.status IN ('waiting', 'called')
       ${branchFilter.sql}
       ORDER BY o.created_at ASC
@@ -1002,12 +1003,14 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
     const [orders] = await db.query(`
       SELECT o.id as order_id, o.participant_id, o.doctor_id, o.consultant_id, o.clinical_notes, o.vitals,
              o.status, o.room_number, o.clinic_id, o.clinic_name, o.created_at, o.updated_at,
+             o.appointment_id, ap.reason as appointment_reason, ap.scheduled_date as appointment_date,
              p.participant_number, p.first_name, p.last_name, p.gender, p.date_of_birth, p.phone,
              COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as doctor_name
       FROM lis_test_orders o
       JOIN lis_participants p ON o.participant_id = p.id
       LEFT JOIN users u ON o.doctor_id = u.id
       LEFT JOIN employees ce ON ce.id = o.consultant_id
+      LEFT JOIN appointments ap ON ap.id = o.appointment_id
       WHERE 1=1 ${filter}
       ORDER BY o.created_at DESC
       LIMIT 1000

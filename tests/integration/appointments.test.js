@@ -19,6 +19,8 @@ let getHandler;
 let postHandler;
 let putHandler;
 let postQueueHandler;
+let getLisQueueHandler;
+let getVisitSummariesHandler;
 let participantId;
 let doctorUserId;
 
@@ -58,6 +60,10 @@ beforeAll(async () => {
   postHandler = handlerFor(router, '/', 'post');
   putHandler = handlerFor(router, '/:id', 'put');
   postQueueHandler = handlerFor(router, '/:id/queue', 'post');
+
+  const lisRouter = require('../../src/server/routes/lisModule');
+  getLisQueueHandler = handlerFor(lisRouter, '/queue', 'get');
+  getVisitSummariesHandler = handlerFor(lisRouter, '/visit-summaries', 'get');
 
   participantId = uuid();
   await sequelize.query(
@@ -167,7 +173,7 @@ describe('POST /api/appointments/:id/queue', () => {
 
   beforeAll(async () => {
     const res = mockRes();
-    await withTenant(() => postHandler(req({ body: { participant_id: participantId, doctor_id: doctorUserId, scheduled_date: '2026-12-15' } }), res));
+    await withTenant(() => postHandler(req({ body: { participant_id: participantId, doctor_id: doctorUserId, scheduled_date: '2026-12-15', reason: 'Follow-up after antenatal visit' } }), res));
     appointmentId = res.body.id;
   });
 
@@ -177,7 +183,7 @@ describe('POST /api/appointments/:id/queue', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  test('queues the patient straight to the booked doctor', async () => {
+  test('queues the patient straight to the booked doctor, linking the new order back to the appointment', async () => {
     const res = mockRes();
     await withTenant(() => postQueueHandler(req({ params: { id: appointmentId } }), res));
     expect(res.statusCode).toBe(200);
@@ -187,6 +193,7 @@ describe('POST /api/appointments/:id/queue', () => {
     expect(order.participant_id).toBe(participantId);
     expect(order.doctor_id).toBe(doctorUserId);
     expect(order.status).toBe('waiting');
+    expect(order.appointment_id).toBe(appointmentId);
 
     const [[appt]] = await sequelize.query(`SELECT status, queued_order_id FROM appointments WHERE id = ?`, { replacements: [appointmentId] });
     expect(appt.status).toBe('queued');
@@ -203,5 +210,23 @@ describe('POST /api/appointments/:id/queue', () => {
     const res = mockRes();
     await withTenant(() => putHandler(req({ params: { id: appointmentId }, body: { reason: 'changed' } }), res));
     expect(res.statusCode).toBe(409);
+  });
+
+  test('the resulting visit shows up as a follow-up on the LIS queue and in the visit summary', async () => {
+    const queueRes = mockRes();
+    await withTenant(() => getLisQueueHandler(req({}), queueRes));
+    expect(queueRes.statusCode).toBe(200);
+    const queuedRow = queueRes.body.find((r) => r.participant_id === participantId);
+    expect(queuedRow).toBeTruthy();
+    expect(queuedRow.appointment_id).toBe(appointmentId);
+    expect(queuedRow.appointment_reason).toBe('Follow-up after antenatal visit');
+
+    const summaryRes = mockRes();
+    await withTenant(() => getVisitSummariesHandler(req({ query: { participant_id: participantId } }), summaryRes));
+    expect(summaryRes.statusCode).toBe(200);
+    const summaryRow = summaryRes.body.find((s) => s.participant_id === participantId);
+    expect(summaryRow).toBeTruthy();
+    expect(summaryRow.appointment_id).toBe(appointmentId);
+    expect(summaryRow.appointment_reason).toBe('Follow-up after antenatal visit');
   });
 });

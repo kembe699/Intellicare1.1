@@ -125,8 +125,8 @@ router.post('/:id/queue', authorize('appointments.write'), async (req, res) => {
 
     const orderId = uuidv4();
     await db.query(
-      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, status, branch_id) VALUES (?, ?, ?, 'waiting', ?)`,
-      { replacements: [orderId, appt.participant_id, appt.doctor_id, appt.branch_id || getCreateBranchId(req)] }
+      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, status, branch_id, appointment_id) VALUES (?, ?, ?, 'waiting', ?, ?)`,
+      { replacements: [orderId, appt.participant_id, appt.doctor_id, appt.branch_id || getCreateBranchId(req), appt.id] }
     );
     await db.query(
       `UPDATE appointments SET status = 'queued', queued_order_id = ?, updated_at = NOW() WHERE id = ?`,
