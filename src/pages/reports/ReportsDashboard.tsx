@@ -9,6 +9,7 @@ import {
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
   TrendingUp, Receipt, LayoutDashboard, ClipboardList, Building2,
   Stethoscope, BedDouble, Undo2, ShieldCheck, FileSpreadsheet, Scissors, Truck,
+  Landmark, Boxes,
 } from 'lucide-react';
 
 const REPORT_GROUPS = [
@@ -43,6 +44,12 @@ const REPORT_CATEGORIES = [
   { id: 'procurement', label: 'Procurement Report', icon: Truck, desc: 'Purchase orders, deliveries, requisitions', group: 'Operations', external: '/procurement/reports' },
   { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
   { id: 'income-statement', label: 'Income Statement', icon: TrendingUp, desc: 'Revenue, expenses, net income', group: 'Financial' },
+  // Accounting already has its own full reports page (trial balance, GL,
+  // receivables aging, etc.) at /accounting/reports — surfaced here the same
+  // way Procurement is, instead of duplicating it.
+  { id: 'accounting', label: 'Accounting Reports', icon: Landmark, desc: 'Trial balance, general ledger, receivables', group: 'Financial', external: '/accounting/reports' },
+  // Same pattern for Fixed Assets' own register/depreciation reports.
+  { id: 'fixed-assets', label: 'Fixed Assets Reports', icon: Boxes, desc: 'Asset register, depreciation schedules', group: 'Financial', external: '/accounting/fixed-assets/reports' },
   { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
   { id: 'audit-summary', label: 'Staff Activity / Audit Log', icon: ShieldCheck, desc: 'Who did what, and when', group: 'Administration' },
 ];
