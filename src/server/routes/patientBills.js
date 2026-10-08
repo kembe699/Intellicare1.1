@@ -782,6 +782,24 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
       console.error('Error creating theatre requests from bill:', theatreError);
     }
 
+    // Post Cost of Goods Sold for any billed item that matches the pharmacy/
+    // inventory catalog — see pharmacyCogsOnBill.js's own header for why.
+    try {
+      const { postPharmacyCogsForBill } = require('../utils/pharmacyCogsOnBill');
+      const cogsResult = await postPharmacyCogsForBill(sequelize, {
+        clinicId: bill.clinic_id, branchId: bill.branch_id, billId: bill.id,
+        billDate: bill.bill_date, billNotes: bill.notes,
+        services: normalizeServices(bill.services), userId: req.user?.id,
+      });
+      if (cogsResult.changed) {
+        await sequelize.query(`UPDATE patient_bills SET services = :services WHERE id = :id`, {
+          replacements: { services: JSON.stringify(cogsResult.services), id: bill.id },
+        });
+      }
+    } catch (cogsError) {
+      console.error('Error posting pharmacy COGS from bill:', cogsError);
+    }
+
     try {
       const rr = require('./reports');
       await rr.logAudit({ req,
@@ -1058,6 +1076,27 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
       );
     } catch (e) {
       console.error('Error creating theatre requests from add-services:', e);
+    }
+
+    // Post Cost of Goods Sold for any billed item that matches the pharmacy/
+    // inventory catalog — runs over the bill's FULL current services (not
+    // just pricedServices), since already-posted items are skipped instantly
+    // (cogsPosted flag check, before any DB lookup) — see
+    // pharmacyCogsOnBill.js's own header.
+    try {
+      const { postPharmacyCogsForBill } = require('../utils/pharmacyCogsOnBill');
+      const cogsResult = await postPharmacyCogsForBill(sequelize, {
+        clinicId: bill.clinic_id, branchId: bill.branch_id, billId: bill.id,
+        billDate: bill.bill_date, billNotes: bill.notes,
+        services: normalizeServices(bill.services), userId: req.user?.id,
+      });
+      if (cogsResult.changed) {
+        await sequelize.query(`UPDATE patient_bills SET services = :services WHERE id = :id`, {
+          replacements: { services: JSON.stringify(cogsResult.services), id: bill.id },
+        });
+      }
+    } catch (cogsError) {
+      console.error('Error posting pharmacy COGS from add-services:', cogsError);
     }
 
     try {
