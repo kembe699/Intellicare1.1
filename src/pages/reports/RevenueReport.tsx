@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
 } from 'recharts';
@@ -119,6 +119,20 @@ export default function RevenueReport() {
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [costSummary, setCostSummary] = useState<{ totalRevenue: number; totalCOGS: number; grossMargin: number; grossMarginPct: number } | null>(null);
   const [cogsByAccount, setCogsByAccount] = useState<{ accountName: string; amount: number }[]>([]);
+  const [schemes, setSchemes] = useState<{ id: string; scheme_name: string }[]>([]);
+  const [selectedSchemeId, setSelectedSchemeId] = useState(''); // '' = all schemes; 'cash' = the Cash/No Scheme bucket
+
+  // Loaded once, up front — the Patient Register filter needs the list
+  // before anyone even picks that report, not lazily on first use.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (user?.clinic) params.append('clinic_id', user.clinic);
+    authFetch(`/api/schemes/active?${params}`)
+      .then(res => (res.ok ? res.json() : []))
+      .then(data => setSchemes(Array.isArray(data) ? data : []))
+      .catch(() => setSchemes([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.clinic]);
 
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
   const isGroupShaped = option.mode === 'group' || option.mode === 'bills-group';
@@ -190,6 +204,7 @@ export default function RevenueReport() {
         setCostSummary(json.summary || null);
         setCogsByAccount(json.cogsByAccount || []);
       } else if (option.mode === 'register') {
+        if (selectedSchemeId) params.set('schemeId', selectedSchemeId);
         const res = await authFetch(`/api/reports-v2/revenue/patient-register?${params}`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
@@ -204,7 +219,7 @@ export default function RevenueReport() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, user?.clinic, reportType]);
+  }, [dateFrom, dateTo, user?.clinic, reportType, selectedSchemeId]);
 
   const sortedGroupRows = useMemo(
     () => isGroupShaped
@@ -395,6 +410,20 @@ export default function RevenueReport() {
               </optgroup>
             ))}
           </select>
+
+          {option.mode === 'register' && (
+            <select
+              value={selectedSchemeId}
+              onChange={e => setSelectedSchemeId(e.target.value)}
+              className="h-9 min-w-[180px] rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">All Schemes</option>
+              <option value="cash">Cash / No Scheme</option>
+              {schemes.map(s => (
+                <option key={s.id} value={s.id}>{s.scheme_name}</option>
+              ))}
+            </select>
+          )}
 
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-muted-foreground" />

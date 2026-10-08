@@ -357,4 +357,24 @@ describe('GET /api/reports-v2/revenue/patient-register', () => {
     expect(schemeRow.schemeName).toBe('RevExt Insurance Co');
     expect(schemeRow.totalBilled).toBe(20000);
   });
+
+  test('schemeId filters to just that scheme\'s patients', async () => {
+    const handler = handlerFor(revenueRouter, '/patient-register', 'get');
+    const res = mockRes();
+    await withTenant(() => handler(req({ dateFrom: TEST_DATE, dateTo: TEST_DATE, schemeId }), res));
+    expect(res.statusCode).toBe(200);
+    expect(res.body.rows.length).toBeGreaterThan(0);
+    expect(res.body.rows.every(r => r.schemeName === 'RevExt Insurance Co')).toBe(true);
+    expect(res.body.rows.some(r => r.patientName === 'RevExt Outpatient')).toBe(false);
+  });
+
+  test('schemeId=cash filters to the Cash / No Scheme bucket only', async () => {
+    const handler = handlerFor(revenueRouter, '/patient-register', 'get');
+    const res = mockRes();
+    await withTenant(() => handler(req({ dateFrom: TEST_DATE, dateTo: TEST_DATE, schemeId: 'cash' }), res));
+    expect(res.statusCode).toBe(200);
+    expect(res.body.rows.length).toBeGreaterThan(0);
+    expect(res.body.rows.every(r => r.schemeName === 'Cash / No Scheme')).toBe(true);
+    expect(res.body.rows.some(r => r.patientName === 'RevExt Inpatient')).toBe(false);
+  });
 });

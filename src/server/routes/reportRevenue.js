@@ -507,6 +507,17 @@ router.get('/patient-register', async (req, res) => {
     const clinicSQL = clinicId ? ' AND pb.clinic_id = ?' : '';
     const clinicParams = clinicId ? [clinicId] : [];
     const branch = getBranchConditionSQL(req, 'pb');
+    // schemeId='cash' is the explicit "Cash / No Scheme" bucket (pb.scheme_id
+    // IS NULL) — a real scheme's id filters to bills raised under that scheme.
+    const schemeId = req.query.schemeId || null;
+    let schemeSQL = '';
+    const schemeParams = [];
+    if (schemeId === 'cash') {
+      schemeSQL = ' AND pb.scheme_id IS NULL';
+    } else if (schemeId) {
+      schemeSQL = ' AND pb.scheme_id = ?';
+      schemeParams.push(schemeId);
+    }
 
     const [rows] = await sequelize.query(
       `SELECT pb.patient_id, pb.patient_name, COALESCE(ps.scheme_name, 'Cash / No Scheme') AS scheme_name,
@@ -514,10 +525,10 @@ router.get('/patient-register', async (req, res) => {
               COALESCE(SUM(pb.paid_amount), 0) AS total_paid, COALESCE(SUM(pb.balance_amount), 0) AS total_balance
        FROM patient_bills pb
        LEFT JOIN patient_schemes ps ON ps.id = pb.scheme_id
-       WHERE DATE(pb.bill_date) BETWEEN ? AND ? ${clinicSQL} ${branch.sql}
+       WHERE DATE(pb.bill_date) BETWEEN ? AND ? ${clinicSQL} ${branch.sql} ${schemeSQL}
        GROUP BY pb.patient_id, pb.patient_name, ps.scheme_name
        ORDER BY scheme_name, pb.patient_name`,
-      { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params] }
+      { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params, ...schemeParams] }
     );
 
     res.json({
