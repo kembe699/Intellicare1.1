@@ -388,8 +388,9 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
       let updatedServices = JSON.parse(JSON.stringify(normalizeServices(bill.services)));
 
       // Reverse paid status for specific services
-      if (receipt.paid_services && Array.isArray(receipt.paid_services)) {
-        receipt.paid_services.forEach(idx => {
+      const paidServiceIndexes = normalizeServices(receipt.paid_services);
+      if (paidServiceIndexes.length > 0) {
+        paidServiceIndexes.forEach(idx => {
           const index = parseInt(idx, 10);
           if (updatedServices[index] && updatedServices[index].paid) {
             reversedServices.push(updatedServices[index]);
@@ -398,6 +399,41 @@ async function applyVoidReversal(receipt, status, reason, req, t) {
             delete updatedServices[index].status;
           }
         });
+      } else {
+        // R1: receipt.paid_services came back empty — an older receipt
+        // predating paidServiceIndexes being reliably sent, or a payment
+        // recorded through a path that never attributed it to specific
+        // lines. Previously this silently reversed nothing: the bill's
+        // paid_amount/balance_amount/status below still went back to
+        // unpaid (correct), but every line item stayed stuck showing
+        // "Paid" forever — a real client-reported bug (reports kept
+        // counting that "paid" item as collected revenue indefinitely,
+        // and the bill looked internally inconsistent: unpaid overall,
+        // yet every line individually paid).
+        //
+        // Safe to reverse EVERY currently-paid line only when this is the
+        // ONLY receipt ever recorded against the bill — nothing else could
+        // have legitimately paid any of them. If other active receipts
+        // exist, which specific lines THIS one covered is genuinely
+        // unknowable from the data available, so this deliberately does
+        // NOT guess — it leaves the lines alone and logs loudly instead of
+        // risking un-paying an item a different, still-active receipt paid.
+        const [[otherActive]] = await sequelize.query(
+          `SELECT COUNT(*) AS cnt FROM receipts WHERE bill_id = :billId AND id != :receiptId AND status = 'active'`,
+          { replacements: { billId: bill.id, receiptId: receipt.id }, transaction: t }
+        );
+        if (parseInt(otherActive.cnt, 10) === 0) {
+          updatedServices.forEach(item => {
+            if (item && item.paid) {
+              reversedServices.push(item);
+              item.paid = false;
+              delete item.paidAt;
+              delete item.status;
+            }
+          });
+        } else {
+          console.warn(`applyVoidReversal: receipt ${receipt.id} has no paid_services recorded, and other active receipts exist on bill ${bill.id} — cannot safely tell which lines this receipt covered. Line items left unchanged; needs manual review.`);
+        }
       }
 
       const receiptAmount = parseFloat(receipt.payment_amount) || 0;
