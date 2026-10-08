@@ -1,26 +1,65 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Users, Building2, ShieldCheck, Stethoscope } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
-import { fmtCurrency, CsvColumn } from '@/utils/reportUtils';
+import { LoadingState } from '@/components/common';
+import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
+import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn } from '@/utils/reportUtils';
 
-// One revenue report, one row shape, four dimensions to view it by —
-// "by department, by scheme, by branch, by user, basically all" in one
-// place rather than four separate pages. User and Department reuse the
-// two breakdowns that already existed and already work well
-// (reportBillingByUser.js, reportClinicPerformance.js) rather than
-// duplicating that logic; Scheme and Branch are genuinely new
-// (reportRevenue.js) — neither existed as a reporting dimension before.
-type GroupBy = 'user' | 'department' | 'scheme' | 'branch';
+// One Revenue Report page, one report-type dropdown — every variant the
+// hospital asked for (by user/department/scheme/branch/payment mode/doctor/
+// item, patient-bill breakdowns by branch/scheme/status with an outpatient/
+// inpatient/discharged filter, a chronological revenue journal, weekly/
+// monthly trends, cancelled receipts/invoices, service cost analysis, and a
+// patient register by scheme) lives behind one selector instead of a
+// four-button tab strip. Picking a report loads it automatically; most
+// report types also offer a Summary (grouped totals) / Detail (every
+// underlying transaction) toggle.
 
-interface Row {
-  key: string;
+type Mode = 'group' | 'bills-group' | 'detail-only' | 'trend' | 'cancelled-receipts' | 'cancelled-invoices' | 'cost-analysis' | 'register';
+type PatientType = 'all' | 'outpatient' | 'inpatient' | 'discharged';
+type View = 'summary' | 'detail';
+
+interface ReportOption {
+  value: string;
   label: string;
-  totalCollected: number;
-  transactionCount?: number;
+  group: string;
+  mode: Mode;
+  billsGroupBy?: 'branch' | 'scheme' | 'status';
+  patientType?: PatientType;
 }
+
+const REPORT_OPTIONS: ReportOption[] = [
+  { value: 'user', label: 'Revenue by User (Cashier)', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'department', label: 'Revenue by Department / Category', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'scheme', label: 'Revenue by Scheme', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'branch', label: 'Revenue by Branch', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'payment_mode', label: 'Revenue by Payment Mode', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'doctor', label: 'Revenue by Doctor', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'item', label: 'Revenue Detailed (By Item)', group: 'Revenue Breakdowns', mode: 'group' },
+  { value: 'journal', label: 'Revenue Journal (All Receipts)', group: 'Revenue Breakdowns', mode: 'detail-only' },
+  { value: 'trend_week', label: 'Revenue — Weekly Trend', group: 'Revenue Breakdowns', mode: 'trend' },
+  { value: 'trend_month', label: 'Revenue — Monthly Trend', group: 'Revenue Breakdowns', mode: 'trend' },
+
+  { value: 'bills_all_branch', label: 'All Patient Bills (By Branch)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'branch', patientType: 'all' },
+  { value: 'bills_all_scheme', label: 'All Patient Bills (By Scheme)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'scheme', patientType: 'all' },
+  { value: 'bills_all_status', label: 'All Patient Bills (By Status)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'status', patientType: 'all' },
+  { value: 'bills_out_branch', label: 'Outpatient Bills (By Branch)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'branch', patientType: 'outpatient' },
+  { value: 'bills_out_scheme', label: 'Outpatient Bills (By Scheme)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'scheme', patientType: 'outpatient' },
+  { value: 'bills_in_branch', label: 'Inpatient / Admitted Bills (By Branch)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'branch', patientType: 'inpatient' },
+  { value: 'bills_in_scheme', label: 'Inpatient / Admitted Bills (By Scheme)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'scheme', patientType: 'inpatient' },
+  { value: 'bills_discharged_branch', label: 'Discharged Inpatient Bills (By Branch)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'branch', patientType: 'discharged' },
+  { value: 'bills_detail', label: 'Total Invoices Breakdown (All Branches)', group: 'Patient Bills', mode: 'detail-only' },
+
+  { value: 'cancelled_receipts', label: 'Cancelled Receipts', group: 'Cancelled / Voided', mode: 'cancelled-receipts' },
+  { value: 'cancelled_invoices', label: 'Cancelled Invoices', group: 'Cancelled / Voided', mode: 'cancelled-invoices' },
+
+  { value: 'service_cost_analysis', label: 'Service Cost Analysis', group: 'Analysis', mode: 'cost-analysis' },
+  { value: 'patient_register', label: 'Patient Register (By Scheme)', group: 'Analysis', mode: 'register' },
+];
+
+const OPTION_GROUPS = ['Revenue Breakdowns', 'Patient Bills', 'Cancelled / Voided', 'Analysis'];
 
 function thisMonthRange() {
   const now = new Date();
@@ -30,52 +69,109 @@ function thisMonthRange() {
   return { from: `${y}-${pad(m + 1)}-01`, to: now.toISOString().split('T')[0] };
 }
 
-const GROUP_OPTIONS: { value: GroupBy; label: string; icon: React.ElementType }[] = [
-  { value: 'user', label: 'By User', icon: Users },
-  { value: 'department', label: 'By Department', icon: Stethoscope },
-  { value: 'scheme', label: 'By Scheme', icon: ShieldCheck },
-  { value: 'branch', label: 'By Branch', icon: Building2 },
-];
+function fmtBucket(iso: string, interval: 'week' | 'month'): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return interval === 'month'
+    ? d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    : `Week of ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
 
 export default function RevenueReport() {
   const { user } = useAuth();
   const defaults = thisMonthRange();
   const [dateFrom, setDateFrom] = useState(defaults.from);
   const [dateTo, setDateTo] = useState(defaults.to);
-  const [groupBy, setGroupBy] = useState<GroupBy>('user');
+  const [reportType, setReportType] = useState('user');
+  const [view, setView] = useState<View>('summary');
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
   const [note, setNote] = useState<string | null>(null);
+  const [costSummary, setCostSummary] = useState<{ totalRevenue: number; totalCOGS: number; grossMargin: number; grossMarginPct: number } | null>(null);
+  const [cogsByAccount, setCogsByAccount] = useState<{ accountName: string; amount: number }[]>([]);
+
+  const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
+  const supportsView = option.mode === 'group' || option.mode === 'bills-group';
+  const metric: 'receipts' | 'invoices' = option.mode === 'bills-group' ? 'invoices' : 'receipts';
+  const effectiveView: View = supportsView ? view : 'detail';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setNote(null);
+    setCostSummary(null);
+    setCogsByAccount([]);
     try {
       const params = new URLSearchParams({ dateFrom, dateTo });
       if (user?.clinic) params.append('clinic_id', user.clinic);
 
-      if (groupBy === 'user') {
-        const res = await authFetch(`/api/reports-v2/billing-by-user?${params}`);
+      if (option.mode === 'group' && effectiveView === 'summary') {
+        if (option.value === 'user') {
+          const res = await authFetch(`/api/reports-v2/billing-by-user?${params}`);
+          if (!res.ok) throw new Error('Failed to load');
+          const json = await res.json();
+          setRows((json.cashiers || []).map((c: any) => ({ key: String(c.cashierId ?? c.cashierName), label: c.cashierName, transactionCount: c.transactionCount, totalCollected: c.totalCollected })));
+        } else if (option.value === 'department') {
+          const res = await authFetch(`/api/reports-v2/clinic-performance?${params}`);
+          if (!res.ok) throw new Error('Failed to load');
+          const json = await res.json();
+          setRows((json.byCategory || []).map((c: any) => ({ key: c.category, label: c.category, totalCollected: c.totalCollected })));
+          if (json.categorization?.note) setNote(json.categorization.note);
+        } else if (option.value === 'doctor') {
+          const res = await authFetch(`/api/reports-v2/doctor-performance?${params}`);
+          if (!res.ok) throw new Error('Failed to load');
+          const json = await res.json();
+          setRows((json.doctors || []).map((d: any) => ({ key: d.doctorId, label: d.doctorName, transactionCount: d.visits, totalCollected: d.revenueCollected })));
+          if (json.revenueAttribution?.note) setNote(json.revenueAttribution.note);
+        } else {
+          const res = await authFetch(`/api/reports-v2/revenue?${params}&groupBy=${option.value}`);
+          if (!res.ok) throw new Error('Failed to load');
+          const json = await res.json();
+          setRows((json.rows || []).map((r: any) => ({ key: r.key, label: r.label, transactionCount: r.transactionCount, totalCollected: r.totalCollected })));
+        }
+      } else if (option.mode === 'bills-group' && effectiveView === 'summary') {
+        params.set('groupBy', option.billsGroupBy!);
+        params.set('patientType', option.patientType!);
+        const res = await authFetch(`/api/reports-v2/revenue/bills?${params}`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
-        setRows((json.cashiers || []).map((c: any) => ({
-          key: String(c.cashierId ?? c.cashierName), label: c.cashierName, totalCollected: c.totalCollected, transactionCount: c.transactionCount,
-        })));
-      } else if (groupBy === 'department') {
-        const res = await authFetch(`/api/reports-v2/clinic-performance?${params}`);
+        setRows(json.rows || []);
+        if (json.note) setNote(json.note);
+      } else if (metric === 'receipts' && (effectiveView === 'detail' || option.mode === 'detail-only')) {
+        const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=receipts`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
-        setRows((json.byCategory || []).map((c: any) => ({
-          key: c.category, label: c.category, totalCollected: c.totalCollected,
-        })));
-        if (json.categorization?.note) setNote(json.categorization.note);
-      } else {
-        const res = await authFetch(`/api/reports-v2/revenue?${params}&groupBy=${groupBy}`);
+        setRows(json.rows || []);
+      } else if (metric === 'invoices' && (effectiveView === 'detail' || option.mode === 'detail-only')) {
+        if (option.patientType && option.patientType !== 'all') params.set('patientType', option.patientType);
+        const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=bills`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
-        setRows((json.rows || []).map((r: any) => ({
-          key: r.key, label: r.label, totalCollected: r.totalCollected, transactionCount: r.transactionCount,
-        })));
+        setRows(json.rows || []);
+        if (json.note) setNote(json.note);
+      } else if (option.mode === 'trend') {
+        const interval = option.value === 'trend_month' ? 'month' : 'week';
+        const res = await authFetch(`/api/reports-v2/revenue/trend?${params}&interval=${interval}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        setRows((json.rows || []).map((r: any) => ({ ...r, label: fmtBucket(r.bucket, interval) })));
+      } else if (option.mode === 'cancelled-receipts' || option.mode === 'cancelled-invoices') {
+        const res = await authFetch(`/api/reports-v2/cancelled-transactions?${params}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        setRows(option.mode === 'cancelled-receipts' ? (json.cancelledReceipts || []) : (json.voidedLineItems || []));
+      } else if (option.mode === 'cost-analysis') {
+        const res = await authFetch(`/api/reports-v2/revenue/service-cost-analysis?${params}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        setRows(json.byCategory || []);
+        setCostSummary(json.summary || null);
+        setCogsByAccount(json.cogsByAccount || []);
+        if (json.note) setNote(json.note);
+      } else if (option.mode === 'register') {
+        const res = await authFetch(`/api/reports-v2/revenue/patient-register?${params}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        setRows(json.rows || []);
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to load revenue report');
@@ -84,105 +180,270 @@ export default function RevenueReport() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, user?.clinic, groupBy]);
+  }, [dateFrom, dateTo, user?.clinic, reportType, effectiveView]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  // Reset to Summary whenever the report type changes away from one that supports it.
+  useEffect(() => { if (!supportsView) setView('summary'); }, [reportType, supportsView]);
 
-  const sorted = [...rows].sort((a, b) => b.totalCollected - a.totalCollected);
-  const total = sorted.reduce((s, r) => s + r.totalCollected, 0);
-  const activeOption = GROUP_OPTIONS.find(o => o.value === groupBy)!;
+  const sortedGroupRows = useMemo(
+    () => (option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary'
+      ? [...rows].sort((a, b) => (b.totalCollected ?? b.totalBilled ?? 0) - (a.totalCollected ?? a.totalBilled ?? 0))
+      : rows,
+    [rows, option.mode, effectiveView]
+  );
 
-  const csvColumns: CsvColumn[] = [
-    { header: activeOption.label.replace('By ', ''), key: 'label' },
-    { header: 'Transactions', key: 'transactionCount' },
-    { header: 'Revenue Collected', key: 'totalCollected', transform: (v: any) => fmtCurrency(v) },
-  ];
+  const groupTotal = sortedGroupRows.reduce((s, r) => s + (r.totalCollected ?? 0), 0);
+
+  // ── Columns + CSV per render shape ──────────────────────────────────────
+  let columns: Column<any>[] = [];
+  let csvColumns: CsvColumn[] = [];
+  let keyExtractor: (row: any, i: number) => string | number = (r, i) => r.key ?? r.id ?? i;
+  let emptyMessage = 'No activity in this period.';
+
+  if (option.mode === 'group' && effectiveView === 'summary') {
+    columns = [
+      { key: 'label', header: option.label.replace('Revenue by ', '').replace('Revenue Detailed (By ', '').replace(')', ''), sortable: true },
+      { key: 'transactionCount', header: 'Transactions', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{v != null ? fmtCount(v) : '—'}</span> },
+      { key: 'totalCollected', header: 'Revenue Collected', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+      {
+        key: 'share', header: 'Share', align: 'right', render: (_v, row) => {
+          const share = groupTotal > 0 ? (row.totalCollected / groupTotal) * 100 : 0;
+          return (
+            <div className="flex items-center gap-2 justify-end">
+              <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, share)}%` }} /></div>
+              <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{share.toFixed(0)}%</span>
+            </div>
+          );
+        },
+      },
+    ];
+    csvColumns = [
+      { header: 'Label', key: 'label' },
+      { header: 'Transactions', key: 'transactionCount' },
+      { header: 'Revenue Collected', key: 'totalCollected', transform: v => fmtCurrency(v) },
+    ];
+  } else if (option.mode === 'bills-group' && effectiveView === 'summary') {
+    columns = [
+      { key: 'label', header: option.billsGroupBy === 'status' ? 'Status' : option.billsGroupBy === 'scheme' ? 'Scheme' : 'Branch', sortable: true },
+      { key: 'billCount', header: 'Bills', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{fmtCount(v)}</span> },
+      { key: 'totalBilled', header: 'Total Billed', align: 'right', sortable: true, render: v => <span className="font-mono">{fmtCurrency(v)}</span> },
+      { key: 'totalPaid', header: 'Total Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
+      { key: 'totalBalance', header: 'Balance', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [
+      { header: 'Label', key: 'label' }, { header: 'Bills', key: 'billCount' },
+      { header: 'Total Billed', key: 'totalBilled', transform: v => fmtCurrency(v) },
+      { header: 'Total Paid', key: 'totalPaid', transform: v => fmtCurrency(v) },
+      { header: 'Balance', key: 'totalBalance', transform: v => fmtCurrency(v) },
+    ];
+  } else if (metric === 'receipts' && effectiveView === 'detail') {
+    keyExtractor = r => r.id;
+    columns = [
+      { key: 'date', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'receiptNumber', header: 'Receipt #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'branch', header: 'Branch', sortable: true },
+      { key: 'scheme', header: 'Scheme', sortable: true },
+      { key: 'cashierName', header: 'Cashier', sortable: true },
+      { key: 'paymentMethod', header: 'Payment Mode', sortable: true, render: v => <span className="capitalize">{v}</span> },
+      { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [
+      { header: 'Date', key: 'date', transform: v => fmtDate(v) }, { header: 'Receipt #', key: 'receiptNumber' },
+      { header: 'Patient', key: 'patientName' }, { header: 'Branch', key: 'branch' }, { header: 'Scheme', key: 'scheme' },
+      { header: 'Cashier', key: 'cashierName' }, { header: 'Payment Mode', key: 'paymentMethod' },
+      { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) },
+    ];
+  } else if (metric === 'invoices' && effectiveView === 'detail') {
+    keyExtractor = r => r.id;
+    columns = [
+      { key: 'date', header: 'Bill Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'billNumber', header: 'Bill #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'branch', header: 'Branch', sortable: true },
+      { key: 'scheme', header: 'Scheme', sortable: true },
+      { key: 'patientType', header: 'Patient Type', sortable: true },
+      { key: 'status', header: 'Status', sortable: true, render: v => <span className="capitalize">{v}</span> },
+      { key: 'totalAmount', header: 'Total', align: 'right', sortable: true, render: v => <span className="font-mono">{fmtCurrency(v)}</span> },
+      { key: 'paidAmount', header: 'Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
+      { key: 'balanceAmount', header: 'Balance', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [
+      { header: 'Bill Date', key: 'date', transform: v => fmtDate(v) }, { header: 'Bill #', key: 'billNumber' },
+      { header: 'Patient', key: 'patientName' }, { header: 'Branch', key: 'branch' }, { header: 'Scheme', key: 'scheme' },
+      { header: 'Patient Type', key: 'patientType' }, { header: 'Status', key: 'status' },
+      { header: 'Total', key: 'totalAmount', transform: v => fmtCurrency(v) },
+      { header: 'Paid', key: 'paidAmount', transform: v => fmtCurrency(v) },
+      { header: 'Balance', key: 'balanceAmount', transform: v => fmtCurrency(v) },
+    ];
+  } else if (option.mode === 'trend') {
+    keyExtractor = r => r.bucket;
+    columns = [
+      { key: 'label', header: option.value === 'trend_month' ? 'Month' : 'Week' },
+      { key: 'transactionCount', header: 'Transactions', align: 'right', render: v => <span className="text-muted-foreground">{fmtCount(v)}</span> },
+      { key: 'totalCollected', header: 'Revenue Collected', align: 'right', render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+      {
+        key: 'share', header: 'Trend', render: (_v, row) => (
+          <div className="w-40 h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, row.share * 100)}%` }} /></div>
+        ),
+      },
+    ];
+    csvColumns = [{ header: option.value === 'trend_month' ? 'Month' : 'Week', key: 'label' }, { header: 'Transactions', key: 'transactionCount' }, { header: 'Revenue Collected', key: 'totalCollected', transform: v => fmtCurrency(v) }];
+  } else if (option.mode === 'cancelled-receipts') {
+    keyExtractor = r => r.id;
+    columns = [
+      { key: 'paymentDate', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'receiptNumber', header: 'Receipt #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+      { key: 'paymentMethod', header: 'Payment Mode', sortable: true, render: v => <span className="capitalize">{v}</span> },
+      { key: 'cashierName', header: 'Cashier', sortable: true },
+      { key: 'status', header: 'Status', sortable: true, render: v => <span className="capitalize text-red-600 font-medium">{v}</span> },
+      { key: 'note', header: 'Note' },
+    ];
+    csvColumns = [{ header: 'Date', key: 'paymentDate', transform: v => fmtDate(v) }, { header: 'Receipt #', key: 'receiptNumber' }, { header: 'Patient', key: 'patientName' }, { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) }, { header: 'Payment Mode', key: 'paymentMethod' }, { header: 'Cashier', key: 'cashierName' }, { header: 'Status', key: 'status' }];
+    emptyMessage = 'No cancelled or refunded receipts in this period.';
+  } else if (option.mode === 'cancelled-invoices') {
+    keyExtractor = (r, i) => `${r.billId}-${r.lineIndex ?? i}`;
+    columns = [
+      { key: 'billDate', header: 'Bill Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'billNumber', header: 'Bill #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'serviceName', header: 'Voided Service', sortable: true },
+      { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+      { key: 'updatedBy', header: 'Voided By', sortable: true, render: v => v || '—' },
+    ];
+    csvColumns = [{ header: 'Bill Date', key: 'billDate', transform: v => fmtDate(v) }, { header: 'Bill #', key: 'billNumber' }, { header: 'Patient', key: 'patientName' }, { header: 'Voided Service', key: 'serviceName' }, { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) }, { header: 'Voided By', key: 'updatedBy' }];
+    emptyMessage = 'No voided line items in this period.';
+  } else if (option.mode === 'cost-analysis') {
+    columns = [
+      { key: 'category', header: 'Category', sortable: true },
+      { key: 'totalBilled', header: 'Billed', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
+      { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [{ header: 'Category', key: 'category' }, { header: 'Billed', key: 'totalBilled', transform: v => fmtCurrency(v) }, { header: 'Collected', key: 'totalCollected', transform: v => fmtCurrency(v) }];
+  } else if (option.mode === 'register') {
+    keyExtractor = r => r.patientId;
+    columns = [
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'schemeName', header: 'Scheme', sortable: true },
+      { key: 'billCount', header: 'Bills', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{fmtCount(v)}</span> },
+      { key: 'totalBilled', header: 'Total Billed', align: 'right', sortable: true, render: v => <span className="font-mono">{fmtCurrency(v)}</span> },
+      { key: 'totalPaid', header: 'Total Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
+      { key: 'totalBalance', header: 'Balance', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [{ header: 'Patient', key: 'patientName' }, { header: 'Scheme', key: 'schemeName' }, { header: 'Bills', key: 'billCount' }, { header: 'Total Billed', key: 'totalBilled', transform: v => fmtCurrency(v) }, { header: 'Total Paid', key: 'totalPaid', transform: v => fmtCurrency(v) }, { header: 'Balance', key: 'totalBalance', transform: v => fmtCurrency(v) }];
+  }
+
+  const displayRows = (option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary' ? sortedGroupRows : rows;
 
   return (
     <ReportSubPageShell
       title="Revenue Report"
-      description="Revenue collected in the period, broken down by whichever dimension you pick"
+      description="Pick a report type below — it loads automatically for the selected date range."
       dateFrom={dateFrom}
       dateTo={dateTo}
       onDateFromChange={setDateFrom}
       onDateToChange={setDateTo}
       onRefresh={fetchData}
       loading={loading}
-      csvData={sorted}
+      csvData={displayRows}
       csvColumns={csvColumns}
-      csvFilename={`revenue-by-${groupBy}-${dateFrom}-${dateTo}.csv`}
+      csvFilename={`revenue-${option.value}-${effectiveView}-${dateFrom}-${dateTo}.csv`}
     >
-      <div className="mb-4 inline-flex rounded-md border overflow-hidden" role="group" aria-label="Group revenue by">
-        {GROUP_OPTIONS.map(({ value, label, icon: Icon }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setGroupBy(value)}
-            aria-pressed={groupBy === value}
-            className={`px-3 py-1.5 text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
-              groupBy === value ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" /> {label}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <select
+          value={reportType}
+          onChange={e => setReportType(e.target.value)}
+          className="h-9 min-w-[280px] rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          {OPTION_GROUPS.map(group => (
+            <optgroup key={group} label={group}>
+              {REPORT_OPTIONS.filter(o => o.group === group).map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+
+        {supportsView && (
+          <div className="inline-flex rounded-md border overflow-hidden" role="group" aria-label="Summary or detail">
+            {(['summary', 'detail'] as View[]).map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`px-3 py-1.5 text-[13px] font-medium capitalize transition-colors ${view === v ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {note && (
         <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">{note}</div>
       )}
 
-      {loading && rows.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : (
-        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-2 text-left">{activeOption.label.replace('By ', '')}</th>
-                <th className="px-4 py-2 text-right">Transactions</th>
-                <th className="px-4 py-2 text-right">Revenue Collected</th>
-                <th className="px-4 py-2 text-right w-32">Share</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-muted-foreground">No revenue activity in this period</td></tr>
-              ) : (
-                sorted.map(r => {
-                  const share = total > 0 ? (r.totalCollected / total) * 100 : 0;
-                  return (
-                    <tr key={r.key} className="border-b border-border/60 last:border-0">
-                      <td className="px-4 py-2">{r.label}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-muted-foreground">{r.transactionCount ?? '—'}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(r.totalCollected)}</td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, share)}%` }} />
-                          </div>
-                          <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{share.toFixed(0)}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-            {sorted.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-foreground/20 font-semibold">
-                  <td className="px-4 py-2">Total</td>
-                  <td className="px-4 py-2 text-right font-mono tabular-nums">{sorted.reduce((s, r) => s + (r.transactionCount || 0), 0)}</td>
-                  <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(total)}</td>
-                  <td />
-                </tr>
-              </tfoot>
+      {option.mode === 'cost-analysis' && costSummary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div className="bg-card rounded-lg border shadow-sm p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
+            <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(costSummary.totalRevenue)}</p>
+          </div>
+          <div className="bg-card rounded-lg border shadow-sm p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Cost of Goods Sold</p>
+            <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(costSummary.totalCOGS)}</p>
+            {cogsByAccount.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">{cogsByAccount.map(a => a.accountName).join(', ')}</p>
             )}
-          </table>
+          </div>
+          <div className="bg-card rounded-lg border shadow-sm p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Gross Margin</p>
+            <p className={`text-2xl font-bold mt-1 ${costSummary.grossMargin >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(costSummary.grossMargin)}</p>
+          </div>
+          <div className="bg-card rounded-lg border shadow-sm p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Gross Margin %</p>
+            <p className="text-2xl font-bold mt-1">{fmtNum(costSummary.grossMarginPct, 1)}%</p>
+          </div>
         </div>
+      )}
+
+      {loading && rows.length === 0 ? (
+        <LoadingState message="Loading report..." />
+      ) : (
+        <>
+          <AdvancedDataTable
+            data={displayRows}
+            keyExtractor={keyExtractor}
+            columns={columns}
+            emptyMessage={emptyMessage}
+            pagination={{ enabled: true, pageSize: 25, pageSizeOptions: [25, 50, 100] }}
+            searchable
+            searchPlaceholder="Search this report..."
+          />
+          {(option.mode === 'group' || option.mode === 'bills-group') && effectiveView === 'summary' && sortedGroupRows.length > 0 && (
+            <div className="flex justify-between items-center px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-semibold -mt-px">
+              <span>Total</span>
+              <span className="flex gap-8">
+                {option.mode === 'group' ? (
+                  <>
+                    <span>{fmtCount(sortedGroupRows.reduce((s, r) => s + (r.transactionCount || 0), 0))}</span>
+                    <span>{fmtCurrency(groupTotal)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{fmtCount(sortedGroupRows.reduce((s, r) => s + (r.billCount || 0), 0))}</span>
+                    <span>{fmtCurrency(sortedGroupRows.reduce((s, r) => s + (r.totalBilled || 0), 0))}</span>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+        </>
       )}
     </ReportSubPageShell>
   );
