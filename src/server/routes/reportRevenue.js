@@ -96,6 +96,11 @@ async function resolveItemAmount(item, bill, rateCache, clinicId) {
 }
 
 function collectedForItem(item, bill, itemTotal, billPaidRatio) {
+  // A voided line never counts as collected, regardless of a stale `paid`
+  // flag left over from before it was voided (void-item intentionally keeps
+  // paid:true on a voided line as a historical marker — see patientBills.js's
+  // /void-item route) or from a receipt reversal that predates R1's fix.
+  if (item.isVoided) return 0;
   if (typeof item.paid === 'boolean') return item.paid ? itemTotal : 0;
   if (item.status === 'paid') return itemTotal;
   if (bill.status === 'paid') return itemTotal;
