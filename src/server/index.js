@@ -631,6 +631,7 @@ app.use('/api/reports-v2/clinic-performance', require('./routes/reportClinicPerf
 app.use('/api/reports-v2/doctor-performance', require('./routes/reportDoctorPerformance'));
 app.use('/api/reports-v2/occupancy', require('./routes/reportOccupancy'));
 app.use('/api/reports-v2/dhis2', require('./routes/reportDhis2'));
+app.use('/api/reports-v2/clinical', require('./routes/reportClinical'));
 app.use('/api/fixed-assets', require('./routes/fixedAssets'));
 app.use('/api/theatre', require('./routes/theatre'));
 app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));

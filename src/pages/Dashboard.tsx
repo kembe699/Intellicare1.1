@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { DashboardOverviewContent } from '@/pages/reports/DashboardOverviewContent';
 import { HeroStatCard, FilterBar, FilterPill, PageHeader, LoadingState } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -805,6 +806,16 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Same minimal overview as Reports Center's Dashboard Overview page —
+            gated the same way collections already are above, since it leads
+            with revenue figures that shouldn't be visible to every role. */}
+        {canViewCollections && (
+          <div>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Overview</h2>
+            <DashboardOverviewContent />
+          </div>
+        )}
       </div>
       </div>
     </AppLayout>

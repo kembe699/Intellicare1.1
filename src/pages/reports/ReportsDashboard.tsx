@@ -5,30 +5,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
-  Users, Package,
+  Package, Stethoscope,
   LogOut, ChevronRight, Search, PanelLeftClose, PanelLeft, Shield,
   TrendingUp, LayoutDashboard, ShieldCheck, FileSpreadsheet,
 } from 'lucide-react';
 
-// Trimmed down to just these 6 at the user's request — Income Statement,
-// Accounting Reports, Fixed Assets Reports, Clinic/Department Performance,
-// Bed/Ward Occupancy, Theatre Report, Procurement Report, Laboratory
-// Report, Pharmacy Report, Doctor Performance and AR Aging were all pulled
-// out of the sidebar AND their routes (see App.tsx) — not deleted, just
-// unlinked, since a future pass will rebuild reporting in a more organized
-// way. Their page/route files are untouched on disk.
+// Patient Report (and the Patients & Billing group it was alone in) removed
+// per request. Inventory/Financial/Administration keep their entries but
+// lose their section header (hideLabel) — only Ministry of Health and the
+// new Clinical group still show a label.
 const REPORT_GROUPS = [
   { label: 'Overview', color: 'text-white' },
-  { label: 'Patients & Billing', color: 'text-white' },
-  { label: 'Inventory', color: 'text-white' },
-  { label: 'Financial', color: 'text-white' },
+  { label: 'Clinical', color: 'text-white' },
+  { label: 'Inventory', color: 'text-white', hideLabel: true },
+  { label: 'Financial', color: 'text-white', hideLabel: true },
   { label: 'Ministry of Health', color: 'text-white' },
-  { label: 'Administration', color: 'text-white' },
+  { label: 'Administration', color: 'text-white', hideLabel: true },
 ];
 
 const REPORT_CATEGORIES = [
   { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, desc: 'Hospital-wide analytics at a glance', group: 'Overview' },
-  { id: 'patients', label: 'Patient Report', icon: Users, desc: 'Visit volume, paid vs. owed', group: 'Patients & Billing' },
+  { id: 'clinical', label: 'Clinical Reports', icon: Stethoscope, desc: 'Registers, workload, morbidity, inpatient/outpatient', group: 'Clinical' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
   { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
   { id: 'dhis2', label: 'DHIS2 Report', icon: FileSpreadsheet, desc: 'Monthly HMIS facility report', group: 'Ministry of Health' },
@@ -97,7 +94,7 @@ export default function ReportsDashboard() {
             if (cats.length === 0) return null;
             return (
               <div key={group.label} className="mb-2">
-                {sidebarOpen && (
+                {sidebarOpen && !(group as any).hideLabel && (
                   <p className={`text-[10px] uppercase tracking-widest font-semibold px-3 pt-3 pb-1 ${group.color}`}>
                     {group.label}
                   </p>
