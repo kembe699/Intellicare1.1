@@ -113,6 +113,7 @@ const CATALOG = [
   ['nursing.procedures.write', 'Manage nursing procedures', 'lis', 'Record injections, minor procedures, and dressings performed by a nurse', ['admin', 'nurse']],
   ['nursing.procedures.order', 'Order billable nursing procedures', 'lis', 'Order an injection, dressing, or minor procedure for a nurse to carry out (doctor, or reception for a walk-in order)', ['admin', 'doctor', 'reception']],
   ['antenatal.write', 'Manage antenatal (ANC) care', 'lis', 'Register ANC patients, record visits, and print the antenatal card', ['admin', 'nurse', 'doctor']],
+  ['appointments.write', 'Manage appointments', 'lis', 'Schedule follow-up appointments and queue a patient to the doctor who asked for one', ['admin', 'doctor', 'reception']],
   ['lis.specimen.write', 'Manage specimens', 'lis', 'Collect, dispatch, QC, route specimens; enter results', ['admin', 'lab']],
   ['lis.results.review', 'Review LIS results', 'lis', 'Manager review of pending results', ['admin', 'lab']],
   ['lis.results.read', 'View LIS result history', 'lis', 'View specimen/result history', ['admin', 'lab', 'doctor']],

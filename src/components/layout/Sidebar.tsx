@@ -85,6 +85,7 @@ interface NavDropdown {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, privilege: 'pages.dashboard.view' },
   { label: 'Patient Registry', href: '/lis/registration', icon: Users, privilege: 'pages.lis_registration.view' },
+  { label: 'Appointments', href: '/appointments', icon: CalendarClock, privilege: 'appointments.write' },
   { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read' },
   { label: 'Radiology', href: '/radiology', icon: Scan, privilege: 'radiology.read' },
   { label: 'Queue Display', href: '/lis/queue', icon: Users, privilege: 'lis.queue.write' },
@@ -355,7 +356,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   // A section label (e.g. "CLINICAL WORKFLOW") should never render on its own with nothing
   // visible underneath it — that reads as "you almost have access" to a role that has none.
   // Each flag mirrors exactly the set of items rendered under that heading below.
-  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || showNursingStation || showInpatient || showTheatre || showLIS || showPharmacy);
+  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/appointments') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || showNursingStation || showInpatient || showTheatre || showLIS || showPharmacy);
   const showBillingFinanceSection = !!(showPatientsBill || showAccounting);
   const showSupplyChainSection = !!(showInventory || showProcurement);
   const showAnalyticsAdminSection = !!(hasNavLink('/reports') || showSetup);
@@ -463,6 +464,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
                   {/* 2. Patient Registry (flat link) */}
                   {renderNavLink('/lis/registration')}
+
+                  {/* 2.05 Appointments (flat link) — follow-ups booked from a Visit
+                      Summary land here; queuing one on the day feeds straight into
+                      the consultation queue below, pre-assigned to that doctor */}
+                  {renderNavLink('/appointments')}
 
                   {/* 2.1 Queue Display (flat link) — patient waits here after registration, before being seen */}
                   {renderNavLink('/lis/queue')}
