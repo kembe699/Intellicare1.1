@@ -49,6 +49,7 @@ const Triage = lazyWithRetry(() => import('./pages/lis/Triage'));
 const NursingProcedures = lazyWithRetry(() => import('./pages/lis/NursingProcedures'));
 const NursingProcedureDetail = lazyWithRetry(() => import('./pages/lis/NursingProcedureDetail'));
 const Antenatal = lazyWithRetry(() => import('./pages/lis/Antenatal'));
+const Appointments = lazyWithRetry(() => import('./pages/Appointments'));
 const AntenatalProfile = lazyWithRetry(() => import('./pages/lis/AntenatalProfile'));
 const LISCollection = lazyWithRetry(() => import('./pages/lis/LISCollection'));
 const LISResultsEntry = lazyWithRetry(() => import('./pages/lis/LISResultsEntry'));
@@ -393,6 +394,11 @@ const AppRoutes = () => {
       <Route path="/nursing/antenatal/:id" element={
         <ProtectedRoute requiredPrivilege="antenatal.write">
           <AntenatalProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/appointments" element={
+        <ProtectedRoute requiredPrivilege="appointments.write">
+          <Appointments />
         </ProtectedRoute>
       } />
       <Route path="/lis/orders" element={

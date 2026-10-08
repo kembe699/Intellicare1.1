@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send, Scan, Syringe } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send, Scan, Syringe, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -240,6 +240,12 @@ export default function LISTestOrders() {
   const [admitReason, setAdmitReason] = useState('');
   const [admitDiagnosis, setAdmitDiagnosis] = useState('');
   const [requestingAdmission, setRequestingAdmission] = useState(false);
+
+  // Schedule Follow-up Appointment (within Visit Summary detail)
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentReason, setAppointmentReason] = useState('');
+  const [schedulingAppointment, setSchedulingAppointment] = useState(false);
 
   // Prescription (within Visit Summary detail)
   const [pharmacyDrugs, setPharmacyDrugs] = useState<any[]>([]);
@@ -853,6 +859,43 @@ export default function LISTestOrders() {
       toast.error('Network error');
     } finally {
       setRequestingAdmission(false);
+    }
+  };
+
+  // Books a follow-up appointment for this visit's patient, defaulting to the
+  // doctor already attending them — it shows up on the new /appointments page,
+  // and queuing it there on the day hands the patient straight back into this
+  // same doctor's consultation queue.
+  const handleScheduleAppointment = async () => {
+    if (!selectedSummary) return;
+    if (!appointmentDate) { toast.error('Pick a date for the follow-up'); return; }
+    setSchedulingAppointment(true);
+    try {
+      const res = await authFetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          participant_id: selectedSummary.participant_id,
+          doctor_id: selectedSummary.doctor_id || undefined,
+          scheduled_date: appointmentDate,
+          reason: appointmentReason.trim() || undefined,
+          source_order_id: selectedSummary.order_id,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Follow-up appointment scheduled');
+        setShowAppointmentModal(false);
+        setAppointmentDate('');
+        setAppointmentReason('');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to schedule appointment');
+      }
+    } catch {
+      toast.error('Network error scheduling appointment');
+    } finally {
+      setSchedulingAppointment(false);
     }
   };
 
@@ -2905,6 +2948,11 @@ export default function LISTestOrders() {
                     >
                       <BedDouble className="w-4 h-4 mr-2" /> Request Admission
                     </Button>
+                    {hasPrivilege('appointments.write') && (
+                      <Button variant="outline" size="sm" onClick={() => setShowAppointmentModal(true)} className="text-primary border-primary/30 hover:bg-primary/5">
+                        <CalendarClock className="w-4 h-4 mr-2" /> Schedule Follow-up
+                      </Button>
+                    )}
                     {selectedSummary.status !== 'closed' && (
                       <Button variant="outline" size="sm" onClick={handleCloseVisit} disabled={closingVisit} className="text-red-600 hover:text-red-700">
                         {closingVisit ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
@@ -3661,6 +3709,35 @@ export default function LISTestOrders() {
             <Button onClick={handleRequestAdmission} disabled={requestingAdmission || !admitDiagnosis.trim()}>
               {requestingAdmission ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BedDouble className="w-4 h-4 mr-2" />}
               {requestingAdmission ? 'Requesting...' : 'Request Admission'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Follow-up Appointment Modal */}
+      <Dialog open={showAppointmentModal} onOpenChange={(open) => { setShowAppointmentModal(open); if (!open) { setAppointmentDate(''); setAppointmentReason(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CalendarClock className="w-5 h-5 text-primary" /> Schedule Follow-up</DialogTitle>
+            <DialogDescription>
+              {selectedSummary ? `Book a next visit for ${selectedSummary.first_name} ${selectedSummary.last_name}${selectedSummary.doctor_name ? ` with Dr. ${selectedSummary.doctor_name}` : ''} — it'll appear on the Appointments page, and queuing it there on the day sends them straight back to this doctor.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-5 space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Date *</label>
+              <Input type="date" value={appointmentDate} onChange={e => setAppointmentDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Reason</label>
+              <Textarea placeholder="e.g. Review labs, follow-up on treatment" value={appointmentReason} onChange={e => setAppointmentReason(e.target.value)} rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAppointmentModal(false)}>Cancel</Button>
+            <Button onClick={handleScheduleAppointment} disabled={schedulingAppointment || !appointmentDate}>
+              {schedulingAppointment ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CalendarClock className="w-4 h-4 mr-2" />}
+              {schedulingAppointment ? 'Scheduling...' : 'Schedule'}
             </Button>
           </DialogFooter>
         </DialogContent>
