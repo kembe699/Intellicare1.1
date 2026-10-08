@@ -302,7 +302,12 @@ router.get('/', async (req, res) => {
         const { amount: itemTotal, isInsurance } = await resolveItemAmount(item, bill, rateCache, clinicId);
 
         let collected;
-        if (typeof item.paid === 'boolean') {
+        if (item.isVoided) {
+          // A voided line never counts as collected, regardless of a stale
+          // `paid` flag left over from before it was voided.
+          collected = 0;
+          explicitPaidFlagItems++;
+        } else if (typeof item.paid === 'boolean') {
           collected = item.paid ? itemTotal : 0;
           explicitPaidFlagItems++;
         } else if (item.status === 'paid') {
