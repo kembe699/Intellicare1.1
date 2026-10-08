@@ -1754,9 +1754,18 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         await sequelize.query('UPDATE dispensing_records SET revenue_gl_entry_id = :je WHERE id = :id', { replacements: { je: glEntry.id, id: dispId }, transaction: t });
       }
 
-      // COGS GL entry
-      if (cogsAcct && selectedBatch && selectedBatch.unit_cost > 0) {
-        const cogsAmount = selectedBatch.unit_cost * quantity_dispensed;
+      // COGS GL entry — cost per unit prefers the actual dispensed batch's own
+      // recorded cost, but a batch bought/received without ever having its
+      // cost entered (common when a GRN was accepted in a hurry) falls back to
+      // the item's own average/current cost rather than skipping COGS
+      // entirely. Whichever source is used, the amount is still the dispensed
+      // item's real cost, never its selling price.
+      const unitCost = (selectedBatch?.unit_cost > 0) ? parseFloat(selectedBatch.unit_cost)
+        : (drug.average_unit_cost > 0) ? parseFloat(drug.average_unit_cost)
+        : (drug.current_unit_cost > 0) ? parseFloat(drug.current_unit_cost)
+        : 0;
+      if (cogsAcct && unitCost > 0) {
+        const cogsAmount = unitCost * quantity_dispensed;
 
         // Get inventory GL account — same fallback reasoning as cogsAcct
         // above: default to Pharmaceutical Inventory (1310), the account
@@ -1777,12 +1786,16 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
             clinic_id: cid,
             transaction_date: new Date(),
             transaction_type: 'pharmacy_dispensing_cogs',
-            description: `COGS: ${drug.drug_name} x${quantity_dispensed} (Batch ${selectedBatch.batch_number})`,
+            description: selectedBatch?.unit_cost > 0
+              ? `COGS: ${drug.drug_name} x${quantity_dispensed} (Batch ${selectedBatch.batch_number})`
+              : `COGS: ${drug.drug_name} x${quantity_dispensed} (item average/current cost — dispensed batch has no recorded cost)`,
             reference_id: dispId,
             reference_module: 'pharmacy_dispensing',
             // COGS is costed in the batch's own cost currency, not the item's selling
             // currency (curr) — they can legitimately differ (e.g. sold in SSP, bought in USD).
-            transaction_currency: selectedBatch.cost_currency || curr,
+            // Falls back to the item's selling currency when costed off the item-level
+            // average/current cost instead of a specific batch.
+            transaction_currency: selectedBatch?.cost_currency || curr,
           }, [
             // Debit: COGS
             { account_id: cogsAcct, debit_amount: cogsAmount, credit_amount: 0, description: `COGS: ${drug.drug_name}` },
@@ -1798,8 +1811,8 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         }
       } else if (!cogsAcct) {
         console.warn(`Dispensing ${dispId}: COGS not posted — Pharmaceutical Cost of Sales account (5210) not found/active for clinic ${cid}.`);
-      } else if (!selectedBatch || !(selectedBatch.unit_cost > 0)) {
-        console.warn(`Dispensing ${dispId}: COGS not posted — dispensed batch has no unit_cost recorded.`);
+      } else if (unitCost <= 0) {
+        console.warn(`Dispensing ${dispId}: COGS not posted — dispensed batch has no unit_cost, and item ${drug.id} has no average_unit_cost/current_unit_cost recorded either.`);
       }
     } catch (glError) {
       console.error('GL entry creation warning (non-blocking):', glError.message);
