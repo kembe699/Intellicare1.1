@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { fmtCurrency } from '@/utils/reportUtils';
 
 type TabType = 'schemes' | 'service-pricing' | 'product-pricing' | 'membership' | 'discounts' | 'reports';
 
@@ -665,20 +666,20 @@ const SchemeManagement: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredSchemes.map(scheme => (
-            <div key={scheme.id} className={`ic-card bg-white ${!scheme.is_active ? 'opacity-50' : ''}`}>
-              <div className="ic-card-header">
-                <div className="flex items-start justify-between">
+            <Card key={scheme.id} className={!scheme.is_active ? 'opacity-50' : ''}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="font-semibold text-[13px] text-foreground">{scheme.scheme_name}</span>
+                    <CardTitle className="text-base">{scheme.scheme_name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">{scheme.scheme_code}</p>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 shrink-0">
                     {!!scheme.is_default && <Badge className="bg-green-100 text-green-800 text-[10px]">Default</Badge>}
                     <Badge variant={scheme.is_active ? 'secondary' : 'destructive'} className="text-[10px] capitalize">{scheme.scheme_type}</Badge>
                   </div>
                 </div>
-              </div>
-              <div className="ic-card-body">
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Currency</span>
@@ -749,8 +750,8 @@ const SchemeManagement: React.FC = () => {
                     </Button>
                   )}
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
           {filteredSchemes.length === 0 && (
             <div className="col-span-full text-center py-12 text-muted-foreground">No schemes found</div>
@@ -776,9 +777,11 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Set Service Price
               </Button>
             </div>
-            <div className="ic-card bg-white">
-              <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Service Prices for {selectedScheme?.scheme_name}</span></div>
-              <div className="ic-card-body">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Service Prices for {selectedScheme?.scheme_name}</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <AdvancedDataTable<any>
                   data={servicePricing}
                   keyExtractor={(sp) => sp.id}
@@ -798,10 +801,10 @@ const SchemeManagement: React.FC = () => {
                         </>
                       ),
                     },
-                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => `${currency.code} ${parseFloat(v || 0).toFixed(2)}` },
+                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => fmtCurrency(v, currency.code) },
                     {
                       key: 'scheme_price', header: 'Scheme Price', align: 'right',
-                      render: (v) => <span className="font-bold">{v ? `${selectedScheme?.currency || currency.code} ${parseFloat(v).toFixed(2)}` : '-'}</span>,
+                      render: (v) => <span className="font-bold">{v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : '-'}</span>,
                     },
                     {
                       key: '__markup', header: 'Markup/Disc', align: 'right',
@@ -814,7 +817,7 @@ const SchemeManagement: React.FC = () => {
                     },
                     {
                       key: 'insurance_copay', header: 'Copay', align: 'right',
-                      render: (v, sp) => v ? `${selectedScheme?.currency || currency.code} ${parseFloat(v).toFixed(2)}` : sp.insurance_copay_percentage ? `${sp.insurance_copay_percentage}%` : '-',
+                      render: (v, sp) => v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : sp.insurance_copay_percentage ? `${sp.insurance_copay_percentage}%` : '-',
                     },
                     { key: 'effective_from', header: 'Effective', render: (v, sp) => <span className="text-xs">{v || '-'}{sp.effective_to ? ` to ${sp.effective_to}` : ''}</span> },
                     {
@@ -827,8 +830,8 @@ const SchemeManagement: React.FC = () => {
                     },
                   ]}
                 />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
@@ -851,9 +854,11 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Set Product Price
               </Button>
             </div>
-            <div className="ic-card bg-white">
-              <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Product Prices for {selectedScheme?.scheme_name}</span></div>
-              <div className="ic-card-body">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Product Prices for {selectedScheme?.scheme_name}</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <AdvancedDataTable<any>
                   data={productPricing}
                   keyExtractor={(pp) => pp.id}
@@ -866,11 +871,11 @@ const SchemeManagement: React.FC = () => {
                   columns={[
                     { key: 'product_name', header: 'Product', sortable: true, render: (v, pp) => <span className="font-medium">{v || pp.product_code}</span> },
                     { key: 'product_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
-                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => `${currency.code} ${parseFloat(v || 0).toFixed(2)}` },
-                    { key: 'scheme_price', header: 'Scheme Price', align: 'right', render: (v) => <span className="font-bold">{v ? `${selectedScheme?.currency || currency.code} ${parseFloat(v).toFixed(2)}` : '-'}</span> },
+                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => fmtCurrency(v, currency.code) },
+                    { key: 'scheme_price', header: 'Scheme Price', align: 'right', render: (v) => <span className="font-bold">{v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : '-'}</span> },
                     {
                       key: 'insurance_copay', header: 'Copay', align: 'right',
-                      render: (v, pp) => v ? `${selectedScheme?.currency || currency.code} ${parseFloat(v).toFixed(2)}` : pp.insurance_copay_percentage ? `${pp.insurance_copay_percentage}%` : '-',
+                      render: (v, pp) => v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : pp.insurance_copay_percentage ? `${pp.insurance_copay_percentage}%` : '-',
                     },
                     { key: 'effective_from', header: 'Effective', render: (v) => <span className="text-xs">{v || '-'}</span> },
                     {
@@ -883,8 +888,8 @@ const SchemeManagement: React.FC = () => {
                     },
                   ]}
                 />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
@@ -904,9 +909,11 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Add Member
               </Button>
             </div>
-            <div className="ic-card bg-white">
-              <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Members of {selectedScheme?.scheme_name}</span></div>
-              <div className="ic-card-body">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Members of {selectedScheme?.scheme_name}</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <AdvancedDataTable<any>
                   data={members}
                   keyExtractor={(m) => m.id}
@@ -952,8 +959,8 @@ const SchemeManagement: React.FC = () => {
                     },
                   ]}
                 />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
@@ -973,9 +980,11 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> New Discount
               </Button>
             </div>
-            <div className="ic-card bg-white">
-              <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Discounts for {selectedScheme?.scheme_name}</span></div>
-              <div className="ic-card-body">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Discounts for {selectedScheme?.scheme_name}</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <AdvancedDataTable<any>
                   data={discounts}
                   keyExtractor={(d) => d.id}
@@ -987,7 +996,7 @@ const SchemeManagement: React.FC = () => {
                     { key: 'discount_type', header: 'Type', render: (v) => <span className="capitalize">{v?.replace('_', ' ')}</span> },
                     {
                       key: 'discount_value', header: 'Value', align: 'right',
-                      render: (v, d) => <span className="font-bold">{d.discount_type === 'percentage' ? `${v}%` : `${selectedScheme?.currency || currency.code} ${parseFloat(v || 0).toFixed(2)}`}</span>,
+                      render: (v, d) => <span className="font-bold">{d.discount_type === 'percentage' ? `${v}%` : fmtCurrency(v, selectedScheme?.currency || currency.code)}</span>,
                     },
                     { key: 'applies_to', header: 'Applies To', render: (v) => <span className="capitalize">{v?.replace('_', ' ')}</span> },
                     { key: 'effective_from', header: 'Period', render: (v, d) => <span className="text-xs">{v || 'Always'}{d.effective_to ? ` - ${d.effective_to}` : ''}</span> },
@@ -997,8 +1006,8 @@ const SchemeManagement: React.FC = () => {
                     },
                   ]}
                 />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
@@ -1011,9 +1020,11 @@ const SchemeManagement: React.FC = () => {
         <div className="flex justify-end"><Button variant="outline" size="sm" onClick={loadReports}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button></div>
 
         {/* Membership Report */}
-        <div className="ic-card bg-white">
-          <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Membership by Scheme</span></div>
-          <div className="ic-card-body">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Membership by Scheme</CardTitle>
+          </CardHeader>
+          <CardContent>
             <AdvancedDataTable<any>
               data={membershipReport}
               keyExtractor={(r, i) => i}
@@ -1025,13 +1036,15 @@ const SchemeManagement: React.FC = () => {
                 { key: 'total_members', header: 'Total', align: 'right', render: (v) => <span className="font-bold">{v}</span> },
               ]}
             />
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Margin Analysis */}
-        <div className="ic-card bg-white">
-          <div className="ic-card-header"><span className="font-semibold text-[13px] text-foreground">Margin Analysis by Scheme</span></div>
-          <div className="ic-card-body">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Margin Analysis by Scheme</CardTitle>
+          </CardHeader>
+          <CardContent>
             <AdvancedDataTable<any>
               data={marginReport}
               keyExtractor={(r, i) => i}
@@ -1047,8 +1060,8 @@ const SchemeManagement: React.FC = () => {
                 { key: 'at_base', header: 'At Base', align: 'right', render: (v) => v || 0 },
               ]}
             />
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -1210,7 +1223,7 @@ const SchemeManagement: React.FC = () => {
           <div className="px-5 py-4 space-y-4">
             <div><Label>Service *</Label>
               <Combobox
-                options={allServices.map((s: any) => ({ value: s.id, label: `${s.service_name || s.name} - ${selectedScheme?.currency || currency.code} ${parseFloat(s.price || 0).toFixed(2)}` }))}
+                options={allServices.map((s: any) => ({ value: s.id, label: `${s.service_name || s.name} - ${fmtCurrency(s.price, selectedScheme?.currency || currency.code)}` }))}
                 value={servicePriceForm.service_id}
                 onChange={v => setServicePriceForm(f => ({...f, service_id: v}))}
                 placeholder="Select service..."
@@ -1257,7 +1270,7 @@ const SchemeManagement: React.FC = () => {
           <div className="px-5 py-4 space-y-4">
             <div><Label>Product *</Label>
               <Combobox
-                options={allProducts.map((p: any) => ({ value: p.id, label: `${p.item_name} - ${selectedScheme?.currency || currency.code} ${parseFloat(p.selling_price || p.cost_price || 0).toFixed(2)}` }))}
+                options={allProducts.map((p: any) => ({ value: p.id, label: `${p.item_name} - ${fmtCurrency(p.selling_price || p.cost_price, selectedScheme?.currency || currency.code)}` }))}
                 value={productPriceForm.product_id}
                 onChange={v => setProductPriceForm(f => ({...f, product_id: v}))}
                 placeholder="Select product..."
