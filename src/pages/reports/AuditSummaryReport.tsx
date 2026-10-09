@@ -258,12 +258,10 @@ export default function AuditSummaryReport() {
       loading={loading}
       hideControls
     >
-      {/* Not sticky, unlike the single-table report pages — this page has a
-          lot more content below it (4 stat tiles + 2 tables), and a pinned
-          header over that much scrolling content just meant results kept
-          sliding in from underneath it. Scrolls away normally instead so
-          nothing ever renders behind anything else. */}
-      <div className="-mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20">
+      {/* Filters + letterhead + the stat tiles stay pinned while only the
+          two result tables below scroll — a solid (not tinted/translucent)
+          background so scrolling rows never show through underneath it. */}
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:border-0 print:shadow-none">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <Combobox
             options={userOptions}
@@ -351,18 +349,10 @@ export default function AuditSummaryReport() {
             </div>
           </div>
         </div>
-      </div>
 
-      {loading ? (
-        <LoadingState message="Loading audit log..." />
-      ) : !hasLoaded ? (
-        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">
-          Pick filters and a date range above, then click View.
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* ── Stat tiles ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* ── Stat tiles — part of the pinned header, not the scrolling results ── */}
+        {hasLoaded && data && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -411,7 +401,17 @@ export default function AuditSummaryReport() {
               </div>
             </div>
           </div>
+        )}
+      </div>
 
+      {loading ? (
+        <LoadingState message="Loading audit log..." />
+      ) : !hasLoaded ? (
+        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">
+          Pick filters and a date range above, then click View.
+        </div>
+      ) : (
+        <div className="space-y-6">
           {/* ── Staff activity summary — clicking a row filters the activity log below to that user ── */}
           <div className="print:hidden">
             <div className="mb-2">
