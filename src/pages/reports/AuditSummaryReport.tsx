@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, Users, Trophy, Zap, ShieldAlert, Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
+import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -203,6 +203,8 @@ export default function AuditSummaryReport() {
 
   const byUser = data?.byUser || [];
   const activityRows = data?.activity.rows || [];
+  const numberedByUser = useMemo(() => byUser.map((r, i) => ({ ...r, no: i + 1 })), [byUser]);
+  const numberedActivity = useMemo(() => activityRows.map((r, i) => ({ ...r, no: i + 1 })), [activityRows]);
 
   // Top 3 action types per user, for the compact badge list in the summary table.
   const topActionsByUser = useMemo(() => {
@@ -411,12 +413,13 @@ export default function AuditSummaryReport() {
               <h3 className="font-semibold text-sm">Staff Activity Summary</h3>
               <p className="text-xs text-muted-foreground">{fmtCount(byUser.length)} staff member{byUser.length === 1 ? '' : 's'} with logged activity {fmtDate(dateFrom)} — {fmtDate(dateTo)} &middot; click a row to filter the activity log below</p>
             </div>
-            <AdvancedDataTable<ByUserRow>
-              data={byUser}
+            <AdvancedDataTable<ByUserRow & { no: number }>
+              data={numberedByUser}
               keyExtractor={(row) => String(row.userId ?? row.userName)}
               searchable
               searchPlaceholder="Search staff..."
               emptyMessage="No staff activity found for the selected filters."
+              maxRows={15}
               onRowClick={(row) => {
                 const newUserId = userFilter === String(row.userId ?? '') ? '' : String(row.userId ?? '');
                 setUserFilter(newUserId);
@@ -424,6 +427,7 @@ export default function AuditSummaryReport() {
               }}
               rowClassName={(row) => (String(row.userId ?? '') === userFilter ? 'bg-primary/5' : '')}
               columns={[
+                { key: 'no', header: 'No', width: '56px', render: (v) => <span className="text-muted-foreground tabular-nums">{v}</span> },
                 { key: 'userName', header: 'User', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'userRole', header: 'Role', sortable: true, render: (v) => <span className="text-muted-foreground capitalize">{v}</span> },
                 { key: 'actionCount', header: 'Total Actions', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCount(v)}</span> },
@@ -453,29 +457,23 @@ export default function AuditSummaryReport() {
 
           {/* ── Chronological activity log — who did what, when, and whether it succeeded ── */}
           <div>
-            <div className="mb-2 flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <h3 className="font-semibold text-sm">Activity Log</h3>
-                <p className="text-xs text-muted-foreground">
-                  Most recent {fmtCount(activityRows.length)}
-                  {data?.activity.truncated ? ` of ${fmtCount(data.activity.totalCount)}` : ''} entries, newest first
-                </p>
-              </div>
-              {data?.activity.truncated && (
-                <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1 print:hidden">
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  Capped at {fmtCount(data.activity.rowCap)} rows — narrow the filters or export CSV for the full set.
-                </div>
-              )}
+            <div className="mb-2">
+              <h3 className="font-semibold text-sm">Activity Log</h3>
+              <p className="text-xs text-muted-foreground">
+                Most recent {fmtCount(activityRows.length)}
+                {data?.activity.truncated ? ` of ${fmtCount(data.activity.totalCount)}` : ''} entries, newest first
+              </p>
             </div>
-            <AdvancedDataTable<ActivityRow>
-              data={activityRows}
+            <AdvancedDataTable<ActivityRow & { no: number }>
+              data={numberedActivity}
               keyExtractor={(row) => row.id}
               searchable
               searchPlaceholder="Search activity log..."
               emptyMessage="No audit log entries found for the selected filters."
               pagination={{ enabled: true, pageSize: 25, pageSizeOptions: [25, 50, 100] }}
+              maxRows={15}
               columns={[
+                { key: 'no', header: 'No', width: '56px', render: (v) => <span className="text-muted-foreground tabular-nums">{v}</span> },
                 { key: 'createdAt', header: 'Date & Time', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{fmtDateTime(v)}</span> },
                 { key: 'userName', header: 'User', sortable: true, render: (v) => <span className="font-medium whitespace-nowrap">{v}</span> },
                 { key: 'module', header: 'Module', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v}</span> },
