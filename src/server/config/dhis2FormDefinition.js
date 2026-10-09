@@ -122,7 +122,7 @@ const SECTIONS = {
     id: 'D',
     title: 'Maternal and Newborn Health',
     type: 'manual',
-    note: 'Entered manually',
+    note: 'ANC 1st/4th visit computed from Antenatal records; other rows entered manually',
     rows: [
       { id: 'anc1', label: 'ANC 1st visit' },
       { id: 'anc4', label: 'ANC 4th visit' },
@@ -196,8 +196,6 @@ const SECTIONS = {
       { id: 'prepared_by', label: 'Prepared by', type: 'text' },
       { id: 'checked_by', label: 'Checked by (facility in-charge)', type: 'text' },
       { id: 'date_submitted_to_county', label: 'Date submitted to county', type: 'date' },
-      { id: 'received_by', label: 'Received by (county HMIS officer)', type: 'text' },
-      { id: 'date_entered_dhis2', label: 'Date entered into DHIS2', type: 'date' },
     ],
   },
 };

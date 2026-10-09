@@ -443,6 +443,39 @@ async function computeLaboratory(req, clinicId, branchId, period) {
   return cRows;
 }
 
+// Section D's only two rows backed by a real clinical module — the rest of D
+// (deliveries, stillbirths, PNC, maternal deaths) and all of E (immunisation)
+// stay manual because this HMIS has no delivery/postnatal/EPI module to
+// source them from yet. ANC1/ANC4 are the standard DHIS2 definitions: a
+// registration's chronologically-first visit (ANC1) and fourth visit (ANC4),
+// counted when that specific visit falls in the reporting period — ranked
+// across the registration's ENTIRE visit history, not just this period's
+// visits, since a woman's 4th visit this month only counts as "ANC4" if
+// visits 1-3 actually happened earlier.
+async function computeMaternalHealth(req, clinicId, branchId, period) {
+  const { periodStart, periodEnd } = getPeriodBounds(period);
+  const periodStartTs = `${periodStart} 00:00:00`;
+  const periodEndTs = `${periodEnd} 23:59:59`;
+
+  const repl = { clinicId, periodStartTs, periodEndTs };
+  const branchSql = branchScope(req, repl, 'ar', branchId);
+  const [[row]] = await sequelize.query(
+    `WITH ranked AS (
+       SELECT av.visit_date,
+              ROW_NUMBER() OVER (PARTITION BY av.registration_id ORDER BY av.visit_date ASC, av.created_at ASC) AS visit_rank
+       FROM antenatal_visits av
+       JOIN antenatal_registrations ar ON ar.id = av.registration_id
+       WHERE ar.clinic_id = :clinicId ${branchSql}
+     )
+     SELECT
+       COUNT(*) FILTER (WHERE visit_rank = 1 AND visit_date >= :periodStartTs AND visit_date <= :periodEndTs) AS anc1,
+       COUNT(*) FILTER (WHERE visit_rank = 4 AND visit_date >= :periodStartTs AND visit_date <= :periodEndTs) AS anc4
+     FROM ranked`,
+    { replacements: repl }
+  );
+  return { anc1: parseInt(row?.anc1) || 0, anc4: parseInt(row?.anc4) || 0 };
+}
+
 async function computeInpatient(req, clinicId, branchId, period) {
   const { periodStart, periodEnd } = getPeriodBounds(period);
   const periodStartTs = `${periodStart} 00:00:00`;
@@ -602,6 +635,7 @@ async function writeStockSnapshots(req, branchId, period, tracerDrugsFinal) {
 async function computeFullReport(req, clinicId, branchId, period) {
   const { sectionA, sectionB, diagnosisReview } = await computeAttendanceAndMorbidity(req, clinicId, branchId, period);
   const sectionC = await computeLaboratory(req, clinicId, branchId, period);
+  const sectionD = await computeMaternalHealth(req, clinicId, branchId, period);
   const sectionF = await computeInpatient(req, clinicId, branchId, period);
   const sectionG = await computeTracerDrugs(req, clinicId, branchId, period);
 
@@ -626,7 +660,7 @@ async function computeFullReport(req, clinicId, branchId, period) {
 
   return {
     period,
-    sections: { A: sectionA, B: sectionB, C: sectionC, F: sectionF, G: sectionG },
+    sections: { A: sectionA, B: sectionB, C: sectionC, D: sectionD, F: sectionF, G: sectionG },
     diagnosisReview,
     warnings,
   };
@@ -909,8 +943,9 @@ function flattenToDataRows(computed, overrides, period, orgUnit) {
     }
   }
   for (const rowDef of formDefinition.sections.D.rows) {
+    const c = computed?.sections?.D?.[rowDef.id]; // only set for anc1/anc4 — everything else in D is manual
     const o = overrides?.D?.[rowDef.id];
-    rows.push({ section: 'D', indicator: rowDef.label, ageGroup: 'All', sex: 'All', value: o ?? 0, computedValue: null, overridden: o != null, dataElement: `D_${rowDef.id}`, period, orgUnit, categoryOptionCombo: 'value' });
+    rows.push({ section: 'D', indicator: rowDef.label, ageGroup: 'All', sex: 'All', value: o ?? c ?? 0, computedValue: c ?? null, overridden: o != null, dataElement: `D_${rowDef.id}`, period, orgUnit, categoryOptionCombo: 'value' });
   }
   for (const rowDef of formDefinition.sections.E.rows) {
     const o = overrides?.E?.[rowDef.id];
@@ -1055,5 +1090,5 @@ module.exports.__testHelpers = {
   extractDiagnosisSegments, isNegatedMatch, matchDiagnosisRow,
   matchLabTestRow, isPositiveResult, pad2, getPeriodBounds, defaultPeriod,
   resolveEffectiveBranchId, branchScope,
-  computeAttendanceAndMorbidity, computeLaboratory,
+  computeAttendanceAndMorbidity, computeLaboratory, computeMaternalHealth,
 };

@@ -19,6 +19,7 @@ const { getSequelize, query, closeConnection, uuid } = require('../setup/testDb'
 const tenantContext = require('../../src/server/tenantContext');
 const { migrateDhis2Tables } = require('../../src/server/scripts/migrateDhis2Tables');
 const { migrateVisitDiagnosesTable } = require('../../src/server/scripts/migrateVisitDiagnosesTable');
+const { ensureAntenatalTables } = require('../../src/server/config/ensureAntenatalTables');
 
 const PERIOD = '2031-06';
 const BRANCH_A = 900001;
@@ -40,6 +41,7 @@ beforeAll(async () => {
   // parsing — every seeded order below has no visit_diagnoses rows, so this
   // just needs the table to exist for that (empty) lookup to succeed.
   await migrateVisitDiagnosesTable(sequelize);
+  await ensureAntenatalTables(sequelize);
 
   // Required after the tenant DB is confirmed up. Its own top-level
   // `require('../models')` still resolves outside any request (falls back
@@ -166,9 +168,45 @@ beforeAll(async () => {
   const pB = uuid();
   await p(pB, '1999-01-01', 'Male', BRANCH_B);
   await order(uuid(), pB, 'Diagnosis: Malaria', '2031-06-17 09:00:00', BRANCH_B);
+
+  // ── Antenatal fixtures for Section D's ANC1/ANC4 computation ──
+  const registration = (id, branchId = BRANCH_A) => query(
+    `INSERT INTO antenatal_registrations (id, clinic_id, branch_id, participant_id, registration_number)
+     VALUES (:id, 1, :branchId, :participantId, :regNo)`,
+    { id, branchId, participantId: p1, regNo: `ANC-${id.slice(0, 8)}` }
+  );
+  const visit = (id, registrationId, visitDate) => query(
+    `INSERT INTO antenatal_visits (id, registration_id, participant_id, visit_date)
+     VALUES (:id, :registrationId, :participantId, :visitDate)`,
+    { id, registrationId, participantId: p1, visitDate: visitDate }
+  );
+
+  // R1: visits 1-3 well before the reporting period, visit 4 falls IN the
+  // period — must count toward ANC4, not ANC1 (ranked across its WHOLE
+  // history, not just what happened this period).
+  const r1 = uuid();
+  await registration(r1);
+  await visit(uuid(), r1, '2031-01-05 09:00:00');
+  await visit(uuid(), r1, '2031-02-05 09:00:00');
+  await visit(uuid(), r1, '2031-03-05 09:00:00');
+  await visit(uuid(), r1, '2031-06-05 09:00:00');
+
+  // R2: a brand-new registration whose very first visit is IN the period —
+  // must count toward ANC1.
+  const r2 = uuid();
+  await registration(r2);
+  await visit(uuid(), r2, '2031-06-15 09:00:00');
+
+  // R3 under BRANCH_B: first visit also in-period — must never appear when
+  // computing for BRANCH_A.
+  const r3 = uuid();
+  await registration(r3, BRANCH_B);
+  await visit(uuid(), r3, '2031-06-10 09:00:00');
 });
 
 afterAll(async () => {
+  await query(`DELETE FROM antenatal_visits WHERE registration_id IN (SELECT id FROM antenatal_registrations WHERE branch_id IN (:a, :b))`, { a: BRANCH_A, b: BRANCH_B });
+  await query(`DELETE FROM antenatal_registrations WHERE branch_id IN (:a, :b)`, { a: BRANCH_A, b: BRANCH_B });
   await query(`DELETE FROM lis_results WHERE branch_id IN (:a, :b)`, { a: BRANCH_A, b: BRANCH_B });
   await query(`DELETE FROM lis_specimens WHERE branch_id IN (:a, :b)`, { a: BRANCH_A, b: BRANCH_B });
   await query(`DELETE FROM lis_test_orders WHERE branch_id IN (:a, :b)`, { a: BRANCH_A, b: BRANCH_B });
@@ -248,6 +286,31 @@ describe('computeLaboratory (Section C)', () => {
     // p11's pending-only specimen excluded; p12's approved-negative specimen counted.
     expect(cRows.hiv.tested).toBe(1);
     expect(cRows.hiv.positive).toBe(0);
+  });
+});
+
+describe('computeMaternalHealth (Section D — ANC1/ANC4)', () => {
+  let dRows;
+  beforeAll(async () => {
+    dRows = await withTenant(() =>
+      reportDhis2.__testHelpers.computeMaternalHealth({}, 1, BRANCH_A, PERIOD)
+    );
+  });
+
+  test('a registration\'s first-ever visit landing in-period counts as ANC1', () => {
+    expect(dRows.anc1).toBe(1); // R2 only — R1's first visit was in January
+  });
+
+  test('a registration\'s 4th visit landing in-period counts as ANC4, even though its earlier visits were months ago', () => {
+    expect(dRows.anc4).toBe(1); // R1's June visit is its 4th ever
+  });
+
+  test('a different branch\'s registration never counts toward this branch', async () => {
+    const resultB = await withTenant(() =>
+      reportDhis2.__testHelpers.computeMaternalHealth({}, 1, BRANCH_B, PERIOD)
+    );
+    expect(resultB.anc1).toBe(1); // R3 only
+    expect(resultB.anc4).toBe(0);
   });
 });
 

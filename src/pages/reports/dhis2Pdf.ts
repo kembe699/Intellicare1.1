@@ -158,10 +158,15 @@ export async function buildDhis2Pdf(
   });
   y = (doc as any).lastAutoTable.finalY + 14;
 
-  // ── Sections D & E (manual) ──
+  // ── Sections D & E ── D's ANC1/ANC4 rows are computed from Antenatal
+  // records (see computeMaternalHealth in reportDhis2.js); the rest of D and
+  // all of E stay manual — this HMIS has no delivery/postnatal/EPI module.
   (['D', 'E'] as const).forEach((secId) => {
-    sectionTitle(`${secId}. ${definition.sections[secId].title} (entered manually)`);
-    const body = (definition.sections[secId].rows || []).map((row: any) => [row.label, overrides[secId]?.[row.id] ?? 0]);
+    const subtitle = secId === 'D' ? '(ANC 1st/4th visit computed; other rows entered manually)' : '(entered manually)';
+    sectionTitle(`${secId}. ${definition.sections[secId].title} ${subtitle}`);
+    const body = (definition.sections[secId].rows || []).map((row: any) => [
+      row.label, overrides[secId]?.[row.id] ?? (computed.sections as any)[secId]?.[row.id] ?? 0,
+    ]);
     autoTable(doc, {
       startY: y, margin: { left: margin, right: margin }, theme: 'grid',
       styles: { fontSize: 8, cellPadding: 4, lineColor: BRAND.border as any },
