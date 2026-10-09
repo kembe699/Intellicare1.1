@@ -588,7 +588,7 @@ export default function AccountingReport() {
           {/* A small CSV/Print row of its own, right above the statement
               and aligned the same way — the main toolbar's CSV/Print
               buttons are a long scroll away once the page has content. */}
-          <div className="max-w-4xl ml-auto flex justify-end gap-2 mb-3 print:hidden">
+          <div className="max-w-4xl flex justify-end gap-2 mb-3 print:hidden">
             <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
               <Download className="w-3.5 h-3.5" />
               CSV
@@ -602,7 +602,7 @@ export default function AccountingReport() {
               pushed to the right — full report-width made the right-aligned
               totals sit far away from the line items on the left with a
               huge empty gap between them. */}
-          <div className="max-w-4xl ml-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0 print:ml-0">
+          <div className="max-w-4xl bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none">
           {/* ── Revenue ── */}
           <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
             <h3 className="text-sm font-bold tracking-wide">Revenue</h3>
@@ -703,7 +703,7 @@ export default function AccountingReport() {
         </>
       ) : option.mode === 'income-statement' && !option.detailed && !option.isComprehensive && summary ? (
         <>
-          <div className="max-w-4xl ml-auto flex justify-end gap-2 mb-3 print:hidden">
+          <div className="max-w-4xl flex justify-end gap-2 mb-3 print:hidden">
             <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
               <Download className="w-3.5 h-3.5" />
               CSV
@@ -713,7 +713,7 @@ export default function AccountingReport() {
               Print
             </Button>
           </div>
-          <div className="max-w-4xl ml-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0 print:ml-0">
+          <div className="max-w-4xl bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none">
             <div className="px-4 py-3">
               <table className="w-full table-fixed text-sm border-collapse">
                 <colgroup><col /><col className="w-40" /></colgroup>
@@ -741,7 +741,7 @@ export default function AccountingReport() {
         </>
       ) : option.mode === 'income-statement-by-branch' ? (
         <>
-          <div className="max-w-4xl ml-auto flex justify-end gap-2 mb-3 print:hidden">
+          <div className="max-w-4xl flex justify-end gap-2 mb-3 print:hidden">
             <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
               <Download className="w-3.5 h-3.5" />
               CSV
@@ -751,7 +751,7 @@ export default function AccountingReport() {
               Print
             </Button>
           </div>
-          <div className="max-w-4xl ml-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0 print:ml-0">
+          <div className="max-w-4xl bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none">
             <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
               <h3 className="text-sm font-bold tracking-wide">By Department (Branch)</h3>
             </div>
