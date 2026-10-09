@@ -261,7 +261,7 @@ export default function AuditSummaryReport() {
       {/* Filters + letterhead + the stat tiles stay pinned while only the
           two result tables below scroll — a solid (not tinted/translucent)
           background so scrolling rows never show through underneath it. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-4 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-6 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <Combobox
             options={userOptions}

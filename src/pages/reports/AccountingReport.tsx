@@ -449,7 +449,7 @@ export default function AccountingReport() {
       {/* Solid background, not the translucent page tint — a sticky header
           over a tall result (the formatted Income Statement especially)
           otherwise lets scrolling content show through underneath it. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-4 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-6 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}
@@ -584,7 +584,11 @@ export default function AccountingReport() {
           Pick a report type and date range above, then click View.
         </div>
       ) : option.mode === 'income-statement' && (option.detailed || option.isComprehensive) && incomeStatement ? (
-        <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+        // Capped at a document-like width (roughly A4 proportions) and
+        // centered — full report-width made the right-aligned totals sit
+        // far away from the line items on the left with a huge empty gap
+        // between them.
+        <div className="max-w-3xl mx-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0">
           {/* ── Revenue ── */}
           <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
             <h3 className="text-sm font-bold tracking-wide">Revenue</h3>
