@@ -16,6 +16,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { fetchUserSignature } from '@/utils/documentTemplate';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ interface ComputedReport {
     A: { new: AgeSexRow; reattendance: AgeSexRow; total: AgeSexRow };
     B: Record<string, AgeSexRow>;
     C: Record<string, LabRow>;
+    D: { anc1: number; anc4: number }; // the only two rows of D backed by real data — see Antenatal records
     F: Record<string, number>;
     G: Record<string, TracerRow>;
   };
@@ -191,6 +193,14 @@ export default function Dhis2Report() {
   const [overrides, setOverrides] = useState<Overrides>({});
   const [header, setHeader] = useState<Record<string, any>>({});
   const [signoff, setSignoff] = useState<Record<string, any>>({});
+  const [preparedBySignature, setPreparedBySignature] = useState<string | null>(null);
+
+  // "Prepared by" is always the current account, not a typed name — pulled
+  // from the same saved-signature feature Profile.tsx and GRNs already use.
+  useEffect(() => {
+    if (!user?.uid) return;
+    fetchUserSignature(user.uid).then(setPreparedBySignature);
+  }, [user?.uid]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -300,9 +310,12 @@ export default function Dhis2Report() {
     if (isAllBranches) { toast.error('Pick a specific branch before saving — "All Branches" is view/export only.'); return null; }
     setSaving(true);
     try {
+      // "Prepared by" is stamped from whoever is actually doing the saving,
+      // not a free-text name someone could type in on anyone's behalf.
+      const signoffToSave = { ...signoff, prepared_by: user?.displayName || signoff.prepared_by || '' };
       const res = await authFetch('/api/reports-v2/dhis2', {
         method: 'POST',
-        body: JSON.stringify({ period, branch_id: branchId, overrides, header, signoff }),
+        body: JSON.stringify({ period, branch_id: branchId, overrides, header, signoff: signoffToSave }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Failed to save report'); return null; }
       const saved = await res.json();
@@ -314,6 +327,7 @@ export default function Dhis2Report() {
         signoff: typeof saved.signoff === 'string' ? JSON.parse(saved.signoff) : (saved.signoff || {}),
       };
       setSavedReport(parsed);
+      setSignoff(parsed.signoff || {});
       return parsed;
     } catch {
       toast.error('Network error saving report');
@@ -442,9 +456,9 @@ export default function Dhis2Report() {
             <>
               {/* Warnings */}
               {(computed.warnings.length > 0) && (
-                <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 space-y-1">
+                <div className="border border-border bg-primary/5 rounded-lg p-3 space-y-1">
                   {computed.warnings.map((w, i) => (
-                    <p key={i} className="text-xs text-amber-800 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {w}</p>
+                    <p key={i} className="text-xs text-foreground flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" /> {w}</p>
                   ))}
                 </div>
               )}
@@ -496,7 +510,7 @@ export default function Dhis2Report() {
               <Card className="overflow-hidden dhis2-section">
                 <div className="px-5 py-3.5 border-b border-border bg-muted/30">
                   <h4 className="font-semibold text-sm text-foreground">B. {definition.sections.B.title}</h4>
-                  <p className="text-xs text-amber-700 mt-1">{definition.sections.B.warningText}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{definition.sections.B.warningText}</p>
                 </div>
                 <CardContent className="p-5">
                   <AgeSexSectionTable
@@ -533,7 +547,10 @@ export default function Dhis2Report() {
                 </CardContent>
               </Card>
 
-              {/* Section D & E (manual) */}
+              {/* Section D & E — D's ANC 1st/4th visit rows are computed from
+                  Antenatal records; everything else here is still manual
+                  entry, since this HMIS has no delivery/postnatal/EPI module
+                  to source it from yet. */}
               {(['D', 'E'] as const).map((secId) => (
                 <Card key={secId} className="overflow-hidden dhis2-section">
                   <div className="px-5 py-3.5 border-b border-border bg-muted/30">
@@ -541,17 +558,32 @@ export default function Dhis2Report() {
                     <p className="text-xs text-muted-foreground mt-0.5">{definition.sections[secId].note}</p>
                   </div>
                   <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {(definition.sections[secId].rows || []).map((row) => (
-                      <div key={row.id}>
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.label}</p>
-                        <input
-                          type="number" disabled={isFinal || !canWrite}
-                          value={(overrides as any)[secId]?.[row.id] ?? ''}
-                          onChange={(e) => setFlatOverride(secId, row.id, parseFloat(e.target.value) || 0)}
-                          className="w-full h-8 mt-0.5 text-sm border rounded px-2 disabled:bg-muted/30"
-                        />
-                      </div>
-                    ))}
+                    {(definition.sections[secId].rows || []).map((row) => {
+                      const isComputedRow = secId === 'D' && (row.id === 'anc1' || row.id === 'anc4');
+                      return (
+                        <div key={row.id}>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.label}</p>
+                          {isComputedRow ? (
+                            <div className="h-8 mt-0.5 flex items-center">
+                              <EditableCell
+                                computedValue={(computed.sections.D as any)[row.id] ?? 0}
+                                overrideValue={(overrides as any)[secId]?.[row.id]}
+                                onChange={(v) => setFlatOverride(secId, row.id, v)}
+                                readOnly={isFinal || !canWrite}
+                                align="left"
+                              />
+                            </div>
+                          ) : (
+                            <input
+                              type="number" disabled={isFinal || !canWrite}
+                              value={(overrides as any)[secId]?.[row.id] ?? ''}
+                              onChange={(e) => setFlatOverride(secId, row.id, parseFloat(e.target.value) || 0)}
+                              className="w-full h-8 mt-0.5 text-sm border rounded px-2 disabled:bg-muted/30"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               ))}
@@ -609,15 +641,27 @@ export default function Dhis2Report() {
                 <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm text-foreground">H. {definition.sections.H.title}</h4></div>
                 <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {(definition.sections.H.fields || []).map((f) => (
-                    <div key={f.id}>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
-                      <input
-                        type={f.type === 'date' ? 'date' : 'text'} disabled={isFinal || !canWrite}
-                        value={signoff[f.id] ?? ''}
-                        onChange={(e) => setSignoff((s) => ({ ...s, [f.id]: e.target.value }))}
-                        className="w-full h-8 mt-0.5 text-sm border rounded px-2 disabled:bg-muted/30"
-                      />
-                    </div>
+                    f.id === 'prepared_by' ? (
+                      <div key={f.id}>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
+                        <p className="text-sm font-medium text-foreground mt-0.5">{signoff.prepared_by || user?.displayName || '—'}</p>
+                        {preparedBySignature ? (
+                          <img src={preparedBySignature} alt="Signature" className="h-8 mt-1 object-contain" />
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground mt-1">No signature on file — add one in Profile</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div key={f.id}>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
+                        <input
+                          type={f.type === 'date' ? 'date' : 'text'} disabled={isFinal || !canWrite}
+                          value={signoff[f.id] ?? ''}
+                          onChange={(e) => setSignoff((s) => ({ ...s, [f.id]: e.target.value }))}
+                          className="w-full h-8 mt-0.5 text-sm border rounded px-2 disabled:bg-muted/30"
+                        />
+                      </div>
+                    )
                   ))}
                 </CardContent>
               </Card>
