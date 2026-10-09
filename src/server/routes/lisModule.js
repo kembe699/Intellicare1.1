@@ -4,6 +4,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
+const { getNextQueueNumber } = require('../config/ensureQueueNumberSupport');
 
 // Named-parameter counterpart to branchFilter's getBranchConditionSQL, for the handlers
 // below that already build their query with Sequelize's :param replacements object
@@ -261,11 +262,13 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
     // Only create a queue entry if the user actually chose to queue at registration time
     // (selected a clinic or doctor) — otherwise every fresh registration would show as "Queued".
     let queuedVisitId = null;
+    let queueNumber = null;
     if (clinic_id || doctor_id || consultant_id) {
       queuedVisitId = uuidv4();
+      queueNumber = await getNextQueueNumber(db, { clinicId: req.user?.clinicId, branchId, transaction: t });
       await db.query(
-        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?)`,
-        { replacements: [queuedVisitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null, branchId], transaction: t }
+        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status, branch_id, queue_number) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?)`,
+        { replacements: [queuedVisitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null, branchId, queueNumber], transaction: t }
       );
     }
 
@@ -296,7 +299,7 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
       } catch (e) { /* non-blocking */ }
     }
 
-    res.status(201).json({ success: true, id, message: 'Participant registered successfully' });
+    res.status(201).json({ success: true, id, participant_number, queue_number: queueNumber, message: 'Participant registered successfully' });
   } catch (error) {
     if (!t.finished) await t.rollback().catch(() => {});
     // Three-way (or more) contention on the same phone's FOR UPDATE gap lock can
@@ -449,12 +452,22 @@ router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req,
   const { sequelize: db } = req.models;
   const { id } = req.params;
   const { doctor_id, consultant_id, room_number, clinic_id, clinic_name } = req.body;
+  let visitId, queueNumber, participant;
   try {
-    const visitId = uuidv4();
-    await db.query(
-      `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?)`,
-      { replacements: [visitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null, getCreateBranchId(req)] }
-    );
+    const branchId = getCreateBranchId(req);
+    const t = await db.transaction();
+    try {
+      visitId = uuidv4();
+      queueNumber = await getNextQueueNumber(db, { clinicId: req.user?.clinicId, branchId, transaction: t });
+      await db.query(
+        `INSERT INTO lis_test_orders (id, participant_id, doctor_id, consultant_id, room_number, clinic_id, clinic_name, status, branch_id, queue_number) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?)`,
+        { replacements: [visitId, id, doctor_id || null, consultant_id || null, room_number || null, clinic_id || null, clinic_name || null, branchId, queueNumber], transaction: t }
+      );
+      await t.commit();
+    } catch (err) {
+      await t.rollback().catch(() => {});
+      throw err;
+    }
 
     // This is the actual "queue a patient to a doctor" path this app uses today
     // (lis_test_orders, not the older patient_queue table) — it had no notification
@@ -464,8 +477,8 @@ router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req,
     // destination department (e.g. "GP"), an unrelated UUID, not a notification target.
     try {
       const { notifyUser, notifyRole } = require('../services/notificationService');
-      const [[participant]] = await db.query(
-        `SELECT first_name, last_name FROM lis_participants WHERE id = ?`,
+      [[participant]] = await db.query(
+        `SELECT first_name, last_name, participant_number FROM lis_participants WHERE id = ?`,
         { replacements: [id] }
       );
       const patientName = participant ? `${participant.first_name} ${participant.last_name}`.trim() : 'A patient';
@@ -486,7 +499,7 @@ router.post('/participants/:id/queue', authorize('lis.queue.write'), async (req,
       }
     } catch (e) { /* non-blocking */ }
 
-    res.json({ success: true, message: 'Participant queued to doctor successfully' });
+    res.json({ success: true, queue_number: queueNumber, participant_number: participant?.participant_number || null, message: 'Participant queued to doctor successfully' });
   } catch (error) {
     console.error('Error queuing participant:', error);
     res.status(500).json({ success: false, error: 'Database error' });

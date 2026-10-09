@@ -128,6 +128,12 @@ async function buildTenantConnection(schemaName) {
   const { ensureInpatientConsultantSupport } = require('./config/ensureInpatientConsultantSupport');
   ensureInpatientConsultantSupport(sequelize).catch(() => {});
 
+  // lis_test_orders.queue_number + queue_number_counters (daily sequential
+  // ticket numbers for the printable queue receipt), ensured per-tenant the
+  // same way.
+  const { ensureQueueNumberSupport } = require('./config/ensureQueueNumberSupport');
+  ensureQueueNumberSupport(sequelize).catch(() => {});
+
   // inpatient_admissions.discharge_outcome (alive/dead/absconded), ensured
   // per-tenant the same way.
   const { ensureInpatientDischargeOutcome } = require('./config/ensureInpatientDischargeOutcome');

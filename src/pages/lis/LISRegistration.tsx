@@ -11,12 +11,21 @@ import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
+import * as docTemplate from '@/utils/documentTemplate';
 
 const GENDER_OPTIONS = [
   { value: 'Male', label: 'Male' },
   { value: 'Female', label: 'Female' },
   { value: 'Other', label: 'Other' },
 ];
+
+// This facility's own front-desk workflow sends patients straight to billing
+// after queuing and prints a queue slip to go with it — kuelmc's workflow
+// doesn't use either, so both are switched off for just this one tenant via
+// user.tenantCode, the same idiom LISTestOrders.tsx already uses for its
+// DPOC-only quick-register/admission features.
+const QUEUE_RECEIPT_DISABLED_TENANT = 'kuelmc';
 
 const timeAgo = (iso: string): string => {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -58,6 +67,8 @@ const calculateDobFromAge = (age: string): string => {
 export default function LISRegistration() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const facilityInfo = useFacilityInfo();
+  const queueFeaturesEnabled = user?.tenantCode !== QUEUE_RECEIPT_DISABLED_TENANT;
   const [participants, setParticipants] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [schemes, setSchemes] = useState<any[]>([]);
@@ -218,6 +229,51 @@ export default function LISRegistration() {
     setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
   };
 
+  // A short printable slip for the patient to hold — queue number large and
+  // central (read from across a waiting room), plus enough to identify them
+  // at the window they're called to. Not shown for QUEUE_RECEIPT_DISABLED_TENANT.
+  const printQueueReceipt = ({ patientName, participantNumber, queueNumber, clinicName, doctorName, roomNumber }: {
+    patientName: string; participantNumber?: string; queueNumber: number | null;
+    clinicName?: string; doctorName?: string; roomNumber?: string;
+  }) => {
+    try {
+      const infoHTML = docTemplate.buildInfoGrid(
+        { title: 'Patient', rows: [
+          { label: 'Name', value: patientName || '—', bold: true },
+          { label: 'Patient No.', value: participantNumber || '—' },
+        ] },
+        { title: 'Queued To', rows: [
+          { label: 'Clinic', value: clinicName || '—' },
+          { label: 'Doctor', value: doctorName || '—' },
+          ...(roomNumber ? [{ label: 'Room', value: roomNumber }] : []),
+        ] },
+      );
+      const bodyHTML = [
+        `<div style="text-align:center;margin:8px 0 20px;">
+           <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#64748B;">Queue Number</div>
+           <div style="font-size:64px;font-weight:800;color:#1A7A75;line-height:1.15;">${queueNumber ?? '—'}</div>
+         </div>`,
+        infoHTML,
+        `<div class="ic-notes">Please wait to be called by queue number. Keep this slip until you are seen.</div>`,
+      ].join('\n');
+
+      const html = docTemplate.buildDocument({
+        title: 'Queue Receipt',
+        docType: 'Queue Receipt',
+        docNumber: queueNumber != null ? `Q-${queueNumber}` : undefined,
+        date: new Date(),
+        bodyHTML,
+        autoPrint: true,
+        logoUrl: facilityInfo.facilityLogo || `${window.location.origin}/hjd-icon.png`,
+        facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
+        branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
+      });
+      docTemplate.openPrintWindow(html);
+    } catch (e) {
+      console.error('Queue receipt print failed', e);
+    }
+  };
+
   const handleUpdateParticipant = async () => {
     if (!editingParticipant) return;
     if (!regForm.first_name.trim() || !regForm.last_name.trim()) {
@@ -264,7 +320,17 @@ export default function LISRegistration() {
             }),
           });
           if (queueRes.ok) {
+            const queueData = await queueRes.json().catch(() => ({}));
             toast.success(`${regForm.first_name} ${regForm.last_name} added to queue`);
+            if (queueFeaturesEnabled) {
+              const doctorName = doctors.find((d: any) => d.id === doctor_id || d.employeeId === consultant_id)?.display_name;
+              printQueueReceipt({
+                patientName: `${regForm.first_name} ${regForm.last_name}`,
+                participantNumber: queueData.participant_number || editingParticipant.participant_number,
+                queueNumber: queueData.queue_number ?? null,
+                clinicName: clinic.name, doctorName, roomNumber: room?.room_number,
+              });
+            }
             billId = await createBillForClinic(clinic, editingParticipant.id, `${regForm.first_name} ${regForm.last_name}`, scheme_id || undefined);
           } else {
             const err = await queueRes.json().catch(() => ({}));
@@ -274,7 +340,7 @@ export default function LISRegistration() {
       }
       toast.success('Patient details updated');
       cancelEdit();
-      if (billId) {
+      if (queueFeaturesEnabled && billId) {
         navigate(`/patients-bill/${billId}`);
         return;
       }
@@ -320,8 +386,17 @@ export default function LISRegistration() {
         if (clinic) {
           billId = await createBillForClinic(clinic, data.id, `${regForm.first_name} ${regForm.last_name}`, scheme_id || undefined);
         }
+        if (queueFeaturesEnabled && data.queue_number != null) {
+          const doctorName = doctors.find((d: any) => d.id === regFormRest.doctor_id || d.employeeId === regFormRest.consultant_id)?.display_name;
+          printQueueReceipt({
+            patientName: `${regForm.first_name} ${regForm.last_name}`,
+            participantNumber: data.participant_number,
+            queueNumber: data.queue_number,
+            clinicName: clinic?.name, doctorName, roomNumber: room?.room_number,
+          });
+        }
         setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
-        if (billId) {
+        if (queueFeaturesEnabled && billId) {
           navigate(`/patients-bill/${billId}`);
           return;
         }
@@ -366,14 +441,24 @@ export default function LISRegistration() {
         }),
       });
       if (res.ok) {
+        const queueData = await res.json().catch(() => ({}));
         if (regForm.scheme_id) {
           await enrollPatientInScheme(duplicatePatient.id, regForm.scheme_id, regForm.member_number);
         }
         const billId = await createBillForClinic(clinic, duplicatePatient.id, `${duplicatePatient.first_name} ${duplicatePatient.last_name}`, regForm.scheme_id || undefined);
         toast.success(`${duplicatePatient.first_name} ${duplicatePatient.last_name} added to queue`);
+        if (queueFeaturesEnabled && queueData.queue_number != null) {
+          const doctorName = doctors.find((d: any) => d.id === doctor_id || d.employeeId === consultant_id)?.display_name;
+          printQueueReceipt({
+            patientName: `${duplicatePatient.first_name} ${duplicatePatient.last_name}`,
+            participantNumber: queueData.participant_number || duplicatePatient.participant_number,
+            queueNumber: queueData.queue_number,
+            clinicName: clinic?.name, doctorName, roomNumber: room?.room_number,
+          });
+        }
         setDuplicatePatient(null);
         setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
-        if (billId) {
+        if (queueFeaturesEnabled && billId) {
           navigate(`/patients-bill/${billId}`);
           return;
         }
