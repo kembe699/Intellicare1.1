@@ -84,17 +84,14 @@ export default function LISQueue() {
         if (lastUpdated !== p.updated_at) {
           calledOrdersRef.current.set(p.order_id, p.updated_at);
 
-          // Trigger announcement if audio is enabled and it's not the initial page load
+          // Trigger announcement if audio is enabled and it's not the initial page load.
+          // Queue number + destination only — no patient or doctor name read aloud
+          // over the waiting-room speaker.
           if (audioEnabled && !isFirstLoadRef.current) {
-            const doctorStr = p.doctor_name ? `Doctor ${p.doctor_name}` : 'the General Laboratory';
-            let announcement = '';
-            if (p.room_number && p.doctor_name) {
-              announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${p.room_number} to see Doctor ${p.doctor_name}.`;
-            } else if (p.room_number) {
-              announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${p.room_number}.`;
-            } else {
-              announcement = `Patient ${p.first_name} ${p.last_name}, please proceed to ${doctorStr}.`;
-            }
+            const destination = p.room_number || p.clinic_name || 'the next available room';
+            const announcement = p.queue_number != null
+              ? `Queue number ${p.queue_number}, please proceed to ${destination}.`
+              : `Please proceed to ${destination}.`;
             playAnnouncement(announcement);
           }
         }
