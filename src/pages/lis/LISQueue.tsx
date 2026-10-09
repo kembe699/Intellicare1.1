@@ -24,6 +24,10 @@ export default function LISQueue() {
   const calledOrdersRef = useRef<Map<string, string>>(new Map());
   const isFirstLoadRef = useRef(true);
   const announcerRef = useRef<HTMLAudioElement | null>(null);
+  // Serializes announcements so two patients called back-to-back don't cut
+  // each other off on the shared <audio> element — each one's full
+  // (double) announcement finishes before the next one starts.
+  const announcementChainRef = useRef<Promise<void>>(Promise.resolve());
 
   // Natural-sounding neural voice (see POST /api/lis/queue/announce) instead of
   // the browser's own speechSynthesis, which is universally synthetic-sounding.
@@ -35,30 +39,52 @@ export default function LISQueue() {
   // the TTS service being down, etc.) rather than going silent — a patient
   // waiting on an audio cue to know they're being called is a real-world
   // consequence of "no sound at all", worse than a less-natural voice.
-  const playAnnouncement = async (text: string) => {
-    try {
-      const res = await authFetch('/api/lis/queue/announce', {
-        method: 'POST',
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) throw new Error(`TTS request failed: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      if (!announcerRef.current) announcerRef.current = new Audio();
-      const audio = announcerRef.current;
-      audio.pause();
-      audio.src = url;
-      audio.onended = () => URL.revokeObjectURL(url);
-      await audio.play();
-    } catch (e) {
-      console.error('Natural voice announcement failed, falling back to the browser voice:', e);
+  //
+  // Resolves only once playback actually finishes (not just once it starts),
+  // so callers can chain a second play after the first one is really done.
+  const playAnnouncementOnce = (text: string): Promise<void> => new Promise((resolve) => {
+    (async () => {
       try {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-      } catch (fallbackError) {
-        console.error('Fallback browser voice also failed', fallbackError);
+        const res = await authFetch('/api/lis/queue/announce', {
+          method: 'POST',
+          body: JSON.stringify({ text }),
+        });
+        if (!res.ok) throw new Error(`TTS request failed: ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        if (!announcerRef.current) announcerRef.current = new Audio();
+        const audio = announcerRef.current;
+        audio.pause();
+        audio.src = url;
+        audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+        await audio.play();
+      } catch (e) {
+        console.error('Natural voice announcement failed, falling back to the browser voice:', e);
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.onend = () => resolve();
+          utterance.onerror = () => resolve();
+          window.speechSynthesis.speak(utterance);
+        } catch (fallbackError) {
+          console.error('Fallback browser voice also failed', fallbackError);
+          resolve();
+        }
       }
-    }
+    })();
+  });
+
+  // A patient call is announced TWICE back-to-back, then stays silent until
+  // the doctor calls again (a fresh updated_at — see handleNewCalls' dedup) —
+  // once is easy to miss in a noisy waiting room, continuous repetition is
+  // just noise, so twice-and-stop is the balance asked for.
+  const announceCalled = (text: string) => {
+    announcementChainRef.current = announcementChainRef.current
+      .then(() => playAnnouncementOnce(text))
+      .then(() => new Promise<void>((r) => setTimeout(r, 400)))
+      .then(() => playAnnouncementOnce(text))
+      .catch(() => {});
   };
 
   // A single pooled queue — lis_test_orders has no per-terminal/facility scoping column,
@@ -92,7 +118,7 @@ export default function LISQueue() {
             const announcement = p.queue_number != null
               ? `Queue number ${p.queue_number}, please proceed to ${destination}.`
               : `Please proceed to ${destination}.`;
-            playAnnouncement(announcement);
+            announceCalled(announcement);
           }
         }
       }
@@ -121,7 +147,8 @@ export default function LISQueue() {
     if (nextState) {
       // Also serves as the browser's required user-gesture "unlock" for the
       // shared <audio> element — this click is what makes .play() allowed.
-      playAnnouncement('Audio enabled');
+      // Single play, not the double-call announcement — it's a UI confirmation, not a call.
+      playAnnouncementOnce('Audio enabled');
     } else {
       announcerRef.current?.pause();
     }
