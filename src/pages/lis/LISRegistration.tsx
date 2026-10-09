@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
@@ -12,7 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import * as docTemplate from '@/utils/documentTemplate';
+import { QueueReceipt } from '@/components/receipts/QueueReceipt';
+import { printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 
 const GENDER_OPTIONS = [
   { value: 'Male', label: 'Male' },
@@ -87,6 +88,15 @@ export default function LISRegistration() {
   const [filterDateFrom, setFilterDateFrom] = useState(() => toLocalDateStr(new Date()));
   const [filterDateTo, setFilterDateTo] = useState(() => toLocalDateStr(new Date()));
 
+  // Printed the same way a payment receipt is — an off-screen 80mm thermal
+  // slip, not the A4 letterhead documentTemplate.ts builds — see
+  // printReceiptWhenPainted below.
+  const [queueReceiptData, setQueueReceiptData] = useState<{
+    patientName: string; participantNumber?: string; queueNumber: number | null;
+    clinicName?: string; doctorName?: string; roomNumber?: string; date: string;
+  } | null>(null);
+  const queueReceiptRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     fetchParticipants();
     fetchDoctors();
@@ -94,6 +104,21 @@ export default function LISRegistration() {
     fetchClinics();
     fetchRooms();
   }, []);
+
+  // Fires the print dialog the moment the off-screen receipt has actually
+  // painted — same pattern PatientsBill.tsx uses for payment receipts, so a
+  // slow render never prints a slip with the queue number/patient blank.
+  useEffect(() => {
+    if (!queueReceiptData) return;
+    const cancel = printReceiptWhenPainted(
+      () => queueReceiptRef.current,
+      (printed) => {
+        setQueueReceiptData(null);
+        if (!printed) toast.error('Queue receipt could not be prepared for printing');
+      }
+    );
+    return cancel;
+  }, [queueReceiptData]);
 
   const fetchDoctors = async () => {
     try {
@@ -229,51 +254,6 @@ export default function LISRegistration() {
     setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
   };
 
-  // A short printable slip for the patient to hold — queue number large and
-  // central (read from across a waiting room), plus enough to identify them
-  // at the window they're called to. Printed for every tenant.
-  const printQueueReceipt = ({ patientName, participantNumber, queueNumber, clinicName, doctorName, roomNumber }: {
-    patientName: string; participantNumber?: string; queueNumber: number | null;
-    clinicName?: string; doctorName?: string; roomNumber?: string;
-  }) => {
-    try {
-      const infoHTML = docTemplate.buildInfoGrid(
-        { title: 'Patient', rows: [
-          { label: 'Name', value: patientName || '—', bold: true },
-          { label: 'Patient No.', value: participantNumber || '—' },
-        ] },
-        { title: 'Queued To', rows: [
-          { label: 'Clinic', value: clinicName || '—' },
-          { label: 'Doctor', value: doctorName || '—' },
-          ...(roomNumber ? [{ label: 'Room', value: roomNumber }] : []),
-        ] },
-      );
-      const bodyHTML = [
-        `<div style="text-align:center;margin:8px 0 20px;">
-           <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#64748B;">Queue Number</div>
-           <div style="font-size:64px;font-weight:800;color:#1A7A75;line-height:1.15;">${queueNumber ?? '—'}</div>
-         </div>`,
-        infoHTML,
-        `<div class="ic-notes">Please wait to be called by queue number. Keep this slip until you are seen.</div>`,
-      ].join('\n');
-
-      const html = docTemplate.buildDocument({
-        title: 'Queue Receipt',
-        docType: 'Queue Receipt',
-        docNumber: queueNumber != null ? `Q-${queueNumber}` : undefined,
-        date: new Date(),
-        bodyHTML,
-        autoPrint: true,
-        logoUrl: facilityInfo.facilityLogo || `${window.location.origin}/hjd-icon.png`,
-        facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
-        branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
-      });
-      docTemplate.openPrintWindow(html);
-    } catch (e) {
-      console.error('Queue receipt print failed', e);
-    }
-  };
-
   const handleUpdateParticipant = async () => {
     if (!editingParticipant) return;
     if (!regForm.first_name.trim() || !regForm.last_name.trim()) {
@@ -323,11 +303,11 @@ export default function LISRegistration() {
             const queueData = await queueRes.json().catch(() => ({}));
             toast.success(`${regForm.first_name} ${regForm.last_name} added to queue`);
             const doctorName = doctors.find((d: any) => d.id === doctor_id || d.employeeId === consultant_id)?.display_name;
-            printQueueReceipt({
+            setQueueReceiptData({
               patientName: `${regForm.first_name} ${regForm.last_name}`,
               participantNumber: queueData.participant_number || editingParticipant.participant_number,
               queueNumber: queueData.queue_number ?? null,
-              clinicName: clinic.name, doctorName, roomNumber: room?.room_number,
+              clinicName: clinic.name, doctorName, roomNumber: room?.room_number, date: new Date().toISOString(),
             });
             billId = await createBillForClinic(clinic, editingParticipant.id, `${regForm.first_name} ${regForm.last_name}`, scheme_id || undefined);
           } else {
@@ -386,11 +366,11 @@ export default function LISRegistration() {
         }
         if (data.queue_number != null) {
           const doctorName = doctors.find((d: any) => d.id === regFormRest.doctor_id || d.employeeId === regFormRest.consultant_id)?.display_name;
-          printQueueReceipt({
+          setQueueReceiptData({
             patientName: `${regForm.first_name} ${regForm.last_name}`,
             participantNumber: data.participant_number,
             queueNumber: data.queue_number,
-            clinicName: clinic?.name, doctorName, roomNumber: room?.room_number,
+            clinicName: clinic?.name, doctorName, roomNumber: room?.room_number, date: new Date().toISOString(),
           });
         }
         setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
@@ -447,11 +427,11 @@ export default function LISRegistration() {
         toast.success(`${duplicatePatient.first_name} ${duplicatePatient.last_name} added to queue`);
         if (queueData.queue_number != null) {
           const doctorName = doctors.find((d: any) => d.id === doctor_id || d.employeeId === consultant_id)?.display_name;
-          printQueueReceipt({
+          setQueueReceiptData({
             patientName: `${duplicatePatient.first_name} ${duplicatePatient.last_name}`,
             participantNumber: queueData.participant_number || duplicatePatient.participant_number,
             queueNumber: queueData.queue_number,
-            clinicName: clinic?.name, doctorName, roomNumber: room?.room_number,
+            clinicName: clinic?.name, doctorName, roomNumber: room?.room_number, date: new Date().toISOString(),
           });
         }
         setDuplicatePatient(null);
@@ -885,6 +865,17 @@ export default function LISRegistration() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Off-screen only so printReceiptWhenPainted has a DOM node with real
+          content to read from — same pattern PatientsBill.tsx uses for
+          payment receipts. */}
+      {queueReceiptData && (
+        <div className="fixed -left-[9999px] top-0">
+          <div ref={queueReceiptRef}>
+            <QueueReceipt {...queueReceiptData} facilityName={facilityInfo.facilityName} branchName={facilityInfo.branchName} />
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
