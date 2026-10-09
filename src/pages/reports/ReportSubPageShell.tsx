@@ -106,14 +106,20 @@ export function ReportSubPageShell({
         </div>
       </div>}
 
-      {/* ── Print header (visible only on print) ── */}
-      <div className="hidden print:block mb-6 border-b pb-4">
-        <h1 className="text-2xl font-bold">{title}</h1>
-        <p className="text-sm text-gray-500">{description}</p>
-        <p className="text-xs text-gray-400 mt-1">
-          Period: {dateFrom} — {dateTo} &nbsp;|&nbsp; Printed: {new Date().toLocaleString()}
-        </p>
-      </div>
+      {/* ── Print header (visible only on print) ──
+          Skipped when hideControls is set: that means the page supplies its
+          own letterhead (facility logo, report title, period) instead of
+          this generic one — showing both printed a second, logo-less header
+          above the page's real one. */}
+      {!hideControls && (
+        <div className="hidden print:block mb-6 border-b pb-4">
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <p className="text-sm text-gray-500">{description}</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Period: {dateFrom} — {dateTo} &nbsp;|&nbsp; Printed: {new Date().toLocaleString()}
+          </p>
+        </div>
+      )}
 
       {/* ── Report content ── */}
       {children}

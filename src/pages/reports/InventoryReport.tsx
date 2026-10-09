@@ -32,6 +32,13 @@ interface ReportOption {
   needsItem?: boolean;
 }
 
+// GET / (backing these 3 modes) is a current-state snapshot — its
+// dateFrom/dateTo is an opt-in "only items restocked in this window"
+// narrowing filter, not a period filter the report is bounded to. Used to
+// skip sending the date-picker's default range to it, and to show "As Of"
+// instead of a misleading "From/To" in the letterhead.
+const SNAPSHOT_MODES = new Set<Mode>(['stock-analysis-items', 'stock-analysis-category', 'stock-valuation-all']);
+
 const REPORT_OPTIONS: ReportOption[] = [
   { value: 'stock_analysis', label: 'Stock Analysis', group: 'Stock Analysis', mode: 'stock-analysis-items', allBranches: false },
   { value: 'stock_analysis_category', label: 'Stock Analysis Grouped by Category', group: 'Stock Analysis', mode: 'stock-analysis-category', allBranches: false },
@@ -103,7 +110,8 @@ export default function InventoryReport() {
       const clinicId = user?.clinic || '1';
       let path = '';
       let dataKey = 'rows';
-      const params = new URLSearchParams({ dateFrom, dateTo, allBranches: String(option.allBranches), clinic_id: String(clinicId) });
+      const params = new URLSearchParams({ allBranches: String(option.allBranches), clinic_id: String(clinicId) });
+      if (!SNAPSHOT_MODES.has(option.mode)) { params.set('dateFrom', dateFrom); params.set('dateTo', dateTo); }
 
       if (option.mode === 'stock-analysis-items') { path = '/'; dataKey = 'items'; }
       else if (option.mode === 'stock-analysis-category') { path = '/'; dataKey = 'categoryBreakdown'; }
@@ -208,7 +216,11 @@ export default function InventoryReport() {
       { key: 'minimumStockLevel', header: 'Reorder Trigger', align: 'right', render: v => <span className="font-mono text-muted-foreground">{fmtCount(v)}</span> },
       { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
     ];
-    csvColumns = [{ header: 'Code', key: 'itemCode' }, { header: 'Item', key: 'itemName' }, { header: 'Category', key: 'itemCategory' }, { header: 'Reorder Trigger', key: 'minimumStockLevel' }, { header: 'Branch', key: 'branchName' }];
+    csvColumns = [
+      { header: 'Code', key: 'itemCode' }, { header: 'Item', key: 'itemName' }, { header: 'Category', key: 'itemCategory' },
+      ...(option.mode === 'below-reorder-level' ? [{ header: 'Qty on Hand', key: 'quantityOnHand' }] : []),
+      { header: 'Reorder Trigger', key: 'minimumStockLevel' }, { header: 'Branch', key: 'branchName' },
+    ];
   } else if (option.mode === 'material-consumption') {
     keyExtractor = (r, i) => r.itemCode ?? i;
     columns = [
@@ -271,8 +283,8 @@ export default function InventoryReport() {
       loading={loading}
       hideControls
     >
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:hidden">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:bg-transparent">
+        <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}
             onChange={e => setReportType(e.target.value)}
@@ -364,8 +376,14 @@ export default function InventoryReport() {
               </div>
             </div>
             <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
-              <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
-              <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
+              {SNAPSHOT_MODES.has(option.mode) ? (
+                <span><span className="font-semibold text-foreground">As Of:</span> {generatedAt ? fmtDate(generatedAt.toISOString()) : fmtDate(new Date().toISOString())}</span>
+              ) : (
+                <>
+                  <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
+                  <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
+                </>
+              )}
               <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
             </div>
           </div>

@@ -78,6 +78,11 @@ beforeAll(async () => {
      VALUES (:id, 1, :tn, :itemId, 'dispense', -8, 500, 4000, 'SSP', CURRENT_DATE, :branchId)`,
     { replacements: { id: uuid(), tn: `${SUFFIX}-TX1`, itemId: item1, branchId } }
   );
+  await sequelize.query(
+    `INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type, quantity_change, unit_cost, total_cost, cost_currency, transaction_date, branch_id)
+     VALUES (:id, 1, :tn, :itemId, 'damage', -5, 500, 2500, 'SSP', CURRENT_DATE, :branchId)`,
+    { replacements: { id: uuid(), tn: `${SUFFIX}-TXDAMAGE`, itemId: item1, branchId } }
+  );
 
   const [[loc]] = await sequelize.query(`INSERT INTO stock_locations (id, clinic_id, location_code, location_name, branch_id) VALUES (:id, 1, :code, :name, :branchId) RETURNING id`, { replacements: { id: uuid(), code: `${SUFFIX}-LOC`, name: `${SUFFIX} Store`, branchId } });
   locId = loc.id;
@@ -164,18 +169,49 @@ describe('Inventory register reports pull from the right records', () => {
     expect(row.stockValue).toBe(2500);
   });
 
-  test('stock-movement-summary by branch totals both transactions correctly', async () => {
+  test('stock-movement-summary by branch totals all transactions correctly', async () => {
     const res = await run('/stock-movement-summary', { ...range, groupBy: 'branch' });
     const row = res.body.rows.find((r) => r.groupLabel === `${SUFFIX} Branch`);
-    expect(row.transactionCount).toBe(2);
-    expect(row.totalQuantity).toBe(18); // 8 + 10
-    expect(row.totalValue).toBe(4500); // 4000 + 500
+    expect(row.transactionCount).toBe(3); // dispense + damage + transfer
+    expect(row.totalQuantity).toBe(23); // 8 + 5 + 10
+    expect(row.totalValue).toBe(7000); // 4000 + 2500 + 500
   });
 
-  test('material-consumption only counts dispense/usage/waste, matching the dispense transaction', async () => {
+  test('stock-movement-summary by location credits BOTH sides of a transfer, not just the FROM location', async () => {
+    // Real bug this covers: COALESCE(from_location_id, to_location_id) always
+    // resolved to the FROM side whenever both were set (every transfer), so
+    // the TO location's inbound movement never showed up in this report at
+    // all. The TX2 fixture transfers 10 units / 500 value from locId to locId2.
+    const res = await run('/stock-movement-summary', { ...range, groupBy: 'location' });
+    const fromRow = res.body.rows.find((r) => r.groupLabel === `${SUFFIX} Store`);
+    const toRow = res.body.rows.find((r) => r.groupLabel === `${SUFFIX} Store 2`);
+    expect(fromRow).toBeTruthy();
+    expect(toRow).toBeTruthy();
+    expect(fromRow.totalQuantity).toBe(10);
+    expect(fromRow.totalValue).toBe(500);
+    expect(toRow.totalQuantity).toBe(10);
+    expect(toRow.totalValue).toBe(500);
+  });
+
+  test('material-consumption counts dispense AND damage (not just dispense/usage/waste)', async () => {
+    // Real bug this covers: the old transaction_type filter omitted 'damage',
+    // inconsistent with every other "stock actually deducted" computation in
+    // this codebase (inventory.js's COGS summary, Usage History report, and
+    // the transaction-creation handler itself all treat damage like waste).
     const res = await run('/material-consumption', range);
     const row = res.body.rows.find((r) => r.itemCode === `${SUFFIX}-FM`);
-    expect(row.quantityConsumed).toBe(8);
-    expect(row.totalValue).toBe(4000);
+    expect(row.quantityConsumed).toBe(13); // 8 (dispense) + 5 (damage)
+    expect(row.totalValue).toBe(6500); // 4000 + 2500
+  });
+
+  test('stock-movement-detail returns unitCost/totalCost as numbers, not numeric strings', async () => {
+    // Real bug this covers: node-pg returns numeric columns as strings;
+    // without parseFloat, the frontend's sortable "Value" column sorted
+    // lexicographically instead of numerically.
+    const res = await run('/stock-movement-detail', range);
+    const row = res.body.rows.find((r) => r.transactionNumber === `${SUFFIX}-TXDAMAGE`);
+    expect(typeof row.unitCost).toBe('number');
+    expect(typeof row.totalCost).toBe('number');
+    expect(row.totalCost).toBe(2500);
   });
 });

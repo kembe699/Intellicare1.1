@@ -524,53 +524,49 @@ export default function ItemMaster() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing & Costing</p>
+                    <div className="space-y-2 rounded-lg border p-2.5 bg-card">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing, Costing & GL Accounts</p>
+                      <p className="text-[10px] text-muted-foreground -mt-1">
+                        Each amount is paired with the account it posts to when set — otherwise the item's category default is used.
+                      </p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[11px] font-medium text-muted-foreground">Unit Cost</label>
                           <Input type="number" step="0.01" min="0" value={formData.current_unit_cost} onChange={e => setFormData({ ...formData, current_unit_cost: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
                         </div>
                         <div>
+                          <label className="text-[11px] font-medium text-muted-foreground">Cost Of Sale Sub-Account</label>
+                          <Combobox
+                            options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                            value={formData.cogs_account_id}
+                            onChange={v => setFormData({ ...formData, cogs_account_id: v })}
+                            placeholder="Use category default"
+                            searchPlaceholder="Search accounts..."
+                            className="mt-0.5 h-8 text-xs"
+                          />
+                        </div>
+                        <div>
                           <label className="text-[11px] font-medium text-muted-foreground">Selling Price</label>
                           <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
                         </div>
+                        <div>
+                          <label className="text-[11px] font-medium text-muted-foreground">Income Sub-Account</label>
+                          <Combobox
+                            options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                            value={formData.revenue_account_id}
+                            onChange={v => setFormData({ ...formData, revenue_account_id: v })}
+                            placeholder="Use category default"
+                            searchPlaceholder="Search accounts..."
+                            className="mt-0.5 h-8 text-xs"
+                          />
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">GL Accounts</p>
-                      <p className="text-[10px] text-muted-foreground -mt-1">
-                        Links this item to specific accounts so its cost of goods sold and revenue post correctly, instead of relying on its category.
-                      </p>
-                      <div>
+                      <div className="pt-1 border-t">
                         <label className="text-[11px] font-medium text-muted-foreground">Inventory Sub-Account</label>
                         <Combobox
                           options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
                           value={formData.inventory_account_id}
                           onChange={v => setFormData({ ...formData, inventory_account_id: v })}
-                          placeholder="Use category default"
-                          searchPlaceholder="Search accounts..."
-                          className="mt-0.5 h-8 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Cost Of Sale Sub-Account</label>
-                        <Combobox
-                          options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                          value={formData.cogs_account_id}
-                          onChange={v => setFormData({ ...formData, cogs_account_id: v })}
-                          placeholder="Use category default"
-                          searchPlaceholder="Search accounts..."
-                          className="mt-0.5 h-8 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Income Sub-Account</label>
-                        <Combobox
-                          options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                          value={formData.revenue_account_id}
-                          onChange={v => setFormData({ ...formData, revenue_account_id: v })}
                           placeholder="Use category default"
                           searchPlaceholder="Search accounts..."
                           className="mt-0.5 h-8 text-xs"

@@ -52,6 +52,25 @@ function clinicIdFor(req) {
   return parseInt(req.query.clinic_id, 10) || req.user?.clinicId || 1;
 }
 
+// Purchase orders aren't all in one currency (po.po_currency/po.exchange_rate
+// vary per PO), so any report that sums across multiple POs — "Purchases By
+// X", "A/P Aging Summary" — would otherwise add e.g. a USD total straight
+// onto an SSP total and present the result as one meaningful number. Every
+// such query below multiplies by po.exchange_rate to convert into this
+// deployment's single base currency before summing (same convention
+// procurement.js already uses when computing purchase_orders.base_currency_total).
+let _baseCurrencyCache = null;
+async function getBaseCurrency() {
+  if (_baseCurrencyCache) return _baseCurrencyCache;
+  try {
+    const [row] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`, { type: QueryTypes.SELECT });
+    _baseCurrencyCache = row?.code || 'USD';
+  } catch {
+    _baseCurrencyCache = 'USD';
+  }
+  return _baseCurrencyCache;
+}
+
 // Same bucket boundaries/labels as reportARAging.js, for consistency across
 // the app's two aging reports (AR for patients, AP for suppliers).
 const BUCKETS = ['current', 'd31_60', 'd61_90', 'd90_plus'];
@@ -70,8 +89,14 @@ function bucketFor(daysOverdue) {
 }
 
 function computeDueDate(orderDate, paymentTerms) {
-  const match = String(paymentTerms || '').match(/(\d+)/);
-  const days = match ? parseInt(match[1], 10) : 30;
+  const terms = String(paymentTerms || '');
+  // "Net30" alone matches /(\d+)/ fine, but compound terms like "2/10 Net 30"
+  // (2% discount if paid within 10 days, otherwise net 30) have an earlier,
+  // smaller number that isn't the due date — a plain first-number match took
+  // "2" as the due-in-days instead of "30". Prefer the number after "Net".
+  const netMatch = terms.match(/net\s*(\d+)/i);
+  const anyMatch = terms.match(/(\d+)/);
+  const days = netMatch ? parseInt(netMatch[1], 10) : anyMatch ? parseInt(anyMatch[1], 10) : 30;
   const d = new Date(orderDate);
   if (isNaN(d.getTime())) return null;
   d.setDate(d.getDate() + days);
@@ -227,8 +252,7 @@ router.get('/ap-aging-summary', async (req, res) => {
     const branchSql = branchScope(req, repl, 'po', allBranches);
 
     const bills = await sequelize.query(
-      `SELECT po.total_amount AS "totalAmount", po.paid_amount AS "paidAmount",
-              (po.total_amount - COALESCE(po.paid_amount, 0)) AS "balanceAmount",
+      `SELECT ((po.total_amount - COALESCE(po.paid_amount, 0)) * COALESCE(po.exchange_rate, 1)) AS "balanceAmount",
               ((CURRENT_DATE)::date - (po.order_date)::date) AS "daysOverdue",
               s.name AS "supplierName", b.name AS "branchName"
        FROM purchase_orders po
@@ -246,6 +270,8 @@ router.get('/ap-aging-summary', async (req, res) => {
     for (const bill of bills) {
       const label = (groupBy === 'supplier' ? bill.supplierName : bill.branchName) || 'Unassigned';
       const row = groups.get(label) || { groupLabel: label, current: 0, d31_60: 0, d61_90: 0, d90_plus: 0, total: 0 };
+      // Balances are already converted to the deployment's base currency above
+      // (bills can be in different po_currency values — see getBaseCurrency()).
       const balance = parseFloat(bill.balanceAmount) || 0;
       const bucket = bucketFor(parseInt(bill.daysOverdue, 10) || 0);
       row[bucket] += balance;
@@ -253,7 +279,8 @@ router.get('/ap-aging-summary', async (req, res) => {
       groups.set(label, row);
     }
 
-    res.json({ rows: [...groups.values()].sort((a, b) => b.total - a.total) });
+    const baseCurrency = await getBaseCurrency();
+    res.json({ currency: baseCurrency, rows: [...groups.values()].sort((a, b) => b.total - a.total) });
   } catch (err) {
     console.error('Procurement ap-aging-summary error:', err);
     res.status(500).json({ error: 'Failed to generate A/P aging summary' });
@@ -337,11 +364,15 @@ router.get('/purchases', async (req, res) => {
     const repl = { clinicId, dateFrom, dateTo };
     const branchSql = branchScope(req, repl, 'po', allBranches);
 
+    // poi.total_price / gli.unit_cost are in the PO's own po_currency, which
+    // varies per PO — multiplying by po.exchange_rate before SUM() converts
+    // every row to the deployment's base currency first, so POs placed in
+    // different currencies don't get added together as if they were one.
     let rows;
     if (groupBy === 'branch') {
       rows = await sequelize.query(
         `SELECT COALESCE(b.name, 'Unassigned') AS "groupLabel", COUNT(DISTINCT po.id) AS "orderCount",
-                SUM(poi.total_price) AS "totalAmount"
+                SUM(poi.total_price * COALESCE(po.exchange_rate, 1)) AS "totalAmount"
          FROM purchase_order_items poi
          JOIN purchase_orders po ON po.id = poi.purchase_order_id
          LEFT JOIN branches b ON b.id = po.branch_id
@@ -353,7 +384,7 @@ router.get('/purchases', async (req, res) => {
     } else if (groupBy === 'supplier') {
       rows = await sequelize.query(
         `SELECT COALESCE(s.name, 'Unassigned') AS "groupLabel", COUNT(DISTINCT po.id) AS "orderCount",
-                SUM(poi.total_price) AS "totalAmount"
+                SUM(poi.total_price * COALESCE(po.exchange_rate, 1)) AS "totalAmount"
          FROM purchase_order_items poi
          JOIN purchase_orders po ON po.id = poi.purchase_order_id
          LEFT JOIN suppliers s ON s.id = po.supplier_id
@@ -365,7 +396,7 @@ router.get('/purchases', async (req, res) => {
     } else if (groupBy === 'item') {
       rows = await sequelize.query(
         `SELECT poi.item_name AS "groupLabel", SUM(poi.quantity) AS "totalQuantity",
-                COUNT(DISTINCT po.id) AS "orderCount", SUM(poi.total_price) AS "totalAmount"
+                COUNT(DISTINCT po.id) AS "orderCount", SUM(poi.total_price * COALESCE(po.exchange_rate, 1)) AS "totalAmount"
          FROM purchase_order_items poi
          JOIN purchase_orders po ON po.id = poi.purchase_order_id
          WHERE po.clinic_id = :clinicId AND po.order_date BETWEEN :dateFrom AND :dateTo
@@ -376,7 +407,7 @@ router.get('/purchases', async (req, res) => {
     } else {
       rows = await sequelize.query(
         `SELECT COALESCE(sl.location_name, 'Unassigned') AS "groupLabel", COUNT(DISTINCT po.id) AS "orderCount",
-                SUM(gli.quantity_received * COALESCE(gli.unit_cost, poi.unit_price)) AS "totalAmount"
+                SUM(gli.quantity_received * COALESCE(gli.unit_cost, poi.unit_price) * COALESCE(po.exchange_rate, 1)) AS "totalAmount"
          FROM grn_line_items gli
          JOIN purchase_order_items poi ON poi.id = gli.po_line_item_id
          JOIN purchase_orders po ON po.id = poi.purchase_order_id
@@ -389,8 +420,9 @@ router.get('/purchases', async (req, res) => {
       );
     }
 
+    const baseCurrency = await getBaseCurrency();
     res.json({
-      period: { dateFrom, dateTo }, groupBy,
+      period: { dateFrom, dateTo }, groupBy, currency: baseCurrency,
       rows: rows.map(r => ({ ...r, orderCount: parseInt(r.orderCount, 10) || 0, totalQuantity: r.totalQuantity != null ? parseInt(r.totalQuantity, 10) || 0 : undefined, totalAmount: parseFloat(r.totalAmount) || 0 })),
     });
   } catch (err) {

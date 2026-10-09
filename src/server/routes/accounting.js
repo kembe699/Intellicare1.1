@@ -1075,14 +1075,27 @@ router.get('/reports/balance-sheet', authorize('accounting.read'), async (req, r
       as_of_date: asOfDate
     };
     const balanceSheetBranchScope = branchScope(req, balanceSheetReplacements, 'al');
+    // period_balance (and, below, opening_balance) are expressed in each
+    // SECTION's own natural direction — debit-normal for assets,
+    // credit-normal for liabilities/equity — not each row's own
+    // balance_type. A contra account (e.g. 1590 Accumulated Depreciation:
+    // an asset but balance_type='credit'; 3300 Owner's Drawings: equity but
+    // balance_type='debit') is exactly the case this distinction matters
+    // for: branching per-row on its own balance_type would report its
+    // balance as a positive number in ITS natural direction, which then
+    // gets ADDED to the section total instead of subtracted, overstating
+    // the section by 2x the contra account's balance. Branching on
+    // account_type instead makes a contra account's balance net negative
+    // within its own section automatically — no special-casing needed.
     const [results] = await sequelize.query(`
       SELECT
         coa.account_code,
         coa.account_name,
         coa.account_type,
         coa.sub_account_type,
+        coa.balance_type,
         coa.opening_balance,
-        SUM(CASE WHEN coa.balance_type = 'debit'
+        SUM(CASE WHEN coa.account_type = 'asset'
                  THEN al.debit_amount - al.credit_amount
                  ELSE al.credit_amount - al.debit_amount END) as period_balance
       FROM chart_of_accounts coa
@@ -1093,17 +1106,26 @@ router.get('/reports/balance-sheet', authorize('accounting.read'), async (req, r
       WHERE coa.clinic_id = :clinic_id
         AND coa.account_type IN ('asset', 'liability', 'equity')
         AND coa.is_active = true
-      GROUP BY coa.id, coa.account_code, coa.account_name, coa.account_type, coa.sub_account_type, coa.opening_balance
+      GROUP BY coa.id, coa.account_code, coa.account_name, coa.account_type, coa.sub_account_type, coa.balance_type, coa.opening_balance
       ORDER BY coa.account_code
     `, {
       replacements: balanceSheetReplacements
     });
 
-    // Calculate final balances
-    const balanceSheetItems = results.map(item => ({
-      ...item,
-      balance: parseFloat(item.opening_balance || 0) + parseFloat(item.period_balance || 0)
-    }));
+    // Calculate final balances — opening_balance is stored per-account in
+    // THAT account's own balance_type direction (confirmed in
+    // AccountingService.getAccountBalance), so it needs the same
+    // section-direction normalization as period_balance above before the
+    // two can be added together.
+    const balanceSheetItems = results.map(item => {
+      const sectionIsDebitNormal = item.account_type === 'asset';
+      const accountIsDebitNormal = item.balance_type === 'debit';
+      const openingInSectionDirection = (accountIsDebitNormal === sectionIsDebitNormal ? 1 : -1) * parseFloat(item.opening_balance || 0);
+      return {
+        ...item,
+        balance: openingInSectionDirection + parseFloat(item.period_balance || 0),
+      };
+    });
 
     // Organize by account type
     const assets = balanceSheetItems.filter(item => item.account_type === 'asset');

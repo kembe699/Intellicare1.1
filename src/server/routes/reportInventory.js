@@ -263,7 +263,14 @@ router.get('/stock-movement-detail', async (req, res) => {
        ORDER BY t.transaction_date DESC, t.created_at DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
-    res.json({ period: { dateFrom, dateTo }, rows });
+    // unit_cost/total_cost are numeric columns — node-pg returns those as
+    // strings, and the frontend's sortable "Value" column does a raw `<`
+    // comparison with no numeric coercion, so without parseFloat here rows
+    // sort lexicographically ("4000.00" before "500.00") instead of by value.
+    res.json({
+      period: { dateFrom, dateTo },
+      rows: rows.map(r => ({ ...r, unitCost: parseFloat(r.unitCost) || 0, totalCost: parseFloat(r.totalCost) || 0 })),
+    });
   } catch (err) {
     console.error('Inventory stock-movement-detail error:', err);
     res.status(500).json({ error: 'Failed to generate stock movement detail' });
@@ -295,12 +302,26 @@ router.get('/stock-movement-summary', async (req, res) => {
           { replacements: repl, type: QueryTypes.SELECT }
         )
       : await sequelize.query(
+          // A transfer transaction carries BOTH from_location_id and
+          // to_location_id on one row (confirmed in inventory.js's
+          // transaction-creation handler — no second row is written for the
+          // destination); COALESCE(from, to) always resolved to the FROM
+          // side whenever both were set, so the TO location's inbound
+          // movement never appeared anywhere in this report. Splitting into
+          // two legs via UNION ALL credits both sides of a transfer; a
+          // non-transfer row (only one of the two set) still appears once.
           `SELECT COALESCE(sl.location_name, 'Unassigned') AS "groupLabel",
                   COUNT(*) AS "transactionCount",
                   SUM(ABS(t.quantity_change)) AS "totalQuantity",
                   SUM(ABS(t.total_cost)) AS "totalValue"
-           FROM inventory_transactions t
-           LEFT JOIN stock_locations sl ON sl.id = COALESCE(t.from_location_id, t.to_location_id)
+           FROM (
+             SELECT from_location_id AS location_id, quantity_change, total_cost, branch_id, transaction_date, clinic_id
+             FROM inventory_transactions WHERE from_location_id IS NOT NULL
+             UNION ALL
+             SELECT to_location_id AS location_id, quantity_change, total_cost, branch_id, transaction_date, clinic_id
+             FROM inventory_transactions WHERE to_location_id IS NOT NULL
+           ) t
+           LEFT JOIN stock_locations sl ON sl.id = t.location_id
            WHERE t.clinic_id = :clinicId AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
            GROUP BY sl.location_name ORDER BY "totalValue" DESC`,
           { replacements: repl, type: QueryTypes.SELECT }
@@ -540,8 +561,11 @@ router.get('/below-reorder-level', async (req, res) => {
 });
 
 // ── GET /material-consumption ────────────────────────────────────────────
-// "Not Committed" = stock actually deducted (dispense/usage/waste
-// transactions) — real data. "Committed" (reserved but not yet deducted)
+// "Not Committed" = stock actually deducted (dispense/usage/waste/damage
+// transactions — the same 4 types inventory.js's own COGS monthly summary
+// and Usage History report use for "stock actually deducted", and the only
+// 4 types the transaction-creation handler deducts quantity_on_hand for)
+// — real data. "Committed" (reserved but not yet deducted)
 // has no live data behind it: `inventory_items.reserved_quantity` and the
 // whole `inventory_reservations` table exist in schema but are never
 // written to anywhere in this codebase (confirmed) — the frontend shows a
@@ -561,7 +585,7 @@ router.get('/material-consumption', async (req, res) => {
               COUNT(*) AS "transactionCount"
        FROM inventory_transactions t
        JOIN inventory_items i ON i.id = t.item_id
-       WHERE t.clinic_id = :clinicId AND t.transaction_type IN ('dispense', 'usage', 'waste')
+       WHERE t.clinic_id = :clinicId AND t.transaction_type IN ('dispense', 'usage', 'waste', 'damage')
          AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
        GROUP BY i.item_name, i.item_code, i.item_category
        ORDER BY "totalValue" DESC`,

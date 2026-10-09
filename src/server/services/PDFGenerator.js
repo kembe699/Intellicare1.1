@@ -97,6 +97,16 @@ class PDFGenerator {
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.gray);
     doc.text(subtitle.toUpperCase(), textX, this.y + 26, { characterSpacing: 1.5 });
 
+    // Facility contact line — address/phone/email belong to the facility,
+    // not the "PATIENT / CUSTOMER" box below, so they're shown once, here,
+    // next to the facility's own name instead of being listed a second time
+    // under the recipient's details.
+    const contactParts = [company.address, company.phone, company.email].filter(Boolean);
+    if (contactParts.length > 0) {
+      doc.font('Helvetica').fontSize(7.5).fillColor(COLORS.gray);
+      doc.text(contactParts.join('  ·  '), textX, this.y + 37, { width: 320 });
+    }
+
     // Right side — document badge
     if (data.documentNumber) {
       const badgeText = data.documentNumber;
@@ -123,7 +133,7 @@ class PDFGenerator {
       metaY += 13;
     }
 
-    this.y = Math.max(this.y + 45, metaY + 5);
+    this.y = Math.max(this.y + 54, metaY + 5);
 
     // Blue separator line (3pt like the HTML template)
     doc.moveTo(MARGIN, this.y).lineTo(PAGE_WIDTH - MARGIN, this.y)
@@ -167,14 +177,19 @@ class PDFGenerator {
     doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.gray);
     doc.text(data.customerName ? 'PATIENT / CUSTOMER' : 'FACILITY DETAILS', rightX + 12, startY + 10, { characterSpacing: 0.8 });
 
+    // The facility's own contact details are shown once, in the header next
+    // to its name — not repeated here under the recipient's own box, which
+    // used to make "PATIENT / CUSTOMER" read as if the facility's address
+    // and phone number belonged to the patient.
     const rightRows = [];
     if (data.customerName) {
       rightRows.push({ label: 'Name', value: data.customerName, bold: true });
+    } else {
+      if (company.name) rightRows.push({ label: 'Facility', value: company.name });
+      if (company.address) rightRows.push({ label: 'Address', value: company.address });
+      if (company.phone) rightRows.push({ label: 'Phone', value: company.phone });
+      if (company.email) rightRows.push({ label: 'Email', value: company.email });
     }
-    if (company.name) rightRows.push({ label: 'Facility', value: company.name });
-    if (company.address) rightRows.push({ label: 'Address', value: company.address });
-    if (company.phone) rightRows.push({ label: 'Phone', value: company.phone });
-    if (company.email) rightRows.push({ label: 'Email', value: company.email });
 
     let ry = startY + 24;
     for (const row of rightRows) {

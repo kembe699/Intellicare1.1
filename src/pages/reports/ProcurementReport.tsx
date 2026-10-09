@@ -61,6 +61,14 @@ const REPORT_OPTIONS: ReportOption[] = [
 
 const OPTION_GROUPS = ['Supplier Bills', 'Payments', 'A/P Aging', 'Consultant Bills', 'Purchases'];
 
+// Only /payments and /purchases actually filter by dateFrom/dateTo server-side
+// (confirmed by reading reportProcurement.js) — the rest are current-state
+// worklists (every still-outstanding bill/item, regardless of when it was
+// raised), the same way a real A/P aging schedule is always "as of today"
+// rather than bounded to a period. Showing a From/To range on those would
+// claim a filter that was never actually applied.
+const SNAPSHOT_MODES = new Set<Mode>(['pending-bills', 'bills-due-payment', 'ap-aging-detailed', 'ap-aging-summary', 'consultant-bill-items', 'consultant-bills']);
+
 function thisMonthRange() {
   const now = new Date();
   const y = now.getFullYear();
@@ -87,7 +95,9 @@ export default function ProcurementReport() {
     setLoading(true);
     try {
       const clinicId = user?.clinic || '1';
-      const params = new URLSearchParams({ dateFrom, dateTo, allBranches: String(option.allBranches), clinic_id: String(clinicId) });
+      const isSnapshot = SNAPSHOT_MODES.has(option.mode);
+      const params = new URLSearchParams({ allBranches: String(option.allBranches), clinic_id: String(clinicId) });
+      if (!isSnapshot) { params.set('dateFrom', dateFrom); params.set('dateTo', dateTo); }
       let path = '';
 
       if (option.mode === 'pending-bills') { path = '/pending-bills'; params.set('sortBy', option.sortBy || 'date'); }
@@ -227,8 +237,8 @@ export default function ProcurementReport() {
       loading={loading}
       hideControls
     >
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:hidden">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:bg-transparent">
+        <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}
             onChange={e => setReportType(e.target.value)}
@@ -298,8 +308,14 @@ export default function ProcurementReport() {
               </div>
             </div>
             <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
-              <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
-              <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
+              {SNAPSHOT_MODES.has(option.mode) ? (
+                <span><span className="font-semibold text-foreground">As Of:</span> {generatedAt ? fmtDate(generatedAt.toISOString()) : fmtDate(new Date().toISOString())}</span>
+              ) : (
+                <>
+                  <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
+                  <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
+                </>
+              )}
               <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
             </div>
           </div>

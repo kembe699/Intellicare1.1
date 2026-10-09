@@ -22,6 +22,10 @@ const { getTenantConnection } = require('../../src/server/tenantDb');
 
 const TEST_SCHEMA = process.env.DB_SCHEMA || 'tenant_test';
 const SUFFIX = `ACCTREG${Date.now()}`;
+// A separate, non-nested prefix for the opening-balance fan-out fixture
+// below — it must NOT start with SUFFIX, since several other tests filter
+// "my rows" by referenceNumber.startsWith(SUFFIX) and expect an exact count.
+const BANK_SUFFIX = `ACCTBANK${Date.now()}`;
 
 let sequelize;
 let testConn;
@@ -29,6 +33,9 @@ let router;
 let branchId;
 let acctIds; // account_code -> id
 let wasActive; // account_code -> original is_active, so we restore it exactly
+let cashFlowOpeningBaseline; // cash-flow openingBalance, captured before any fixture rows are posted
+let tempBankAcctId; // a dedicated temp account with a non-zero opening_balance — see below
+let tempOffsetAcctId; // balances the temp bank account's postings without touching 3100 (which other tests assert exact values on)
 
 function withTenant(fn) {
   return tenantContext.run(testConn, fn);
@@ -89,8 +96,43 @@ beforeAll(async () => {
   // reactivate for the test, restored in afterAll.
   await sequelize.query(`UPDATE chart_of_accounts SET is_active = true WHERE clinic_id = 1 AND account_code IN ('3100', '3300')`);
 
+  // Captured before any fixture rows exist, so the opening-balance fan-out
+  // regression test below can assert an exact delta instead of an absolute
+  // value — tenant_test is a shared schema and already carries history from
+  // other tests.
+  const cashFlowBaselineRes = await run('/cash-flow', { dateFrom: '2026-01-01', dateTo: '2026-12-31', clinic_id: '1', allBranches: 'true', detail: 'false' });
+  cashFlowOpeningBaseline = cashFlowBaselineRes.body.openingBalance;
+
+  // A dedicated temp bank account with a NON-zero opening_balance (1100
+  // Cash's is 0.00 in tenant_test, which would mask the fan-out bug below:
+  // 0 multiplied by any number of joined ledger rows is still 0).
+  tempBankAcctId = uuid();
+  await sequelize.query(
+    `INSERT INTO chart_of_accounts (id, clinic_id, account_code, account_name, account_type, balance_type, is_bank_account, is_active, opening_balance)
+     VALUES (:id, 1, :code, :name, 'asset', 'debit', true, true, 1234.56)`,
+    { replacements: { id: tempBankAcctId, code: `${BANK_SUFFIX}-ACCT`, name: `${BANK_SUFFIX} Test Bank` } }
+  );
+  // A separate temp offset account for the bank postings below — using an
+  // existing account like 3100 would also move ITS opening balance and
+  // break the equity-statement test's exact-value assertion on it.
+  tempOffsetAcctId = uuid();
+  await sequelize.query(
+    `INSERT INTO chart_of_accounts (id, clinic_id, account_code, account_name, account_type, balance_type, is_active, opening_balance)
+     VALUES (:id, 1, :code, :name, 'equity', 'credit', true, 0)`,
+    { replacements: { id: tempOffsetAcctId, code: `${BANK_SUFFIX}-OFFSET`, name: `${BANK_SUFFIX} Test Offset` } }
+  );
+
   // Prior entry, before the test's date range — proves opening-balance math.
   await postPair(`${SUFFIX}-PRIOR`, '2024-01-01', acctIds['1100'], acctIds['3100'], 5000, 'opening_capital', `${SUFFIX} prior capital injection`);
+
+  // Two more ledger rows on the temp bank account — one before dateFrom (100,
+  // should move openingBalance), one within the period (50, must NOT move
+  // openingBalance). Two rows on the same is_bank_account account is exactly
+  // the shape that triggered the old fan-out bug (SUM(coa.opening_balance)
+  // joined against account_ledger with no GROUP BY counted 1234.56 once per
+  // matched row instead of once total).
+  await postPair(`${BANK_SUFFIX}-PRIOR`, '2024-01-02', tempBankAcctId, tempOffsetAcctId, 100, 'test_fixture_bank', `${BANK_SUFFIX} temp bank prior`);
+  await postPair(`${BANK_SUFFIX}-PERIOD`, '2026-03-04', tempBankAcctId, tempOffsetAcctId, 50, 'test_fixture_bank', `${BANK_SUFFIX} temp bank period`);
 
   // Period entries.
   await postPair(`${SUFFIX}-REV`, '2026-03-01', acctIds['1100'], acctIds['4100'], 2000, 'patient_billing', `${SUFFIX} revenue receipt`);
@@ -100,7 +142,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await sequelize.query(`DELETE FROM account_ledger WHERE reference_number LIKE :pfx`, { replacements: { pfx: `${SUFFIX}%` } });
+    await sequelize.query(`DELETE FROM account_ledger WHERE reference_number LIKE :pfx OR reference_number LIKE :pfx2`, { replacements: { pfx: `${SUFFIX}%`, pfx2: `${BANK_SUFFIX}%` } });
+    await sequelize.query(`DELETE FROM chart_of_accounts WHERE id IN (:ids)`, { replacements: { ids: [tempBankAcctId, tempOffsetAcctId] } });
     await sequelize.query(`DELETE FROM branches WHERE id = :branchId`, { replacements: { branchId } });
     for (const code of ['3100', '3300']) {
       await sequelize.query(`UPDATE chart_of_accounts SET is_active = :active WHERE clinic_id = 1 AND account_code = :code`, { replacements: { active: wasActive[code], code } });
@@ -111,6 +154,22 @@ afterAll(async () => {
 const range = { dateFrom: '2026-01-01', dateTo: '2026-12-31', clinic_id: '1' };
 
 describe('Accounting Reports pull from account_ledger — the shared sink for both GL pipelines', () => {
+  test('cash-flow opening balance is not inflated by an account having multiple ledger rows', async () => {
+    // Real bug this covers: the opening-balance query used to LEFT JOIN
+    // chart_of_accounts to account_ledger with no date restriction in the ON
+    // clause, then SUM(coa.opening_balance) across that join — fanning the
+    // opening balance out once per matched ledger row instead of once per
+    // account. The temp bank account (opening_balance 1234.56) gets two
+    // ledger rows in this fixture; under the old query its opening_balance
+    // would have been counted twice (an extra +1234.56 the correct answer
+    // doesn't have). Expected delta: 5000 (Cash's PRIOR entry) + 1234.56
+    // (temp account's own opening_balance, counted exactly once) + 100
+    // (temp account's one pre-dateFrom ledger row) — the in-period 50 row
+    // must NOT appear here at all.
+    const res = await run('/cash-flow', { ...range, allBranches: 'true', detail: 'false' });
+    expect(res.body.openingBalance - cashFlowOpeningBaseline).toBeCloseTo(5000 + 1234.56 + 100, 2);
+  });
+
   test('cash-flow groups by source_module with correct debit=in / credit=out amounts', async () => {
     const res = await run('/cash-flow', { ...range, allBranches: 'true', detail: 'false' });
     const rev = res.body.rows.find((r) => r.sourceModule === 'patient_billing');

@@ -345,8 +345,8 @@ export default function ClinicalReport() {
       loading={loading}
       hideControls
     >
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:hidden">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:bg-transparent">
+        <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}
             onChange={e => setReportType(e.target.value)}
