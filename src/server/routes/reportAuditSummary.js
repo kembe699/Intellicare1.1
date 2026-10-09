@@ -121,10 +121,25 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // Three nested scopes:
+    //  - scopeClause: clinic + date range + branch only.
+    //  - contextScopeClause: + action/status filters, but NEVER userId — this
+    //    is what the "pickers" (byUser, byUserAction, byAction,
+    //    mostActiveUserRow) use, so picking a user doesn't collapse the
+    //    staff list down to just that one row and make it impossible to
+    //    switch to someone else. Action/status DO apply here though: once
+    //    you've picked an action or outcome, every number on the page
+    //    (tiles, staff summary, activity log) should agree with each
+    //    other — the staff summary previously stayed fully unfiltered even
+    //    with an action selected, showing e.g. "5 actions" for a user next
+    //    to a "Total Actions Logged: 0" tile for the same filter.
+    //  - fullScopeClause: contextScopeClause + userId — the actual
+    //    drill-down scope for the tiles and the activity log itself.
     const scopeClause = `(al.clinic_id = :clinicId OR al.clinic_id IS NULL) AND al.created_at BETWEEN :fromTs AND :toTs${branchScopeSQL}`;
-    let userScopeClause = userId ? `${scopeClause} AND al.user_id = :userId` : scopeClause;
-    if (action) userScopeClause += ' AND al.action = :action';
-    if (status) userScopeClause += ' AND al.status = :status';
+    let contextScopeClause = scopeClause;
+    if (action) contextScopeClause += ' AND al.action = :action';
+    if (status) contextScopeClause += ' AND al.status = :status';
+    const fullScopeClause = userId ? `${contextScopeClause} AND al.user_id = :userId` : contextScopeClause;
 
     // 1. Summary tiles — total actions, active staff count, most active user, top action.
     //    Scoped to the selected user when one is picked.
@@ -132,7 +147,7 @@ router.get('/', async (req, res) => {
       `SELECT COUNT(*) AS "totalActions",
               COUNT(DISTINCT al.user_id) AS "activeStaffCount"
        FROM audit_logs al
-       WHERE ${userScopeClause}`,
+       WHERE ${fullScopeClause}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -142,7 +157,7 @@ router.get('/', async (req, res) => {
               COUNT(*) AS "actionCount"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
-       WHERE ${scopeClause} AND al.user_id IS NOT NULL
+       WHERE ${contextScopeClause} AND al.user_id IS NOT NULL
        GROUP BY al.user_id, "userName"
        ORDER BY "actionCount" DESC
        LIMIT 1`,
@@ -152,7 +167,7 @@ router.get('/', async (req, res) => {
     const [mostCommonActionRow] = await sequelize.query(
       `SELECT al.action AS action, COUNT(*) AS "actionCount"
        FROM audit_logs al
-       WHERE ${userScopeClause}
+       WHERE ${fullScopeClause}
        GROUP BY al.action
        ORDER BY "actionCount" DESC
        LIMIT 1`,
@@ -168,7 +183,7 @@ router.get('/', async (req, res) => {
               MAX(al.created_at) AS "lastActionAt"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
-       WHERE ${scopeClause}
+       WHERE ${contextScopeClause}
        GROUP BY al.user_id, "userName", "userRole"
        ORDER BY "actionCount" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -182,7 +197,7 @@ router.get('/', async (req, res) => {
               COUNT(*) AS "actionCount"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
-       WHERE ${scopeClause}
+       WHERE ${contextScopeClause}
        GROUP BY al.user_id, "userName", al.action
        ORDER BY "userName" ASC, "actionCount" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -192,7 +207,7 @@ router.get('/', async (req, res) => {
     const byAction = await sequelize.query(
       `SELECT al.action AS action, al.module AS module, COUNT(*) AS "actionCount"
        FROM audit_logs al
-       WHERE ${scopeClause}
+       WHERE ${contextScopeClause}
        GROUP BY al.action, al.module
        ORDER BY "actionCount" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -203,7 +218,7 @@ router.get('/', async (req, res) => {
     //    they did" drill-down), and includes the before/after value snapshot so
     //    an update/void/cancel action can be inspected in detail, not just named.
     const [countRow] = await sequelize.query(
-      `SELECT COUNT(*) AS total FROM audit_logs al WHERE ${userScopeClause}`,
+      `SELECT COUNT(*) AS total FROM audit_logs al WHERE ${fullScopeClause}`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
     const totalLogCount = parseInt(countRow.total, 10) || 0;
@@ -225,7 +240,7 @@ router.get('/', async (req, res) => {
               al.created_at AS "createdAt"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al.user_id
-       WHERE ${userScopeClause}
+       WHERE ${fullScopeClause}
        ORDER BY al.created_at DESC, al.id DESC
        LIMIT :rowCap`,
       { replacements: repl, type: QueryTypes.SELECT }
