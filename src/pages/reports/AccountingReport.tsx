@@ -595,16 +595,20 @@ export default function AccountingReport() {
             ) : (
               <>
                 <p className="font-semibold text-sm mb-1">Revenue</p>
-                {incomeStatement.revenue.map(l => (
-                  <div key={l.account_id} className="flex justify-between py-0.5 text-sm pl-4">
-                    <span className="text-muted-foreground">{l.account_name}</span>
-                    <span className="font-mono">{fmtCurrency(l.amount)}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between pt-2 mt-1 border-t border-border font-semibold text-sm">
-                  <span>Total Revenue:</span>
-                  <span className="font-mono">{fmtCurrency(incomeStatement.totals.totalRevenue)}</span>
-                </div>
+                <table className="max-w-md text-sm border-collapse">
+                  <tbody>
+                    {incomeStatement.revenue.map(l => (
+                      <tr key={l.account_id} className="border-b border-border/70">
+                        <td className="py-1 pl-4 pr-6 text-muted-foreground whitespace-nowrap">{l.account_name}</td>
+                        <td className="py-1 text-right font-mono whitespace-nowrap">{fmtCurrency(l.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-foreground/70">
+                      <td className="pt-1.5 pl-0 pr-6 font-semibold whitespace-nowrap">Total Revenue:</td>
+                      <td className="pt-1.5 text-right font-mono font-semibold whitespace-nowrap">{fmtCurrency(incomeStatement.totals.totalRevenue)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </>
             )}
             <div className="flex justify-end mt-3">
@@ -626,16 +630,20 @@ export default function AccountingReport() {
               incomeStatement.expenseGroups.map(g => (
                 <div key={g.label} className="mb-3 last:mb-0">
                   <p className="font-semibold text-sm mb-1">{g.label}</p>
-                  {g.lines.map(l => (
-                    <div key={l.account_id} className="flex justify-between py-0.5 text-sm pl-4">
-                      <span className="text-muted-foreground">{l.account_name}</span>
-                      <span className="font-mono">{fmtCurrency(l.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between pt-1.5 mt-1 border-t border-border font-semibold text-sm">
-                    <span>Total {g.label}:</span>
-                    <span className="font-mono">{fmtCurrency(g.total)}</span>
-                  </div>
+                  <table className="max-w-md text-sm border-collapse">
+                    <tbody>
+                      {g.lines.map(l => (
+                        <tr key={l.account_id} className="border-b border-border/70">
+                          <td className="py-1 pl-4 pr-6 text-muted-foreground whitespace-nowrap">{l.account_name}</td>
+                          <td className="py-1 text-right font-mono whitespace-nowrap">{fmtCurrency(l.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-foreground/70">
+                        <td className="pt-1.5 pl-0 pr-6 font-semibold whitespace-nowrap">Total {g.label}:</td>
+                        <td className="pt-1.5 text-right font-mono font-semibold whitespace-nowrap">{fmtCurrency(g.total)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               ))
             )}
