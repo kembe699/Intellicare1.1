@@ -258,7 +258,12 @@ export default function AuditSummaryReport() {
       loading={loading}
       hideControls
     >
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:bg-transparent">
+      {/* Not sticky, unlike the single-table report pages — this page has a
+          lot more content below it (4 stat tiles + 2 tables), and a pinned
+          header over that much scrolling content just meant results kept
+          sliding in from underneath it. Scrolls away normally instead so
+          nothing ever renders behind anything else. */}
+      <div className="-mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <Combobox
             options={userOptions}
