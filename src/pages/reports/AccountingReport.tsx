@@ -95,6 +95,15 @@ export default function AccountingReport() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
+  // Structured income-statement breakdown (Revenue / Cost of Goods Sold /
+  // Operating Expenses / Miscellaneous, each with its own line items and
+  // subtotal) — rendered as a real formatted financial statement instead of
+  // a flat sortable table for the Detailed/Comprehensive variants.
+  const [incomeStatement, setIncomeStatement] = useState<{
+    revenue: { account_id: string; account_name: string; amount: number }[];
+    expenseGroups: { label: string; lines: { account_id: string; account_name: string; amount: number }[]; total: number }[];
+    totals: { totalRevenue: number; totalExpenses: number; netIncome: number };
+  } | null>(null);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [accounts, setAccounts] = useState<{ id: string; account_code: string; account_name: string; sub_account_type: string | null }[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
@@ -118,6 +127,7 @@ export default function AccountingReport() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setSummary(null);
+    setIncomeStatement(null);
     try {
       const clinicId = user?.clinic || '1';
 
@@ -143,21 +153,31 @@ export default function AccountingReport() {
         const res = await authFetch(`/api/reports-v2/income-statement?${params}`);
         if (!res.ok) throw new Error('Failed to load income statement');
         const json = await res.json();
-        if (option.isComprehensive) {
+        if (option.isComprehensive || option.detailed) {
+          // Both variants now render as a real formatted statement (grouped
+          // by Revenue / Cost of Goods Sold / Operating Expenses /
+          // Miscellaneous, each with its own subtotal) instead of a flat
+          // list — the backend already computes this exact breakdown
+          // (expenseSections), previously only used for "Comprehensive".
           const sections = json.expenseSections || {};
-          const expenseRows = [
-            ...(sections.costOfGoodsSold?.lines || []).map((l: any) => ({ ...l, section: 'Cost of Goods Sold' })),
-            ...(sections.operatingExpenses?.lines || []).map((l: any) => ({ ...l, section: 'Operating Expenses' })),
-            ...(sections.miscellaneous?.lines || []).map((l: any) => ({ ...l, section: 'Miscellaneous' })),
-          ];
+          const expenseGroups = [
+            { label: 'Cost Of Goods Sold', lines: sections.costOfGoodsSold?.lines || [], total: sections.costOfGoodsSold?.total || 0 },
+            { label: 'Operating Expenses', lines: sections.operatingExpenses?.lines || [], total: sections.operatingExpenses?.total || 0 },
+            { label: 'Miscellaneous', lines: sections.miscellaneous?.lines || [], total: sections.miscellaneous?.total || 0 },
+          ].filter(g => g.lines.length > 0);
+
+          setIncomeStatement({
+            revenue: json.revenue || [],
+            expenseGroups,
+            totals: json.totals || { totalRevenue: 0, totalExpenses: 0, netIncome: 0 },
+          });
+
+          // Flattened version kept for CSV export only — the formatted
+          // statement above is what's actually shown on screen/print.
+          const expenseRows = expenseGroups.flatMap(g => g.lines.map((l: any) => ({ ...l, section: g.label })));
           setRows([
             ...(json.revenue || []).map((r: any) => ({ ...r, section: 'Revenue' })),
             ...expenseRows,
-          ]);
-        } else if (option.detailed) {
-          setRows([
-            ...(json.revenue || []).map((r: any) => ({ ...r, section: 'Revenue' })),
-            ...(json.expenses || []).map((r: any) => ({ ...r, section: 'Expenses' })),
           ]);
         } else {
           setRows([
@@ -578,6 +598,80 @@ export default function AccountingReport() {
       ) : !hasLoaded ? (
         <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">
           Pick a report type and date range above, then click View.
+        </div>
+      ) : option.mode === 'income-statement' && (option.detailed || option.isComprehensive) && incomeStatement ? (
+        <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+          {/* ── Revenue ── */}
+          <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
+            <h3 className="text-sm font-bold tracking-wide">Revenue</h3>
+          </div>
+          <div className="px-4 py-3">
+            {incomeStatement.revenue.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No revenue in this period.</p>
+            ) : (
+              <>
+                <p className="font-semibold text-sm mb-1">Revenue</p>
+                {incomeStatement.revenue.map(l => (
+                  <div key={l.account_id} className="flex justify-between py-0.5 text-sm pl-4">
+                    <span className="text-muted-foreground">{l.account_name}</span>
+                    <span className="font-mono">{fmtCurrency(l.amount)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between pt-2 mt-1 border-t border-border font-semibold text-sm">
+                  <span>Total Revenue:</span>
+                  <span className="font-mono">{fmtCurrency(incomeStatement.totals.totalRevenue)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-end mt-3">
+              <div className="min-w-[260px] flex justify-between gap-4 text-sm font-semibold">
+                <span>Total Revenue</span>
+                <span className="font-mono border-b-4 border-double border-foreground pb-0.5">{fmtCurrency(incomeStatement.totals.totalRevenue)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Expenses ── */}
+          <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-t border-border">
+            <h3 className="text-sm font-bold tracking-wide">Expenses</h3>
+          </div>
+          <div className="px-4 py-3">
+            {incomeStatement.expenseGroups.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No expenses in this period.</p>
+            ) : (
+              incomeStatement.expenseGroups.map(g => (
+                <div key={g.label} className="mb-3 last:mb-0">
+                  <p className="font-semibold text-sm mb-1">{g.label}</p>
+                  {g.lines.map(l => (
+                    <div key={l.account_id} className="flex justify-between py-0.5 text-sm pl-4">
+                      <span className="text-muted-foreground">{l.account_name}</span>
+                      <span className="font-mono">{fmtCurrency(l.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-1.5 mt-1 border-t border-border font-semibold text-sm">
+                    <span>Total {g.label}:</span>
+                    <span className="font-mono">{fmtCurrency(g.total)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+            <div className="flex justify-end mt-3">
+              <div className="min-w-[260px] flex justify-between gap-4 text-sm font-semibold">
+                <span>Total Expenses:</span>
+                <span className="font-mono border-b-4 border-double border-foreground pb-0.5">{fmtCurrency(incomeStatement.totals.totalExpenses)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Net Income ── */}
+          <div className={`px-4 py-3 border-t-2 ${incomeStatement.totals.netIncome >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <div className="flex justify-end">
+              <div className={`min-w-[260px] flex justify-between gap-4 text-base font-bold ${incomeStatement.totals.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                <span>Net Income {incomeStatement.totals.netIncome >= 0 ? '(Profit)' : '(Loss)'}:</span>
+                <span className="font-mono">{fmtCurrency(incomeStatement.totals.netIncome)}</span>
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <AdvancedDataTable
