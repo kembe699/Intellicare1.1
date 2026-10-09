@@ -16,6 +16,10 @@ interface QueueReceiptProps {
 const DIVIDER = '--------------------------------';
 const THICK_DIVIDER = '================================';
 
+// 1 -> "00001", 10 -> "00010", 100000 -> "100000" (widens past 5 digits
+// rather than truncating, same convention as GL/JE document numbers).
+const formatQueueNumber = (n: number | null): string => (n == null ? '—' : String(n).padStart(5, '0'));
+
 // Same thermal conventions as PaymentReceipt.tsx — solid black, a 600-weight
 // floor instead of 400, bold sans-serif instead of monospace — a mid-gray or
 // a thin stroke fades to near-nothing on a worn 1-bit thermal head.
@@ -61,8 +65,8 @@ export const QueueReceipt: React.FC<QueueReceiptProps> = ({
       {/* ── Queue number — large and central, read from across the room ── */}
       <div style={{ textAlign: 'center', margin: '6px 0 8px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1px' }}>YOUR QUEUE NUMBER</div>
-        <div style={{ fontSize: '56px', fontWeight: 700, lineHeight: 1.1, margin: '2px 0' }}>
-          {queueNumber ?? '—'}
+        <div style={{ fontSize: '48px', fontWeight: 700, lineHeight: 1.1, margin: '2px 0', letterSpacing: '1px' }}>
+          {formatQueueNumber(queueNumber)}
         </div>
       </div>
 
