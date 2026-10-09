@@ -55,8 +55,13 @@ const CATEGORY_EXPENSE_CODE = {
   'Transport': '5800',               // Travel and Transport
   'Medical Supplies': '5200',        // Medical Supplies Expense
   'Administrative Expenses': '5440', // Administrative Expenses
+  // Routine facility-running costs — same home as the literal "Administrative
+  // Expenses" category above, so they stop falling into Miscellaneous below.
+  'Catering': '5440',                // Administrative Expenses
+  'Cleaning': '5440',                // Administrative Expenses
+  'Security': '5440',                // Administrative Expenses
 };
-const DEFAULT_EXPENSE_CODE = '5900'; // Miscellaneous Expenses — fallback for Catering/Cleaning/Security/Other/unknown
+const DEFAULT_EXPENSE_CODE = '5900'; // Miscellaneous Expenses — fallback for Other/unknown categories
 
 // Same 7-value vocabulary ItemMaster.tsx offers for inventory_items.item_category
 // (drugs/consumables/equipment/supplies/reagents/surgical/general). 'equipment' is
