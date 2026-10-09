@@ -52,6 +52,7 @@ async function migrateInventoryTables() {
         inventory_account_id VARCHAR(36) NULL,
         cogs_account_id VARCHAR(36) NULL,
         usage_account_id VARCHAR(36) NULL,
+        revenue_account_id VARCHAR(36) NULL,
 
         requires_batch_tracking BOOLEAN DEFAULT false,
         requires_expiry_tracking BOOLEAN DEFAULT false,
@@ -74,6 +75,10 @@ async function migrateInventoryTables() {
     try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_invitems_clinic_cat ON inventory_items(clinic_id, item_category)`); } catch(e){}
     try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_invitems_clinic_active ON inventory_items(clinic_id, is_active)`); } catch(e){}
     await addColumnIfNotExists('inventory_items', 'barcode', 'VARCHAR(100) NULL');
+    // The item's own revenue/income account — lets a bill line for this item
+    // post to a specific account directly (see resolveRevenueAccountForLine),
+    // instead of relying solely on item_category inference.
+    await addColumnIfNotExists('inventory_items', 'revenue_account_id', 'VARCHAR(36) NULL');
     console.log('  inventory_items table created/verified.');
   } catch (e) {
     console.log('  Note:', e.message);

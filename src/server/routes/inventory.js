@@ -208,7 +208,7 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
       unit_of_measure, reorder_unit, conversion_factor,
       minimum_stock_level, maximum_stock_level, reorder_quantity, lead_time_days,
       inventory_valuation_method, current_unit_cost, selling_price, cost_currency,
-      inventory_account_id, cogs_account_id, usage_account_id,
+      inventory_account_id, cogs_account_id, usage_account_id, revenue_account_id,
       requires_batch_tracking, requires_expiry_tracking, requires_serial_number,
       is_controlled_substance, notes, preferred_supplier_id, created_by
     } = req.body;
@@ -221,14 +221,14 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
         unit_of_measure, reorder_unit, conversion_factor,
         minimum_stock_level, maximum_stock_level, reorder_quantity, lead_time_days,
         inventory_valuation_method, current_unit_cost, average_unit_cost, selling_price, cost_currency,
-        inventory_account_id, cogs_account_id, usage_account_id,
+        inventory_account_id, cogs_account_id, usage_account_id, revenue_account_id,
         requires_batch_tracking, requires_expiry_tracking, requires_serial_number,
         is_controlled_substance, notes, preferred_supplier_id, created_by)
       VALUES (:id, :clinic_id, :branch_id, :item_code, :barcode, :item_name, :item_description, :item_category, :item_type,
         :unit_of_measure, :reorder_unit, :conversion_factor,
         :minimum_stock_level, :maximum_stock_level, :reorder_quantity, :lead_time_days,
         :inventory_valuation_method, :current_unit_cost, :current_unit_cost, :selling_price, :cost_currency,
-        :inventory_account_id, :cogs_account_id, :usage_account_id,
+        :inventory_account_id, :cogs_account_id, :usage_account_id, :revenue_account_id,
         :requires_batch_tracking, :requires_expiry_tracking, :requires_serial_number,
         :is_controlled_substance, :notes, :preferred_supplier_id, :created_by)
     `, {
@@ -245,7 +245,7 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
         current_unit_cost: current_unit_cost || 0, selling_price: selling_price || 0,
         cost_currency: cost_currency || 'SSP',
         inventory_account_id: inventory_account_id || null, cogs_account_id: cogs_account_id || null,
-        usage_account_id: usage_account_id || null,
+        usage_account_id: usage_account_id || null, revenue_account_id: revenue_account_id || null,
         requires_batch_tracking: !!requires_batch_tracking,
         requires_expiry_tracking: !!requires_expiry_tracking,
         requires_serial_number: !!requires_serial_number,
@@ -572,7 +572,7 @@ router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
       'barcode', 'item_name', 'item_description', 'item_category', 'item_type', 'unit_of_measure',
       'reorder_unit', 'conversion_factor', 'minimum_stock_level', 'maximum_stock_level',
       'reorder_quantity', 'lead_time_days', 'inventory_valuation_method', 'current_unit_cost',
-      'selling_price', 'cost_currency', 'inventory_account_id', 'cogs_account_id', 'usage_account_id',
+      'selling_price', 'cost_currency', 'inventory_account_id', 'cogs_account_id', 'usage_account_id', 'revenue_account_id',
       'requires_batch_tracking', 'requires_expiry_tracking', 'requires_serial_number',
       'is_controlled_substance', 'is_active', 'notes', 'preferred_supplier_id'
     ];

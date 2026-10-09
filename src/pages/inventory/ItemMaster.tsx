@@ -42,6 +42,9 @@ interface InventoryItem {
   requires_expiry_tracking: boolean;
   is_controlled_substance: boolean;
   is_active: boolean;
+  inventory_account_id: string | null;
+  cogs_account_id: string | null;
+  revenue_account_id: string | null;
   preferred_supplier_id: number;
   preferred_supplier_name: string;
   active_batches: number;
@@ -109,6 +112,7 @@ const emptyForm = (currencyCode: string) => ({
   requires_batch_tracking: false, requires_expiry_tracking: false,
   is_controlled_substance: false, preferred_supplier_id: '', notes: '',
   initial_quantity: 0, location_id: '', expiry_date: '',
+  inventory_account_id: '', cogs_account_id: '', revenue_account_id: '',
 });
 
 export default function ItemMaster() {
@@ -149,7 +153,14 @@ export default function ItemMaster() {
   const [applyingPriceAdj, setApplyingPriceAdj] = useState(false);
   const [currentExchangeRate, setCurrentExchangeRate] = useState<number | null>(null);
 
-  useEffect(() => { fetchLocations(); fetchCurrentExchangeRate(); }, []);
+  // GL accounts an item can be linked to directly — Inventory Sub-Account
+  // (asset), Cost Of Sale Sub-Account (expense), Income Sub-Account
+  // (revenue). Set, these take priority over item_category-based GL
+  // inference (pharmacyCogsOnBill.js / resolveRevenueAccountForLine) — the
+  // whole point of linking an item to its own accounts directly.
+  const [accounts, setAccounts] = useState<{ id: string; account_code: string; account_name: string; account_type: string }[]>([]);
+
+  useEffect(() => { fetchLocations(); fetchCurrentExchangeRate(); fetchAccounts(); }, []);
   // Load the catalogue, and re-load when a location filter is applied or cleared.
   //
   // This used to show nothing until a location was chosen, on the reasoning that a
@@ -198,6 +209,16 @@ export default function ItemMaster() {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const res = await authFetch(`/api/accounting/chart-of-accounts?clinic_id=${clinicId}`, { credentials: 'include' });
+      if (!res.ok) return;
+      setAccounts(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch chart of accounts', e);
+    }
+  };
+
   const filteredItems = useMemo(() => items.filter(item => {
     const q = search.toLowerCase();
     const matchesSearch = !q || item.item_name?.toLowerCase().includes(q) || item.item_code?.toLowerCase().includes(q);
@@ -232,6 +253,8 @@ export default function ItemMaster() {
       is_controlled_substance: !!item.is_controlled_substance,
       preferred_supplier_id: item.preferred_supplier_id ? String(item.preferred_supplier_id) : '',
       notes: item.notes || '', initial_quantity: 0, location_id: '', expiry_date: '',
+      inventory_account_id: item.inventory_account_id || '', cogs_account_id: item.cogs_account_id || '',
+      revenue_account_id: item.revenue_account_id || '',
     });
   };
 
@@ -512,6 +535,46 @@ export default function ItemMaster() {
                           <label className="text-[11px] font-medium text-muted-foreground">Selling Price</label>
                           <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">GL Accounts</p>
+                      <p className="text-[10px] text-muted-foreground -mt-1">
+                        Links this item to specific accounts so its cost of goods sold and revenue post correctly, instead of relying on its category.
+                      </p>
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground">Inventory Sub-Account</label>
+                        <Combobox
+                          options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                          value={formData.inventory_account_id}
+                          onChange={v => setFormData({ ...formData, inventory_account_id: v })}
+                          placeholder="Use category default"
+                          searchPlaceholder="Search accounts..."
+                          className="mt-0.5 h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground">Cost Of Sale Sub-Account</label>
+                        <Combobox
+                          options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                          value={formData.cogs_account_id}
+                          onChange={v => setFormData({ ...formData, cogs_account_id: v })}
+                          placeholder="Use category default"
+                          searchPlaceholder="Search accounts..."
+                          className="mt-0.5 h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground">Income Sub-Account</label>
+                        <Combobox
+                          options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                          value={formData.revenue_account_id}
+                          onChange={v => setFormData({ ...formData, revenue_account_id: v })}
+                          placeholder="Use category default"
+                          searchPlaceholder="Search accounts..."
+                          className="mt-0.5 h-8 text-xs"
+                        />
                       </div>
                     </div>
 

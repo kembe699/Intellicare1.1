@@ -50,6 +50,17 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 const AccountingService = require('../services/AccountingService');
+const { ChartOfAccounts } = require('../models');
+
+// Resolved by account id, cached alongside the category-code cache (a
+// distinct key prefix keeps the two from colliding in the same Map).
+async function getAccountByIdCached(cache, accountId) {
+  const key = `id:${accountId}`;
+  if (!cache.has(key)) {
+    cache.set(key, await ChartOfAccounts.findOne({ where: { id: accountId, is_active: true } }));
+  }
+  return cache.get(key);
+}
 
 function normalizeName(s) {
   if (!s) return '';
@@ -114,15 +125,43 @@ async function postPharmacyCogsForBill(sequelize, { clinicId, branchId, billId, 
     if (!n) continue;
 
     const [matches] = await sequelize.query(
-      `SELECT item_name, item_category, current_unit_cost, average_unit_cost
+      `SELECT item_name, item_category, current_unit_cost, average_unit_cost, cogs_account_id, inventory_account_id
        FROM inventory_items WHERE is_active = true AND item_name ILIKE :pattern
        ORDER BY length(item_name) DESC LIMIT 1`,
       { replacements: { pattern: `%${rawName}%` } }
     );
     const invItem = matches[0];
     if (!invItem) continue;
-    const accts = CATEGORY_ACCOUNTS[invItem.item_category];
-    if (!accts) continue;
+
+    // An item explicitly linked to its own GL accounts (Item Master →
+    // "Cost Of Sale Sub-Account" / "Inventory Sub-Account") always wins over
+    // category inference — the whole point of linking it directly is to
+    // stop relying on item_category guessing which account this specific
+    // item's COGS belongs to.
+    let cogsAcct = null;
+    let invAcct = null;
+    let cogsCodeLabel = null;
+    let invCodeLabel = null;
+    if (invItem.cogs_account_id && invItem.inventory_account_id) {
+      cogsAcct = await getAccountByIdCached(cache, invItem.cogs_account_id);
+      invAcct = await getAccountByIdCached(cache, invItem.inventory_account_id);
+      cogsCodeLabel = cogsAcct?.account_code || invItem.cogs_account_id;
+      invCodeLabel = invAcct?.account_code || invItem.inventory_account_id;
+    }
+    if (!cogsAcct || !invAcct) {
+      const accts = CATEGORY_ACCOUNTS[invItem.item_category];
+      if (!accts) continue;
+      if (!cache.has(accts.cogsCode)) cache.set(accts.cogsCode, await AccountingService.getAccountByCode(clinicId, accts.cogsCode));
+      if (!cache.has(accts.invCode)) cache.set(accts.invCode, await AccountingService.getAccountByCode(clinicId, accts.invCode));
+      cogsAcct = cache.get(accts.cogsCode);
+      invAcct = cache.get(accts.invCode);
+      cogsCodeLabel = accts.cogsCode;
+      invCodeLabel = accts.invCode;
+    }
+    if (!cogsAcct || !invAcct) {
+      console.warn(`postPharmacyCogsForBill: skipped "${rawName}" on bill ${billId} — account ${!cogsAcct ? cogsCodeLabel : invCodeLabel} not found/active for clinic ${clinicId}.`);
+      continue;
+    }
 
     const unitCost = parseFloat(invItem.current_unit_cost) > 0 ? parseFloat(invItem.current_unit_cost)
       : parseFloat(invItem.average_unit_cost) > 0 ? parseFloat(invItem.average_unit_cost)
@@ -133,17 +172,8 @@ async function postPharmacyCogsForBill(sequelize, { clinicId, branchId, billId, 
     const cogsAmount = unitCost * qty;
     if (cogsAmount <= 0) continue;
 
-    if (!cache.has(accts.cogsCode)) cache.set(accts.cogsCode, await AccountingService.getAccountByCode(clinicId, accts.cogsCode));
-    if (!cache.has(accts.invCode)) cache.set(accts.invCode, await AccountingService.getAccountByCode(clinicId, accts.invCode));
-    const cogsAcct = cache.get(accts.cogsCode);
-    const invAcct = cache.get(accts.invCode);
-    if (!cogsAcct || !invAcct) {
-      console.warn(`postPharmacyCogsForBill: skipped "${rawName}" on bill ${billId} — account ${!cogsAcct ? accts.cogsCode : accts.invCode} not found/active for clinic ${clinicId}.`);
-      continue;
-    }
-
     if (dryRun) {
-      result.previewed.push({ billId, billDate, itemName: invItem.item_name, billedAs: rawName, category: invItem.item_category, quantity: qty, unitCost, cogsAmount, cogsAccount: accts.cogsCode, invAccount: accts.invCode });
+      result.previewed.push({ billId, billDate, itemName: invItem.item_name, billedAs: rawName, category: invItem.item_category, quantity: qty, unitCost, cogsAmount, cogsAccount: cogsCodeLabel, invAccount: invCodeLabel });
       postedCount += 1;
       postedTotal += cogsAmount;
       continue;
