@@ -115,8 +115,12 @@ export default function LISQueue() {
           // over the waiting-room speaker.
           if (audioEnabled && !isFirstLoadRef.current) {
             const destination = p.room_number || p.clinic_name || 'the next available room';
+            // Spaced-out digits ("0 0 0 0 1") so the TTS voice reads the actual
+            // padded ticket number digit-by-digit ("zero zero zero zero one"),
+            // matching the printed receipt, instead of collapsing "00001" down
+            // to just "one".
             const announcement = p.queue_number != null
-              ? `Queue number ${p.queue_number}, please proceed to ${destination}.`
+              ? `Queue number ${String(p.queue_number).padStart(5, '0').split('').join(' ')}, please proceed to ${destination}.`
               : `Please proceed to ${destination}.`;
             announceCalled(announcement);
           }
