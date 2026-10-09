@@ -123,7 +123,11 @@ router.get('/bill/:id/pdf', authorize('bills.read'), async (req, res) => {
 
     const company = await getCompanyInfo();
     const createdByName = await resolveCreatedByName(bill.created_by);
-    const currency = services.find(s => s.currency && s.currency !== 'SSP')?.currency || 'SSP';
+    // Line items never carry their own `currency` key (confirmed across every
+    // write path in patientBills.js) — the bill's real currency is
+    // `patient_bills.bill_currency`, the same field every other reader in
+    // this codebase uses (receipts.js, billingEnhanced.js, AccountingService.js).
+    const currency = bill.bill_currency || 'SSP';
 
     const pdfData = {
       company,

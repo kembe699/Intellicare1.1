@@ -65,10 +65,19 @@ router.get('/income-statement-by-branch', async (req, res) => {
     const clinicId = clinicIdFor(req);
     const repl = { clinicId, dateFrom, dateTo };
 
+    // Branches on each row's own balance_type (not a flat "revenue=credit,
+    // expense=debit" assumption) so a contra-revenue or contra-expense
+    // account — an ordinary chart-of-accounts shape, same class as this
+    // tenant's existing contra-asset (1590) and contra-equity (3300)
+    // accounts — nets the right direction instead of silently inverting.
     const rows = await sequelize.query(
       `SELECT COALESCE(b.name, 'Unassigned') AS "branchName",
-              SUM(CASE WHEN coa.account_type = 'revenue' THEN al.credit_amount - al.debit_amount ELSE 0 END) AS "totalRevenue",
-              SUM(CASE WHEN coa.account_type = 'expense' THEN al.debit_amount - al.credit_amount ELSE 0 END) AS "totalExpenses"
+              SUM(CASE WHEN coa.account_type = 'revenue' THEN
+                    CASE WHEN coa.balance_type = 'credit' THEN al.credit_amount - al.debit_amount ELSE al.debit_amount - al.credit_amount END
+                  ELSE 0 END) AS "totalRevenue",
+              SUM(CASE WHEN coa.account_type = 'expense' THEN
+                    CASE WHEN coa.balance_type = 'debit' THEN al.debit_amount - al.credit_amount ELSE al.credit_amount - al.debit_amount END
+                  ELSE 0 END) AS "totalExpenses"
        FROM account_ledger al
        JOIN chart_of_accounts coa ON coa.id = al.account_id
        LEFT JOIN branches b ON b.id = al.branch_id
@@ -111,12 +120,28 @@ router.get('/cash-flow', async (req, res) => {
     const repl = { clinicId, dateFrom };
     const branchSqlOpening = branchScope(req, repl, 'al', allBranches);
 
+    // opening_balance and pre-period ledger activity are summed in two
+    // separate subqueries rather than one joined aggregate — a bank account
+    // can have many account_ledger rows, and joining them to
+    // chart_of_accounts before SUM(coa.opening_balance) fans that opening
+    // balance out once per matched ledger row (a 5-row account's $1,000
+    // opening balance was being counted 5 times, reporting $5,000). Also
+    // branches on each account's own balance_type rather than assuming
+    // every is_bank_account row is debit-normal — true for every account in
+    // this tenant today, but an overdraft/line-of-credit account marked
+    // is_bank_account with balance_type='credit' is an ordinary real-world
+    // shape this shouldn't silently get wrong.
     const [openingRow] = await sequelize.query(
-      `SELECT COALESCE(SUM(coa.opening_balance), 0)
-              + COALESCE(SUM(CASE WHEN al.transaction_date < :dateFrom THEN al.debit_amount - al.credit_amount ELSE 0 END), 0) AS "openingBalance"
-       FROM chart_of_accounts coa
-       LEFT JOIN account_ledger al ON al.account_id = coa.id AND al.is_posted = true ${branchSqlOpening}
-       WHERE coa.clinic_id = :clinicId AND coa.is_bank_account = true AND coa.is_active = true`,
+      `SELECT
+         COALESCE((SELECT SUM(opening_balance) FROM chart_of_accounts WHERE clinic_id = :clinicId AND is_bank_account = true AND is_active = true), 0)
+         + COALESCE((
+             SELECT SUM(CASE WHEN coa.balance_type = 'debit' THEN al.debit_amount - al.credit_amount ELSE al.credit_amount - al.debit_amount END)
+             FROM account_ledger al
+             JOIN chart_of_accounts coa ON coa.id = al.account_id
+             WHERE coa.clinic_id = :clinicId AND coa.is_bank_account = true AND coa.is_active = true
+               AND al.is_posted = true AND al.transaction_date < :dateFrom
+               ${branchSqlOpening}
+           ), 0) AS "openingBalance"`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
@@ -403,10 +428,14 @@ router.get('/equity-statement', async (req, res) => {
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
+    // Branches on each row's own balance_type, not a flat account_type
+    // assumption — same reasoning as /income-statement-by-branch above.
     const [netIncomeRow] = await sequelize.query(
-      `SELECT SUM(CASE WHEN coa.account_type = 'revenue' THEN al.credit_amount - al.debit_amount
-                       WHEN coa.account_type = 'expense' THEN -(al.debit_amount - al.credit_amount)
-                       ELSE 0 END) AS "netIncome"
+      `SELECT SUM(CASE WHEN coa.account_type = 'revenue' THEN
+                    CASE WHEN coa.balance_type = 'credit' THEN al.credit_amount - al.debit_amount ELSE al.debit_amount - al.credit_amount END
+                  WHEN coa.account_type = 'expense' THEN
+                    CASE WHEN coa.balance_type = 'debit' THEN -(al.debit_amount - al.credit_amount) ELSE -(al.credit_amount - al.debit_amount) END
+                  ELSE 0 END) AS "netIncome"
        FROM account_ledger al
        JOIN chart_of_accounts coa ON coa.id = al.account_id
        WHERE coa.clinic_id = :clinicId AND al.is_posted = true AND al.transaction_date BETWEEN :dateFrom AND :dateTo
