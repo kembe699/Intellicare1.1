@@ -11,12 +11,12 @@ import {
 } from 'lucide-react';
 
 // Patient Report (and the Patients & Billing group it was alone in) removed
-// per request. Inventory/Financial/Administration keep their entries but
-// lose their section header (hideLabel) — only Ministry of Health and the
-// new Clinical group still show a label.
+// per request. Clinical/Inventory/Financial/Administration keep their
+// entries but lose their section header (hideLabel) — only Ministry of
+// Health still shows a label.
 const REPORT_GROUPS = [
   { label: 'Overview', color: 'text-white' },
-  { label: 'Clinical', color: 'text-white' },
+  { label: 'Clinical', color: 'text-white', hideLabel: true },
   { label: 'Inventory', color: 'text-white', hideLabel: true },
   { label: 'Financial', color: 'text-white', hideLabel: true },
   { label: 'Ministry of Health', color: 'text-white' },
