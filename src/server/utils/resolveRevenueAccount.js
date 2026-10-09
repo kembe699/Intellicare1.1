@@ -65,14 +65,19 @@ async function resolveRevenueAccountForLine(line, clinicId) {
     id   ? ['SELECT category FROM services WHERE id = :id LIMIT 1', { id }, null] : null,
     name ? ['SELECT category FROM services WHERE LOWER(service_name) = LOWER(:name) LIMIT 1', { name }, null] : null,
     name ? ['SELECT 1 AS hit FROM lab_tests WHERE LOWER(test_name) = LOWER(:name) LIMIT 1', { name }, 'laboratory'] : null,
-    id   ? ['SELECT 1 AS hit FROM inventory_items WHERE id = :id LIMIT 1', { id: String(id) }, 'pharmacy'] : null,
-    name ? ['SELECT 1 AS hit FROM inventory_items WHERE LOWER(item_name) = LOWER(:name) LIMIT 1', { name }, 'pharmacy'] : null,
+    // The item's own "Income Sub-Account" (Item Master) always wins over
+    // category inference, same reasoning as the per-item COGS/inventory
+    // account override in pharmacyCogsOnBill.js — linking it directly is
+    // the whole point of exposing that field.
+    id   ? ['SELECT revenue_account_id FROM inventory_items WHERE id = :id LIMIT 1', { id: String(id) }, 'pharmacy'] : null,
+    name ? ['SELECT revenue_account_id FROM inventory_items WHERE LOWER(item_name) = LOWER(:name) LIMIT 1', { name }, 'pharmacy'] : null,
   ].filter(Boolean);
 
   for (const [sql, replacements, forcedCategory] of lookups) {
     try {
       const [[row]] = await sequelize.query(sql, { replacements });
       if (!row) continue;
+      if (row.revenue_account_id) return row.revenue_account_id;
       const category = forcedCategory || row.category;
       if (category) return resolveRevenueAccount(category, clinicId);
     } catch (e) {
