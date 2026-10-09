@@ -58,13 +58,37 @@ function asDateStr(v) {
 
 const ACTIVITY_ROW_CAP = 200;
 
+// ── GET /actions ────────────────────────────────────────────────────────
+// Every distinct action value this clinic has ever logged — independent of
+// whatever date range the Activity Log happens to be showing, so the Action
+// filter dropdown always lists every kind of action the system can log
+// (per its own real history), not just the ones that occurred within
+// whatever period is currently selected.
+router.get('/actions', async (req, res) => {
+  try {
+    const clinicId = parseInt(req.query.clinic_id, 10) || req.user?.clinicId || 1;
+    const rows = await sequelize.query(
+      `SELECT DISTINCT action FROM audit_logs
+       WHERE (clinic_id = :clinicId OR clinic_id IS NULL) AND action IS NOT NULL AND action <> ''
+       ORDER BY action`,
+      { replacements: { clinicId }, type: QueryTypes.SELECT }
+    );
+    res.json({ actions: rows.map(r => r.action) });
+  } catch (err) {
+    console.error('Audit summary actions error:', err);
+    res.status(500).json({ error: 'Failed to load action list' });
+  }
+});
+
 // ── GET / ────────────────────────────────────────────────────────────────
 // Query params:
 //   dateFrom, dateTo  — YYYY-MM-DD, default to the last 30 days
 //   clinic_id         — defaults to the authenticated user's clinic
-//   userId            — optional: narrow the totals tiles + chronological activity
-//                        log down to a single user's actions (drill-down after
-//                        picking someone from the Staff Activity Summary table).
+//   userId, action, status — all optional: narrow the totals tiles +
+//                        chronological activity log (drill-down after
+//                        picking someone from the Staff Activity Summary
+//                        table, or picking an action/status from their own
+//                        filter dropdowns). status is 'success' or 'failure'.
 //                        byUser/byUserAction/byAction stay clinic-wide so the
 //                        picker/summary context doesn't collapse to one row.
 router.get('/', async (req, res) => {
@@ -73,10 +97,12 @@ router.get('/', async (req, res) => {
     const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
     const clinicId = parseInt(req.query.clinic_id, 10) || req.user?.clinicId || 1;
     const userId = req.query.userId ? String(req.query.userId) : null;
+    const action = req.query.action ? String(req.query.action) : null;
+    const status = req.query.status ? String(req.query.status) : null;
 
     const fromTs = `${dateFrom} 00:00:00`;
     const toTs = `${dateTo} 23:59:59`;
-    const repl = { clinicId, fromTs, toTs, rowCap: ACTIVITY_ROW_CAP, userId };
+    const repl = { clinicId, fromTs, toTs, rowCap: ACTIVITY_ROW_CAP, userId, action, status };
 
     // Non-admin users only see their own branch's staff activity; admins see
     // the whole clinic. Same clinic_id-NULL-is-in-scope reasoning as above
@@ -96,7 +122,9 @@ router.get('/', async (req, res) => {
     }
 
     const scopeClause = `(al.clinic_id = :clinicId OR al.clinic_id IS NULL) AND al.created_at BETWEEN :fromTs AND :toTs${branchScopeSQL}`;
-    const userScopeClause = userId ? `${scopeClause} AND al.user_id = :userId` : scopeClause;
+    let userScopeClause = userId ? `${scopeClause} AND al.user_id = :userId` : scopeClause;
+    if (action) userScopeClause += ' AND al.action = :action';
+    if (status) userScopeClause += ' AND al.status = :status';
 
     // 1. Summary tiles — total actions, active staff count, most active user, top action.
     //    Scoped to the selected user when one is picked.
