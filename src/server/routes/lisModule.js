@@ -521,7 +521,7 @@ router.get('/queue', authorize('lis.queue.write'), async (req, res) => {
     const branchFilter = getBranchConditionSQL(req, 'o');
     const [queue] = await db.query(`
       SELECT o.id as order_id, o.doctor_id, o.consultant_id, o.room_number, o.clinic_id, o.clinic_name, o.status, o.created_at, o.updated_at,
-             o.vitals, o.triaged_by, o.triaged_at, o.appointment_id, ap.reason as appointment_reason,
+             o.queue_number, o.vitals, o.triaged_by, o.triaged_at, o.appointment_id, ap.reason as appointment_reason,
              p.id as participant_id, p.participant_number, p.first_name, p.last_name, p.gender,
              COALESCE(u.display_name, ce.first_name || ' ' || ce.last_name) as doctor_name, tu.display_name as triaged_by_name
       FROM lis_test_orders o
