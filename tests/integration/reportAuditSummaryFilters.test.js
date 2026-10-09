@@ -120,4 +120,22 @@ describe('Audit Log filters', () => {
     expect(mine[0].userName).toBe(`${SUFFIX} Alice`);
     expect(mine[0].action).toBe(`${SUFFIX}_LOGIN`);
   });
+
+  test('an action filter narrows the Staff Activity Summary and totals tiles too, not just the Activity Log', async () => {
+    // Real bug this covers: byUser/mostActiveUser/totalsRow used to stay
+    // scoped only by date+branch, never by the action/status filters —
+    // picking an action showed a "Total Actions Logged: 0" tile next to a
+    // Staff Activity Summary row still claiming "5 actions" for the same
+    // filter, because the two were reading from differently-scoped queries.
+    const res = await run('/', { ...range, action: `${SUFFIX}_LOGIN` });
+    const alice = res.body.byUser.find((r) => r.userName === `${SUFFIX} Alice`);
+    const bob = res.body.byUser.find((r) => r.userName === `${SUFFIX} Bob`);
+    // Alice has 2 total actions (LOGIN + BILL_VOID) but only 1 LOGIN.
+    expect(alice.actionCount).toBe(1);
+    expect(bob.actionCount).toBe(1);
+    // totalsRow must agree with what byUser now shows: 1 + 1 = 2, not the
+    // unfiltered total of 3.
+    expect(res.body.totals.totalActions).toBe(2);
+    expect(res.body.totals.activeStaffCount).toBe(2);
+  });
 });
