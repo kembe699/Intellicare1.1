@@ -584,11 +584,25 @@ export default function AccountingReport() {
           Pick a report type and date range above, then click View.
         </div>
       ) : option.mode === 'income-statement' && (option.detailed || option.isComprehensive) && incomeStatement ? (
-        // Capped at a document-like width (roughly A4 proportions) and
-        // centered — full report-width made the right-aligned totals sit
-        // far away from the line items on the left with a huge empty gap
-        // between them.
-        <div className="max-w-4xl mx-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0">
+        <>
+          {/* A small CSV/Print row of its own, right above the statement
+              and aligned the same way — the main toolbar's CSV/Print
+              buttons are a long scroll away once the page has content. */}
+          <div className="max-w-4xl ml-auto flex justify-end gap-2 mb-3 print:hidden">
+            <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={triggerPrint} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </Button>
+          </div>
+          {/* Capped at a document-like width (roughly A4 proportions) and
+              pushed to the right — full report-width made the right-aligned
+              totals sit far away from the line items on the left with a
+              huge empty gap between them. */}
+          <div className="max-w-4xl ml-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0 print:ml-0">
           {/* ── Revenue ── */}
           <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
             <h3 className="text-sm font-bold tracking-wide">Revenue</h3>
@@ -685,7 +699,97 @@ export default function AccountingReport() {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        </>
+      ) : option.mode === 'income-statement' && !option.detailed && !option.isComprehensive && summary ? (
+        <>
+          <div className="max-w-4xl ml-auto flex justify-end gap-2 mb-3 print:hidden">
+            <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={triggerPrint} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </Button>
+          </div>
+          <div className="max-w-4xl ml-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0 print:ml-0">
+            <div className="px-4 py-3">
+              <table className="w-full table-fixed text-sm border-collapse">
+                <colgroup><col /><col className="w-40" /></colgroup>
+                <tbody>
+                  <tr className="border-b border-border/70">
+                    <td className="py-1.5 font-semibold">Total Revenue</td>
+                    <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(summary.totalRevenue)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 font-semibold">Total Expenses</td>
+                    <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(summary.totalExpenses)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className={`px-4 py-3 border-t-2 ${summary.netIncome >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+              <div className="flex justify-between">
+                <span className={`text-base font-bold ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  Net Income {summary.netIncome >= 0 ? '(Profit)' : '(Loss)'}:
+                </span>
+                <span className={`text-base font-bold font-mono ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(summary.netIncome)}</span>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : option.mode === 'income-statement-by-branch' ? (
+        <>
+          <div className="max-w-4xl ml-auto flex justify-end gap-2 mb-3 print:hidden">
+            <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={triggerPrint} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </Button>
+          </div>
+          <div className="max-w-4xl ml-auto bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none print:mx-0 print:ml-0">
+            <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
+              <h3 className="text-sm font-bold tracking-wide">By Department (Branch)</h3>
+            </div>
+            <div className="px-4 py-3">
+              {rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No activity in this period.</p>
+              ) : (
+                <table className="w-full table-fixed text-sm border-collapse">
+                  <colgroup><col /><col className="w-36" /><col className="w-36" /><col className="w-36" /></colgroup>
+                  <thead>
+                    <tr className="border-b-2 border-foreground/70 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <th className="text-left font-semibold pb-1.5">Department</th>
+                      <th className="text-right font-semibold pb-1.5">Revenue</th>
+                      <th className="text-right font-semibold pb-1.5">Expenses</th>
+                      <th className="text-right font-semibold pb-1.5">Net Income</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r: any) => (
+                      <tr key={r.branchName} className="border-b border-border/70">
+                        <td className="py-1.5 text-muted-foreground">{r.branchName}</td>
+                        <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(r.totalRevenue)}</td>
+                        <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(r.totalExpenses)}</td>
+                        <td className={`py-1.5 text-right font-mono font-medium whitespace-nowrap ${r.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(r.netIncome)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-foreground/70 font-semibold">
+                      <td className="pt-1.5">Total</td>
+                      <td className="pt-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(rows.reduce((s: number, r: any) => s + (r.totalRevenue || 0), 0))}</td>
+                      <td className="pt-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(rows.reduce((s: number, r: any) => s + (r.totalExpenses || 0), 0))}</td>
+                      <td className="pt-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(rows.reduce((s: number, r: any) => s + (r.netIncome || 0), 0))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </>
       ) : (
         <AdvancedDataTable
           data={numberedRows}
