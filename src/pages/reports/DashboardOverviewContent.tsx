@@ -182,7 +182,7 @@ export function DashboardOverviewContent() {
           </div>
 
           {/* ── Revenue trend — no card chrome, just a labeled chart ── */}
-          <div>
+          <div className="bg-card border rounded-lg shadow-sm p-4">
             <h3 className="text-sm font-medium text-foreground mb-1">Revenue</h3>
             <p className="text-xs text-muted-foreground mb-3">{fmtDate(dateFrom)} – {fmtDate(dateTo)}</p>
             {revenueTrend.length === 0 ? (
@@ -207,7 +207,7 @@ export function DashboardOverviewContent() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* ── Patient trend ── */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 bg-card border rounded-lg shadow-sm p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">New Patients</h3>
               {patientTrend.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10">No registrations in this period.</p>
@@ -229,8 +229,8 @@ export function DashboardOverviewContent() {
               )}
             </div>
 
-            {/* ── Payment method — plain list, no card box ── */}
-            <div>
+            {/* ── Payment method ── */}
+            <div className="bg-card border rounded-lg shadow-sm p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">Payment Method</h3>
               {paymentMethods.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6">No payments.</p>
@@ -257,7 +257,7 @@ export function DashboardOverviewContent() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* ── Revenue by clinic ── */}
-            <div>
+            <div className="bg-card border rounded-lg shadow-sm p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">By Clinic</h3>
               {revenueByClinic.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6">No clinic data.</p>
@@ -283,7 +283,7 @@ export function DashboardOverviewContent() {
             </div>
 
             {/* ── Recent activity ── */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 bg-card border rounded-lg shadow-sm p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">Recent Activity</h3>
               <AdvancedDataTable<RecentActivityRow>
                 data={recentActivity}

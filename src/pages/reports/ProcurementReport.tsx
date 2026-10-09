@@ -18,17 +18,10 @@ import { fmtCurrency, fmtCount, fmtDate, CsvColumn, getDatePresets, exportCSV, t
 // requisitions/receipts/consultant-bills tabs) is untouched — that page
 // answers "what's the status of this PO/GRN", this one answers "give me
 // a register/ledger-style report over a date range".
-//
-// "Supplier Credit Note Items" is flagged rather than guessed at: the only
-// credit_notes table in this codebase is patient-facing AR (refunds/credits
-// against a patient bill), has no line items, and has no supplier/AP
-// concept at all — there is no supplier-side credit/debit note feature
-// anywhere in the system today. Selecting it shows a message instead of
-// fabricated data.
 
 type Mode =
   | 'pending-bills' | 'bills-due-payment' | 'payments' | 'ap-aging-detailed' | 'ap-aging-summary'
-  | 'consultant-bill-items' | 'consultant-bills' | 'purchases' | 'unavailable';
+  | 'consultant-bill-items' | 'consultant-bills' | 'purchases';
 
 interface ReportOption {
   value: string;
@@ -39,10 +32,7 @@ interface ReportOption {
   sortBy?: 'date' | 'supplier';
   aggGroupBy?: 'branch' | 'supplier' | 'item' | 'location';
   billStatus?: 'unpaid' | 'paid';
-  unavailableReason?: string;
 }
-
-const NO_SUPPLIER_CREDIT_NOTES = 'No supplier-side credit/debit note feature exists in the system today — the only credit_notes table is patient-facing (refunds against a patient bill), with no line items and no supplier concept at all. Tell me how supplier credit notes should actually be recorded and this is a straightforward add.';
 
 const REPORT_OPTIONS: ReportOption[] = [
   { value: 'pending_bills_all', label: 'Pending Supplier Bills (All Branches)', group: 'Supplier Bills', mode: 'pending-bills', allBranches: true, sortBy: 'date' },
@@ -67,11 +57,9 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'purchases_by_supplier', label: 'Purchases By Supplier', group: 'Purchases', mode: 'purchases', allBranches: true, aggGroupBy: 'supplier' },
   { value: 'purchases_by_item', label: 'Purchases By Item', group: 'Purchases', mode: 'purchases', allBranches: true, aggGroupBy: 'item' },
   { value: 'purchases_by_location', label: 'Purchases By Storage Location', group: 'Purchases', mode: 'purchases', allBranches: true, aggGroupBy: 'location' },
-
-  { value: 'supplier_credit_note_items', label: 'Supplier Credit Note Items (By Branch)', group: 'Other', mode: 'unavailable', allBranches: false, unavailableReason: NO_SUPPLIER_CREDIT_NOTES },
 ];
 
-const OPTION_GROUPS = ['Supplier Bills', 'Payments', 'A/P Aging', 'Consultant Bills', 'Purchases', 'Other'];
+const OPTION_GROUPS = ['Supplier Bills', 'Payments', 'A/P Aging', 'Consultant Bills', 'Purchases'];
 
 function thisMonthRange() {
   const now = new Date();
@@ -96,12 +84,6 @@ export default function ProcurementReport() {
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
 
   const fetchData = useCallback(async () => {
-    if (option.mode === 'unavailable') {
-      setRows([]);
-      setHasLoaded(true);
-      setGeneratedAt(new Date());
-      return;
-    }
     setLoading(true);
     try {
       const clinicId = user?.clinic || '1';
@@ -324,11 +306,7 @@ export default function ProcurementReport() {
         </div>
       </div>
 
-      {option.mode === 'unavailable' && hasLoaded ? (
-        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md text-center px-6">
-          {option.unavailableReason}
-        </div>
-      ) : loading ? (
+      {loading ? (
         <LoadingState message="Loading report..." />
       ) : !hasLoaded ? (
         <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">
