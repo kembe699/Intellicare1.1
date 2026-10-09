@@ -16,11 +16,7 @@ import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn, getDatePresets, expo
 // nothing loads until "View" is clicked, letterhead + selector stay pinned
 // while the table scrolls underneath.
 //
-// Two entries are flagged rather than guessed at:
-//  - "Special Clinic Register": no schema concept of a "special clinic"
-//    exists anywhere in this codebase (grepped — zero hits). Selecting it
-//    shows a message instead of fabricated data; tell me what should define
-//    one (a service category? a specific department?) and it's a quick add.
+// Two choices made without a schema-backed distinction to point to:
 //  - "Inpatient Register [MOH 301]": pulls the same columns as the plain
 //    Inpatient Register — there was no MOH 301 paper-form layout to match
 //    against, so flag if the real 301 form needs different/additional
@@ -33,7 +29,7 @@ import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn, getDatePresets, expo
 
 type Mode =
   | 'patient-register' | 'workload' | 'visits-by-role' | 'morbidity' | 'nursing-notes-summary'
-  | 'special-clinic' | 'lab-data-summary' | 'lab-tat-summary' | 'radiology-register'
+  | 'lab-data-summary' | 'lab-tat-summary' | 'radiology-register'
   | 'prescription-register' | 'inpatient-register' | 'inpatient-admissions-attending'
   | 'daily-bed-return' | 'laboratory-register' | 'outpatient-register';
 
@@ -56,7 +52,6 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'workload_all', label: 'Workload (All Branches)', group: 'Patients', mode: 'workload', allBranches: true },
   { value: 'workload_branch', label: 'Workload (By Branch)', group: 'Patients', mode: 'workload', allBranches: false },
   { value: 'visits_by_role_branch', label: 'Patient Visits By Role(s) (By Branch)', group: 'Patients', mode: 'visits-by-role', allBranches: false },
-  { value: 'special_clinic_register', label: 'Special Clinic Register', group: 'Patients', mode: 'special-clinic', allBranches: false },
 
   { value: 'morbidity_diagnosis_branch', label: 'Morbidity By Diagnosis (By Branch)', group: 'Clinical Notes', mode: 'morbidity', allBranches: false, morbidityBy: 'diagnosis' },
   { value: 'morbidity_impression_branch', label: 'Morbidity By Impression (By Branch)', group: 'Clinical Notes', mode: 'morbidity', allBranches: false, morbidityBy: 'impression' },
@@ -132,12 +127,6 @@ export default function ClinicalReport() {
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
 
   const fetchData = useCallback(async () => {
-    if (option.mode === 'special-clinic') {
-      setRows([]);
-      setHasLoaded(true);
-      setGeneratedAt(new Date());
-      return;
-    }
     setLoading(true);
     try {
       const params = new URLSearchParams({ dateFrom, dateTo, allBranches: String(option.allBranches) });
@@ -464,12 +453,7 @@ export default function ClinicalReport() {
         </div>
       </div>
 
-      {option.mode === 'special-clinic' && hasLoaded ? (
-        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md text-center px-6">
-          Not available yet — there's no "special clinic" concept in the system today (no clinic type/department flag).
-          Tell me what should define one (a specific service category? a specific department?) and this is a quick add.
-        </div>
-      ) : loading ? (
+      {loading ? (
         <LoadingState message="Loading report..." />
       ) : !hasLoaded ? (
         <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">

@@ -45,12 +45,7 @@ interface ReportOption {
   detailed?: boolean;
   isComprehensive?: boolean;
   expensesGroupBy?: 'none' | 'category' | 'period';
-  description?: string;
 }
-
-const DEPARTMENT_NOTE = 'This system has no real department/cost-center tagging on ledger postings — grouped by Branch instead, the only populated dimension.';
-const CASH_FLOW_NOTE = 'Direct-method cash movement over the actual cash/bank accounts, grouped by source. Not a GAAP operating/investing/financing statement — no such categorization exists in this chart of accounts.';
-const FISCAL_PERIOD_NOTE = 'No fiscal-period/fiscal-year-start setting exists in this system — grouped by calendar month.';
 
 const REPORT_OPTIONS: ReportOption[] = [
   { value: 'trial_balance_detailed', label: 'Trial Balance (Detailed)', group: 'Trial Balance', mode: 'trial-balance', detailed: true },
@@ -58,15 +53,15 @@ const REPORT_OPTIONS: ReportOption[] = [
 
   { value: 'income_statement_detailed', label: 'Income Statement (Detailed)', group: 'Income Statement', mode: 'income-statement', detailed: true },
   { value: 'income_statement_summary', label: 'Income Statement (Summary)', group: 'Income Statement', mode: 'income-statement', detailed: false },
-  { value: 'income_statement_by_department', label: 'Income Statement (Detailed) By Department', group: 'Income Statement', mode: 'income-statement-by-branch', description: DEPARTMENT_NOTE },
+  { value: 'income_statement_by_department', label: 'Income Statement (Detailed) By Department', group: 'Income Statement', mode: 'income-statement-by-branch' },
   { value: 'comprehensive_income_statement', label: 'Comprehensive Income Statement', group: 'Income Statement', mode: 'income-statement', detailed: true, isComprehensive: true },
 
   { value: 'balance_sheet_detailed', label: 'Balance Sheet (Detailed)', group: 'Balance Sheet', mode: 'balance-sheet', detailed: true },
   { value: 'balance_sheet_summary', label: 'Balance Sheet (Summary)', group: 'Balance Sheet', mode: 'balance-sheet', detailed: false },
   { value: 'comprehensive_balance_sheet', label: 'Comprehensive Balance Sheet (Detailed)', group: 'Balance Sheet', mode: 'balance-sheet', detailed: true },
 
-  { value: 'cash_flow_statement', label: 'Cash Flow Statement', group: 'Cash Flow & Equity', mode: 'cash-flow', description: CASH_FLOW_NOTE },
-  { value: 'comprehensive_cash_flow', label: 'Comprehensive Cash Flow Statement', group: 'Cash Flow & Equity', mode: 'cash-flow', isComprehensive: true, description: CASH_FLOW_NOTE },
+  { value: 'cash_flow_statement', label: 'Cash Flow Statement', group: 'Cash Flow & Equity', mode: 'cash-flow' },
+  { value: 'comprehensive_cash_flow', label: 'Comprehensive Cash Flow Statement', group: 'Cash Flow & Equity', mode: 'cash-flow', isComprehensive: true },
   { value: 'statement_of_changes_in_equity', label: 'Statement of Changes in Equity', group: 'Cash Flow & Equity', mode: 'equity-statement' },
 
   { value: 'general_ledger_detailed', label: 'General Ledger (Detailed)', group: 'General Ledger', mode: 'general-ledger', allBranches: true },
@@ -76,7 +71,7 @@ const REPORT_OPTIONS: ReportOption[] = [
 
   { value: 'all_expenses_detailed', label: 'All Expenses Detailed', group: 'Expenses', mode: 'expenses', expensesGroupBy: 'none', allBranches: true },
   { value: 'all_expenses_summary', label: 'All Expenses Summary', group: 'Expenses', mode: 'expenses', expensesGroupBy: 'category', allBranches: true },
-  { value: 'all_expenses_fiscal_period', label: 'All Expenses Grouped by Fiscal Period', group: 'Expenses', mode: 'expenses', expensesGroupBy: 'period', allBranches: true, description: FISCAL_PERIOD_NOTE },
+  { value: 'all_expenses_fiscal_period', label: 'All Expenses Grouped by Fiscal Period', group: 'Expenses', mode: 'expenses', expensesGroupBy: 'period', allBranches: true },
 ];
 
 const OPTION_GROUPS = ['Trial Balance', 'Income Statement', 'Balance Sheet', 'Cash Flow & Equity', 'General Ledger', 'Expenses'];
@@ -528,12 +523,28 @@ export default function AccountingReport() {
               <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
               <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
             </div>
-            {option.description && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">{option.description}</p>
-            )}
           </div>
         </div>
       </div>
+
+      {summary && hasLoaded && option.mode === 'income-statement' && (
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-card rounded-lg border shadow-sm p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
+            <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(summary.totalRevenue)}</p>
+          </div>
+          <div className="bg-card rounded-lg border shadow-sm p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Expenses</p>
+            <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(summary.totalExpenses)}</p>
+          </div>
+          <div className={`rounded-lg border shadow-sm p-4 ${summary.netIncome >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <p className={`text-[11px] uppercase tracking-wide font-medium ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+              Net Income — {summary.netIncome >= 0 ? 'Profit' : 'Loss'}
+            </p>
+            <p className={`text-2xl font-bold mt-1 ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(summary.netIncome)}</p>
+          </div>
+        </div>
+      )}
 
       {summary && hasLoaded && (option.mode === 'trial-balance' || option.mode === 'balance-sheet') && (
         <div className="mb-4 px-4 py-2.5 rounded-md border border-border bg-card text-sm flex items-center gap-4">

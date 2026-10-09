@@ -13,24 +13,13 @@ import { Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
 import { fmtCurrency, fmtCount, fmtDate, CsvColumn, getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
 
 // One Inventory Reports page, one dropdown — same shape as Revenue/Clinical
-// Reports. Five entries are flagged rather than guessed at: Internal Order
-// Receipt/Issuance Detailed and Interbranch Order Issuance/Receipt Detailed
-// have no backing table anywhere in this codebase (no requisition or
-// branch-transfer workflow exists today — the only inter-location movement
-// is a same-branch `transfer` transaction type, not a two-document
-// request/approval flow). Material Consumption (Committed) has no backing
-// either — `inventory_items.reserved_quantity` and the whole
-// `inventory_reservations` table exist in the schema but are never written
-// to anywhere; only "(Not Committed)" (stock actually deducted) has real
-// data. Selecting any of these five shows a message instead of fake data —
-// tell me how you want each one to actually work and it's a straightforward
-// add once the workflow is decided.
+// Reports.
 
 type Mode =
   | 'stock-analysis-items' | 'stock-analysis-category' | 'fast-moving' | 'slow-moving'
   | 'retired-batches' | 'near-expiry' | 'stock-expiry' | 'stock-valuation-all'
   | 'stock-valuation-location' | 'out-of-stock' | 'below-reorder-level' | 'material-consumption'
-  | 'stock-movement-detail' | 'stock-movement-summary' | 'unavailable';
+  | 'stock-movement-detail' | 'stock-movement-summary';
 
 interface ReportOption {
   value: string;
@@ -41,11 +30,7 @@ interface ReportOption {
   summaryGroupBy?: 'branch' | 'location';
   needsLocation?: boolean;
   needsItem?: boolean;
-  unavailableReason?: string;
 }
-
-const NO_ORDER_WORKFLOW = 'No internal-order or interbranch-transfer workflow exists in the system today — only a same-branch stock transfer. Tell me how this should actually work (who requests, who approves, does it move between branches or just locations) and it\'s a quick add.';
-const NO_COMMITTED_CONCEPT = 'No "committed" (reserved-but-not-yet-deducted) stock concept is actually in use — the reservations table exists in the schema but nothing in the app writes to it. Tell me what should count as "committed" and this is a quick add.';
 
 const REPORT_OPTIONS: ReportOption[] = [
   { value: 'stock_analysis', label: 'Stock Analysis', group: 'Stock Analysis', mode: 'stock-analysis-items', allBranches: false },
@@ -71,15 +56,9 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'stock_valuation_location', label: 'Stock Valuation (By Storage Location)', group: 'Valuation', mode: 'stock-valuation-location', allBranches: false },
 
   { value: 'material_consumption_not_committed', label: 'Material Consumption (Not Committed)', group: 'Consumption', mode: 'material-consumption', allBranches: false },
-  { value: 'material_consumption_committed', label: 'Material Consumption (Committed)', group: 'Consumption', mode: 'unavailable', allBranches: false, unavailableReason: NO_COMMITTED_CONCEPT },
-
-  { value: 'internal_order_receipt', label: 'Internal Order Receipt Detailed', group: 'Internal / Interbranch Orders', mode: 'unavailable', allBranches: false, unavailableReason: NO_ORDER_WORKFLOW },
-  { value: 'internal_order_issuance', label: 'Internal Order Issuance Detailed', group: 'Internal / Interbranch Orders', mode: 'unavailable', allBranches: false, unavailableReason: NO_ORDER_WORKFLOW },
-  { value: 'interbranch_order_issuance', label: 'Interbranch Order Issuance Detailed', group: 'Internal / Interbranch Orders', mode: 'unavailable', allBranches: false, unavailableReason: NO_ORDER_WORKFLOW },
-  { value: 'interbranch_order_receipt', label: 'Interbranch Order Receipt Detailed', group: 'Internal / Interbranch Orders', mode: 'unavailable', allBranches: false, unavailableReason: NO_ORDER_WORKFLOW },
 ];
 
-const OPTION_GROUPS = ['Stock Analysis', 'Movement Analysis', 'Stock Movement', 'Stock Levels', 'Valuation', 'Consumption', 'Internal / Interbranch Orders'];
+const OPTION_GROUPS = ['Stock Analysis', 'Movement Analysis', 'Stock Movement', 'Stock Levels', 'Valuation', 'Consumption'];
 
 function thisMonthRange() {
   const now = new Date();
@@ -119,12 +98,6 @@ export default function InventoryReport() {
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
 
   const fetchData = useCallback(async () => {
-    if (option.mode === 'unavailable') {
-      setRows([]);
-      setHasLoaded(true);
-      setGeneratedAt(new Date());
-      return;
-    }
     setLoading(true);
     try {
       const clinicId = user?.clinic || '1';
@@ -399,11 +372,7 @@ export default function InventoryReport() {
         </div>
       </div>
 
-      {option.mode === 'unavailable' && hasLoaded ? (
-        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md text-center px-6">
-          {option.unavailableReason}
-        </div>
-      ) : loading ? (
+      {loading ? (
         <LoadingState message="Loading report..." />
       ) : !hasLoaded ? (
         <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-md">
