@@ -446,7 +446,10 @@ export default function AccountingReport() {
       loading={loading}
       hideControls
     >
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:bg-transparent">
+      {/* Solid background, not the translucent page tint — a sticky header
+          over a tall result (the formatted Income Statement especially)
+          otherwise lets scrolling content show through underneath it. */}
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:border-0 print:shadow-none">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}
@@ -546,25 +549,6 @@ export default function AccountingReport() {
           </div>
         </div>
       </div>
-
-      {summary && hasLoaded && option.mode === 'income-statement' && (
-        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-card rounded-lg border shadow-sm p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
-            <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(summary.totalRevenue)}</p>
-          </div>
-          <div className="bg-card rounded-lg border shadow-sm p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Expenses</p>
-            <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(summary.totalExpenses)}</p>
-          </div>
-          <div className={`rounded-lg border shadow-sm p-4 ${summary.netIncome >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-            <p className={`text-[11px] uppercase tracking-wide font-medium ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-              Net Income — {summary.netIncome >= 0 ? 'Profit' : 'Loss'}
-            </p>
-            <p className={`text-2xl font-bold mt-1 ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(summary.netIncome)}</p>
-          </div>
-        </div>
-      )}
 
       {summary && hasLoaded && (option.mode === 'trial-balance' || option.mode === 'balance-sheet') && (
         <div className="mb-4 px-4 py-2.5 rounded-md border border-border bg-card text-sm flex items-center gap-4">
