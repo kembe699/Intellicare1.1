@@ -80,7 +80,7 @@ export default function FacilityConfigurations() {
     }
   };
 
-  const previewNumber = `${settings.patient_number_prefix || 'PTN'}-20261010-4821${settings.patient_number_suffix ? `-${settings.patient_number_suffix}` : ''}`;
+  const previewNumber = `${settings.patient_number_prefix || 'PTN'}-000182${settings.patient_number_suffix ? `-${settings.patient_number_suffix}` : ''}`;
 
   return (
     <AppLayout>
@@ -123,7 +123,7 @@ export default function FacilityConfigurations() {
 
                 <div className="pt-2 border-t border-border">
                   <p className="text-sm font-medium text-foreground mb-1">Patient number format</p>
-                  <p className="text-xs text-muted-foreground mb-3">Choose a prefix and, optionally, a suffix for every new patient number this facility generates — the date and a random 4-digit code in the middle stay the same either way.</p>
+                  <p className="text-xs text-muted-foreground mb-3">Choose a prefix and, optionally, a suffix for every new patient number this facility generates — the 6-digit sequential number in the middle stays the same either way.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs">Prefix</Label>
