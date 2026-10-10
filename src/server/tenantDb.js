@@ -134,6 +134,12 @@ async function buildTenantConnection(schemaName) {
   const { ensureQueueNumberSupport } = require('./config/ensureQueueNumberSupport');
   ensureQueueNumberSupport(sequelize).catch(() => {});
 
+  // facility_settings (queue receipt / billing-redirect toggles, patient
+  // number prefix+suffix — Setup > Configurations), ensured per-tenant the
+  // same way.
+  const { ensureFacilitySettingsTable } = require('./config/ensureFacilitySettingsTable');
+  ensureFacilitySettingsTable(sequelize).catch(() => {});
+
   // inpatient_admissions.discharge_outcome (alive/dead/absconded), ensured
   // per-tenant the same way.
   const { ensureInpatientDischargeOutcome } = require('./config/ensureInpatientDischargeOutcome');

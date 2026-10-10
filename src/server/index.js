@@ -113,6 +113,7 @@ app.use((err, req, res, next) => {
 
 const currenciesRouter = require('./routes/currencies');
 const facilitiesRouter = require('./routes/facilities');
+const facilitySettingsRouter = require('./routes/facilitySettings');
 
 // NOTE: /api/facilities/branches/all and /api/facilities/name used to be
 // declared here, ahead of `app.use('/api', authenticateToken)`, so that the
@@ -647,6 +648,7 @@ app.use('/api/hr', require('./routes/hr'));
 app.use('/api/hr/salary-advances', require('./routes/salaryAdvances'));
 app.use('/api/hr/leave', require('./routes/leave'));
 app.use('/api/facilities', facilitiesRouter);
+app.use('/api/facility-settings', facilitySettingsRouter);
 
 // Was mounted before authenticateToken (see the facilities note above for the
 // exact same bug, already diagnosed and fixed there): with no tenant context,

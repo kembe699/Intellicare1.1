@@ -120,6 +120,7 @@ const RptCancelledTransactions = lazyWithRetry(() => import('./pages/reports/Can
 const RptAuditSummary = lazyWithRetry(() => import('./pages/reports/AuditSummaryReport'));
 const WardsManagement = lazyWithRetry(() => import('./pages/inpatient/WardsManagement'));
 const RoomsManagement = lazyWithRetry(() => import('./pages/inpatient/RoomsManagement'));
+const FacilityConfigurations = lazyWithRetry(() => import('./pages/setup/FacilityConfigurations'));
 const Admissions = lazyWithRetry(() => import('./pages/inpatient/Admissions'));
 const AdmittedPatients = lazyWithRetry(() => import('./pages/inpatient/AdmittedPatients'));
 const PatientDetails = lazyWithRetry(() => import('./pages/inpatient/PatientDetails'));
@@ -700,6 +701,11 @@ const AppRoutes = () => {
       <Route path="/setup/rooms" element={
         <ProtectedRoute requiredPrivilege="pages.setup_rooms.view">
           <RoomsManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/setup/configurations" element={
+        <ProtectedRoute requiredPrivilege="pages.setup_configurations.view">
+          <FacilityConfigurations />
         </ProtectedRoute>
       } />
       <Route path="/inpatient/admissions" element={

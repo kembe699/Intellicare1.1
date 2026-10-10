@@ -158,6 +158,7 @@ const CATALOG = [
   ['setup.lab_tests.manage', 'Manage lab test catalogue', 'setup', 'Create/edit/delete/seed/bulk-upload lab tests', ['admin']],
   ['setup.api_configurations.manage', 'Manage API keys', 'setup', 'Generate/revoke integration API keys', ['admin']],
   ['approvals.manage', 'Grant approval permissions', 'setup', 'Grant/revoke a user’s per-action approval permission', ['admin']],
+  ['setup.facility_settings.manage', 'Manage facility configurations', 'setup', 'Change queue receipt/billing-redirect toggles and the patient number prefix/suffix', ['admin']],
 
   // Standalone navigation destinations with no single API resource behind
   // them, so no existing privilege above already represents "can see this
@@ -174,6 +175,7 @@ const CATALOG = [
   ['pages.setup_facility.view', 'View facility setup page', 'pages', 'Access to the facility setup page', ['admin', 'doctor']],
   ['pages.setup_wards.view', 'View wards setup page', 'pages', 'Access to the wards setup page', ['admin', 'doctor']],
   ['pages.setup_rooms.view', 'View rooms setup page', 'pages', 'Access to the rooms setup page', ['admin', 'doctor']],
+  ['pages.setup_configurations.view', 'View configurations setup page', 'pages', 'Access to the facility configurations setup page', ['admin', 'doctor']],
   ['pages.procurement_requisitions.view', 'View purchase requisitions page', 'pages', 'Access to the purchase requisitions page', ['admin', 'finance_manager', 'accountant', 'doctor', 'pharmacy', 'procurement']],
   // Deliberately never granted to any role — Setup > Security manages roles,
   // privileges, and user accounts, so it must stay permanently admin-only,

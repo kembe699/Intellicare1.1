@@ -21,13 +21,6 @@ const GENDER_OPTIONS = [
   { value: 'Other', label: 'Other' },
 ];
 
-// Every tenant prints a queue receipt on queuing. kuelmc's front desk bills
-// separately though, so — for that one tenant only — skip the auto-redirect
-// to the billing page straight after queuing (the bill itself is still
-// created in the background either way). Same tenantCode idiom
-// LISTestOrders.tsx already uses for its DPOC-only features.
-const BILLING_REDIRECT_DISABLED_TENANT = 'kuelmc';
-
 const timeAgo = (iso: string): string => {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -69,7 +62,24 @@ export default function LISRegistration() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const facilityInfo = useFacilityInfo();
-  const billingRedirectEnabled = user?.tenantCode !== BILLING_REDIRECT_DISABLED_TENANT;
+  // Setup > Configurations — was a hardcoded "kuelmc only" tenantCode check;
+  // now a real, admin-editable per-facility setting (see facilitySettings.js).
+  // Defaults to both enabled until the setting loads, matching every
+  // facility's behavior before this setting existed.
+  const [facilitySettings, setFacilitySettings] = useState({ queueReceiptEnabled: true, billingRedirectEnabled: true });
+  useEffect(() => {
+    authFetch('/api/facility-settings', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((s) => {
+        if (!s) return;
+        setFacilitySettings({
+          queueReceiptEnabled: s.queue_receipt_enabled !== false,
+          billingRedirectEnabled: s.billing_redirect_after_queue_enabled !== false,
+        });
+      })
+      .catch(() => {});
+  }, []);
+  const { queueReceiptEnabled, billingRedirectEnabled } = facilitySettings;
   const [participants, setParticipants] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [schemes, setSchemes] = useState<any[]>([]);
@@ -303,7 +313,7 @@ export default function LISRegistration() {
             const queueData = await queueRes.json().catch(() => ({}));
             toast.success(`${regForm.first_name} ${regForm.last_name} added to queue`);
             const doctorName = doctors.find((d: any) => d.id === doctor_id || d.employeeId === consultant_id)?.display_name;
-            setQueueReceiptData({
+            if (queueReceiptEnabled) setQueueReceiptData({
               patientName: `${regForm.first_name} ${regForm.last_name}`,
               participantNumber: queueData.participant_number || editingParticipant.participant_number,
               queueNumber: queueData.queue_number ?? null,
@@ -364,7 +374,7 @@ export default function LISRegistration() {
         if (clinic) {
           billId = await createBillForClinic(clinic, data.id, `${regForm.first_name} ${regForm.last_name}`, scheme_id || undefined);
         }
-        if (data.queue_number != null) {
+        if (queueReceiptEnabled && data.queue_number != null) {
           const doctorName = doctors.find((d: any) => d.id === regFormRest.doctor_id || d.employeeId === regFormRest.consultant_id)?.display_name;
           setQueueReceiptData({
             patientName: `${regForm.first_name} ${regForm.last_name}`,
@@ -425,7 +435,7 @@ export default function LISRegistration() {
         }
         const billId = await createBillForClinic(clinic, duplicatePatient.id, `${duplicatePatient.first_name} ${duplicatePatient.last_name}`, regForm.scheme_id || undefined);
         toast.success(`${duplicatePatient.first_name} ${duplicatePatient.last_name} added to queue`);
-        if (queueData.queue_number != null) {
+        if (queueReceiptEnabled && queueData.queue_number != null) {
           const doctorName = doctors.find((d: any) => d.id === doctor_id || d.employeeId === consultant_id)?.display_name;
           setQueueReceiptData({
             patientName: `${duplicatePatient.first_name} ${duplicatePatient.last_name}`,
