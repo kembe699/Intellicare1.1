@@ -82,6 +82,7 @@ export const QueueReceipt: React.FC<QueueReceiptProps> = ({
       {/* ── Queued to ── */}
       <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1px', marginBottom: '3px' }}>QUEUED TO</div>
       {row('Clinic:', clinicName || '-')}
+      {doctorName && row('Doctor:', doctorName)}
       {roomNumber && row('Room:', roomNumber)}
       {row('Date:', format(new Date(date), 'dd/MM/yyyy HH:mm'))}
 
