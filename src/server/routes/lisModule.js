@@ -184,7 +184,16 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
   const id = uuidv4();
   const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const participant_number = `PTN-${dateStr}-${randomSuffix}`;
+  // Prefix/suffix are facility-configurable (Setup > Configurations) instead
+  // of the hardcoded "PTN-" this used to always produce.
+  const facilityClinicId = req.user?.clinicId || 1;
+  const [[numberingSettings]] = await db.query(
+    `SELECT patient_number_prefix, patient_number_suffix FROM facility_settings WHERE clinic_id = ?`,
+    { replacements: [facilityClinicId] }
+  );
+  const numberPrefix = numberingSettings?.patient_number_prefix || 'PTN';
+  const numberSuffix = numberingSettings?.patient_number_suffix || '';
+  const participant_number = `${numberPrefix}-${dateStr}-${randomSuffix}${numberSuffix ? `-${numberSuffix}` : ''}`;
   const cleanPhone = phone && phone.trim() ? phone.trim() : null;
   const branchId = getCreateBranchId(req);
 

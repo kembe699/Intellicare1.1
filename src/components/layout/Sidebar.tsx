@@ -56,7 +56,8 @@ import {
   Scissors,
   CalendarClock,
   Syringe,
-  HeartPulse
+  HeartPulse,
+  SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -231,6 +232,7 @@ const setupDropdown: NavDropdown = {
     { label: 'Uncoded Diagnoses', href: '/setup/diagnosis-coding', icon: ClipboardList, privilege: 'clinical.diagnoses.write' },
     { label: 'Wards', href: '/setup/wards', icon: Building2, privilege: 'pages.setup_wards.view' },
     { label: 'Rooms', href: '/setup/rooms', icon: DoorOpen, privilege: 'pages.setup_rooms.view' },
+    { label: 'Configurations', href: '/setup/configurations', icon: SlidersHorizontal, privilege: 'pages.setup_configurations.view' },
     { label: 'API Configurations', href: '/setup/api-configurations', icon: Key, privilege: 'setup.api_configurations.manage' },
     { label: 'Security', href: '/setup/security', icon: Shield, privilege: 'pages.security.access' },
     { label: 'Approvals', href: '/setup/approvals', icon: ShieldCheck, privilege: 'approvals.manage' },

@@ -137,6 +137,17 @@ export const HOW_TO_GUIDE: GuideEntry[] = [
     ],
   },
   {
+    title: 'How to Configure Queue Receipts, Billing Redirect, and Patient Numbering',
+    path: '/setup/configurations',
+    steps: [
+      'Open Setup → Configurations.',
+      'Toggle "Print queue receipt" to turn the printed queue slip on or off for this facility.',
+      'Toggle "Go straight to billing after queuing" to control whether queuing a patient jumps to their bill — the bill is still created either way.',
+      'Set a Prefix and, optionally, a Suffix for this facility\'s patient numbers; the preview below shows an example.',
+      'Click "Save Changes".',
+    ],
+  },
+  {
     title: 'How to Admit a Patient',
     path: '/inpatient/admissions',
     steps: [
