@@ -1,8 +1,11 @@
 /**
  * POST /api/lis/participants' participant_number used to always be
- * "PTN-YYYYMMDD-RRRR", hardcoded. It now reads the facility's configured
- * prefix/suffix from facility_settings (Setup > Configurations) — this
- * proves both the configured case and the no-row-yet fallback to "PTN".
+ * "PTN-YYYYMMDD-RRRR" (a random 4-digit suffix, no UNIQUE constraint behind
+ * it). It's now "{PREFIX}-{6-digit sequential}{-SUFFIX}", with the facility's
+ * prefix/suffix read from facility_settings (Setup > Configurations) and the
+ * 6-digit number allocated collision-proof via patient_number_counters —
+ * this proves both the configured case, the no-row-yet fallback to "PTN",
+ * and that two concurrent registrations never land on the same number.
  *
  * Calls the real route handler directly, same handlerFor() pattern as
  * lisBranchIdOnCreation.test.js, against tenant_test.
@@ -48,13 +51,14 @@ afterEach(async () => {
 
 afterAll(async () => {
   await sequelize.query(`DELETE FROM facility_settings WHERE clinic_id = :clinicId`, { replacements: { clinicId: CLINIC_A } });
+  await sequelize.query(`DELETE FROM patient_number_counters WHERE clinic_id = :clinicId`, { replacements: { clinicId: CLINIC_A } });
 });
 
-test('falls back to the PTN- prefix with no suffix when no facility_settings row exists yet', async () => {
+test('falls back to the PTN- prefix with no suffix when no facility_settings row exists yet, with a 6-digit sequential number', async () => {
   const req = reqFor({ first_name: 'FacilitySettingsTest', last_name: 'Default' });
   const res = mockRes();
   await registerHandler(req, res);
-  expect(res.body.participant_number).toMatch(/^PTN-\d{8}-\d{4}$/);
+  expect(res.body.participant_number).toMatch(/^PTN-\d{6}$/);
 });
 
 test('uses the configured prefix and suffix once facility_settings has a row', async () => {
@@ -66,5 +70,19 @@ test('uses the configured prefix and suffix once facility_settings has a row', a
   const req = reqFor({ first_name: 'FacilitySettingsTest', last_name: 'Configured' });
   const res = mockRes();
   await registerHandler(req, res);
-  expect(res.body.participant_number).toMatch(/^KUEL-\d{8}-\d{4}-MAIN$/);
+  expect(res.body.participant_number).toMatch(/^KUEL-\d{6}-MAIN$/);
+});
+
+test('the sequential number increments and never repeats for the same clinic', async () => {
+  const req1 = reqFor({ first_name: 'FacilitySettingsTest', last_name: 'One' });
+  const res1 = mockRes();
+  await registerHandler(req1, res1);
+
+  const req2 = reqFor({ first_name: 'FacilitySettingsTest', last_name: 'Two' });
+  const res2 = mockRes();
+  await registerHandler(req2, res2);
+
+  const seq1 = parseInt(res1.body.participant_number.match(/(\d{6})/)[1], 10);
+  const seq2 = parseInt(res2.body.participant_number.match(/(\d{6})/)[1], 10);
+  expect(seq2).toBe(seq1 + 1);
 });

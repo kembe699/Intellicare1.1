@@ -140,6 +140,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureFacilitySettingsTable } = require('./config/ensureFacilitySettingsTable');
   ensureFacilitySettingsTable(sequelize).catch(() => {});
 
+  // patient_number_counters (6-digit sequential patient numbers), ensured
+  // per-tenant the same way.
+  const { ensurePatientNumberCounterTable } = require('./config/ensurePatientNumberCounterTable');
+  ensurePatientNumberCounterTable(sequelize).catch(() => {});
+
   // inpatient_admissions.discharge_outcome (alive/dead/absconded), ensured
   // per-tenant the same way.
   const { ensureInpatientDischargeOutcome } = require('./config/ensureInpatientDischargeOutcome');

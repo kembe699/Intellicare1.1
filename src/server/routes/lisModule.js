@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
 const { getNextQueueNumber } = require('../config/ensureQueueNumberSupport');
+const { getNextPatientNumber } = require('../config/ensurePatientNumberCounterTable');
 
 // Named-parameter counterpart to branchFilter's getBranchConditionSQL, for the handlers
 // below that already build their query with Sequelize's :param replacements object
@@ -182,8 +183,6 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
   const { sequelize: db } = req.models;
   const { first_name, last_name, gender, date_of_birth, phone, residence, study_ref, demographics, doctor_id, consultant_id, room_number, clinic_id, clinic_name } = req.body;
   const id = uuidv4();
-  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   // Prefix/suffix are facility-configurable (Setup > Configurations) instead
   // of the hardcoded "PTN-" this used to always produce.
   const facilityClinicId = req.user?.clinicId || 1;
@@ -193,13 +192,18 @@ router.post('/participants', authorize('lis.participants.create'), async (req, r
   );
   const numberPrefix = numberingSettings?.patient_number_prefix || 'PTN';
   const numberSuffix = numberingSettings?.patient_number_suffix || '';
-  const participant_number = `${numberPrefix}-${dateStr}-${randomSuffix}${numberSuffix ? `-${numberSuffix}` : ''}`;
   const cleanPhone = phone && phone.trim() ? phone.trim() : null;
   const branchId = getCreateBranchId(req);
 
   const attemptRegister = async () => {
   const t = await db.transaction();
   try {
+    // Allocated inside this transaction (same technique as queue_number):
+    // Postgres' row lock on the counter makes two concurrent registrations
+    // impossible to land on the same 6-digit number — a plain random suffix
+    // (the old scheme) had no such guarantee and no UNIQUE constraint behind it.
+    const patientNumberSeq = await getNextPatientNumber(db, { clinicId: facilityClinicId, transaction: t });
+    const participant_number = `${numberPrefix}-${patientNumberSeq}${numberSuffix ? `-${numberSuffix}` : ''}`;
     // Locking the phone value for the rest of this transaction closes the same check-
     // then-insert race found in billing/inpatient: without it, two concurrent
     // registrations for the same phone both read "no existing match" before either
