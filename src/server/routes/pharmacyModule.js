@@ -644,6 +644,7 @@ router.get('/prescriptions/:id', authorize('pharmacy.prescribe'), async (req, re
     const [rx] = await sequelize.query(`
       SELECT pp.*,
         COALESCE((p.first_name || ' ' || p.last_name), (lp.first_name || ' ' || lp.last_name)) AS patient_name,
+        lp.participant_number AS patient_number,
         u.display_name AS doctor_name
       FROM pharmacy_prescriptions pp
       LEFT JOIN patients p ON pp.patient_id = p.id

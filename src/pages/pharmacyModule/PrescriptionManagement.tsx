@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
@@ -13,10 +13,13 @@ import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency } from '@/lib/presc
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
 import {
-  ClipboardList, Plus, Search, X, Pill, Loader2, Ban, RefreshCw, FileSpreadsheet,
+  ClipboardList, Plus, Search, X, Pill, Loader2, Ban, RefreshCw, FileSpreadsheet, Printer,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
+import { PrescriptionReceipt } from '@/components/receipts/PrescriptionReceipt';
+import { printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 
 const API = '/api/pharmacy-module';
 
@@ -48,6 +51,41 @@ export default function PrescriptionManagement() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const clinicId = user?.clinic || 1;
+  const facilityInfo = useFacilityInfo();
+
+  // Printed on the same 80mm thermal template as the queue receipt — an
+  // off-screen render + printReceiptWhenPainted, same pattern PatientsBill.tsx
+  // uses for payment receipts.
+  const [rxReceiptData, setRxReceiptData] = useState<any | null>(null);
+  const rxReceiptRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!rxReceiptData) return;
+    const cancel = printReceiptWhenPainted(
+      () => rxReceiptRef.current,
+      (printed) => {
+        setRxReceiptData(null);
+        if (!printed) toast.error('Prescription receipt could not be prepared for printing');
+      }
+    );
+    return cancel;
+  }, [rxReceiptData]);
+
+  const handlePrintPrescription = (rx: any) => {
+    setRxReceiptData({
+      prescriptionNumber: rx.prescription_number,
+      patientName: rx.patient_name || 'Unknown patient',
+      patientNumber: rx.patient_number,
+      doctorName: rx.doctor_name,
+      date: rx.prescription_date || new Date().toISOString(),
+      notes: rx.prescription_notes,
+      lines: (rx.lines || []).map((l: any) => ({
+        drugName: l.drug_name,
+        doseStrength: l.dose_strength,
+        frequency: l.frequency,
+        quantity: l.quantity_prescribed,
+      })),
+    });
+  };
 
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -892,14 +930,29 @@ export default function PrescriptionManagement() {
                   Cancel Prescription
                 </Button>
               ) : <span />}
-              {(selectedRx.status === 'pending' || selectedRx.status === 'partial_dispensed') ? (
-                <Button onClick={() => navigate('/pharmacy-dispensing', { state: { prescriptionId: selectedRx.id } })}>
-                  <Pill className="w-4 h-4 mr-2" /> Dispense
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => handlePrintPrescription(selectedRx)}>
+                  <Printer className="w-4 h-4 mr-2" /> Print
                 </Button>
-              ) : (
-                <Button variant="outline" onClick={() => setSelectedRx(null)}>Close</Button>
-              )}
+                {(selectedRx.status === 'pending' || selectedRx.status === 'partial_dispensed') ? (
+                  <Button onClick={() => navigate('/pharmacy-dispensing', { state: { prescriptionId: selectedRx.id } })}>
+                    <Pill className="w-4 h-4 mr-2" /> Dispense
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setSelectedRx(null)}>Close</Button>
+                )}
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Off-screen only so printReceiptWhenPainted has a DOM node with real
+          content to read from — same pattern as the queue receipt. */}
+      {rxReceiptData && (
+        <div className="fixed -left-[9999px] top-0">
+          <div ref={rxReceiptRef}>
+            <PrescriptionReceipt {...rxReceiptData} facilityName={facilityInfo.facilityName} branchName={facilityInfo.branchName} />
           </div>
         </div>
       )}
