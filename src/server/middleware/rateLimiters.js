@@ -94,4 +94,33 @@ const clinicalInsightsLimiter = rateLimit({
   message: { error: 'Too many Clinical Insights requests this hour. Please try again later.' },
 });
 
-module.exports = { authLimiter, authSourceLimiter, passwordResetLimiter, payrollSignLimiter, clinicalInsightsLimiter };
+// Public, unauthenticated "Book a Demo" page (routes/publicBookDemo.js). A
+// real visitor hits availability a few times while browsing the calendar
+// then submits once; this bounds scripted slot-grabbing/spam per source IP.
+// Availability reads get the looser limit (just browsing); the actual
+// booking POST uses the tighter one.
+const bookDemoAvailabilityLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again in a few minutes.' },
+});
+
+const bookDemoSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many booking attempts from this device. Please try again later.' },
+});
+
+module.exports = {
+  authLimiter,
+  authSourceLimiter,
+  passwordResetLimiter,
+  payrollSignLimiter,
+  clinicalInsightsLimiter,
+  bookDemoAvailabilityLimiter,
+  bookDemoSubmitLimiter,
+};

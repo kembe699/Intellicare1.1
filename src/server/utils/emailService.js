@@ -293,9 +293,84 @@ Need help? Contact ${supportEmail()}`;
   return deliver({ to, subject: isReset ? 'Your IntelliCare password was reset' : 'Welcome to IntelliCare', html, text });
 }
 
+// ── Book a Demo ─────────────────────────────────────────────────────────────
+/**
+ * Sent to the visitor right after they book a demo slot on the public
+ * /book-demo page (routes/publicBookDemo.js). Carries exactly what they'd
+ * need to show up — date/time/timezone and demo type — and our contacts.
+ */
+async function sendDemoBookingConfirmationEmail({ to, fullName, bookingDate, startTime, endTime, demoType, facilityName }) {
+  const safeName = fullName || 'there';
+  const html = shell('Your Demo is Booked', `
+    <p style="margin:0 0 20px;font-size:16px;color:#333;">Hello <strong>${safeName}</strong>,</p>
+    <p style="margin:0 0 20px;font-size:16px;color:#333;">Thanks for booking a demo of IntelliCare for <strong>${facilityName}</strong>. Here are the details:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;">
+      <tr><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;width:40%;">Date</td>
+          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;font-weight:700;">${bookingDate}</td></tr>
+      <tr><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;">Time</td>
+          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;font-weight:700;">${startTime} – ${endTime} (Africa/Juba, UTC+2)</td></tr>
+      <tr><td style="padding:12px 16px;font-size:14px;color:#666;">Demo type</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111;font-weight:700;">${demoType}</td></tr>
+    </table>
+    <p style="margin:0 0 20px;font-size:14px;color:#666;">If you need to reschedule or have any questions, reach us at <a href="mailto:${supportEmail()}" style="color:#3D8A97;">${supportEmail()}</a>.</p>`);
+
+  const text = `Hello ${safeName},
+
+Thanks for booking a demo of IntelliCare for ${facilityName}. Here are the details:
+
+  Date:        ${bookingDate}
+  Time:        ${startTime} - ${endTime} (Africa/Juba, UTC+2)
+  Demo type:   ${demoType}
+
+If you need to reschedule or have any questions, reach us at ${supportEmail()}.
+
+---
+IntelliCare Hospital Management System`;
+
+  return deliver({ to, subject: `Your IntelliCare demo is booked — ${bookingDate} ${startTime}`, html, text });
+}
+
+/**
+ * Sent to our own team (always info@nilehc.tech, not configurable — see
+ * routes/publicBookDemo.js) for every new demo booking, so sales/support
+ * knows to prepare regardless of whether anyone is watching the admin panel.
+ */
+async function sendDemoBookingNotificationEmail({ booking }) {
+  const rows = [
+    ['Date', booking.booking_date],
+    ['Time', `${booking.start_time} – ${booking.end_time} (Africa/Juba, UTC+2)`],
+    ['Demo type', booking.demo_type],
+    ['Full name', booking.full_name],
+    ['Email', booking.email],
+    ['Phone/WhatsApp', booking.phone],
+    ['Job title', booking.job_title || '—'],
+    ['Facility name', booking.facility_name],
+    ['Facility type', booking.facility_type],
+    ['Location/city', booking.location_city],
+    ['Staff/beds', booking.staff_or_beds_range || '—'],
+    ['Notes', booking.notes || '—'],
+  ];
+  const rowsHtml = rows.map(([label, value]) => `
+    <tr><td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;width:35%;">${label}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;">${value}</td></tr>`).join('');
+  const rowsText = rows.map(([label, value]) => `  ${label}: ${value}`).join('\n');
+
+  const html = shell('New Demo Booking', `
+    <p style="margin:0 0 20px;font-size:16px;color:#333;">A new demo was booked on the public Book a Demo page.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;">${rowsHtml}</table>`);
+
+  const text = `A new demo was booked on the public Book a Demo page.
+
+${rowsText}`;
+
+  return deliver({ to: 'info@nilehc.tech', subject: `New demo booking — ${booking.facility_name} (${booking.booking_date} ${booking.start_time})`, html, text });
+}
+
 module.exports = {
   sendPasswordResetEmail,
   sendTenantWelcomeEmail,
   sendNewUserWelcomeEmail,
+  sendDemoBookingConfirmationEmail,
+  sendDemoBookingNotificationEmail,
   deliver,
 };
