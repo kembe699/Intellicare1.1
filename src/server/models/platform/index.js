@@ -10,6 +10,9 @@ const Quotation = require('./Quotation')(platformSequelize);
 const CompanyProfile = require('./CompanyProfile')(platformSequelize);
 const QuotationInvoice = require('./QuotationInvoice')(platformSequelize);
 const QuotationInvoicePayment = require('./QuotationInvoicePayment')(platformSequelize);
+const DemoBookingSettings = require('./DemoBookingSettings')(platformSequelize);
+const DemoBookingBlockedDate = require('./DemoBookingBlockedDate')(platformSequelize);
+const DemoBooking = require('./DemoBooking')(platformSequelize);
 
 Client.hasMany(Invoice, { foreignKey: 'client_id', as: 'invoices' });
 Invoice.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
@@ -25,6 +28,23 @@ Customer.hasMany(QuotationInvoice, { foreignKey: 'customer_id', as: 'quotationIn
 QuotationInvoice.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
 QuotationInvoice.hasMany(QuotationInvoicePayment, { foreignKey: 'invoice_id', as: 'payments' });
 QuotationInvoicePayment.belongsTo(QuotationInvoice, { foreignKey: 'invoice_id', as: 'invoice' });
+
+// Split out so tests can get the demo_bookings table + its partial unique
+// index ready without going through initializePlatformDatabase()'s
+// admin-seeding step (which throws if SEED_ADMIN_PASSWORD isn't set and no
+// admin row exists yet) — see tests/integration/demoBookingDoubleBooking.test.js.
+async function ensureDemoBookingSchema() {
+  await platformSequelize.sync({ force: false, alter: false });
+  try {
+    await platformSequelize.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS demo_bookings_slot_unique
+       ON demo_bookings (booking_date, start_time)
+       WHERE status != 'cancelled'`
+    );
+  } catch (err) {
+    console.log('Note: could not create demo_bookings_slot_unique index:', err.message);
+  }
+}
 
 async function initializePlatformDatabase() {
   await platformSequelize.authenticate();
@@ -58,6 +78,11 @@ async function initializePlatformDatabase() {
     }
   }
 
+  // Database-level backstop against double-booking a demo slot — see
+  // ensureDemoBookingSchema() above for why this is a partial unique index
+  // rather than a plain column-level unique constraint.
+  await ensureDemoBookingSchema();
+
   // Seed the platform owner's own login if none exists yet — same bootstrap
   // pattern and credentials already used to seed this app's first tenant
   // admin (see runBackgroundMigrations in index.js), so there's one
@@ -86,5 +111,9 @@ module.exports = {
   CompanyProfile,
   QuotationInvoice,
   QuotationInvoicePayment,
+  DemoBookingSettings,
+  DemoBookingBlockedDate,
+  DemoBooking,
   initializePlatformDatabase,
+  ensureDemoBookingSchema,
 };

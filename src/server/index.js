@@ -144,6 +144,13 @@ const facilitySettingsRouter = require('./routes/facilitySettings');
 // touches the ambient proxy or depends on any tenant context existing.
 app.use('/api/public/payroll-sign', require('./routes/publicPayroll'));
 
+// Public "Book a Demo" flow (src/pages/public/BookDemo.tsx, /book-demo) —
+// mounted here for the same reason: no tenant and no platform-admin token
+// exists for a visitor who hasn't signed up yet, so this must run ahead of
+// authenticateToken rather than relying on its publicPaths allowlist (which
+// is tenant-specific and keyed off req.path, not this prefix).
+app.use('/api/public/book-demo', require('./routes/publicBookDemo'));
+
 // Branch verification endpoint must be public for login page
 const bcrypt = require('bcrypt');
 const { User } = require('./models');
@@ -585,6 +592,7 @@ const platformCustomersRouter = require('./routes/platform/customers');
 const platformQuotationsRouter = require('./routes/platform/quotations');
 const platformCompanyProfileRouter = require('./routes/platform/company-profile');
 const platformQuotationInvoicesRouter = require('./routes/platform/quotation-invoices');
+const platformDemoBookingsRouter = require('./routes/platform/demo-bookings');
 
 // API Routes
 app.use('/api/platform/auth', platformAuthRouter);
@@ -597,6 +605,7 @@ app.use('/api/platform/customers', platformCustomersRouter);
 app.use('/api/platform/quotations', platformQuotationsRouter);
 app.use('/api/platform/company-profile', platformCompanyProfileRouter);
 app.use('/api/platform/quotation-invoices', platformQuotationInvoicesRouter);
+app.use('/api/platform/demo-bookings', platformDemoBookingsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/notifications', notificationsRouter);

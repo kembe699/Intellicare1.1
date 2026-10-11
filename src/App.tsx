@@ -25,10 +25,12 @@ const PlatformQuotationDetail = lazyWithRetry(() => import('./pages/platform/Pla
 const PlatformCompanyProfile = lazyWithRetry(() => import('./pages/platform/PlatformCompanyProfile'));
 const PlatformInvoices = lazyWithRetry(() => import('./pages/platform/PlatformInvoices'));
 const PlatformInvoiceDetail = lazyWithRetry(() => import('./pages/platform/PlatformInvoiceDetail'));
+const PlatformDemoBookings = lazyWithRetry(() => import('./pages/platform/PlatformDemoBookings'));
 
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
 const PayrollSign = lazyWithRetry(() => import('./pages/public/PayrollSign'));
+const BookDemo = lazyWithRetry(() => import('./pages/public/BookDemo'));
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const PatientVisitsHistory = lazyWithRetry(() => import('./pages/PatientVisitsHistory'));
 const PatientsBill = lazyWithRetry(() => import('./pages/PatientsBill'));
@@ -277,6 +279,9 @@ const AppRoutes = () => {
       <Route path="/platform-admin/invoices/:id" element={
         <ProtectedPlatformRoute><PlatformInvoiceDetail /></ProtectedPlatformRoute>
       } />
+      <Route path="/platform-admin/demo-bookings" element={
+        <ProtectedPlatformRoute><PlatformDemoBookings /></ProtectedPlatformRoute>
+      } />
       <Route path="/login" element={
         <PublicRoute>
           <Login />
@@ -294,6 +299,11 @@ const AppRoutes = () => {
           bounced to the dashboard. No ProtectedRoute either — the whole
           point is an employee with no account can open this. */}
       <Route path="/payroll-sign/:code/:token" element={<PayrollSign />} />
+      {/* Same bare pattern as payroll-sign above — a prospective client with
+          no account must be able to open this, and PublicRoute would bounce
+          an already-logged-in staff member (e.g. opening it to show someone
+          else) away to their dashboard instead of letting them see it. */}
+      <Route path="/book-demo" element={<BookDemo />} />
       <Route path="/dashboard" element={
         <ProtectedRoute requiredPrivilege="pages.dashboard.view">
           <Dashboard />
