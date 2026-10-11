@@ -59,7 +59,11 @@ describe('POST /pharmacy-module/dispensing validates the chosen store\'s own sto
 
   test('rejects the dispense when the location-specific stock is insufficient, even if clinic-wide stock is not', () => {
     expect(stockSection).toMatch(/if \(cleanFromLocationId\)/);
-    expect(stockSection).toMatch(/locAvailable < quantity_dispensed/);
+    // Compared against packQty (the pack-equivalent of quantity_dispensed),
+    // not the raw dose-unit count — see ensureInventoryPackSizeSupport.js:
+    // stock_by_location.quantity_on_hand is pack-tracked (Strip/Bottle/etc.),
+    // quantity_dispensed is always a dose-unit count (tablets/mL).
+    expect(stockSection).toMatch(/locAvailable < packQty/);
     expect(stockSection).toMatch(/Insufficient stock at selected location/);
   });
 });

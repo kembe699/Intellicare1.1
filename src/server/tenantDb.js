@@ -145,6 +145,12 @@ async function buildTenantConnection(schemaName) {
   const { ensurePatientNumberCounterTable } = require('./config/ensurePatientNumberCounterTable');
   ensurePatientNumberCounterTable(sequelize).catch(() => {});
 
+  // inventory_items.units_per_pack/dose_unit_label + fractional pack-quantity
+  // columns (fixes dose-count vs. pack-count conflation at dispense time),
+  // ensured per-tenant the same way.
+  const { ensureInventoryPackSizeSupport } = require('./config/ensureInventoryPackSizeSupport');
+  ensureInventoryPackSizeSupport(sequelize).catch(() => {});
+
   // inpatient_admissions.discharge_outcome (alive/dead/absconded), ensured
   // per-tenant the same way.
   const { ensureInpatientDischargeOutcome } = require('./config/ensureInpatientDischargeOutcome');

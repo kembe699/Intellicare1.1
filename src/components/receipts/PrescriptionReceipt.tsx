@@ -6,6 +6,7 @@ interface PrescriptionLine {
   doseStrength?: string;
   frequency?: string;
   quantity?: number | string;
+  unit?: string;
 }
 
 interface PrescriptionReceiptProps {
@@ -88,7 +89,7 @@ export const PrescriptionReceipt: React.FC<PrescriptionReceiptProps> = ({
             <span style={{ fontSize: '10px', fontWeight: 600, color: '#000' }}>
               {[l.doseStrength, l.frequency].filter(Boolean).join(' · ') || '-'}
             </span>
-            {l.quantity != null && <span style={{ fontSize: '11px', fontWeight: 700 }}>Qty {l.quantity}</span>}
+            {l.quantity != null && <span style={{ fontSize: '11px', fontWeight: 700 }}>Qty {l.quantity}{l.unit ? ` ${l.unit}` : ''}</span>}
           </div>
         </div>
       )) : (

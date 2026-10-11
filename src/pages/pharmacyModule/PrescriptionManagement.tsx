@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
-import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency } from '@/lib/prescriptionFrequency';
+import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from 'sonner';
 import {
@@ -83,6 +83,7 @@ export default function PrescriptionManagement() {
         doseStrength: l.dose_strength,
         frequency: l.frequency,
         quantity: l.quantity_prescribed,
+        unit: l.unit_of_measure,
       })),
     });
   };
@@ -307,16 +308,20 @@ export default function PrescriptionManagement() {
     const qty = parseInt(rxQty, 10) || 1;
     const drugKey = billingMode === 'scheme' ? drug.product_id : drug.id;
     const drugName = billingMode === 'scheme' ? drug.product_name : drug.drug_name;
-    const stockOnHand = drug.stock_on_hand != null ? parseInt(drug.stock_on_hand, 10) : null;
+    const stockOnHand = drug.stock_on_hand != null ? parseFloat(drug.stock_on_hand) : null;
     const alreadyQueued = rxLines.filter(l => l.drug_id === drugKey).reduce((sum, l) => sum + (l.quantity_prescribed || 0), 0);
-    if (stockOnHand != null && !isNaN(stockOnHand) && qty + alreadyQueued > stockOnHand) {
-      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drugName} in stock — reduce the quantity.`);
+    // stock_on_hand is tracked in the item's pack unit (Strip/Bottle/etc.),
+    // qty is always a dose-unit count — compare like units via packEquivalent,
+    // not the raw dose count, or a 10-per-strip drug looks "out of stock" at
+    // 1/10th its real capacity.
+    if (stockOnHand != null && !isNaN(stockOnHand) && packEquivalent(qty + alreadyQueued, drug) > stockOnHand) {
+      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drugName} in stock (≈ ${Math.floor(stockOnHand * (Number(drug.units_per_pack) || 1))} ${doseUnitLabel(drug)}) — reduce the quantity.`);
       return;
     }
 
     if (billingMode === 'scheme') {
       setRxLines(prev => [...prev, {
-        drug_id: drug.product_id, drug_name: drug.product_name, unit_of_measure: drug.unit_of_measure || 'tablet',
+        drug_id: drug.product_id, drug_name: drug.product_name, unit_of_measure: doseUnitLabel(drug),
         quantity_prescribed: qty, dose_strength: rxDose, frequency: rxFrequency,
         dose_amount: rxDoseAmount ? parseFloat(rxDoseAmount) : null, is_external: false,
         duration_days: parseInt(rxDuration, 10) || 0, notes: rxNotes.trim(),
@@ -324,7 +329,7 @@ export default function PrescriptionManagement() {
       }]);
     } else {
       setRxLines(prev => [...prev, {
-        drug_id: drug.id, drug_name: drug.drug_name, unit_of_measure: drug.unit_of_measure || 'tablet',
+        drug_id: drug.id, drug_name: drug.drug_name, unit_of_measure: doseUnitLabel(drug),
         quantity_prescribed: qty, dose_strength: rxDose, frequency: rxFrequency,
         dose_amount: rxDoseAmount ? parseFloat(rxDoseAmount) : null, is_external: false,
         duration_days: parseInt(rxDuration, 10) || 0, notes: rxNotes.trim(),

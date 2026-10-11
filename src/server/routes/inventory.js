@@ -205,7 +205,7 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
     const id = uuidv4();
     const {
       item_code, barcode, item_name, item_description, item_category, item_type,
-      unit_of_measure, reorder_unit, conversion_factor,
+      unit_of_measure, reorder_unit, conversion_factor, units_per_pack, dose_unit_label,
       minimum_stock_level, maximum_stock_level, reorder_quantity, lead_time_days,
       inventory_valuation_method, current_unit_cost, selling_price, cost_currency,
       inventory_account_id, cogs_account_id, usage_account_id, revenue_account_id,
@@ -218,14 +218,14 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
 
     await sequelize.query(`
       INSERT INTO inventory_items (id, clinic_id, branch_id, item_code, barcode, item_name, item_description, item_category, item_type,
-        unit_of_measure, reorder_unit, conversion_factor,
+        unit_of_measure, reorder_unit, conversion_factor, units_per_pack, dose_unit_label,
         minimum_stock_level, maximum_stock_level, reorder_quantity, lead_time_days,
         inventory_valuation_method, current_unit_cost, average_unit_cost, selling_price, cost_currency,
         inventory_account_id, cogs_account_id, usage_account_id, revenue_account_id,
         requires_batch_tracking, requires_expiry_tracking, requires_serial_number,
         is_controlled_substance, notes, preferred_supplier_id, created_by)
       VALUES (:id, :clinic_id, :branch_id, :item_code, :barcode, :item_name, :item_description, :item_category, :item_type,
-        :unit_of_measure, :reorder_unit, :conversion_factor,
+        :unit_of_measure, :reorder_unit, :conversion_factor, :units_per_pack, :dose_unit_label,
         :minimum_stock_level, :maximum_stock_level, :reorder_quantity, :lead_time_days,
         :inventory_valuation_method, :current_unit_cost, :current_unit_cost, :selling_price, :cost_currency,
         :inventory_account_id, :cogs_account_id, :usage_account_id, :revenue_account_id,
@@ -239,6 +239,8 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
         item_category: item_category || 'general', item_type: item_type || 'consumable',
         unit_of_measure: unit_of_measure || 'Each', reorder_unit: reorder_unit || unit_of_measure || 'Each',
         conversion_factor: conversion_factor || 1,
+        units_per_pack: parseInt(units_per_pack, 10) || 1,
+        dose_unit_label: (dose_unit_label || '').trim() || null,
         minimum_stock_level: minimum_stock_level || 0, maximum_stock_level: maximum_stock_level || 0,
         reorder_quantity: reorder_quantity || 0, lead_time_days: lead_time_days || 7,
         inventory_valuation_method: inventory_valuation_method || 'weighted_average',
@@ -570,7 +572,7 @@ router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
     const replacements = { id: req.params.id, clinicId };
     const allowed = [
       'barcode', 'item_name', 'item_description', 'item_category', 'item_type', 'unit_of_measure',
-      'reorder_unit', 'conversion_factor', 'minimum_stock_level', 'maximum_stock_level',
+      'reorder_unit', 'conversion_factor', 'units_per_pack', 'dose_unit_label', 'minimum_stock_level', 'maximum_stock_level',
       'reorder_quantity', 'lead_time_days', 'inventory_valuation_method', 'current_unit_cost',
       'selling_price', 'cost_currency', 'inventory_account_id', 'cogs_account_id', 'usage_account_id', 'revenue_account_id',
       'requires_batch_tracking', 'requires_expiry_tracking', 'requires_serial_number',
@@ -579,7 +581,7 @@ router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
 
     const intFields = new Set([
       'minimum_stock_level', 'maximum_stock_level', 'reorder_quantity',
-      'lead_time_days', 'conversion_factor', 'preferred_supplier_id'
+      'lead_time_days', 'conversion_factor', 'units_per_pack', 'preferred_supplier_id'
     ]);
     const numericFields = new Set(['current_unit_cost', 'selling_price']);
 
@@ -587,10 +589,12 @@ router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
       if (req.body[key] !== undefined) {
         let val = req.body[key];
         if (val === '' || val === null) {
-          val = null;
+          // units_per_pack is NOT NULL DEFAULT 1 — clearing the field means
+          // "no pack conversion", i.e. 1, not an invalid null.
+          val = key === 'units_per_pack' ? 1 : null;
         } else if (intFields.has(key)) {
           val = parseInt(val, 10);
-          if (isNaN(val)) val = null;
+          if (isNaN(val) || (key === 'units_per_pack' && val < 1)) val = key === 'units_per_pack' ? 1 : null;
         } else if (numericFields.has(key)) {
           val = parseFloat(val);
           if (isNaN(val)) val = null;
