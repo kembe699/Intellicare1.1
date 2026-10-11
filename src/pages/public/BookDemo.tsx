@@ -159,7 +159,7 @@ const MobileLogo: React.FC = () => (
 const PageShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-white lg:bg-slate-50">
     <div className="lg:min-h-screen lg:flex lg:items-center lg:justify-center lg:p-8">
-      <div className="w-full lg:max-w-5xl lg:flex lg:bg-white lg:rounded-[28px] lg:shadow-[0_24px_70px_-20px_rgba(21,55,101,0.18)] lg:border lg:border-slate-100 lg:overflow-hidden">
+      <div className="w-full lg:max-w-7xl lg:flex lg:bg-white lg:rounded-[28px] lg:shadow-[0_24px_70px_-20px_rgba(21,55,101,0.18)] lg:border lg:border-slate-100 lg:overflow-hidden">
         <BrandPanel />
         <div className="flex-1 flex flex-col min-h-screen lg:min-h-[640px] lg:px-12 lg:py-12">
           {children}
@@ -170,6 +170,20 @@ const PageShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const BookDemo: React.FC = () => {
+  // The internal app sets html{font-size:13px} globally (index.css) to fit
+  // its data-dense desktop screens, so every rem-based Tailwind utility
+  // resolves ~19% smaller than it looks in the class name — not just here;
+  // it silently shrank this page's own h-11/h-12 tap targets below the
+  // mobile-first spec's 44px minimum too. This is a standalone public page
+  // with no app chrome sharing the document, so it's safe to restore the
+  // normal 16px root for as long as it's mounted, and put it back on
+  // navigate-away.
+  useEffect(() => {
+    const prevFontSize = document.documentElement.style.fontSize;
+    document.documentElement.style.fontSize = '16px';
+    return () => { document.documentElement.style.fontSize = prevFontSize; };
+  }, []);
+
   const [step, setStep] = useState<Step>(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -353,7 +367,7 @@ const BookDemo: React.FC = () => {
           <StepDots step={step} />
 
           {step === 1 && (
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] lg:grid-cols-[1fr_260px] gap-6 lg:gap-10 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] lg:grid-cols-[480px_1fr] gap-6 lg:gap-12 items-start">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <button
@@ -383,12 +397,12 @@ const BookDemo: React.FC = () => {
                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-7 gap-1.5">
+                  <div className="grid grid-cols-7 gap-1.5 lg:gap-2.5">
                     {calendarCells.map((cell, idx) => {
                       if (!cell) return <div key={idx} />;
                       const status = monthDays[cell.date] || 'closed';
                       const isSelected = selectedDate === cell.date;
-                      const base = 'aspect-square min-h-[44px] w-full rounded-lg text-sm font-medium flex items-center justify-center transition-colors';
+                      const base = 'aspect-square min-h-[44px] lg:min-h-[52px] w-full rounded-lg text-sm lg:text-base font-medium flex items-center justify-center transition-colors';
                       if (status === 'closed') {
                         return <div key={idx} className={`${base} text-slate-300 cursor-not-allowed`}>{cell.day}</div>;
                       }
@@ -425,22 +439,22 @@ const BookDemo: React.FC = () => {
                 </h2>
                 {selectedDate && <p className="text-xs text-slate-400 mb-3">{selectedDate}</p>}
                 {!selectedDate ? (
-                  <div className="h-32 flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl">
-                    <CalendarIcon className="w-5 h-5 mr-2" /> No date selected
+                  <div className="h-32 lg:min-h-[380px] flex flex-col items-center justify-center gap-2 text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl">
+                    <CalendarIcon className="w-6 h-6" /> No date selected
                   </div>
                 ) : daySlotsLoading ? (
-                  <div className="h-32 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+                  <div className="h-32 lg:min-h-[380px] flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
                 ) : dayError ? (
                   <div className="text-sm text-red-600 p-3 rounded-lg bg-red-50">{dayError}</div>
                 ) : !daySlots || daySlots.length === 0 ? (
-                  <div className="text-sm text-slate-500 p-4 rounded-lg bg-slate-50 text-center">No free times on this day</div>
+                  <div className="lg:min-h-[380px] flex items-center justify-center text-sm text-slate-500 p-4 rounded-lg bg-slate-50 text-center">No free times on this day</div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-1 gap-2 max-h-[340px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 md:grid-cols-1 lg:grid-cols-3 gap-2 lg:gap-3 max-h-[340px] lg:max-h-[380px] overflow-y-auto pr-1">
                     {daySlots.map((slot) => (
                       <button
                         key={slot.start}
                         onClick={() => setSelectedSlot(slot)}
-                        className="min-h-[44px] rounded-lg text-sm font-semibold border transition-colors"
+                        className="min-h-[44px] lg:min-h-[48px] rounded-lg text-sm font-semibold border transition-colors"
                         style={selectedSlot?.start === slot.start
                           ? { backgroundColor: TEAL, color: '#fff', borderColor: TEAL }
                           : { color: NAVY, borderColor: '#E2E8F0' }}

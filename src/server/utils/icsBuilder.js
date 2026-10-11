@@ -31,4 +31,19 @@ function buildDemoBookingIcs({ bookingDate, startTime, endTime, facilityName, de
   return lines.join('\r\n');
 }
 
-module.exports = { buildDemoBookingIcs };
+// A direct "Add to Google Calendar" link — navigates straight into Google
+// Calendar's own prefilled event screen, no file download involved. This is
+// the primary action in the confirmation email; the .ics (above) is kept as
+// a quiet attachment alongside it for Outlook/Apple Mail users, since those
+// clients recognize a text/calendar attachment on their own.
+function buildGoogleCalendarUrl({ bookingDate, startTime, endTime, facilityName, demoType }) {
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `IntelliCare Demo — ${facilityName}`,
+    dates: `${toUtcStamp(bookingDate, startTime)}/${toUtcStamp(bookingDate, endTime)}`,
+    details: `${demoType} demo of IntelliCare HMIS for ${facilityName}.`,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+module.exports = { buildDemoBookingIcs, buildGoogleCalendarUrl };

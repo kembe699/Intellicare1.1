@@ -324,12 +324,20 @@ const DEMO_NAVY = '#153765';
  * attachment is what every mail client actually recognizes as a calendar
  * invite (Gmail/Outlook both offer their own "add to calendar" prompt for
  * a text/calendar attachment without any extra markup needed here).
+ *
+ * The button itself links straight to Google Calendar's own prefilled
+ * "add event" screen (no file involved) — a downloaded .ics is what a
+ * visitor actually complained about ("I want it to go straight to my
+ * calendar, not download a file"). The .ics is still attached to the email
+ * alongside it, quietly, for Outlook/Apple Mail users whose clients
+ * recognize a text/calendar attachment on their own.
  */
 async function sendDemoBookingConfirmationEmail({ to, fullName, bookingDate, startTime, endTime, demoType, facilityName }) {
   const safeName = fullName || 'there';
-  const { buildDemoBookingIcs } = require('./icsBuilder');
+  const { buildDemoBookingIcs, buildGoogleCalendarUrl } = require('./icsBuilder');
   const ics = buildDemoBookingIcs({ bookingDate, startTime, endTime, facilityName, demoType });
   const icsBase64 = Buffer.from(ics).toString('base64');
+  const googleCalendarUrl = buildGoogleCalendarUrl({ bookingDate, startTime, endTime, facilityName, demoType });
   const logoUrl = `${frontendUrl()}/hjd.png`;
 
   const html = `<!DOCTYPE html>
@@ -362,7 +370,10 @@ async function sendDemoBookingConfirmationEmail({ to, fullName, bookingDate, sta
           </table>
         </td></tr>
         <tr><td align="center" style="padding-bottom:28px;">
-          <span style="display:inline-block;padding:10px 20px;background-color:#f0fafb;border:1px solid #d7eef1;border-radius:8px;font-size:13px;font-weight:600;color:${DEMO_TEAL};">📅 Calendar invite attached — tap to add to calendar</span>
+          <a href="${googleCalendarUrl}" style="display:inline-block;padding:13px 28px;background-color:${DEMO_TEAL};color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">Add to Google Calendar</a>
+        </td></tr>
+        <tr><td align="center" style="padding-bottom:28px;font-size:12px;color:#8a97ab;">
+          Using Outlook or Apple Calendar? A calendar invite is attached to this email.
         </td></tr>
         <tr><td align="center" style="font-size:13px;color:#8a97ab;line-height:1.6;">
           Need to reschedule? Email <a href="mailto:${supportEmail()}" style="color:${DEMO_TEAL};text-decoration:none;">${supportEmail()}</a>
@@ -380,6 +391,9 @@ Thanks for booking a demo of IntelliCare HMIS for ${facilityName}. Here are the 
   Date:        ${bookingDate}
   Time:        ${startTime} - ${endTime} (Africa/Juba, UTC+2)
   Demo type:   ${demoType}
+
+Add to Google Calendar: ${googleCalendarUrl}
+(Using Outlook or Apple Calendar? A calendar invite is attached to this email.)
 
 Need to reschedule? Email ${supportEmail()}.
 
