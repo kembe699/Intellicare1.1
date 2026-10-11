@@ -50,8 +50,14 @@ const createTransporter = () => {
  * triggered it (creating a tenant still succeeds if its welcome email bounces).
  * The outcome is returned so the caller can report it honestly rather than
  * claiming an email was sent when it wasn't.
+ *
+ * `attachments` (optional): [{ filename, content: base64 string, contentType }].
+ * Added for the demo-booking confirmation's .ics calendar invite — a data:
+ * URI link in the body is blocked by several webmail clients (Gmail strips
+ * data: hrefs), while a real attachment is what every client actually
+ * recognizes as "add to calendar".
  */
-async function deliver({ to, subject, html, text, replyTo }) {
+async function deliver({ to, subject, html, text, replyTo, attachments }) {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (apiKey) {
@@ -69,6 +75,7 @@ async function deliver({ to, subject, html, text, replyTo }) {
           html,
           text,
           ...(replyTo ? { reply_to: replyTo } : {}),
+          ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content })) } : {}),
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -90,7 +97,12 @@ async function deliver({ to, subject, html, text, replyTo }) {
   const transporter = createTransporter();
   if (transporter) {
     try {
-      await transporter.sendMail({ from: fromAddress(), to, subject, html, text, replyTo });
+      await transporter.sendMail({
+        from: fromAddress(), to, subject, html, text, replyTo,
+        ...(attachments?.length
+          ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, encoding: 'base64', contentType: a.contentType })) }
+          : {}),
+      });
       console.log(`✅ Email sent to ${to} via SMTP`);
       return { delivered: true, mode: 'smtp' };
     } catch (err) {
@@ -294,40 +306,93 @@ Need help? Contact ${supportEmail()}`;
 }
 
 // ── Book a Demo ─────────────────────────────────────────────────────────────
+// Brand colours for this one template — same exact hex values as the public
+// /book-demo page (BookDemo.tsx), deliberately not the shared shell()'s
+// #3D8A97 gradient look used by every other email in this file. Kept as its
+// own bespoke, minimal markup rather than reusing shell() so this one stays
+// visually tied to the booking page it follows, without changing how every
+// other email (password reset, welcome) looks.
+const DEMO_TEAL = '#0A96A1';
+const DEMO_NAVY = '#153765';
+
 /**
  * Sent to the visitor right after they book a demo slot on the public
  * /book-demo page (routes/publicBookDemo.js). Carries exactly what they'd
- * need to show up — date/time/timezone and demo type — and our contacts.
+ * need to show up — date/time/timezone and demo type — our contacts, and a
+ * real .ics attachment. A data: URI link in the body would be simpler but
+ * Gmail and several other webmail clients strip data: hrefs outright; a real
+ * attachment is what every mail client actually recognizes as a calendar
+ * invite (Gmail/Outlook both offer their own "add to calendar" prompt for
+ * a text/calendar attachment without any extra markup needed here).
  */
 async function sendDemoBookingConfirmationEmail({ to, fullName, bookingDate, startTime, endTime, demoType, facilityName }) {
   const safeName = fullName || 'there';
-  const html = shell('Your Demo is Booked', `
-    <p style="margin:0 0 20px;font-size:16px;color:#333;">Hello <strong>${safeName}</strong>,</p>
-    <p style="margin:0 0 20px;font-size:16px;color:#333;">Thanks for booking a demo of IntelliCare for <strong>${facilityName}</strong>. Here are the details:</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;">
-      <tr><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;width:40%;">Date</td>
-          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;font-weight:700;">${bookingDate}</td></tr>
-      <tr><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#666;">Time</td>
-          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111;font-weight:700;">${startTime} – ${endTime} (Africa/Juba, UTC+2)</td></tr>
-      <tr><td style="padding:12px 16px;font-size:14px;color:#666;">Demo type</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111;font-weight:700;">${demoType}</td></tr>
-    </table>
-    <p style="margin:0 0 20px;font-size:14px;color:#666;">If you need to reschedule or have any questions, reach us at <a href="mailto:${supportEmail()}" style="color:#3D8A97;">${supportEmail()}</a>.</p>`);
+  const { buildDemoBookingIcs } = require('./icsBuilder');
+  const ics = buildDemoBookingIcs({ bookingDate, startTime, endTime, facilityName, demoType });
+  const icsBase64 = Buffer.from(ics).toString('base64');
+  const logoUrl = `${frontendUrl()}/hjd.png`;
 
-  const text = `Hello ${safeName},
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your Demo is Booked</title></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background-color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
+    <tr><td align="center" style="padding:40px 20px;">
+      <table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;">
+        <tr><td align="center" style="padding-bottom:28px;">
+          <img src="${logoUrl}" alt="IntelliCare" height="40" style="height:40px;width:auto;display:block;">
+        </td></tr>
+        <tr><td align="center" style="padding-bottom:4px;">
+          <span style="font-size:12px;font-weight:700;letter-spacing:0.06em;color:${DEMO_TEAL};text-transform:uppercase;">Demo Confirmed</span>
+        </td></tr>
+        <tr><td align="center" style="padding-bottom:20px;">
+          <h1 style="margin:0;font-size:22px;font-weight:700;color:${DEMO_NAVY};">Your demo is booked</h1>
+        </td></tr>
+        <tr><td style="padding-bottom:24px;font-size:15px;line-height:1.6;color:#44546a;">
+          Hi ${safeName}, thanks for booking a demo of IntelliCare HMIS for <strong style="color:${DEMO_NAVY};">${facilityName}</strong>. Here are the details:
+        </td></tr>
+        <tr><td style="padding-bottom:28px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e7ecf2;border-radius:10px;">
+            <tr><td style="padding:14px 18px;border-bottom:1px solid #e7ecf2;font-size:13px;color:#8a97ab;width:38%;">Date</td>
+                <td style="padding:14px 18px;border-bottom:1px solid #e7ecf2;font-size:14px;color:${DEMO_NAVY};font-weight:600;">${bookingDate}</td></tr>
+            <tr><td style="padding:14px 18px;border-bottom:1px solid #e7ecf2;font-size:13px;color:#8a97ab;">Time</td>
+                <td style="padding:14px 18px;border-bottom:1px solid #e7ecf2;font-size:14px;color:${DEMO_NAVY};font-weight:600;">${startTime} – ${endTime} (Africa/Juba, UTC+2)</td></tr>
+            <tr><td style="padding:14px 18px;font-size:13px;color:#8a97ab;">Demo type</td>
+                <td style="padding:14px 18px;font-size:14px;color:${DEMO_NAVY};font-weight:600;">${demoType}</td></tr>
+          </table>
+        </td></tr>
+        <tr><td align="center" style="padding-bottom:28px;">
+          <span style="display:inline-block;padding:10px 20px;background-color:#f0fafb;border:1px solid #d7eef1;border-radius:8px;font-size:13px;font-weight:600;color:${DEMO_TEAL};">📅 Calendar invite attached — tap to add to calendar</span>
+        </td></tr>
+        <tr><td align="center" style="font-size:13px;color:#8a97ab;line-height:1.6;">
+          Need to reschedule? Email <a href="mailto:${supportEmail()}" style="color:${DEMO_TEAL};text-decoration:none;">${supportEmail()}</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
-Thanks for booking a demo of IntelliCare for ${facilityName}. Here are the details:
+  const text = `Hi ${safeName},
+
+Thanks for booking a demo of IntelliCare HMIS for ${facilityName}. Here are the details:
 
   Date:        ${bookingDate}
   Time:        ${startTime} - ${endTime} (Africa/Juba, UTC+2)
   Demo type:   ${demoType}
 
-If you need to reschedule or have any questions, reach us at ${supportEmail()}.
+Need to reschedule? Email ${supportEmail()}.
 
 ---
-IntelliCare Hospital Management System`;
+IntelliCare`;
 
-  return deliver({ to, subject: `Your IntelliCare demo is booked — ${bookingDate} ${startTime}`, html, text });
+  return deliver({
+    to,
+    subject: `Your IntelliCare demo is booked — ${bookingDate} ${startTime}`,
+    html,
+    text,
+    attachments: [{ filename: 'intellicare-demo.ics', content: icsBase64, contentType: 'text/calendar; charset=utf-8; method=PUBLISH' }],
+  });
 }
 
 /**
