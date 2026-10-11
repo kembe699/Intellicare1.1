@@ -90,6 +90,29 @@ export function calculateQuantity(
   return Math.ceil(dose * freq.perDay * days);
 }
 
+/**
+ * What to call one dose on screen and on printouts. A drug stocked as a
+ * pack (unit_of_measure "Strip") needs its own dose_unit_label ("Tablet")
+ * set in Item Master, or a dose count gets wrongly labeled with the pack's
+ * name — this is the fix for that, not just cosmetic: calculateQuantity()
+ * always returns a dose-unit count, never a pack count.
+ */
+export function doseUnitLabel(drug?: { dose_unit_label?: string | null; unit_of_measure?: string | null } | null): string {
+  return drug?.dose_unit_label || drug?.unit_of_measure || 'tablet';
+}
+
+/**
+ * Converts a dose-unit quantity (tablets/mL — what calculateQuantity()
+ * computes) into the item's pack-equivalent (strips/bottles/tubes/vials —
+ * what stock_on_hand/quantity_on_hand is actually tracked in), for
+ * client-side stock checks before submitting. units_per_pack defaults to 1
+ * (no conversion) for any item that hasn't had a real pack size configured.
+ */
+export function packEquivalent(doseQty: number, drug?: { units_per_pack?: number | string | null } | null): number {
+  const unitsPerPack = Number(drug?.units_per_pack) || 1;
+  return doseQty / unitsPerPack;
+}
+
 /** "1 tablet three times daily for 5 days" — the sig, for labels and printouts. */
 export function describeDosage(
   dose: number | string | null | undefined,

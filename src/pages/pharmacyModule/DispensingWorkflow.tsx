@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
 
 const API = '/api/pharmacy-module';
 
@@ -582,8 +583,8 @@ export default function DispensingWorkflow() {
             // Leftover lines from before stock was checked at prescribing time can still
             // exceed current stock — don't pre-check those, the row itself flags it as
             // "Out of stock" and disables the checkbox until restocked.
-            const stockRaw = l.stock_on_hand != null ? parseInt(l.stock_on_hand, 10) : NaN;
-            initialChecked[l.id] = isNaN(stockRaw) || stockRaw >= remaining;
+            const stockRaw = l.stock_on_hand != null ? parseFloat(l.stock_on_hand) : NaN;
+            initialChecked[l.id] = isNaN(stockRaw) || stockRaw >= packEquivalent(remaining, l);
           }
         });
         setLineQty(initialQty);
@@ -1033,9 +1034,9 @@ export default function DispensingWorkflow() {
     if (!drug) return;
     const qty = parseInt(addLineQty, 10) || 1;
     if (qty <= 0) { toast.error('Quantity must be greater than zero'); return; }
-    const stockOnHand = drug.stock_on_hand != null ? parseInt(drug.stock_on_hand, 10) : null;
-    if (stockOnHand != null && !isNaN(stockOnHand) && qty > stockOnHand) {
-      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock — reduce the quantity.`);
+    const stockOnHand = drug.stock_on_hand != null ? parseFloat(drug.stock_on_hand) : null;
+    if (stockOnHand != null && !isNaN(stockOnHand) && packEquivalent(qty, drug) > stockOnHand) {
+      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock (≈ ${Math.floor(stockOnHand * (Number(drug.units_per_pack) || 1))} ${doseUnitLabel(drug)}) — reduce the quantity.`);
       return;
     }
 
@@ -1063,7 +1064,7 @@ export default function DispensingWorkflow() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ drug_id: drug.id, quantity_prescribed: qty, unit_of_measure: drug.unit_of_measure || 'tablet' }),
+          body: JSON.stringify({ drug_id: drug.id, quantity_prescribed: qty, unit_of_measure: doseUnitLabel(drug) }),
         }),
         authFetch(`/api/patient-bills/active/${selectedRx.patient_id}/${clinicId}`, { credentials: 'include' }),
       ]);
@@ -1075,7 +1076,12 @@ export default function DispensingWorkflow() {
 
       const sellingPrice = priceOverride != null ? priceOverride : (parseFloat(drug.selling_price) || 0);
       if (sellingPrice > 0) {
-        const lineItem = { serviceName: drug.drug_name, quantity: qty, unitPrice: sellingPrice, totalPrice: sellingPrice * qty };
+        // sellingPrice is "price per pack" (per Strip/Bottle/etc.) same as
+        // everywhere else — the bill line shows qty in dose units, so its
+        // own unitPrice must be price-per-dose-unit for qty*unitPrice to
+        // still equal totalPrice, or this overcharges by units_per_pack.
+        const unitsPerPack = Number(drug.units_per_pack) || 1;
+        const lineItem = { serviceName: drug.drug_name, quantity: qty, unitPrice: sellingPrice / unitsPerPack, totalPrice: sellingPrice * packEquivalent(qty, drug) };
         if (existingBillRes.ok) {
           const existingBill = await existingBillRes.json();
           const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
@@ -1215,9 +1221,9 @@ export default function DispensingWorkflow() {
     if (billBalance > 0 && !activeBill?.scheme_id) { toast.error('This patient has an outstanding balance — dispensing is blocked until payment is collected.'); return; }
     const linesToDispense = (selectedRx.lines || []).filter((l: any) => {
       if (!checkedLines[l.id] || !(parseInt(lineQty[l.id], 10) > 0)) return false;
-      const stockRaw = l.stock_on_hand != null ? parseInt(l.stock_on_hand, 10) : NaN;
+      const stockRaw = l.stock_on_hand != null ? parseFloat(l.stock_on_hand) : NaN;
       const remaining = l.quantity_prescribed - (l.total_quantity_dispensed || 0);
-      return isNaN(stockRaw) || stockRaw >= remaining;
+      return isNaN(stockRaw) || stockRaw >= packEquivalent(remaining, l);
     });
     if (linesToDispense.length === 0) { toast.error('Select at least one item to dispense'); return; }
 
@@ -1405,12 +1411,16 @@ export default function DispensingWorkflow() {
                         // by which point the pharmacist had already told the patient it was
                         // going on the bill.
                         const stockLeft = selectedDrug && selectedDrug.stock_on_hand != null
-                          ? parseInt(selectedDrug.stock_on_hand, 10)
+                          ? parseFloat(selectedDrug.stock_on_hand)
                           : null;
                         const knownStock = stockLeft != null && !isNaN(stockLeft);
                         const outOfStock = knownStock && stockLeft <= 0;
-                        const notEnoughStock = knownStock && previewQty > stockLeft;
-                        const lineTotal = discountedPrice * previewQty;
+                        // previewQty is a dose-unit count (tablets), stockLeft is pack-
+                        // tracked (strips/bottles) — compare like units via packEquivalent.
+                        const notEnoughStock = knownStock && packEquivalent(previewQty, selectedDrug) > stockLeft;
+                        // discountedPrice is "price per pack" same as selling_price —
+                        // billed by the pack-equivalent of previewQty, not the raw dose count.
+                        const lineTotal = discountedPrice * packEquivalent(previewQty, selectedDrug);
                         return (
                           <>
                             <div>
@@ -1442,12 +1452,15 @@ export default function DispensingWorkflow() {
                                   </div>
                                   <div>
                                     <Label className="text-xs font-medium text-muted-foreground">UOM</Label>
-                                    <Input value={selectedDrug?.unit_of_measure || ''} readOnly disabled className="mt-1 bg-muted/40" />
+                                    <Input value={selectedDrug ? doseUnitLabel(selectedDrug) : ''} readOnly disabled className="mt-1 bg-muted/40" />
                                   </div>
                                   <div>
                                     <Label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-red-700' : 'text-muted-foreground')}>Stock</Label>
                                     <Input
-                                      value={selectedDrug?.stock_on_hand ?? ''}
+                                      // Stock is pack-tracked (Strip/Bottle/etc.) while Qty/UOM
+                                      // above are dose units — labeled with the item's own
+                                      // unit_of_measure so the two aren't mistaken for the same unit.
+                                      value={selectedDrug?.stock_on_hand != null ? `${selectedDrug.stock_on_hand} ${selectedDrug.unit_of_measure || ''}`.trim() : ''}
                                       readOnly
                                       disabled
                                       className={cn('mt-1', outOfStock ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-muted/40')}
@@ -1757,8 +1770,8 @@ export default function DispensingWorkflow() {
                                   const schemePricing = schemeProductPricing.find((p: any) => p.product_id === l.drug_id);
                                   const hasSchemePrice = !!schemePricing;
                                   const missingInsurancePrice = isInsured && !billHasScheme && !hasSchemePrice;
-                                  const stockOnHand = l.stock_on_hand != null ? parseInt(l.stock_on_hand, 10) : null;
-                                  const insufficientStock = stockOnHand != null && !isNaN(stockOnHand) && stockOnHand < remaining;
+                                  const stockOnHand = l.stock_on_hand != null ? parseFloat(l.stock_on_hand) : null;
+                                  const insufficientStock = stockOnHand != null && !isNaN(stockOnHand) && stockOnHand < packEquivalent(remaining, l);
                                   const selectable = (l.status === 'pending' || l.status === 'partial') && remaining > 0 && !missingInsurancePrice && !insufficientStock;
                                   return !selectable ? 'opacity-50' : '';
                                 }}
@@ -1770,8 +1783,8 @@ export default function DispensingWorkflow() {
                                       const schemePricing = schemeProductPricing.find((p: any) => p.product_id === l.drug_id);
                                       const hasSchemePrice = !!schemePricing;
                                       const missingInsurancePrice = isInsured && !billHasScheme && !hasSchemePrice;
-                                      const stockOnHand = l.stock_on_hand != null ? parseInt(l.stock_on_hand, 10) : null;
-                                      const insufficientStock = stockOnHand != null && !isNaN(stockOnHand) && stockOnHand < remaining;
+                                      const stockOnHand = l.stock_on_hand != null ? parseFloat(l.stock_on_hand) : null;
+                                      const insufficientStock = stockOnHand != null && !isNaN(stockOnHand) && stockOnHand < packEquivalent(remaining, l);
                                       const selectable = (l.status === 'pending' || l.status === 'partial') && remaining > 0 && !missingInsurancePrice && !insufficientStock;
                                       return (
                                         <input
@@ -1876,13 +1889,13 @@ export default function DispensingWorkflow() {
                                       const schemePricing = schemeProductPricing.find((p: any) => p.product_id === l.drug_id);
                                       const hasSchemePrice = !!schemePricing;
                                       const missingInsurancePrice = isInsured && !billHasScheme && !hasSchemePrice;
-                                      const stockOnHand = l.stock_on_hand != null ? parseInt(l.stock_on_hand, 10) : null;
-                                      const insufficientStock = stockOnHand != null && !isNaN(stockOnHand) && stockOnHand < remaining;
+                                      const stockOnHand = l.stock_on_hand != null ? parseFloat(l.stock_on_hand) : null;
+                                      const insufficientStock = stockOnHand != null && !isNaN(stockOnHand) && stockOnHand < packEquivalent(remaining, l);
                                       const selectable = (v === 'pending' || v === 'partial') && remaining > 0 && !missingInsurancePrice && !insufficientStock;
                                       return insufficientStock ? (
                                         <span className="inline-flex flex-col gap-0.5">
                                           <Badge variant="outline" className="w-fit gap-1 border-red-200 bg-red-50 text-red-700"><PackageX className="w-3 h-3" /> Out of stock</Badge>
-                                          <span className="text-[10px] text-red-600">Only {stockOnHand} in stock — restock to dispense</span>
+                                          <span className="text-[10px] text-red-600">Only {stockOnHand} {l.pack_unit_of_measure || ''} in stock — restock to dispense</span>
                                         </span>
                                       ) : (
                                         <Badge

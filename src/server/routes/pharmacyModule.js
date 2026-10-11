@@ -86,7 +86,7 @@ router.get('/drugs', authorize('pharmacy.read'), async (req, res) => {
     const [rows] = await sequelize.query(`
       SELECT i.id, i.id AS drug_id, i.item_code AS drug_code, i.item_name AS drug_name,
         i.item_description AS drug_description, i.item_category AS therapeutic_category,
-        i.unit_of_measure, i.selling_price, i.current_unit_cost, i.cost_currency,
+        i.unit_of_measure, i.units_per_pack, i.dose_unit_label, i.selling_price, i.current_unit_cost, i.cost_currency,
         ${stockOnHandExpr} AS stock_on_hand, i.minimum_stock_level,
         i.is_active, i.is_controlled_substance, i.item_type,
         i.requires_batch_tracking, i.requires_expiry_tracking,
@@ -145,7 +145,7 @@ router.get('/drugs/:id', authorize('pharmacy.read'), async (req, res) => {
     const [rows] = await sequelize.query(`
       SELECT i.id, i.id AS drug_id, i.item_code AS drug_code, i.item_name AS drug_name,
         i.item_description AS drug_description, i.item_category AS therapeutic_category,
-        i.unit_of_measure, i.selling_price, i.current_unit_cost, i.cost_currency,
+        i.unit_of_measure, i.units_per_pack, i.dose_unit_label, i.selling_price, i.current_unit_cost, i.cost_currency,
         i.quantity_on_hand AS stock_on_hand, i.minimum_stock_level AS reorder_level,
         i.reorder_quantity, i.is_active, i.is_controlled_substance, i.item_type,
         i.cogs_account_id, i.inventory_account_id,
@@ -658,6 +658,7 @@ router.get('/prescriptions/:id', authorize('pharmacy.prescribe'), async (req, re
       SELECT pl.*, COALESCE(ii.item_name, pl.external_drug_name) AS drug_name, ii.item_code AS drug_code,
         ii.selling_price, ii.cost_currency,
         ii.quantity_on_hand AS stock_on_hand,
+        ii.units_per_pack, ii.dose_unit_label, ii.unit_of_measure AS pack_unit_of_measure,
         ii.id AS inventory_item_id,
         d.generic_name, d.strength, d.dosage_form
       FROM prescription_lines pl
@@ -1427,6 +1428,16 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       cogs_account_id: item.cogs_account_id
     };
 
+    // quantity_dispensed is always a dose-unit count (tablets/mL — what
+    // calculateQuantity() on the prescribing side computes, and what's
+    // recorded on dispensing_records/prescription_lines). Stock, however, is
+    // tracked in the item's own pack unit (a "Strip" of units_per_pack
+    // tablets) — units_per_pack defaults to 1, so packQty === quantity_dispensed
+    // for every item that hasn't had a real pack size configured, preserving
+    // today's behavior exactly until an admin sets one (Setup > Item Master).
+    const unitsPerPack = parseFloat(item.units_per_pack) || 1;
+    const packQty = parseFloat(quantity_dispensed) / unitsPerPack;
+
     // 2. Check stock
     console.log('Step 2: Checking stock for item:', inventoryItemId);
     let selectedBatch = null;
@@ -1435,10 +1446,10 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         'SELECT quantity_on_hand FROM inventory_items WHERE id = :id',
         { replacements: { id: inventoryItemId }, transaction: t }
       );
-      if (stockCheck.length > 0 && stockCheck[0].quantity_on_hand < quantity_dispensed) {
+      if (stockCheck.length > 0 && stockCheck[0].quantity_on_hand < packQty) {
         console.log('❌ Insufficient stock');
         await t.rollback();
-        return res.status(400).json({ error: 'Insufficient stock', available: stockCheck[0].quantity_on_hand, requested: quantity_dispensed });
+        return res.status(400).json({ error: 'Insufficient stock', available: stockCheck[0].quantity_on_hand, requested: packQty });
       }
       console.log('✅ Step 2 complete: Stock available:', stockCheck[0]?.quantity_on_hand);
 
@@ -1452,18 +1463,20 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
           { replacements: { itemId: inventoryItemId, locationId: cleanFromLocationId }, transaction: t }
         );
         const locAvailable = locStockCheck.length > 0 ? locStockCheck[0].quantity_on_hand : 0;
-        if (locAvailable < quantity_dispensed) {
+        if (locAvailable < packQty) {
           console.log('❌ Insufficient stock at selected location');
           await t.rollback();
-          return res.status(400).json({ error: 'Insufficient stock at selected location', available: locAvailable, requested: quantity_dispensed });
+          return res.status(400).json({ error: 'Insufficient stock at selected location', available: locAvailable, requested: packQty });
         }
       }
 
-      // Select batch (FIFO - earliest expiry first)
+      // Select batch (FIFO - earliest expiry first). quantity_received/
+      // quantity_used are pack-tracked too (a batch is received as "80
+      // Strips"), so compared against packQty, not the raw dose count.
       if (batch_id) {
         const [batchRows] = await sequelize.query(
           'SELECT *, (quantity_received - quantity_used) AS quantity_remaining FROM inventory_batches WHERE id = :id AND (quantity_received - quantity_used) >= :qty',
-          { replacements: { id: batch_id, qty: quantity_dispensed }, transaction: t }
+          { replacements: { id: batch_id, qty: packQty }, transaction: t }
         );
         if (batchRows.length > 0) selectedBatch = batchRows[0];
       }
@@ -1473,7 +1486,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
           WHERE item_id = :iid AND status = 'active' AND (quantity_received - quantity_used) >= :qty
             AND (expiry_date IS NULL OR expiry_date > CURRENT_DATE)
           ORDER BY expiry_date ASC LIMIT 1
-        `, { replacements: { iid: inventoryItemId, qty: quantity_dispensed }, transaction: t });
+        `, { replacements: { iid: inventoryItemId, qty: packQty }, transaction: t });
         if (autoBatch.length > 0) selectedBatch = autoBatch[0];
       }
     }
@@ -1507,7 +1520,13 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         price = (item.selling_price || 0) * rate;
       } catch (rateErr) { /* use base price if rate not available */ }
     }
-    const totalPrice = price * quantity_dispensed;
+    // selling_price (and any unit_price override) has always meant "price per
+    // unit_of_measure pack" — the item form has never had a separate per-
+    // dose-unit price. Priced by packQty, not the raw dose count, for the
+    // same reason stock is deducted by packQty: billing 20 tablets at the
+    // per-strip price would overcharge 10x once quantity_dispensed correctly
+    // means tablets instead of strips.
+    const totalPrice = price * packQty;
     console.log('✅ Step 4 complete: Price calculated:', price, 'Total:', totalPrice);
 
     // 5. Create dispensing record
@@ -1567,6 +1586,10 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       invTxnId = uuidv4();
       const txnNumber = `TXN-DISP-${dispensingNumber}`;
 
+      // quantity_change (and every column it feeds below) is pack-tracked,
+      // same as quantity_on_hand — logged/deducted by packQty, not the raw
+      // dose-unit quantity_dispensed. unit_cost is likewise "cost per pack"
+      // (what a GRN paid per Strip/Bottle/etc.), so total_cost follows packQty too.
       await sequelize.query(`
         INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,
           quantity_change, from_location_id, batch_id, unit_cost, total_cost,
@@ -1576,10 +1599,10 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       `, {
         replacements: {
           id: invTxnId, cid, txn: txnNumber, iid: inventoryItemId,
-          qty: -quantity_dispensed, flid: cleanFromLocationId,
+          qty: -packQty, flid: cleanFromLocationId,
           bid: selectedBatch?.id || cleanBatchId,
           cost: selectedBatch?.unit_cost || 0,
-          total: (selectedBatch?.unit_cost || 0) * quantity_dispensed,
+          total: (selectedBatch?.unit_cost || 0) * packQty,
           ref: dispensingNumber, notes: `Dispensed to patient`, by: cleanPharmacistId
         },
         transaction: t
@@ -1588,14 +1611,14 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       // Update item stock
       await sequelize.query(
         'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :id',
-        { replacements: { qty: quantity_dispensed, id: inventoryItemId }, transaction: t }
+        { replacements: { qty: packQty, id: inventoryItemId }, transaction: t }
       );
 
       // Update batch
       if (selectedBatch) {
         await sequelize.query(
           'UPDATE inventory_batches SET quantity_used = quantity_used + :qty WHERE id = :id',
-          { replacements: { qty: quantity_dispensed, id: selectedBatch.id }, transaction: t }
+          { replacements: { qty: packQty, id: selectedBatch.id }, transaction: t }
         );
       }
 
@@ -1603,7 +1626,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       if (from_location_id) {
         await sequelize.query(
           'UPDATE stock_by_location SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE item_id = :iid AND location_id = :lid',
-          { replacements: { qty: quantity_dispensed, iid: inventoryItemId, lid: from_location_id }, transaction: t }
+          { replacements: { qty: packQty, iid: inventoryItemId, lid: from_location_id }, transaction: t }
         );
       }
 
@@ -1766,7 +1789,10 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         : (drug.current_unit_cost > 0) ? parseFloat(drug.current_unit_cost)
         : 0;
       if (cogsAcct && unitCost > 0) {
-        const cogsAmount = unitCost * quantity_dispensed;
+        // unitCost (batch cost, or item average/current cost) is "cost per
+        // pack" same as selling_price — costed by the pack-equivalent of
+        // quantity_dispensed, not the raw dose count, same fix as totalPrice above.
+        const cogsAmount = unitCost * packQty;
 
         // Get inventory GL account — same fallback reasoning as cogsAcct
         // above: default to Pharmaceutical Inventory (1310), the account

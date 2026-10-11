@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
-import { FREQUENCY_OPTIONS, calculateQuantity, describeDosage, findFrequency } from '@/lib/prescriptionFrequency';
+import { FREQUENCY_OPTIONS, calculateQuantity, describeDosage, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -445,15 +445,19 @@ export default function LISTestOrders() {
     if (!rxDrugId) { toast.error('Select a drug'); return; }
     const drug = pharmacyDrugs.find(d => d.id === rxDrugId);
     if (!drug) return;
-    const stockOnHand = drug.stock_on_hand != null ? parseInt(drug.stock_on_hand, 10) : null;
+    const stockOnHand = drug.stock_on_hand != null ? parseFloat(drug.stock_on_hand) : null;
     const alreadyQueued = rxLines.filter(l => l.drug_id === drug.id).reduce((sum, l) => sum + (l.quantity_prescribed || 0), 0);
-    if (stockOnHand != null && !isNaN(stockOnHand) && qty + alreadyQueued > stockOnHand) {
-      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock — reduce the quantity, or tick "Not in stock" to prescribe it for purchase outside.`);
+    // stock_on_hand is tracked in the item's pack unit (Strip/Bottle/etc.),
+    // qty is always a dose-unit count — compare like units via packEquivalent,
+    // not the raw dose count, or a 10-per-strip drug looks "out of stock" at
+    // 1/10th its real capacity.
+    if (stockOnHand != null && !isNaN(stockOnHand) && packEquivalent(qty + alreadyQueued, drug) > stockOnHand) {
+      toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock (≈ ${Math.floor(stockOnHand * (Number(drug.units_per_pack) || 1))} ${doseUnitLabel(drug)}) — reduce the quantity, or tick "Not in stock" to prescribe it for purchase outside.`);
       return;
     }
     setRxLines(prev => [...prev, {
       drug_id: drug.id, is_external: false, drug_name: drug.drug_name,
-      unit_of_measure: drug.unit_of_measure || 'tablet',
+      unit_of_measure: doseUnitLabel(drug),
       quantity_prescribed: qty, dose_amount: parseFloat(rxDoseAmount) || null,
       dose_strength: rxDose, frequency: rxFrequency,
       duration_days: duration, notes: rxNotes.trim(), selling_price: parseFloat(drug.selling_price) || 0,
@@ -2699,7 +2703,7 @@ export default function LISTestOrders() {
                             className="mt-1 flex items-center text-xs text-muted-foreground border rounded-md px-3 h-9 bg-muted/30 truncate"
                             title="Unit of measure — what one dose amount actually is (tablet, capsule, ml, etc.)"
                           >
-                            {rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—'}
+                            {rxDrugId ? doseUnitLabel(pharmacyDrugs.find((d: any) => d.id === rxDrugId)) : '—'}
                           </div>
                         )}
                       </div>
@@ -3447,7 +3451,7 @@ export default function LISTestOrders() {
                                 className="mt-1 flex items-center text-xs text-muted-foreground border rounded-md px-3 h-9 bg-muted/30 truncate"
                                 title="Unit of measure — what one dose amount actually is (tablet, capsule, ml, etc.)"
                               >
-                                {rxDrugId ? (pharmacyDrugs.find((d: any) => d.id === rxDrugId)?.unit_of_measure || 'tablet') : '—'}
+                                {rxDrugId ? doseUnitLabel(pharmacyDrugs.find((d: any) => d.id === rxDrugId)) : '—'}
                               </div>
                             )}
                           </div>

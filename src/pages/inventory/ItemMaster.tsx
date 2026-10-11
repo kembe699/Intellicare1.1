@@ -26,6 +26,8 @@ interface InventoryItem {
   item_category: string;
   item_type: string;
   unit_of_measure: string;
+  units_per_pack: number;
+  dose_unit_label: string | null;
   quantity_on_hand: number;
   reserved_quantity: number;
   available_quantity: number;
@@ -106,7 +108,7 @@ const generateBarcode = () => {
 const emptyForm = (currencyCode: string) => ({
   item_code: generateItemCode(), barcode: '', item_name: '', item_description: '', item_category: 'general',
   item_type: 'consumable', unit_of_measure: 'Each', reorder_unit: 'Each',
-  conversion_factor: 1, minimum_stock_level: 0, maximum_stock_level: 0,
+  conversion_factor: 1, units_per_pack: 1, dose_unit_label: '', minimum_stock_level: 0, maximum_stock_level: 0,
   reorder_quantity: 0, lead_time_days: 7, inventory_valuation_method: 'weighted_average',
   current_unit_cost: 0, selling_price: 0, cost_currency: currencyCode,
   requires_batch_tracking: false, requires_expiry_tracking: false,
@@ -243,6 +245,7 @@ export default function ItemMaster() {
       item_description: item.item_description || '', item_category: item.item_category || 'general',
       item_type: item.item_type || 'consumable', unit_of_measure: item.unit_of_measure || 'Each',
       reorder_unit: item.unit_of_measure || 'Each', conversion_factor: 1,
+      units_per_pack: item.units_per_pack || 1, dose_unit_label: item.dose_unit_label || '',
       minimum_stock_level: item.minimum_stock_level || 0, maximum_stock_level: item.maximum_stock_level || 0,
       reorder_quantity: item.reorder_quantity || 0, lead_time_days: item.lead_time_days || 7,
       inventory_valuation_method: item.inventory_valuation_method || 'weighted_average',
@@ -520,6 +523,30 @@ export default function ItemMaster() {
                         searchPlaceholder="Search units..."
                         className="mt-0.5 h-8 text-xs"
                       />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground">Units per pack</label>
+                        <Input
+                          type="number" min="1" step="1" value={formData.units_per_pack}
+                          onChange={e => setFormData({ ...formData, units_per_pack: parseInt(e.target.value, 10) || 1 })}
+                          className="mt-0.5 h-8 text-xs"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          e.g. 10 tablets per {formData.unit_of_measure || 'Strip'} — leave at 1 if stocked individually
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground">Dose unit (optional)</label>
+                        <Input
+                          value={formData.dose_unit_label} placeholder="e.g. Tablet"
+                          onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
+                          className="mt-0.5 h-8 text-xs"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          What one dose is called on the prescription/receipt
+                        </p>
+                      </div>
                     </div>
                   </div>
 
