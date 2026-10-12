@@ -949,7 +949,7 @@ export default function PatientsBill() {
                         <label key={i} className="flex items-center gap-2 p-2 text-sm cursor-pointer hover:bg-muted/40">
                           <input type="checkbox" className="rounded border-input" checked={selectedItems.has(i)} onChange={() => toggleItemSelection(i)} />
                           <span className="flex-1 min-w-0 truncate">{s.serviceName || s.name || s.service_name}</span>
-                          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">{s.currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">{s.currency || selectedBill.bill_currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>
                         </label>
                       ))}
                     </div>

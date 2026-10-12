@@ -1347,13 +1347,13 @@ export default function BillDetails() {
                 key: 'unitPrice', header: 'Unit Price', align: 'right',
                 render: (_v, s) => isUnbilledInsuranceLine(s)
                   ? <span className="font-mono text-sky-700">{s.schemeCurrency} {amt(s.schemePrice).toFixed(2)}</span>
-                  : <span className="font-mono">{s.currency || 'SSP'} {amt(s.unitPrice).toFixed(2)}</span>,
+                  : <span className="font-mono">{s.currency || bill.bill_currency || 'SSP'} {amt(s.unitPrice).toFixed(2)}</span>,
               },
               {
                 key: 'totalPrice', header: 'Amount', align: 'right',
                 render: (_v, s) => isUnbilledInsuranceLine(s)
                   ? <span className="font-mono font-semibold text-sky-700">{s.schemeCurrency} {(amt(s.schemePrice) * s.quantity).toFixed(2)}</span>
-                  : <span className="font-mono font-semibold">{s.currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>,
+                  : <span className="font-mono font-semibold">{s.currency || bill.bill_currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>,
               },
               { key: 'discountLabel', header: 'Discount', align: 'center', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
               {
