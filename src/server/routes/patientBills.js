@@ -469,7 +469,7 @@ async function computeBaseCurrencyTotal(services, clinicId, asOfDate = new Date(
       throw err;
     }
   }
-  return Math.round(total * 100) / 100;
+  return { total: Math.round(total * 100) / 100, baseCurrency };
 }
 
 // Get all patient bills for a clinic
@@ -630,13 +630,17 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
       } else {
         // Cash bill — recalculate total in the base currency. See computeBaseCurrencyTotal
         // for why this must never be a raw sum of totalPrice across possibly-mixed currencies.
-        const newTotal = await computeBaseCurrencyTotal(parsedServices, billData.clinic_id, billData.bill_date || new Date());
+        const { total: newTotal, baseCurrency } = await computeBaseCurrencyTotal(parsedServices, billData.clinic_id, billData.bill_date || new Date());
         billData.total_amount = newTotal;
         billData.balance_amount = newTotal - (billData.paid_amount || 0);
-        billData.bill_currency = 'SSP';
+        // Was hardcoded 'SSP' regardless of the tenant's real configured base
+        // currency (e.g. tenant_kuelmc runs USD) — use what was actually just
+        // resolved above instead of re-guessing it.
+        billData.bill_currency = baseCurrency;
       }
     } else {
-      billData.bill_currency = 'SSP';
+      const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
+      billData.bill_currency = baseCurrencyRow?.code || 'SSP';
     }
 
     billData.services = parsedServices;
@@ -984,9 +988,15 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     // currency — same reasoning as bill creation: it's what the insurer is actually billed
     // via a Credit invoice later, so it must never get converted into an SSP-equivalent.
     // Only a cash bill (no scheme_id) goes through computeBaseCurrencyTotal's conversion.
-    const newServicesTotal = bill.scheme_id
-      ? pricedServices.filter(s => !s.isVoided).reduce((sum, s) => sum + (parseFloat(s.totalPrice) || 0), 0)
-      : await computeBaseCurrencyTotal(pricedServices, bill.clinic_id, new Date());
+    let newServicesTotal;
+    let cashBillBaseCurrency = null;
+    if (bill.scheme_id) {
+      newServicesTotal = pricedServices.filter(s => !s.isVoided).reduce((sum, s) => sum + (parseFloat(s.totalPrice) || 0), 0);
+    } else {
+      const computed = await computeBaseCurrencyTotal(pricedServices, bill.clinic_id, new Date());
+      newServicesTotal = computed.total;
+      cashBillBaseCurrency = computed.baseCurrency;
+    }
     const newTotalAmount = parseFloat(bill.total_amount) + newServicesTotal;
     const paidAmount = parseFloat(bill.paid_amount);
     const newBalanceAmount = newTotalAmount - paidAmount;
@@ -1019,9 +1029,13 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
       // calculation above for why converting this to SSP would be wrong.
       updatePayload.bill_currency = schemeResult.schemeCurrency || 'SSP';
     } else {
-      // Cash bill — bill-level totals are always base-currency (SSP); each line item keeps
-      // its own real currency/price for display, see computeBaseCurrencyTotal.
-      updatePayload.bill_currency = 'SSP';
+      // Cash bill — bill-level totals are always in the tenant's real base
+      // currency; each line item keeps its own real currency/price for
+      // display, see computeBaseCurrencyTotal. Was hardcoded 'SSP' regardless
+      // of what that actually is for this tenant — reuse what was just
+      // resolved above (cashBillBaseCurrency is only null when bill.scheme_id
+      // was set, which this branch excludes, so it's always populated here).
+      updatePayload.bill_currency = cashBillBaseCurrency;
     }
 
     await bill.update(updatePayload, { transaction: t });
