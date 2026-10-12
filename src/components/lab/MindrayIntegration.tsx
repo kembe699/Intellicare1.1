@@ -31,7 +31,7 @@ export const MindrayIntegration: React.FC<MindrayIntegrationProps> = ({
       
       if (result) {
         setLastResult(result);
-        toast.success(`Results fetched from holding tank for sample ${sampleId}`);
+        toast.success(`Results fetched from ${result.machineName} for sample ${sampleId}`);
         
         if (onResultReceived) {
           onResultReceived(sampleId, result);
@@ -86,7 +86,7 @@ export const MindrayIntegration: React.FC<MindrayIntegrationProps> = ({
             <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <div className="text-sm font-medium text-green-800 mb-1">
-                Success: Sample {lastResult.sampleId} Fetched
+                Success: Sample {lastResult.sampleId} Fetched from {lastResult.machineName}
               </div>
               <div className="text-xs text-green-700">
                 {lastResult.components.length} parameters loaded into the form below. Please review and click 'Submit Lab Report' to officially save them.

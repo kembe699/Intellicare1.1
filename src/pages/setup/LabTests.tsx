@@ -828,7 +828,12 @@ const handleBulkDelete = async () => {
                   <Combobox
                     options={[
                       { value: 'none', label: 'None — Manual Entry' },
-                      { value: 'mindray', label: '🔬 Mindray BC-10 / BC-30' },
+                      // Stored value stays 'mindray' for backward compatibility with
+                      // existing test configs — the fetch mechanism itself (pull a
+                      // result by Sample ID from the holding tank) isn't specific to
+                      // Mindray hardware; it works for any analyzer the lab agent is
+                      // configured for (e.g. the Bonavera Count 5R).
+                      { value: 'mindray', label: '🔬 Lab Analyzer (Mindray, Bonavera, etc.)' },
                     ]}
                     value={machineIntegration}
                     onChange={setMachineIntegration}
@@ -839,7 +844,7 @@ const handleBulkDelete = async () => {
                   {machineIntegration === 'mindray' && (
                     <p className="text-xs text-primary bg-primary/10 border border-primary/30 rounded-md px-3 py-2 flex items-center gap-1.5">
                       <Cpu className="w-3.5 h-3.5 flex-shrink-0" />
-                      The <strong>Fetch from Mindray</strong> panel will automatically appear in the Lab module when this test is selected.
+                      The <strong>Fetch from Machine</strong> panel will automatically appear in the Lab module when this test is selected.
                     </p>
                   )}
                 </div>

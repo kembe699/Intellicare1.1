@@ -89,8 +89,12 @@ router.post('/receive', verifyIntegrationToken, async (req, res) => {
       VALUES (?, ?, ?, ?, FALSE)
     `, {
       replacements: [
-        sampleId, 
-        machineName || 'Mindray BC-10', 
+        sampleId,
+        // Every real lab agent (Mindray's SQL poller, the Bonavera's TCP/HL7
+        // listener) always sends its own device.name — this fallback only
+        // fires for a caller that omitted it entirely, so it shouldn't name
+        // one specific analyzer as if that were a safe guess.
+        machineName || 'Unknown Lab Machine',
         JSON.stringify(rawData || {}), 
         JSON.stringify(parsedData)
       ]
