@@ -3,6 +3,7 @@ import { authFetch } from '@/api/apiClient';
 export interface MindrayResult {
   sampleId: string;
   testCode: string;
+  machineName: string;
   components: Array<{
     name: string;
     value: string;
@@ -55,6 +56,10 @@ export class LabIntegrationService {
       const mindrayResult: MindrayResult = {
         sampleId: rawResult.sample_id,
         testCode: parsedData.testCode || 'CBC',
+        // The real source analyzer (e.g. "Bonavera Count 5R") — this used to
+        // get dropped here, so the UI only ever had "Mindray" to show,
+        // regardless of which machine the result actually came from.
+        machineName: rawResult.machine_name || 'Lab Machine',
         timestamp: rawResult.created_at,
         status: 'completed',
         components: parsedData.components.map((c: any) => ({

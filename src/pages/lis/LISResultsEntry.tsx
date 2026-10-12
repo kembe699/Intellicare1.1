@@ -637,39 +637,61 @@ export default function LISResultsEntry() {
                             <MindrayIntegration
                               testRequestId={selectedSpecimen.order_id}
                               onResultReceived={(sampleId, results) => {
+                                // Hyphens, underscores and spaces are all treated as
+                                // equivalent — a device reporting 'RDW_CV'/'P_LCR'
+                                // (underscores, e.g. the Bonavera Count 5R) against a panel
+                                // defined with 'RDW-CV'/'P-LCR' (hyphens) is the same
+                                // parameter, not a mismatch to alias around. % and # are
+                                // kept — those distinguish genuinely different parameters
+                                // (e.g. LYM% vs LYM#).
+                                const normalize = (s: string) => s.trim().toLowerCase().replace(/[-_\s]/g, '');
+
                                 const machineValues = new Map();
                                 results.components.forEach((c: any) => {
-                                  if (c.name) machineValues.set(c.name.trim().toLowerCase(), c);
+                                  if (c.name) machineValues.set(normalize(c.name), c);
                                 });
 
                                 const newResultValues = { ...resultValues };
                                 selectedTestSchema.components.forEach((comp: any) => {
-                                  const compName = comp.name?.trim().toLowerCase() || '';
+                                  const compName = normalize(comp.name || '');
                                   let matched = machineValues.get(compName);
 
-                                  // Handling aliases (like WBC, RBC)
+                                  // Handling aliases — covers both long descriptive panel names
+                                  // ('white blood cells') and legacy 3-part-analyzer short labels
+                                  // ('Lymph%'/'Gran%'/'Mid%') against a 5-part analyzer's own
+                                  // vocabulary (LYM/NEU/MON/EOS/BASO). 'Mid' has no exact 5-part
+                                  // equivalent (it historically lumped Mono+Eos+Baso together on
+                                  // a 3-part analyzer) — Monocytes is the closest single value,
+                                  // kept as a best-effort fallback rather than leaving it blank.
                                   if (!matched) {
                                     const aliases: Record<string, string[]> = {
-                                      'white blood cells': ['wbc'],
-                                      'red blood cells': ['rbc'],
+                                      'whitebloodcells': ['wbc'],
+                                      'redbloodcells': ['rbc'],
                                       'hemoglobin': ['hgb', 'hb'],
                                       'hematocrit': ['hct'],
-                                      'mean corpuscular volume': ['mcv'],
-                                      'mean corpuscular hemoglobin': ['mch'],
-                                      'mean corpuscular hb conc': ['mchc'],
+                                      'meancorpuscularvolume': ['mcv'],
+                                      'meancorpuscularhemoglobin': ['mch'],
+                                      'meancorpuscularhbconc': ['mchc'],
                                       'platelets': ['plt'],
-                                      'lymphocytes %': ['lym%'],
-                                      'monocytes %': ['mon%'],
-                                      'granulocytes %': ['gra%'],
-                                      'lymphocytes #': ['lym#'],
-                                      'monocytes #': ['mon#'],
-                                      'granulocytes #': ['gra#']
+                                      'lymphocytes%': ['lym%'],
+                                      'monocytes%': ['mon%'],
+                                      'granulocytes%': ['neu%', 'gra%'],
+                                      'lymphocytes#': ['lym#'],
+                                      'monocytes#': ['mon#'],
+                                      'granulocytes#': ['neu#', 'gra#'],
+                                      'lymph%': ['lym%'],
+                                      'lymph#': ['lym#'],
+                                      'gran%': ['neu%', 'gra%'],
+                                      'gran#': ['neu#', 'gra#'],
+                                      'mid%': ['mon%'],
+                                      'mid#': ['mon#'],
                                     };
 
                                     const compAliases = aliases[compName] || [];
                                     for (const alias of compAliases) {
-                                      if (machineValues.has(alias)) {
-                                        matched = machineValues.get(alias);
+                                      const normalizedAlias = normalize(alias);
+                                      if (machineValues.has(normalizedAlias)) {
+                                        matched = machineValues.get(normalizedAlias);
                                         break;
                                       }
                                     }
