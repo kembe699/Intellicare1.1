@@ -1171,7 +1171,7 @@ export default function BillDetails() {
               return (
                 <div className="bg-card rounded-lg border border-sky-200 shadow-sm p-4">
                   <h3 className="font-medium mb-2 text-lg border-b pb-2 flex items-center gap-2 text-sky-700"><Shield className="w-4 h-4" /> Insurance Claim</h3>
-                  <p className="text-xs text-muted-foreground mb-3">These items are billed at 0 in SSP — they're claimed from the insurer separately, in their own currency.</p>
+                  <p className="text-xs text-muted-foreground mb-3">These items are billed at 0 in {bill.bill_currency || 'SSP'} — they're claimed from the insurer separately, in their own currency.</p>
                   <div className="flex justify-between items-center text-sm mb-3">
                     <span className="text-muted-foreground">Scheme Total</span>
                     <span className="font-bold text-sky-700">{schemeCurrency} {schemeTotal.toFixed(2)}</span>
@@ -1363,7 +1363,7 @@ export default function BillDetails() {
               {
                 key: '__status', header: 'Status', align: 'center',
                 render: (_v, s) => isUnbilledInsuranceLine(s) ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-sky-50 text-sky-700 border-sky-200" title="Not billed in SSP — claimed from the insurer separately, from the Dispensing screen">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-sky-50 text-sky-700 border-sky-200" title={`Not billed in ${bill?.bill_currency || 'SSP'} — claimed from the insurer separately, from the Dispensing screen`}>
                     <Shield className="w-3 h-3" /> Insurance
                   </span>
                 ) : s.isVoided ? (
