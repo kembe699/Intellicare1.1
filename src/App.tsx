@@ -375,7 +375,7 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/lis/queue" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPrivilege="lis.queue.write">
           <LISQueue />
         </ProtectedRoute>
       } />

@@ -27,6 +27,15 @@
 
 const express = require('express');
 const router = express.Router();
+const { authorize } = require('../middleware/authorize');
+// Every reports-v2 route carries financial/clinical data and was previously
+// gated only on the frontend's requiredPrivilege="pages.reports.view" check
+// (src/App.tsx) -- any authenticated user of any role could call these
+// endpoints directly (devtools/Postman/a future UI surface) and get the
+// data with no server-side check at all. Mirrors reportDhis2.js, the one
+// report file that already did this correctly.
+router.use(authorize('pages.reports.view'));
+
 const { sequelize } = require('../models');
 const { QueryTypes } = require('sequelize');
 
