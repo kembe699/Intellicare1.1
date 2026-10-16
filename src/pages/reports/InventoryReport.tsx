@@ -19,7 +19,7 @@ type Mode =
   | 'stock-analysis-items' | 'stock-analysis-category' | 'fast-moving' | 'slow-moving'
   | 'retired-batches' | 'near-expiry' | 'stock-expiry' | 'stock-valuation-all'
   | 'stock-valuation-location' | 'out-of-stock' | 'below-reorder-level' | 'material-consumption'
-  | 'stock-movement-detail' | 'stock-movement-summary' | 'lab-test-consumables';
+  | 'stock-movement-detail' | 'stock-movement-summary';
 
 interface ReportOption {
   value: string;
@@ -63,11 +63,9 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'stock_valuation_location', label: 'Stock Valuation (By Storage Location)', group: 'Valuation', mode: 'stock-valuation-location', allBranches: false },
 
   { value: 'material_consumption_not_committed', label: 'Material Consumption (Not Committed)', group: 'Consumption', mode: 'material-consumption', allBranches: false },
-
-  { value: 'lab_test_consumables', label: 'Lab Test Consumables (Reagent/Kit Linkage)', group: 'Lab Consumables', mode: 'lab-test-consumables', allBranches: false },
 ];
 
-const OPTION_GROUPS = ['Stock Analysis', 'Movement Analysis', 'Stock Movement', 'Stock Levels', 'Valuation', 'Consumption', 'Lab Consumables'];
+const OPTION_GROUPS = ['Stock Analysis', 'Movement Analysis', 'Stock Movement', 'Stock Levels', 'Valuation', 'Consumption'];
 
 function thisMonthRange() {
   const now = new Date();
@@ -134,7 +132,7 @@ export default function InventoryReport() {
       } else if (option.mode === 'stock-movement-summary') {
         path = '/stock-movement-summary';
         params.set('groupBy', option.summaryGroupBy!);
-      } else if (option.mode === 'lab-test-consumables') path = '/lab-test-consumables';
+      }
 
       const res = await authFetch(`/api/reports-v2/inventory${path}?${params}`);
       if (!res.ok) throw new Error('Failed to load report');
@@ -256,49 +254,6 @@ export default function InventoryReport() {
       { key: 'totalValue', header: 'Total Value', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
     ];
     csvColumns = [{ header: option.summaryGroupBy === 'location' ? 'Location' : 'Branch', key: 'groupLabel' }, { header: 'Transactions', key: 'transactionCount' }, { header: 'Total Qty Moved', key: 'totalQuantity' }, { header: 'Total Value', key: 'totalValue', transform: v => fmtCurrency(v) }];
-  } else if (option.mode === 'lab-test-consumables') {
-    columns = [
-      { key: 'testName', header: 'Lab Test', sortable: true, render: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-muted-foreground font-mono">{r.testCode}</p></div> },
-      { key: 'itemName', header: 'Reagent / Kit', sortable: true, render: (v, r) => <div><p>{v}</p><p className="text-xs text-muted-foreground font-mono">{r.itemCode}</p></div> },
-      { key: 'locationName', header: 'Location', sortable: true, render: v => v || <span className="text-muted-foreground">Any</span> },
-      { key: 'quantityOnHand', header: 'Qty on Hand', align: 'right', sortable: true, render: (v, r) => <span className="font-mono">{fmtCount(v)} {r.unitOfMeasure || ''}</span> },
-      { key: 'testsPerUnit', header: 'Tests/Unit', align: 'right', render: v => <span className="font-mono text-muted-foreground">{fmtCount(v)}</span> },
-      {
-        key: 'testsRemaining', header: 'Tests Remaining', align: 'right', sortable: true,
-        render: v => {
-          const n = Number(v) || 0;
-          return <span className={`font-mono font-semibold ${n <= 0 ? 'text-red-600' : n < 10 ? 'text-amber-600' : 'text-foreground'}`}>{fmtCount(n)}</span>;
-        },
-      },
-      {
-        key: 'testsPerformed', header: 'Tests Performed (Period)', align: 'right', sortable: true,
-        render: v => v == null ? <span className="text-muted-foreground">—</span> : <span className="font-mono">{fmtCount(v)}</span>,
-      },
-      {
-        key: 'quantityConsumed', header: 'Consumed (Period)', align: 'right', sortable: true,
-        render: (v, r) => v == null ? <span className="text-muted-foreground">—</span> : <span className="font-mono text-muted-foreground">{Number(v).toFixed(4)} {r.unitOfMeasure || ''}</span>,
-      },
-      {
-        key: 'status', header: 'Status', sortable: true,
-        render: v => (
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            v === 'Available' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' :
-            v === 'Unavailable' ? 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400' :
-            'bg-muted text-muted-foreground'
-          }`}>{v}</span>
-        ),
-      },
-      { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
-    ];
-    csvColumns = [
-      { header: 'Lab Test', key: 'testName' }, { header: 'Test Code', key: 'testCode' },
-      { header: 'Reagent/Kit', key: 'itemName' }, { header: 'Item Code', key: 'itemCode' },
-      { header: 'Location', key: 'locationName' }, { header: 'Qty on Hand', key: 'quantityOnHand' },
-      { header: 'Tests/Unit', key: 'testsPerUnit' }, { header: 'Tests Remaining', key: 'testsRemaining' },
-      { header: 'Tests Performed (Period)', key: 'testsPerformed' }, { header: 'Consumed (Period)', key: 'quantityConsumed' },
-      { header: 'Status', key: 'status' }, { header: 'Branch', key: 'branchName' },
-    ];
-    emptyMessage = 'No lab tests are linked to a consumable yet — set one up under Inventory > Lab Test Consumables.';
   }
 
   const numberedRows = useMemo(() => rows.map((r, i) => ({ ...r, no: i + 1 })), [rows]);
