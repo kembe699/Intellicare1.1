@@ -707,6 +707,7 @@ app.get('/api/test-db', async (req, res) => {
 
 app.use('/api/accounting', accountingRouter);
 app.use('/api/procurement', procurementRouter);
+app.use('/api/stock-transfers', require('./routes/stockTransfers'));
 app.use('/api/approvals', approvalsRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/inventory', inventoryRouter);
@@ -898,6 +899,9 @@ async function runBackgroundMigrations() {
     )],
     ['LabConsumables',    () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/migrateLabConsumables').migrateLabConsumables, 'Lab Consumables'
+    )],
+    ['StockTransfers',    () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateStockTransfers').migrateStockTransfers, 'Stock Transfers'
     )],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],
     ['LisBarcodeUnify',   async () => {

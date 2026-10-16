@@ -137,6 +137,15 @@ const CATALOG = [
   ['procurement.purchase_orders.write', 'Manage purchase orders', 'procurement', 'Create/edit purchase orders and PO items', ['admin', 'procurement']],
   ['procurement.settings.manage', 'Manage procurement settings', 'procurement', 'Clinic-level procurement settings', ['admin']],
 
+  // Deliberately broad (every role) — any department can view stores and
+  // raise a stock transfer request, not only lab/pharmacy/procurement.
+  // Actually touching a specific store's stock (requesting FROM it on
+  // behalf of your own location, or approving/fulfilling a request that
+  // drains it) is gated separately, per-user per-location, by the new
+  // location_access table — see utils/locationAccess.js — not by role.
+  ['stock_transfers.use', 'Use stock transfer requests', 'procurement', 'View stores and items, create/view stock transfer requests between locations', ['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'accountant', 'finance_manager', 'auditor', 'procurement', 'nurse', 'cashier']],
+  ['stock_transfers.manage', 'Manage store access grants', 'procurement', 'Grant/revoke which users can request from or fulfill at a given storage location', ['admin', 'procurement']],
+
   // Payroll data is sensitive (salaries, bank details) — admin-only by default.
   // A tenant that wants to delegate this can create a custom role via Roles &
   // Privileges and grant these exact keys, rather than this app adding a new

@@ -119,6 +119,7 @@ const procurementDropdown: NavDropdown = {
     { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ShoppingCart, privilege: 'procurement.purchase_orders.write' },
     { label: 'Goods Receipt', href: '/procurement/goods-receipt', icon: Truck, privilege: ['procurement.write', 'pharmacy.write'] },
     { label: 'Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write' },
+    { label: 'Stock Transfers', href: '/procurement/stock-transfers', icon: ArrowRightLeft, privilege: 'stock_transfers.use' },
     { label: 'Reports', href: '/procurement/reports', icon: BarChart3, privilege: 'procurement.read' },
   ]
 };
@@ -237,6 +238,7 @@ const setupDropdown: NavDropdown = {
     { label: 'API Configurations', href: '/setup/api-configurations', icon: Key, privilege: 'setup.api_configurations.manage' },
     { label: 'Security', href: '/setup/security', icon: Shield, privilege: 'pages.security.access' },
     { label: 'Approvals', href: '/setup/approvals', icon: ShieldCheck, privilege: 'approvals.manage' },
+    { label: 'Store Access', href: '/setup/store-access', icon: MapPin, privilege: 'stock_transfers.manage' },
   ]
 };
 

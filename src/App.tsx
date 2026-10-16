@@ -89,6 +89,8 @@ const LeaveManagement = lazyWithRetry(() => import('./pages/hr/LeaveManagement')
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
+const StockTransferRequests = lazyWithRetry(() => import('./pages/procurement/StockTransferRequests'));
+const LocationAccess = lazyWithRetry(() => import('./pages/setup/LocationAccess'));
 const Profile = lazyWithRetry(() => import('./pages/Profile'));
 const HowTo = lazyWithRetry(() => import('./pages/HowTo'));
 const ChartOfAccounts = lazyWithRetry(() => import('./pages/accounting/ChartOfAccounts'));
@@ -613,6 +615,16 @@ const AppRoutes = () => {
       <Route path="/procurement/reports" element={
         <ProtectedRoute requiredPrivilege="procurement.read">
           <ProcurementReports />
+        </ProtectedRoute>
+      } />
+      <Route path="/procurement/stock-transfers" element={
+        <ProtectedRoute requiredPrivilege="stock_transfers.use">
+          <StockTransferRequests />
+        </ProtectedRoute>
+      } />
+      <Route path="/setup/store-access" element={
+        <ProtectedRoute requiredPrivilege="stock_transfers.manage">
+          <LocationAccess />
         </ProtectedRoute>
       } />
       <Route path="/accounting" element={<Navigate to="/accounting/chart-of-accounts" replace />} />
