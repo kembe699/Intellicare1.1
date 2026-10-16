@@ -99,6 +99,7 @@ const FinancialReports = lazyWithRetry(() => import('./pages/accounting/Financia
 const ExchangeRatesPage = lazyWithRetry(() => import('./pages/accounting/ExchangeRates'));
 const ItemMaster = lazyWithRetry(() => import('./pages/inventory/ItemMaster'));
 const StockLocations = lazyWithRetry(() => import('./pages/inventory/StockLocations'));
+const LabTestConsumables = lazyWithRetry(() => import('./pages/inventory/LabTestConsumables'));
 const StockTransactions = lazyWithRetry(() => import('./pages/inventory/StockTransactions'));
 const BatchTracking = lazyWithRetry(() => import('./pages/inventory/BatchTracking'));
 const PhysicalCounts = lazyWithRetry(() => import('./pages/inventory/PhysicalCounts'));
@@ -666,6 +667,11 @@ const AppRoutes = () => {
       <Route path="/inventory/locations" element={
         <ProtectedRoute requiredPrivilege="inventory.read">
           <StockLocations />
+        </ProtectedRoute>
+      } />
+      <Route path="/inventory/lab-test-consumables" element={
+        <ProtectedRoute requiredPrivilege="inventory.read">
+          <LabTestConsumables />
         </ProtectedRoute>
       } />
       <Route path="/inventory/transactions" element={

@@ -896,6 +896,9 @@ async function runBackgroundMigrations() {
     ['PerfIndexes',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/addPerformanceIndexes').addPerformanceIndexes, 'Performance Indexes'
     )],
+    ['LabConsumables',    () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/migrateLabConsumables').migrateLabConsumables, 'Lab Consumables'
+    )],
     ['Reporting',         () => require('./scripts/migrateReportingTables').migrateReportingTables()],
     ['LisBarcodeUnify',   async () => {
       const { sequelize: sq } = require('./models');
