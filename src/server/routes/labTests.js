@@ -5,7 +5,6 @@ const { authorize } = require('../middleware/authorize');
 const { resolveRevenueAccount } = require('../utils/resolveRevenueAccount');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
-const { getUnavailableLabTestIds } = require('../utils/labConsumables');
 const router = express.Router();
 
 // Non-admin users only see/manage lab tests from their own branch; admins see
@@ -89,20 +88,6 @@ router.get('/', async (req, res) => {
         type: LabTest.sequelize.QueryTypes.SELECT
       });
       test.components = components;
-    }
-
-    // A test with a linked reagent/kit that's run too low to cover another
-    // test shows as unavailable — a test with no link at all is always
-    // available (the link is optional).
-    try {
-      const resolvedClinicId = BranchQueryFilter.resolveClinicId(req) || parseInt(clinicId) || 1;
-      const unavailable = await getUnavailableLabTestIds(LabTest.sequelize, resolvedClinicId);
-      for (const test of labTests) {
-        test.is_available = !unavailable.has(test.id);
-      }
-    } catch (availErr) {
-      console.error('Error computing lab test availability:', availErr.message);
-      for (const test of labTests) test.is_available = true;
     }
 
     console.log(`Found ${labTests.length} lab tests with components`);

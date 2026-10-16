@@ -736,7 +736,7 @@ router.get('/locations', authorize('inventory.read'), async (req, res) => {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const branchFilter = getBranchConditionSQL(req, 'sl');
     const [locations] = await sequelize.query(`
-      SELECT sl.*, d.department_name, d.department_code,
+      SELECT sl.*,
         (SELECT COUNT(DISTINCT sbl.item_id) FROM stock_by_location sbl WHERE sbl.location_id = sl.id AND sbl.quantity_on_hand > 0) AS item_count,
         (SELECT COALESCE(SUM(sbl2.quantity_on_hand), 0) FROM stock_by_location sbl2 WHERE sbl2.location_id = sl.id) AS total_stock,
         -- Value of what is standing in this location, so the list answers
@@ -748,7 +748,6 @@ router.get('/locations', authorize('inventory.read'), async (req, res) => {
            JOIN inventory_items ii ON ii.id = sbl3.item_id
           WHERE sbl3.location_id = sl.id) AS stock_value
       FROM stock_locations sl
-      LEFT JOIN departments d ON d.id = sl.department_id
       WHERE sl.clinic_id = ?${branchFilter.sql}
       ORDER BY sl.location_name ASC
     `, { replacements: [clinicId, ...branchFilter.params] });
@@ -762,19 +761,18 @@ router.get('/locations', authorize('inventory.read'), async (req, res) => {
 router.post('/locations', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
-    const { location_code, location_name, location_type, address, manager_user_id, capacity_description, department_id } = req.body;
+    const { location_code, location_name, location_type, address, manager_user_id, capacity_description } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
     if (!location_code || !location_name) return res.status(400).json({ error: 'location_code and location_name required' });
 
     await sequelize.query(`
-      INSERT INTO stock_locations (id, clinic_id, branch_id, location_code, location_name, location_type, address, manager_user_id, capacity_description, department_id)
-      VALUES (:id, :clinic_id, :branch_id, :location_code, :location_name, :location_type, :address, :manager_user_id, :capacity_description, :department_id)
+      INSERT INTO stock_locations (id, clinic_id, branch_id, location_code, location_name, location_type, address, manager_user_id, capacity_description)
+      VALUES (:id, :clinic_id, :branch_id, :location_code, :location_name, :location_type, :address, :manager_user_id, :capacity_description)
     `, {
       replacements: {
         id, clinic_id, branch_id: getCreateBranchId(req), location_code, location_name,
         location_type: location_type || 'warehouse', address: address || null,
-        manager_user_id: manager_user_id || null, capacity_description: capacity_description || null,
-        department_id: department_id || null
+        manager_user_id: manager_user_id || null, capacity_description: capacity_description || null
       }
     });
     res.status(201).json({ id, location_code, location_name, message: 'Location created' });
@@ -799,18 +797,13 @@ router.put('/locations/:id', authorize('inventory.write'), async (req, res) => {
 
     const fields = [];
     const replacements = { id: req.params.id, clinicId };
-    const allowed = ['location_name', 'location_type', 'address', 'manager_user_id', 'is_active', 'capacity_description', 'department_id'];
+    const allowed = ['location_name', 'location_type', 'address', 'manager_user_id', 'is_active', 'capacity_description'];
     for (const key of allowed) {
       // No backticks — this is Postgres, not MySQL. Backtick-quoted identifiers
       // aren't valid syntax here at all, so this UPDATE threw a syntax error and
       // 500'd on every single call that actually had a field to update (the
       // affectedRows check just below never even had a chance to matter).
-      if (req.body[key] !== undefined) {
-        // department_id is a FK — an empty string from a cleared dropdown must
-        // become NULL, not get sent to Postgres as '' and reject on the FK check.
-        fields.push(`${key} = :${key}`);
-        replacements[key] = (key === 'department_id' && !req.body[key]) ? null : req.body[key];
-      }
+      if (req.body[key] !== undefined) { fields.push(`${key} = :${key}`); replacements[key] = req.body[key]; }
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     const [, locMeta] = await sequelize.query(`UPDATE stock_locations SET ${fields.join(', ')} WHERE id = :id AND clinic_id = :clinicId`, { replacements });
@@ -2215,94 +2208,6 @@ router.post('/gl-entry', authorize('inventory.write'), async (req, res) => {
   } catch (error) {
     console.error('Error creating GL entry:', error);
     res.status(500).json({ error: 'Failed to create GL entry' });
-  }
-});
-
-// ── Lab Test Consumables ──────────────────────────────────────────────────
-// Optional link from a lab test to the reagent/kit it draws from, with a
-// yield (tests_per_unit) that drives automatic stock deduction when the test
-// is performed. See utils/labConsumables.js for the deduction/availability
-// logic this feeds.
-router.get('/lab-test-consumables', authorize('inventory.read'), async (req, res) => {
-  try {
-    const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const { lab_test_id } = req.query;
-    const conditions = ['ltc.clinic_id = :clinicId'];
-    const replacements = { clinicId };
-    if (lab_test_id) { conditions.push('ltc.lab_test_id = :lab_test_id'); replacements.lab_test_id = lab_test_id; }
-
-    const [rows] = await sequelize.query(`
-      SELECT ltc.*, lt.test_name, lt.test_code,
-        ii.item_name, ii.item_code, ii.unit_of_measure, ii.quantity_on_hand,
-        sl.location_name,
-        FLOOR(ii.quantity_on_hand * ltc.tests_per_unit) AS tests_remaining
-      FROM lab_test_consumables ltc
-      JOIN lab_tests lt ON lt.id = ltc.lab_test_id
-      JOIN inventory_items ii ON ii.id = ltc.inventory_item_id
-      LEFT JOIN stock_locations sl ON sl.id = ltc.location_id
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY lt.test_name ASC
-    `, { replacements });
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching lab test consumables:', error);
-    res.status(500).json({ error: 'Failed to fetch lab test consumables' });
-  }
-});
-
-router.post('/lab-test-consumables', authorize('inventory.write'), async (req, res) => {
-  try {
-    const { lab_test_id, inventory_item_id, location_id, tests_per_unit, notes } = req.body;
-    const clinic_id = BranchQueryFilter.resolveClinicId(req);
-    if (!lab_test_id || !inventory_item_id || !tests_per_unit || Number(tests_per_unit) <= 0) {
-      return res.status(400).json({ error: 'lab_test_id, inventory_item_id and a positive tests_per_unit are required' });
-    }
-    const id = uuidv4();
-    await sequelize.query(`
-      INSERT INTO lab_test_consumables (id, clinic_id, lab_test_id, inventory_item_id, location_id, tests_per_unit, notes, created_by)
-      VALUES (:id, :clinic_id, :lab_test_id, :inventory_item_id, :location_id, :tests_per_unit, :notes, :created_by)
-    `, {
-      replacements: {
-        id, clinic_id, lab_test_id, inventory_item_id, location_id: location_id || null,
-        tests_per_unit, notes: notes || null, created_by: req.user?.id || null,
-      },
-    });
-    res.status(201).json({ id, message: 'Lab test consumable link created' });
-  } catch (error) {
-    if (error.original?.code === '23505') return res.status(409).json({ error: 'This test is already linked to that item' });
-    console.error('Error creating lab test consumable link:', error);
-    res.status(500).json({ error: 'Failed to create lab test consumable link' });
-  }
-});
-
-router.put('/lab-test-consumables/:id', authorize('inventory.write'), async (req, res) => {
-  try {
-    const { tests_per_unit, location_id, is_active, notes } = req.body;
-    const fields = [];
-    const replacements = { id: req.params.id };
-    if (tests_per_unit !== undefined) { fields.push('tests_per_unit = :tests_per_unit'); replacements.tests_per_unit = tests_per_unit; }
-    if (location_id !== undefined) { fields.push('location_id = :location_id'); replacements.location_id = location_id || null; }
-    if (is_active !== undefined) { fields.push('is_active = :is_active'); replacements.is_active = is_active; }
-    if (notes !== undefined) { fields.push('notes = :notes'); replacements.notes = notes; }
-    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
-    fields.push('updated_at = NOW()');
-    const [, meta] = await sequelize.query(`UPDATE lab_test_consumables SET ${fields.join(', ')} WHERE id = :id`, { replacements });
-    if (meta.rowCount === 0) return res.status(404).json({ error: 'Link not found' });
-    res.json({ message: 'Updated' });
-  } catch (error) {
-    console.error('Error updating lab test consumable link:', error);
-    res.status(500).json({ error: 'Failed to update link' });
-  }
-});
-
-router.delete('/lab-test-consumables/:id', authorize('inventory.write'), async (req, res) => {
-  try {
-    const [, meta] = await sequelize.query('DELETE FROM lab_test_consumables WHERE id = :id', { replacements: { id: req.params.id } });
-    if (meta.rowCount === 0) return res.status(404).json({ error: 'Link not found' });
-    res.json({ message: 'Deleted' });
-  } catch (error) {
-    console.error('Error deleting lab test consumable link:', error);
-    res.status(500).json({ error: 'Failed to delete link' });
   }
 });
 

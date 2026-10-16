@@ -510,27 +510,6 @@ router.post('/:id/results', authorize('lab.requests.write'), async (req, res) =>
       { replacements: [status, id] }
     );
 
-    // Deduct the linked reagent/kit exactly once, on the transition into
-    // completed — not on every re-save of an already-completed request.
-    if (status === 'completed' && labRequest.status !== 'completed') {
-      try {
-        const [[matchedTest]] = await sequelize.query(
-          `SELECT id FROM lab_tests WHERE test_code = ? OR test_name = ? LIMIT 1`,
-          { replacements: [labRequest.test_code || '', labRequest.test_name || ''] }
-        );
-        if (matchedTest) {
-          const { deductLabTestConsumables } = require('../utils/labConsumables');
-          await deductLabTestConsumables({
-            sequelize, clinicId: labRequest.clinic_id, labTestId: matchedTest.id,
-            quantityOfTests: 1, referenceType: 'lab_request', referenceId: id,
-            createdBy: req.user?.id, branchId: labRequest.branch_id,
-          });
-        }
-      } catch (deductErr) {
-        console.error('Non-blocking: lab consumable deduction failed for request', id, ':', deductErr.message);
-      }
-    }
-
     const [[updated]] = await sequelize.query(`SELECT * FROM lab_requests WHERE id = ?`, { replacements: [id] });
     res.json(updated);
   } catch (error) {
