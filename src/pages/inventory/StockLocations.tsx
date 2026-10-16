@@ -22,6 +22,14 @@ interface StockLocation {
   capacity_description: string;
   item_count: number;
   total_stock: number;
+  department_id?: string | null;
+  department_name?: string | null;
+}
+
+interface Department {
+  id: string;
+  department_name: string;
+  department_code: string;
 }
 
 const LOCATION_TYPES = ['warehouse', 'pharmacy', 'laboratory', 'clinic', 'storage', 'theatre'];
@@ -49,14 +57,21 @@ export default function StockLocations() {
   const [search, setSearch] = useState('');
 
   const [editingLocation, setEditingLocation] = useState<StockLocation | null>(null);
-  const [formData, setFormData] = useState({ location_code: '', location_name: '', location_type: 'warehouse', address: '', capacity_description: '' });
+  const [formData, setFormData] = useState({ location_code: '', location_name: '', location_type: 'warehouse', address: '', capacity_description: '', department_id: '' });
   const [saving, setSaving] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const [selectedLocation, setSelectedLocation] = useState<StockLocation | null>(null);
   const [locationStock, setLocationStock] = useState<any[]>([]);
   const [stockLoading, setStockLoading] = useState(false);
 
-  useEffect(() => { fetchLocations(); }, []);
+  useEffect(() => {
+    fetchLocations();
+    authFetch('/api/departments', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setDepartments(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
 
   const fetchLocations = async () => {
     setLoading(true);
@@ -78,7 +93,7 @@ export default function StockLocations() {
 
   const openCreate = () => {
     setEditingLocation(null);
-    setFormData({ location_code: '', location_name: '', location_type: 'warehouse', address: '', capacity_description: '' });
+    setFormData({ location_code: '', location_name: '', location_type: 'warehouse', address: '', capacity_description: '', department_id: '' });
   };
 
   const openEdit = (loc: StockLocation) => {
@@ -86,7 +101,7 @@ export default function StockLocations() {
     setFormData({
       location_code: loc.location_code, location_name: loc.location_name,
       location_type: loc.location_type || 'warehouse', address: loc.address || '',
-      capacity_description: loc.capacity_description || '',
+      capacity_description: loc.capacity_description || '', department_id: loc.department_id || '',
     });
   };
 
@@ -173,6 +188,16 @@ export default function StockLocations() {
                 <label className="text-xs font-medium text-muted-foreground">Capacity Description</label>
                 <Input value={formData.capacity_description} onChange={e => setFormData({ ...formData, capacity_description: e.target.value })} placeholder="e.g. 500 sq ft cold storage" className="mt-1" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Work Station / Department</label>
+                <Combobox
+                  options={[{ value: '', label: '— None —' }, ...departments.map(d => ({ value: d.id, label: d.department_name }))]}
+                  value={formData.department_id}
+                  onChange={v => setFormData({ ...formData, department_id: v })}
+                  searchPlaceholder="Search..."
+                  className="mt-1 h-9"
+                />
+              </div>
               <div className="md:col-span-2 lg:col-span-4">
                 <label className="text-xs font-medium text-muted-foreground">Address</label>
                 <textarea
@@ -222,6 +247,7 @@ export default function StockLocations() {
                 ),
               },
               { key: 'location_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize">{v}</span> },
+              { key: 'department_name', header: 'Work Station', render: (v) => v || <span className="text-muted-foreground">—</span> },
               { key: 'address', header: 'Address', render: (v) => v || '—' },
               { key: 'item_count', header: 'Items', align: 'right', sortable: true, render: (v) => Number(v || 0).toLocaleString() },
               { key: 'total_stock', header: 'Units', align: 'right', sortable: true, render: (v) => Number(v || 0).toLocaleString() },

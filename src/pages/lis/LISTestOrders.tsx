@@ -631,6 +631,11 @@ export default function LISTestOrders() {
   };
 
   const toggleReqService = (item: any) => {
+    const isSelected = reqServiceSelected.some(x => x.key === item.key);
+    if (!isSelected && item.type === 'test' && item.is_available === false) {
+      toast.error(`${item.name} is unavailable — its linked reagent/kit is out of stock.`);
+      return;
+    }
     setReqServiceSelected(prev =>
       prev.some(x => x.key === item.key) ? prev.filter(x => x.key !== item.key) : [...prev, item]
     );
@@ -1858,6 +1863,12 @@ export default function LISTestOrders() {
 
   const toggleTest = (test: any) => {
     const isSelected = selectedTests.some(t => t.test_code === test.test_code);
+    // A test whose linked reagent/kit has run out can't be deselected into
+    // existence by a direct call either — only selecting back OUT is allowed.
+    if (!isSelected && test.is_available === false) {
+      toast.error(`${test.test_name} is unavailable — its linked reagent/kit is out of stock.`);
+      return;
+    }
     setSelectedTests(isSelected ? selectedTests.filter(t => t.test_code !== test.test_code) : [...selectedTests, test]);
   };
 
@@ -1931,7 +1942,7 @@ export default function LISTestOrders() {
   const reqServiceOptions = [
     ...labTests
       .filter((t: any) => t.test_name?.toLowerCase().includes(reqServiceQuery.toLowerCase()) || t.test_code?.toLowerCase().includes(reqServiceQuery.toLowerCase()))
-      .map((t: any) => ({ key: `test-${t.id}`, type: 'test' as const, code: t.test_code, name: t.test_name, department: t.category, price: parseFloat(t.price) || 0, currency: t.currency || 'SSP' })),
+      .map((t: any) => ({ key: `test-${t.id}`, type: 'test' as const, code: t.test_code, name: t.test_name, department: t.category, price: parseFloat(t.price) || 0, currency: t.currency || 'SSP', is_available: t.is_available !== false })),
     ...services
       .filter((s: any) => (s.service_name || s.name || '').toLowerCase().includes(reqServiceQuery.toLowerCase()))
       .map((s: any) => ({ key: `svc-${s.id}`, type: 'service' as const, serviceId: s.id, name: s.service_name || s.name, price: parseFloat(s.price) || 0, currency: s.currency || 'SSP' })),
@@ -2397,14 +2408,23 @@ export default function LISTestOrders() {
                               <CommandGroup key={category} heading={category}>
                                 {tests.map(test => {
                                   const isSelected = selectedTests.some(t => t.test_code === test.test_code);
+                                  const isUnavailable = test.is_available === false;
                                   return (
-                                    <CommandItem key={test.id} value={test.test_name} onSelect={() => toggleTest(test)} className="group">
+                                    <CommandItem
+                                      key={test.id} value={test.test_name} onSelect={() => toggleTest(test)}
+                                      disabled={isUnavailable && !isSelected}
+                                      className={cn('group', isUnavailable && !isSelected && 'opacity-50 cursor-not-allowed')}
+                                    >
                                       <Check className={cn('mr-2 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
                                       <div className="flex items-center justify-between gap-2 min-w-0 flex-1">
                                         <span className="truncate">{test.test_name}</span>
-                                        <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
-                                          {parseFloat(test.price || 0).toFixed(2)} {test.currency || 'SSP'}
-                                        </span>
+                                        {isUnavailable ? (
+                                          <span className="text-xs text-red-500 font-medium shrink-0">Out of stock</span>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
+                                            {parseFloat(test.price || 0).toFixed(2)} {test.currency || 'SSP'}
+                                          </span>
+                                        )}
                                       </div>
                                     </CommandItem>
                                   );
@@ -3594,12 +3614,19 @@ export default function LISTestOrders() {
                                   <CommandGroup>
                                     {reqServiceOptions.map(item => {
                                       const isSelected = reqServiceSelected.some(x => x.key === item.key);
+                                      const isUnavailable = item.type === 'test' && item.is_available === false;
                                       return (
-                                        <CommandItem key={item.key} value={item.name} onSelect={() => toggleReqService(item)}>
+                                        <CommandItem
+                                          key={item.key} value={item.name} onSelect={() => toggleReqService(item)}
+                                          disabled={isUnavailable && !isSelected}
+                                          className={cn(isUnavailable && !isSelected && 'opacity-50 cursor-not-allowed')}
+                                        >
                                           <Check className={cn('mr-2 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
                                           <div className="min-w-0 flex-1">
                                             <div className="truncate">{item.name}</div>
-                                            <div className="text-xs text-muted-foreground">{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                              {isUnavailable ? <span className="text-red-500 font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
+                                            </div>
                                           </div>
                                         </CommandItem>
                                       );

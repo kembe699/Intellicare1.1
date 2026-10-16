@@ -1521,8 +1521,9 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
   // NULL/mismatch-inclusive). Confirmed live: a specimen on branch 2 had
   // approved results stamped branch_id=1, so its own order's visit summary
   // showed "No results recorded" despite the results genuinely existing.
-  const [[specimen]] = await db.query(`SELECT branch_id FROM lis_specimens WHERE id = ?`, { replacements: [id] });
+  const [[specimen]] = await db.query(`SELECT branch_id, status, clinic_id FROM lis_specimens WHERE id = ?`, { replacements: [id] });
   const branchId = specimen?.branch_id ?? getCreateBranchId(req);
+  const alreadyAnalyzed = specimen?.status === 'analyzed';
 
   const t = await db.transaction();
   try {
@@ -1539,7 +1540,26 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
       `UPDATE lis_specimens SET status = 'analyzed', comment = ? WHERE id = ?`,
       { replacements: [comment || null, id], transaction: t }
     );
-    
+
+    // Deduct the linked reagent/kit — once per specimen, on the transition
+    // into 'analyzed' (the moment the bench actually ran it), not on every
+    // re-save of an already-analyzed specimen.
+    if (!alreadyAnalyzed && test_code) {
+      try {
+        const [[matchedTest]] = await db.query(`SELECT id FROM lab_tests WHERE test_code = ? LIMIT 1`, { replacements: [test_code], transaction: t });
+        if (matchedTest) {
+          const { deductLabTestConsumables } = require('../utils/labConsumables');
+          await deductLabTestConsumables({
+            sequelize: db, clinicId: specimen?.clinic_id || 1, labTestId: matchedTest.id,
+            quantityOfTests: 1, referenceType: 'lis_specimen', referenceId: id,
+            createdBy: recordedBy, branchId, transaction: t,
+          });
+        }
+      } catch (deductErr) {
+        console.error('Non-blocking: lab consumable deduction failed for specimen', id, ':', deductErr.message);
+      }
+    }
+
     await t.commit();
     res.json({ success: true, message: 'Results saved successfully' });
   } catch (error) {
