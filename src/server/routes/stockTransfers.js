@@ -258,6 +258,19 @@ router.post('/:id/approve', authorize('stock_transfers.use'), async (req, res) =
         );
         const available = parseFloat(source?.quantity_on_hand) || 0;
         const qty = parseFloat(line.quantity_requested);
+
+        // Priced on the same basis as the stock-location valuation figure
+        // elsewhere in this app (GET /inventory/locations), so a transfer
+        // this screen triggers carries a real $ value into the Stock
+        // Movement reports instead of the $0 a manual transfer defaults to
+        // when nobody types a unit cost in by hand.
+        const [[costRow]] = await sequelize.query(
+          'SELECT current_unit_cost, average_unit_cost, cost_currency FROM inventory_items WHERE id = :item_id',
+          { replacements: { item_id: line.inventory_item_id }, transaction: t }
+        );
+        const unitCost = parseFloat(costRow?.current_unit_cost) || parseFloat(costRow?.average_unit_cost) || 0;
+        const totalCost = unitCost * qty;
+        const costCurrency = costRow?.cost_currency || 'SSP';
         if (available < qty) {
           throw Object.assign(new Error(`Not enough stock remaining at the source location to fulfill this request (${available} available, ${qty} needed).`), { statusCode: 409 });
         }
@@ -281,17 +294,17 @@ router.post('/:id/approve', authorize('stock_transfers.use'), async (req, res) =
         const txnId = uuidv4();
         await sequelize.query(`
           INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,
-            quantity_change, from_location_id, to_location_id, reference_type, reference_id,
-            transaction_date, notes, created_by)
+            quantity_change, from_location_id, to_location_id, unit_cost, total_cost, cost_currency,
+            reference_type, reference_id, transaction_date, notes, created_by)
           VALUES (:id, :clinic_id, :transaction_number, :item_id, 'transfer',
-            :qty, :from_location_id, :to_location_id, 'stock_transfer_request', :reference_id,
-            CURRENT_DATE, :notes, :created_by)
+            :qty, :from_location_id, :to_location_id, :unit_cost, :total_cost, :cost_currency,
+            'stock_transfer_request', :reference_id, CURRENT_DATE, :notes, :created_by)
         `, {
           replacements: {
             id: txnId, clinic_id: clinicId, transaction_number: `${request.transfer_number}-${line.id.slice(0, 8)}`,
             item_id: line.inventory_item_id, qty, from_location_id: request.from_location_id,
-            to_location_id: request.to_location_id, reference_id: request.id,
-            notes: `Stock transfer request ${request.transfer_number}`, created_by: req.user.id,
+            to_location_id: request.to_location_id, unit_cost: unitCost, total_cost: totalCost, cost_currency: costCurrency,
+            reference_id: request.id, notes: `Stock transfer request ${request.transfer_number}`, created_by: req.user.id,
           },
           transaction: t,
         });
