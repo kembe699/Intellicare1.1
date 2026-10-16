@@ -610,4 +610,81 @@ router.get('/material-consumption', async (req, res) => {
   }
 });
 
+// ── GET /lab-test-consumables ────────────────────────────────────────────
+// Current-state snapshot of every test<->reagent/kit link: the yield, the
+// stock it's drawing from, how many tests that stock can still cover, and
+// whether the test is currently available to bill — plus, if dateFrom/dateTo
+// are given, how many tests were actually performed (and how much was
+// consumed) against that link in the window, from the
+// lab_test_consumption inventory_transactions rows the deduction hook writes.
+router.get('/lab-test-consumables', async (req, res) => {
+  try {
+    const allBranches = boolParam(req.query.allBranches);
+    const clinicId = clinicIdFor(req);
+    const dateFrom = asDateStr(req.query.dateFrom);
+    const dateTo = asDateStr(req.query.dateTo);
+    const repl = { clinicId };
+    const branchSql = branchScope(req, repl, 'ii', allBranches);
+
+    const rows = await sequelize.query(
+      `SELECT
+         ltc.id,
+         lt.test_name AS "testName", lt.test_code AS "testCode",
+         ii.item_code AS "itemCode", ii.item_name AS "itemName", ii.unit_of_measure AS "unitOfMeasure",
+         sl.location_name AS "locationName",
+         ii.quantity_on_hand AS "quantityOnHand",
+         ltc.tests_per_unit AS "testsPerUnit",
+         FLOOR(ii.quantity_on_hand * ltc.tests_per_unit) AS "testsRemaining",
+         ltc.is_active AS "isActive",
+         b.name AS "branchName"
+       FROM lab_test_consumables ltc
+       JOIN lab_tests lt ON lt.id = ltc.lab_test_id
+       JOIN inventory_items ii ON ii.id = ltc.inventory_item_id
+       LEFT JOIN stock_locations sl ON sl.id = ltc.location_id
+       LEFT JOIN branches b ON b.id = ii.branch_id
+       WHERE ltc.clinic_id = :clinicId ${branchSql}
+       ORDER BY lt.test_name ASC`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+
+    const byLink = new Map();
+    if (dateFrom && dateTo) {
+      const usageRepl = { clinicId, dateFrom, dateTo: `${dateTo} 23:59:59` };
+      const usage = await sequelize.query(
+        `SELECT lab_test_consumable_id AS "linkId",
+                COUNT(*) AS "testsPerformed",
+                SUM(ABS(quantity_change)) AS "quantityConsumed"
+         FROM inventory_transactions
+         WHERE clinic_id = :clinicId AND transaction_type = 'lab_test_consumption'
+           AND lab_test_consumable_id IS NOT NULL
+           AND created_at BETWEEN :dateFrom AND :dateTo
+         GROUP BY lab_test_consumable_id`,
+        { replacements: usageRepl, type: QueryTypes.SELECT }
+      );
+      for (const u of usage) byLink.set(u.linkId, u);
+    }
+
+    res.json({
+      period: dateFrom && dateTo ? { dateFrom, dateTo } : null,
+      rows: rows.map(r => {
+        const usage = byLink.get(r.id);
+        const quantityOnHand = parseFloat(r.quantityOnHand) || 0;
+        const testsRemaining = parseInt(r.testsRemaining, 10) || 0;
+        return {
+          ...r,
+          quantityOnHand,
+          testsPerUnit: parseFloat(r.testsPerUnit) || 0,
+          testsRemaining,
+          status: !r.isActive ? 'Inactive' : testsRemaining < 1 ? 'Unavailable' : 'Available',
+          testsPerformed: dateFrom && dateTo ? parseInt(usage?.testsPerformed, 10) || 0 : null,
+          quantityConsumed: dateFrom && dateTo ? parseFloat(usage?.quantityConsumed) || 0 : null,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error('Inventory lab-test-consumables error:', err);
+    res.status(500).json({ error: 'Failed to generate lab test consumables report' });
+  }
+});
+
 module.exports = router;
