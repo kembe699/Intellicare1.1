@@ -171,7 +171,7 @@ const inventoryDropdown: NavDropdown = {
   items: [
     { label: 'Item Master', href: '/inventory/items', icon: Package, privilege: 'inventory.read' },
     { label: 'Stock Locations', href: '/inventory/locations', icon: MapPin, privilege: 'inventory.read' },
-    { label: 'Lab Test Consumables', href: '/inventory/lab-test-consumables', icon: FlaskConical, privilege: 'inventory.read' },
+    { label: 'Lab Consumables', href: '/inventory/lab-test-consumables', icon: FlaskConical, privilege: 'inventory.read' },
     { label: 'Transactions', href: '/inventory/transactions', icon: ArrowRightLeft, privilege: 'inventory.read' },
     { label: 'Batch Tracking', href: '/inventory/batches', icon: Clock, privilege: 'inventory.write' },
     { label: 'Physical Counts', href: '/inventory/physical-counts', icon: ClipboardCheck, privilege: 'inventory.read' },

@@ -44,21 +44,18 @@ export default function LabTestConsumables() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(empty);
 
+  const [itemsLoading, setItemsLoading] = useState(false);
+
   const load = async () => {
     setLoading(true);
     try {
-      const [linksRes, testsRes, itemsRes, locsRes] = await Promise.all([
+      const [linksRes, testsRes, locsRes] = await Promise.all([
         authFetch('/api/inventory/lab-test-consumables', { credentials: 'include' }),
         authFetch('/api/lab-tests', { credentials: 'include' }),
-        authFetch('/api/inventory/items', { credentials: 'include' }),
         authFetch('/api/inventory/locations', { credentials: 'include' }),
       ]);
       if (linksRes.ok) setLinks(await linksRes.json());
       if (testsRes.ok) setLabTests(await testsRes.json());
-      if (itemsRes.ok) {
-        const data = await itemsRes.json();
-        setItems(Array.isArray(data) ? data : data.items || []);
-      }
       if (locsRes.ok) setLocations(await locsRes.json());
     } catch (e) {
       console.error(e);
@@ -70,9 +67,22 @@ export default function LabTestConsumables() {
 
   useEffect(() => { load(); }, []);
 
+  // Items are specific to whichever store the reagent/kit actually sits in —
+  // picking the location first and loading only what's stocked there means
+  // you're never offered an item you'd then have to go hunt down.
+  useEffect(() => {
+    if (!formData.location_id) { setItems([]); return; }
+    setItemsLoading(true);
+    authFetch(`/api/inventory/items?location_id=${formData.location_id}`, { credentials: 'include' })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setItems(Array.isArray(data) ? data : data.items || []))
+      .catch(() => setItems([]))
+      .finally(() => setItemsLoading(false));
+  }, [formData.location_id]);
+
   const testOptions = useMemo(() => labTests.map(t => ({ value: t.id, label: `${t.test_name} (${t.test_code})` })), [labTests]);
   const itemOptions = useMemo(() => items.map(i => ({ value: i.id, label: `${i.item_name} — ${Number(i.quantity_on_hand || 0).toLocaleString()} ${i.unit_of_measure || ''} on hand` })), [items]);
-  const locationOptions = useMemo(() => [{ value: '', label: '— Any location —' }, ...locations.map(l => ({ value: l.id, label: l.location_name }))], [locations]);
+  const locationOptions = useMemo(() => locations.map(l => ({ value: l.id, label: l.location_name })), [locations]);
 
   const openCreate = () => { setEditingId(null); setFormData(empty); };
   const openEdit = (row: LinkRow) => {
@@ -87,8 +97,8 @@ export default function LabTestConsumables() {
     e.preventDefault();
     if (saving) return;
     const testsPerUnit = parseFloat(formData.tests_per_unit);
-    if (!formData.lab_test_id || !formData.inventory_item_id || !testsPerUnit || testsPerUnit <= 0) {
-      toast.error('Pick a test, an item, and a positive "tests per unit"');
+    if (!formData.location_id || !formData.lab_test_id || !formData.inventory_item_id || !testsPerUnit || testsPerUnit <= 0) {
+      toast.error('Pick a storage location, a test, an item, and a positive "tests per unit"');
       return;
     }
     setSaving(true);
@@ -163,7 +173,19 @@ export default function LabTestConsumables() {
             <form onSubmit={handleSubmit}>
               <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Lab Test</label>
+                  <label className="text-xs font-medium text-muted-foreground">1. Storage Location</label>
+                  <Combobox
+                    options={locationOptions}
+                    value={formData.location_id}
+                    onChange={v => setFormData({ ...formData, location_id: v, inventory_item_id: '' })}
+                    placeholder="Pick a store first..."
+                    searchPlaceholder="Search..."
+                    className="mt-1 h-9"
+                    disabled={!!editingId}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">2. Lab Test</label>
                   <Combobox
                     options={testOptions}
                     value={formData.lab_test_id}
@@ -174,15 +196,19 @@ export default function LabTestConsumables() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Reagent / Kit (Inventory Item)</label>
+                  <label className="text-xs font-medium text-muted-foreground">3. Reagent / Kit</label>
                   <Combobox
                     options={itemOptions}
                     value={formData.inventory_item_id}
                     onChange={v => setFormData({ ...formData, inventory_item_id: v })}
+                    placeholder={!formData.location_id ? 'Pick a location first...' : itemsLoading ? 'Loading...' : 'Select item...'}
                     searchPlaceholder="Search items..."
                     className="mt-1 h-9"
-                    disabled={!!editingId}
+                    disabled={!!editingId || !formData.location_id || itemsLoading}
                   />
+                  {!formData.location_id && !editingId && (
+                    <p className="text-[11px] text-muted-foreground mt-1">Only items actually stocked at the chosen location will be listed here.</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Tests per Unit</label>
@@ -192,16 +218,6 @@ export default function LabTestConsumables() {
                     onChange={e => setFormData({ ...formData, tests_per_unit: e.target.value })}
                     placeholder="e.g. 200"
                     className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Storage Location</label>
-                  <Combobox
-                    options={locationOptions}
-                    value={formData.location_id}
-                    onChange={v => setFormData({ ...formData, location_id: v })}
-                    searchPlaceholder="Search..."
-                    className="mt-1 h-9"
                   />
                 </div>
                 <div>
