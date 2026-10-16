@@ -90,6 +90,9 @@ const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/Pur
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
 const StockTransferRequests = lazyWithRetry(() => import('./pages/procurement/StockTransferRequests'));
+const NewStockTransferRequest = lazyWithRetry(() => import('./pages/procurement/NewStockTransferRequest'));
+const StockTransferRequestDetail = lazyWithRetry(() => import('./pages/procurement/StockTransferRequestDetail'));
+const StoreStock = lazyWithRetry(() => import('./pages/procurement/StoreStock'));
 const LocationAccess = lazyWithRetry(() => import('./pages/setup/LocationAccess'));
 const Profile = lazyWithRetry(() => import('./pages/Profile'));
 const HowTo = lazyWithRetry(() => import('./pages/HowTo'));
@@ -620,6 +623,21 @@ const AppRoutes = () => {
       <Route path="/procurement/stock-transfers" element={
         <ProtectedRoute requiredPrivilege="stock_transfers.use">
           <StockTransferRequests />
+        </ProtectedRoute>
+      } />
+      <Route path="/procurement/stock-transfers/new" element={
+        <ProtectedRoute requiredPrivilege="stock_transfers.use">
+          <NewStockTransferRequest />
+        </ProtectedRoute>
+      } />
+      <Route path="/procurement/stock-transfers/stock" element={
+        <ProtectedRoute requiredPrivilege="stock_transfers.use">
+          <StoreStock />
+        </ProtectedRoute>
+      } />
+      <Route path="/procurement/stock-transfers/:id" element={
+        <ProtectedRoute requiredPrivilege="stock_transfers.use">
+          <StockTransferRequestDetail />
         </ProtectedRoute>
       } />
       <Route path="/setup/store-access" element={
