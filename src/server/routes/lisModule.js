@@ -1521,7 +1521,19 @@ router.post('/specimens/:id/results', authorize('lis.specimen.write'), async (re
   // NULL/mismatch-inclusive). Confirmed live: a specimen on branch 2 had
   // approved results stamped branch_id=1, so its own order's visit summary
   // showed "No results recorded" despite the results genuinely existing.
-  const [[specimen]] = await db.query(`SELECT branch_id, status, clinic_id FROM lis_specimens WHERE id = ?`, { replacements: [id] });
+  // lis_specimens has no clinic_id column (confirmed live, every tenant) —
+  // this app is single-clinic-per-tenant, so clinicId resolution below
+  // always falls back to 1 anyway. Wrapped defensively: a raw
+  // SequelizeDatabaseError here previously had nothing to catch it, which
+  // crashed the whole process (this app calls process.exit(1) on any
+  // unhandled rejection) on every single call — a schema mismatch should
+  // degrade this one request, never take down the server.
+  let specimen;
+  try {
+    [[specimen]] = await db.query(`SELECT branch_id, status FROM lis_specimens WHERE id = ?`, { replacements: [id] });
+  } catch (lookupErr) {
+    console.error('Non-blocking: failed to look up specimen', id, 'before saving results:', lookupErr.message);
+  }
   const branchId = specimen?.branch_id ?? getCreateBranchId(req);
   const alreadyAnalyzed = specimen?.status === 'analyzed';
 
