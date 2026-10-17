@@ -180,6 +180,7 @@ export default function PharmacyReport() {
                 <h3 className="font-semibold text-sm">Fast Moving Items</h3>
               </div>
               <AdvancedDataTable<MovementItem>
+                headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
                 data={fastMoving}
                 keyExtractor={(row) => row.itemId}
                 emptyMessage="No items dispensed in this period."
@@ -196,6 +197,7 @@ export default function PharmacyReport() {
                 <h3 className="font-semibold text-sm">Slow Moving Items</h3>
               </div>
               <AdvancedDataTable<MovementItem>
+                headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
                 data={slowMoving}
                 keyExtractor={(row) => row.itemId}
                 emptyMessage="No active inventory items found."
@@ -215,6 +217,17 @@ export default function PharmacyReport() {
               <p className="text-xs text-muted-foreground">{fmtCount(byDrug.length)} drug{byDrug.length === 1 ? '' : 's'} dispensed or billed in period</p>
             </div>
             <AdvancedDataTable<ByDrugRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              footerRow={(colSpan) => (
+                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                  <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span>Total Collected</span>
+                      <span className="font-mono text-base border-b-2 border-double border-foreground pb-0.5">{fmtCurrency(data?.cashSummary.totalCollected)}</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
               data={byDrug}
               keyExtractor={(row) => row.drugId ?? row.drugName}
               searchable

@@ -438,6 +438,7 @@ export default function ClinicalReport() {
         </div>
       ) : (
         <AdvancedDataTable
+          headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
           data={numberedRows}
           keyExtractor={keyExtractor}
           columns={columnsWithNo}

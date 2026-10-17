@@ -203,6 +203,7 @@ export default function ClinicPerformanceReport() {
               <p className="text-xs text-muted-foreground">Visit volume and revenue collected per clinic for the selected period</p>
             </div>
             <AdvancedDataTable<ClinicRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={byClinic}
               keyExtractor={(c) => c.clinicId}
               emptyMessage="No clinics found."
@@ -221,6 +222,7 @@ export default function ClinicPerformanceReport() {
               <p className="text-xs text-muted-foreground">Volume and revenue per service category — which service lines are generating money</p>
             </div>
             <AdvancedDataTable<CategoryRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={byCategory}
               keyExtractor={(c) => c.category}
               emptyMessage="No billed services found for the selected period."

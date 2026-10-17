@@ -218,6 +218,17 @@ export default function DoctorPerformanceReport() {
               </p>
             </div>
             <AdvancedDataTable<DoctorRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              footerRow={(colSpan) => (
+                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                  <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span>Total Revenue Attributed</span>
+                      <span className="font-mono text-base border-b-2 border-double border-foreground pb-0.5">{fmtCurrency(displaySummary?.totalRevenueAttributed)}</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
               data={filteredDoctors}
               keyExtractor={(doc) => doc.doctorId}
               searchable

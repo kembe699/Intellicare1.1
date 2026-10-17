@@ -65,6 +65,10 @@ export interface AdvancedDataTableProps<T> {
   bulkActions?: BulkAction[];
   
   // Styling
+  /** Overrides the header row's background/text classes — e.g. the reports section's banded look. Leaves everything else (sorting, sizing) unchanged. */
+  headerClassName?: string;
+  /** A bold summary row rendered in a <tfoot>, below all data rows — e.g. a report's grand total. Called with the real column count (selection checkbox included) so a wide label cell can colSpan correctly; return your own <tr>/<td>s. */
+  footerRow?: (colSpan: number) => React.ReactNode;
   stickyHeader?: boolean;
   /**
    * Cap the table body's height, in rows, and scroll past it.
@@ -98,6 +102,8 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   exportable = false,
   exportFileName = 'export',
   bulkActions = [],
+  headerClassName,
+  footerRow,
   stickyHeader = false,
   maxRows,
   compact = false,
@@ -305,8 +311,10 @@ export function AdvancedDataTable<T extends Record<string, any>>({
           <thead className={cn((stickyHeader || maxRows) && 'sticky top-0 z-10')}>
             {/* Opaque, not bg-muted/60, whenever the header is pinned: at 60%
                 the rows sliding underneath read straight through it, so the
-                first line of the list appeared to sit above the column names. */}
-            <tr className={cn('border-b border-border', (stickyHeader || maxRows) ? 'bg-muted' : 'bg-muted/60')}>
+                first line of the list appeared to sit above the column names.
+                headerClassName, when given, replaces this background/border
+                entirely — e.g. the reports section's banded look. */}
+            <tr className={headerClassName || cn('border-b border-border', (stickyHeader || maxRows) ? 'bg-muted' : 'bg-muted/60')}>
               {selectable && (
                 <th className="px-4 py-2.5 text-left w-12">
                   <Checkbox
@@ -422,6 +430,9 @@ export function AdvancedDataTable<T extends Record<string, any>>({
               );
             })}
           </tbody>
+          {footerRow && !loading && !isEmpty && (
+            <tfoot>{footerRow(columns.length + (selectable ? 1 : 0))}</tfoot>
+          )}
         </table>
       </div>
 

@@ -396,6 +396,7 @@ export default function AuditSummaryReport() {
               <p className="text-xs text-muted-foreground">{fmtCount(byUser.length)} staff member{byUser.length === 1 ? '' : 's'} with logged activity {fmtDate(dateFrom)} — {fmtDate(dateTo)} &middot; click a row to filter the activity log below</p>
             </div>
             <AdvancedDataTable<ByUserRow & { no: number }>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={numberedByUser}
               keyExtractor={(row) => String(row.userId ?? row.userName)}
               searchable
@@ -447,6 +448,7 @@ export default function AuditSummaryReport() {
               </p>
             </div>
             <AdvancedDataTable<ActivityRow & { no: number }>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={numberedActivity}
               keyExtractor={(row) => row.id}
               searchable

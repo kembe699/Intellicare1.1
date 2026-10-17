@@ -234,6 +234,7 @@ export default function OccupancyReport() {
               <p className="text-xs text-muted-foreground mt-0.5">Current bed state, grouped by ward</p>
             </div>
             <AdvancedDataTable<WardRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={byWard}
               keyExtractor={(w) => w.ward_id}
               searchable
@@ -270,6 +271,7 @@ export default function OccupancyReport() {
               <p className="text-xs text-muted-foreground mt-0.5">Showing {filteredBeds.length} of {beds.length} beds</p>
             </div>
             <AdvancedDataTable<BedRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={filteredBeds}
               keyExtractor={(b) => b.id}
               emptyMessage="No beds match your filters."
@@ -350,6 +352,7 @@ export default function OccupancyReport() {
             </div>
 
             <AdvancedDataTable<DailyRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={trend.daily}
               keyExtractor={(d) => d.day}
               emptyMessage="No admissions in this period."

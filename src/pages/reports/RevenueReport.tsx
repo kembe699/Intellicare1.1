@@ -524,6 +524,7 @@ export default function RevenueReport() {
       ) : (
         <>
           <AdvancedDataTable
+            headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
             data={displayRows}
             keyExtractor={keyExtractor}
             columns={columnsWithNo}

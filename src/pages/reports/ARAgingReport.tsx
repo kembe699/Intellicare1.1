@@ -215,6 +215,7 @@ export default function ARAgingReport() {
               <p className="text-xs text-muted-foreground mt-0.5">As of {fmtDate(data?.asOf)}</p>
             </div>
             <AdvancedDataTable<AgingSummaryRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={agingSummary}
               keyExtractor={(row) => row.bucket}
               columns={[
@@ -244,6 +245,7 @@ export default function ARAgingReport() {
               </p>
             </div>
             <AdvancedDataTable<AgingBillRow>
+              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
               data={filteredItems}
               keyExtractor={(item) => item.id}
               emptyMessage="No outstanding bills found."

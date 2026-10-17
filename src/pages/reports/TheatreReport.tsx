@@ -127,7 +127,7 @@ export default function TheatreReport() {
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr className="bg-sky-100 dark:bg-sky-950/40 border-b border-border text-xs uppercase tracking-wide text-foreground font-semibold">
                     <th className="px-4 py-2 text-left">Procedure</th>
                     <th className="px-4 py-2 text-right">Count</th>
                     <th className="px-4 py-2 text-right">Revenue</th>
@@ -144,6 +144,15 @@ export default function TheatreReport() {
                     </tr>
                   ))}
                 </tbody>
+                {byProcedure.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                      <td className="px-4 py-2.5">Total</td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums">{byProcedure.reduce((s, p) => s + p.operationCount, 0)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums border-b-2 border-double border-foreground">{fmtCurrency(byProcedure.reduce((s, p) => s + p.totalRevenue, 0))}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
 
@@ -154,7 +163,7 @@ export default function TheatreReport() {
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr className="bg-sky-100 dark:bg-sky-950/40 border-b border-border text-xs uppercase tracking-wide text-foreground font-semibold">
                     <th className="px-4 py-2 text-left">Surgeon</th>
                     <th className="px-4 py-2 text-right">Count</th>
                     <th className="px-4 py-2 text-right">Revenue</th>
@@ -171,6 +180,15 @@ export default function TheatreReport() {
                     </tr>
                   ))}
                 </tbody>
+                {bySurgeon.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                      <td className="px-4 py-2.5">Total</td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums">{bySurgeon.reduce((s, x) => s + x.operationCount, 0)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums border-b-2 border-double border-foreground">{fmtCurrency(bySurgeon.reduce((s, x) => s + x.totalRevenue, 0))}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
