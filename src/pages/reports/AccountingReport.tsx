@@ -445,10 +445,11 @@ export default function AccountingReport() {
       loading={loading}
       hideControls
     >
-      {/* Solid background, not the translucent page tint — a sticky header
-          over a tall result (the formatted Income Statement especially)
-          otherwise lets scrolling content show through underneath it. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-8 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
+      {/* Deliberately NOT sticky — this block (filters, letterhead, stat tiles)
+          used to pin itself to the viewport while scrolling, but the app's own
+          fixed top bar sits at the same z-index band and covered its top edge
+          once stuck. It scrolls away with the rest of the page instead. */}
+      <div className="-mx-6 -mt-6 px-6 pt-6 pb-4 mb-6 bg-background border-b border-border print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}

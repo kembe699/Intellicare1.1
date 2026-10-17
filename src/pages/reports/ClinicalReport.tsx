@@ -13,8 +13,7 @@ import { Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
 import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn, getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
 
 // One Clinical Reports page, one dropdown — same shape as Revenue Report:
-// nothing loads until "View" is clicked, letterhead + selector stay pinned
-// while the table scrolls underneath.
+// nothing loads until "View" is clicked.
 //
 // Two choices made without a schema-backed distinction to point to:
 //  - "Inpatient Register [MOH 301]": pulls the same columns as the plain
@@ -344,7 +343,7 @@ export default function ClinicalReport() {
       loading={loading}
       hideControls
     >
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-8 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
+      <div className="-mx-6 -mt-6 px-6 pt-6 pb-4 mb-6 bg-background border-b border-border print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}

@@ -266,10 +266,9 @@ export default function AuditSummaryReport() {
       loading={loading}
       hideControls
     >
-      {/* Filters + letterhead + the stat tiles stay pinned while only the
-          two result tables below scroll — a solid (not tinted/translucent)
-          background so scrolling rows never show through underneath it. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 mb-8 bg-background border-b border-border shadow-sm print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0 print:shadow-none">
+      {/* Filters + letterhead + stat tiles, in normal document flow (not
+          sticky) — scrolls away with the page like the rest of the report. */}
+      <div className="-mx-6 -mt-6 px-6 pt-6 pb-4 mb-6 bg-background border-b border-border print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0">
         <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <Combobox
             options={userOptions}
@@ -336,7 +335,7 @@ export default function AuditSummaryReport() {
 
         <ReportLetterhead title="Staff Activity / Audit Log" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} className="mb-0" />
 
-        {/* ── Stat tiles — part of the pinned header, not the scrolling results ── */}
+        {/* ── Stat tiles ── */}
         {hasLoaded && data && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
             <div className="bg-card rounded-lg border shadow-sm p-4">

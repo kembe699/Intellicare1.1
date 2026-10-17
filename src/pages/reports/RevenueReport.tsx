@@ -23,10 +23,9 @@ import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn, getDatePresets, expo
 // patient register by scheme) lives behind one selector instead of a
 // four-button tab strip. Picking a report type or date range only updates
 // the form — nothing loads until "View" is clicked, so a report never
-// fetches while someone is still choosing what they want. The selector,
-// date range and letterhead stay pinned at the top (sticky) while a long
-// table scrolls underneath, capped to a fixed height so it scrolls inside
-// itself rather than growing the page.
+// fetches while someone is still choosing what they want. The table is
+// capped to a fixed height so it scrolls inside itself rather than growing
+// the page.
 
 type Mode = 'group' | 'bills-group' | 'detail-only' | 'trend' | 'cancelled-receipts' | 'cancelled-invoices' | 'cost-analysis' | 'register';
 type PatientType = 'all' | 'outpatient' | 'inpatient' | 'discharged';
@@ -391,11 +390,10 @@ export default function RevenueReport() {
       loading={loading}
       hideControls
     >
-      {/* Selector, date range, and letterhead stay pinned while the table
-          scrolls beneath — matches the standard page background so content
-          scrolling underneath never shows through. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-primary/20 print:hidden">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+      {/* Not sticky — scrolls away with the rest of the page. The toolbar
+          itself is print:hidden; the letterhead below it still prints. */}
+      <div className="-mx-6 -mt-6 px-6 pt-6 pb-4 mb-6 bg-background border-b border-border print:static print:mx-0 print:px-0 print:pt-0 print:pb-0 print:mb-0 print:border-0">
+        <div className="flex flex-wrap items-end gap-3 mb-4 print:hidden">
           <select
             value={reportType}
             onChange={e => setReportType(e.target.value)}
