@@ -64,6 +64,89 @@ router.get('/locations/:id/items', authorize('stock_transfers.use'), async (req,
   }
 });
 
+// Manual stock consumption — a department (e.g. nursing) using up a quantity
+// of an item already sitting at their own store, logged as a tracked
+// movement rather than silently editing a number. Gated by the same
+// location_access.can_request flag as requesting-on-behalf-of (someone
+// trusted to requisition for a store is trusted to record what it used),
+// not can_fulfill — that one is about releasing stock to ANOTHER location's
+// request, a different action. Reduces both this location's stock and the
+// clinic-wide total (unlike a transfer, this stock has actually left the
+// building), matching how 'usage'/'dispense' already behave in
+// routes/inventory.js's POST /transactions.
+router.post('/locations/:id/consume', authorize('stock_transfers.use'), async (req, res) => {
+  try {
+    const { inventory_item_id, quantity, notes } = req.body;
+    const locationId = req.params.id;
+    const qty = parseFloat(quantity);
+    if (!inventory_item_id || !qty || qty <= 0) {
+      return res.status(400).json({ error: 'inventory_item_id and a positive quantity are required' });
+    }
+
+    if (!(await canRequestTo(sequelize, req, locationId))) {
+      return res.status(403).json({ error: 'You do not have permission to record usage at this location' });
+    }
+
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+
+    await sequelize.transaction(async (t) => {
+      const [[source]] = await sequelize.query(
+        'SELECT quantity_on_hand FROM stock_by_location WHERE item_id = :item_id AND location_id = :loc_id FOR UPDATE',
+        { replacements: { item_id: inventory_item_id, loc_id: locationId }, transaction: t }
+      );
+      const available = parseFloat(source?.quantity_on_hand) || 0;
+      if (available < qty) {
+        throw Object.assign(new Error(`Not enough stock at this location to consume ${qty} (${available} available).`), { statusCode: 409 });
+      }
+
+      await sequelize.query(
+        'UPDATE stock_by_location SET quantity_on_hand = quantity_on_hand - :qty WHERE item_id = :item_id AND location_id = :loc_id',
+        { replacements: { qty, item_id: inventory_item_id, loc_id: locationId }, transaction: t }
+      );
+
+      await sequelize.query(
+        'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :item_id',
+        { replacements: { qty, item_id: inventory_item_id }, transaction: t }
+      );
+
+      const [[costRow]] = await sequelize.query(
+        'SELECT current_unit_cost, average_unit_cost, cost_currency FROM inventory_items WHERE id = :item_id',
+        { replacements: { item_id: inventory_item_id }, transaction: t }
+      );
+      const unitCost = parseFloat(costRow?.current_unit_cost) || parseFloat(costRow?.average_unit_cost) || 0;
+      const costCurrency = costRow?.cost_currency || 'SSP';
+
+      const txDate = new Date().toISOString().split('T')[0];
+      const [[countResult]] = await sequelize.query(
+        "SELECT COUNT(*) AS cnt FROM inventory_transactions WHERE DATE(created_at) = CURRENT_DATE", { transaction: t }
+      );
+      const seq = (parseInt(countResult?.cnt) || 0) + 1;
+      const transactionNumber = `USE-${txDate.replace(/-/g, '')}-${String(seq).padStart(4, '0')}`;
+
+      await sequelize.query(`
+        INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,
+          quantity_change, from_location_id, unit_cost, total_cost, cost_currency,
+          reference_type, transaction_date, notes, created_by)
+        VALUES (:id, :clinic_id, :transaction_number, :item_id, 'usage',
+          :qty, :from_location_id, :unit_cost, :total_cost, :cost_currency,
+          'manual_consumption', CURRENT_DATE, :notes, :created_by)
+      `, {
+        replacements: {
+          id: uuidv4(), clinic_id: clinicId, transaction_number: transactionNumber, item_id: inventory_item_id,
+          qty: -qty, from_location_id: locationId, unit_cost: unitCost, total_cost: unitCost * qty, cost_currency: costCurrency,
+          notes: notes || null, created_by: req.user.id,
+        },
+        transaction: t,
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error recording stock consumption:', error);
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to record stock consumption' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Transfer requests
 // ---------------------------------------------------------------------------
