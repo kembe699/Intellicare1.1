@@ -346,6 +346,113 @@ router.get('/stock-movement-summary', async (req, res) => {
   }
 });
 
+// ── GET /stock-card ───────────────────────────────────────────────────────
+// A classic "bin card" / item ledger: every movement for one item (optionally
+// narrowed to one storage location), in order, with who recorded it, what it
+// was for, and the running stock balance immediately after each row. The
+// balance is anchored to the item's current known-correct quantity_on_hand
+// (or, when a location is given, that location's stock_by_location row) and
+// walked backwards from there — robust regardless of any stock the item
+// started with before its first ever logged transaction, and independent of
+// the dateFrom/dateTo window, which only narrows what's *displayed*.
+router.get('/stock-card', async (req, res) => {
+  try {
+    const itemId = req.query.itemId;
+    if (!itemId) return res.status(400).json({ error: 'itemId is required' });
+    const locationId = req.query.locationId || null;
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const clinicId = clinicIdFor(req);
+
+    const items = await sequelize.query(
+      `SELECT id, item_name, item_code, unit_of_measure, quantity_on_hand FROM inventory_items WHERE id = :itemId AND clinic_id = :clinicId`,
+      { replacements: { itemId, clinicId }, type: QueryTypes.SELECT }
+    );
+    const item = items[0];
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    let currentBalance = parseFloat(item.quantity_on_hand) || 0;
+    let locationName = null;
+    if (locationId) {
+      const sbl = await sequelize.query(
+        `SELECT sbl.quantity_on_hand, sl.location_name FROM stock_by_location sbl
+         LEFT JOIN stock_locations sl ON sl.id = sbl.location_id
+         WHERE sbl.item_id = :itemId AND sbl.location_id = :locationId`,
+        { replacements: { itemId, locationId }, type: QueryTypes.SELECT }
+      );
+      currentBalance = parseFloat(sbl[0]?.quantity_on_hand) || 0;
+      locationName = sbl[0]?.location_name || null;
+    }
+
+    const locationFilterSql = locationId
+      ? ` AND (t.from_location_id = :locationId OR t.to_location_id = :locationId)`
+      : '';
+
+    // delta: this row's net effect on the balance being tracked (clinic-wide
+    // or this one location) — mirrors exactly how routes/inventory.js's
+    // POST /transactions (and utils/labConsumables.js) apply these same rows
+    // live: a transfer nets to zero clinic-wide but debits/credits whichever
+    // single location is in view; a receipt/positive adjustment only counts
+    // clinic-wide; everything else (dispense/usage/waste/damage/
+    // return_to_supplier/lab_test_consumption/negative adjustment) already
+    // carries a negative quantity_change and applies as-is either way.
+    const deltaSql = locationId
+      ? `CASE
+           WHEN t.transaction_type = 'transfer' AND t.to_location_id = :locationId THEN t.quantity_change
+           WHEN t.transaction_type = 'transfer' AND t.from_location_id = :locationId THEN -t.quantity_change
+           ELSE t.quantity_change
+         END`
+      : `CASE
+           WHEN t.transaction_type IN ('receipt','adjustment') AND t.quantity_change > 0 THEN t.quantity_change
+           WHEN t.transaction_type = 'transfer' THEN 0
+           ELSE t.quantity_change
+         END`;
+
+    const rows = await sequelize.query(`
+      WITH deltas AS (
+        SELECT t.id, t.transaction_number, t.transaction_type, t.transaction_date, t.created_at,
+               t.quantity_change, t.from_location_id, t.to_location_id, t.notes, t.created_by,
+               ${deltaSql} AS delta
+        FROM inventory_transactions t
+        WHERE t.item_id = :itemId AND t.clinic_id = :clinicId ${locationFilterSql}
+      ),
+      balanced AS (
+        SELECT d.*,
+          COALESCE(SUM(d.delta) OVER (
+            ORDER BY d.transaction_date DESC, d.created_at DESC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+          ), 0) AS cum_after
+        FROM deltas d
+      )
+      SELECT b.*, (:currentBalance - b.cum_after) AS running_balance,
+        fl.location_name AS from_location_name, tl.location_name AS to_location_name,
+        u.display_name AS created_by_name
+      FROM balanced b
+      LEFT JOIN stock_locations fl ON fl.id = b.from_location_id
+      LEFT JOIN stock_locations tl ON tl.id = b.to_location_id
+      LEFT JOIN users u ON u.id::text = b.created_by
+      WHERE b.transaction_date BETWEEN :dateFrom AND :dateTo
+      ORDER BY b.transaction_date ASC, b.created_at ASC
+    `, { replacements: { itemId, clinicId, locationId, currentBalance, dateFrom, dateTo }, type: QueryTypes.SELECT });
+
+    res.json({
+      item: { id: item.id, name: item.item_name, code: item.item_code, uom: item.unit_of_measure },
+      location: locationId ? { id: locationId, name: locationName } : null,
+      currentBalance,
+      period: { dateFrom, dateTo },
+      rows: rows.map(r => ({
+        ...r,
+        quantity_change: parseFloat(r.quantity_change) || 0,
+        delta: parseFloat(r.delta) || 0,
+        running_balance: parseFloat(r.running_balance) || 0,
+      })),
+    });
+  } catch (err) {
+    console.error('Inventory stock-card error:', err);
+    res.status(500).json({ error: 'Failed to generate stock card' });
+  }
+});
+
 // ── GET /fast-moving & /slow-moving ──────────────────────────────────────
 // Ranked by total quantity moved out (dispense/usage) in the period.
 // fast = top 20 (highest volume); slow = every active item, ascending

@@ -19,7 +19,7 @@ type Mode =
   | 'stock-analysis-items' | 'stock-analysis-category' | 'fast-moving' | 'slow-moving'
   | 'retired-batches' | 'near-expiry' | 'stock-expiry' | 'stock-valuation-all'
   | 'stock-valuation-location' | 'out-of-stock' | 'below-reorder-level' | 'material-consumption'
-  | 'stock-movement-detail' | 'stock-movement-summary' | 'lab-test-consumables';
+  | 'stock-movement-detail' | 'stock-movement-summary' | 'lab-test-consumables' | 'stock-card';
 
 interface ReportOption {
   value: string;
@@ -52,6 +52,7 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'stock_movement_detail_item', label: 'Stock Movement Detailed (By Item)', group: 'Stock Movement', mode: 'stock-movement-detail', allBranches: true, needsItem: true },
   { value: 'stock_movement_summary_branch', label: 'Stock Movement Summary (By Branch)', group: 'Stock Movement', mode: 'stock-movement-summary', allBranches: false, summaryGroupBy: 'branch' },
   { value: 'stock_movement_summary_location', label: 'Stock Movement Summary (By Storage Location)', group: 'Stock Movement', mode: 'stock-movement-summary', allBranches: true, summaryGroupBy: 'location' },
+  { value: 'stock_card', label: 'Stock Card — Who/When/Why & Running Balance (By Item)', group: 'Stock Movement', mode: 'stock-card', allBranches: true, needsItem: true, needsLocation: true },
 
   { value: 'out_of_stock', label: 'Out Of Stock', group: 'Stock Levels', mode: 'out-of-stock', allBranches: false },
   { value: 'below_reorder_level', label: 'Below Reorder Level', group: 'Stock Levels', mode: 'below-reorder-level', allBranches: false },
@@ -107,6 +108,10 @@ export default function InventoryReport() {
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
 
   const fetchData = useCallback(async () => {
+    if (option.mode === 'stock-card' && !selectedItemId) {
+      toast.error('Pick an item first — the running balance only makes sense for one item at a time.');
+      return;
+    }
     setLoading(true);
     try {
       const clinicId = user?.clinic || '1';
@@ -135,6 +140,11 @@ export default function InventoryReport() {
         path = '/stock-movement-summary';
         params.set('groupBy', option.summaryGroupBy!);
       } else if (option.mode === 'lab-test-consumables') path = '/lab-test-consumables';
+      else if (option.mode === 'stock-card') {
+        path = '/stock-card';
+        params.set('itemId', selectedItemId);
+        if (selectedLocationId) params.set('locationId', selectedLocationId);
+      }
 
       const res = await authFetch(`/api/reports-v2/inventory${path}?${params}`);
       if (!res.ok) throw new Error('Failed to load report');
@@ -299,6 +309,26 @@ export default function InventoryReport() {
       { header: 'Status', key: 'status' }, { header: 'Branch', key: 'branchName' },
     ];
     emptyMessage = 'No lab tests are linked to a consumable yet — set one up under Inventory > Lab Test Consumables.';
+  } else if (option.mode === 'stock-card') {
+    columns = [
+      { key: 'transaction_date', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'transaction_number', header: 'Transaction #', sortable: true, render: v => <span className="font-mono text-xs text-primary">{v}</span> },
+      { key: 'transaction_type', header: 'Type', sortable: true, render: v => <span className="capitalize">{String(v).replace(/_/g, ' ')}</span> },
+      { key: 'quantity_change', header: 'Qty Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{v > 0 ? '+' : ''}{v}</span> },
+      { key: 'from_location_name', header: 'From', render: v => v || '—' },
+      { key: 'to_location_name', header: 'To', render: v => v || '—' },
+      { key: 'created_by_name', header: 'Used / Recorded By', render: v => v || '—' },
+      { key: 'notes', header: 'Used For / Notes', render: v => v || '—' },
+      { key: 'running_balance', header: 'Running Balance', align: 'right', sortable: true, render: v => <span className="font-mono font-semibold">{fmtCount(v)}</span> },
+    ];
+    csvColumns = [
+      { header: 'Date', key: 'transaction_date', transform: v => fmtDate(v) }, { header: 'Transaction #', key: 'transaction_number' },
+      { header: 'Type', key: 'transaction_type' }, { header: 'Qty Change', key: 'quantity_change' },
+      { header: 'From', key: 'from_location_name' }, { header: 'To', key: 'to_location_name' },
+      { header: 'Used / Recorded By', key: 'created_by_name' }, { header: 'Used For / Notes', key: 'notes' },
+      { header: 'Running Balance', key: 'running_balance' },
+    ];
+    emptyMessage = 'No movements recorded for this item in this period.';
   }
 
   const numberedRows = useMemo(() => rows.map((r, i) => ({ ...r, no: i + 1 })), [rows]);
@@ -361,7 +391,7 @@ export default function InventoryReport() {
               onChange={e => setSelectedItemId(e.target.value)}
               className="h-9 min-w-[180px] rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             >
-              <option value="">All Items</option>
+              <option value="">{option.mode === 'stock-card' ? 'Select an item...' : 'All Items'}</option>
               {items.map(it => <option key={it.id} value={it.id}>{it.item_name}</option>)}
             </select>
           )}
