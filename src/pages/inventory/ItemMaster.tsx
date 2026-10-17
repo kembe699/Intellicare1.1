@@ -482,7 +482,7 @@ export default function ItemMaster() {
                           value={formData.item_category}
                           onChange={v => setFormData({ ...formData, item_category: v })}
                           searchPlaceholder="Search categories..."
-                          className="mt-0.5 h-8 text-xs"
+                          className="mt-0.5 h-8 text-xs bg-white"
                         />
                       </div>
                     </div>
@@ -494,7 +494,7 @@ export default function ItemMaster() {
                           onChange={e => setFormData({ ...formData, barcode: e.target.value })}
                           onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
                           placeholder="Scan, type, or generate..."
-                          className="h-8 text-xs font-mono"
+                          className="h-8 text-xs font-mono bg-white"
                         />
                         <Button type="button" variant="outline" size="icon" className="h-8 w-8 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
                           <RefreshCw className="w-3.5 h-3.5" />
@@ -503,7 +503,7 @@ export default function ItemMaster() {
                     </div>
                     <div>
                       <label className="text-[11px] font-medium text-muted-foreground">Item Name</label>
-                      <Input required value={formData.item_name} onChange={e => setFormData({ ...formData, item_name: e.target.value })} placeholder="Drug / item full name" className="mt-0.5 h-8 text-xs" />
+                      <Input required value={formData.item_name} onChange={e => setFormData({ ...formData, item_name: e.target.value })} placeholder="Drug / item full name" className="mt-0.5 h-8 text-xs bg-white" />
                     </div>
                     <div>
                       <label className="text-[11px] font-medium text-muted-foreground">Description</label>
@@ -511,7 +511,7 @@ export default function ItemMaster() {
                         value={formData.item_description}
                         onChange={e => setFormData({ ...formData, item_description: e.target.value })}
                         placeholder="Strength, formulation, notes..."
-                        className="w-full mt-0.5 p-2 border border-input rounded-md resize-none h-10 text-xs bg-background shadow-sm"
+                        className="w-full mt-0.5 p-2 border border-input rounded-md resize-none h-10 text-xs bg-white shadow-sm"
                       />
                     </div>
                     <div>
@@ -521,7 +521,7 @@ export default function ItemMaster() {
                         value={formData.unit_of_measure}
                         onChange={v => setFormData({ ...formData, unit_of_measure: v, reorder_unit: v })}
                         searchPlaceholder="Search units..."
-                        className="mt-0.5 h-8 text-xs"
+                        className="mt-0.5 h-8 text-xs bg-white"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -530,7 +530,7 @@ export default function ItemMaster() {
                         <Input
                           type="number" min="1" step="1" value={formData.units_per_pack}
                           onChange={e => setFormData({ ...formData, units_per_pack: parseInt(e.target.value, 10) || 1 })}
-                          className="mt-0.5 h-8 text-xs"
+                          className="mt-0.5 h-8 text-xs bg-white"
                         />
                         <p className="text-[10px] text-muted-foreground mt-0.5">
                           e.g. 10 tablets per {formData.unit_of_measure || 'Strip'} — leave at 1 if stocked individually
@@ -541,7 +541,7 @@ export default function ItemMaster() {
                         <Input
                           value={formData.dose_unit_label} placeholder="e.g. Tablet"
                           onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
-                          className="mt-0.5 h-8 text-xs"
+                          className="mt-0.5 h-8 text-xs bg-white"
                         />
                         <p className="text-[10px] text-muted-foreground mt-0.5">
                           What one dose is called on the prescription/receipt
@@ -553,13 +553,10 @@ export default function ItemMaster() {
                   <div className="space-y-3">
                     <div className="space-y-2 rounded-lg border p-2.5 bg-card">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing, Costing & GL Accounts</p>
-                      <p className="text-[10px] text-muted-foreground -mt-1">
-                        Each amount is paired with the account it posts to when set — otherwise the item's category default is used.
-                      </p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[11px] font-medium text-muted-foreground">Unit Cost</label>
-                          <Input type="number" step="0.01" min="0" value={formData.current_unit_cost} onChange={e => setFormData({ ...formData, current_unit_cost: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                          <Input type="number" step="0.01" min="0" value={formData.current_unit_cost} onChange={e => setFormData({ ...formData, current_unit_cost: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
                         </div>
                         <div>
                           <label className="text-[11px] font-medium text-muted-foreground">Cost Of Sale Sub-Account</label>
@@ -569,12 +566,12 @@ export default function ItemMaster() {
                             onChange={v => setFormData({ ...formData, cogs_account_id: v })}
                             placeholder="Use category default"
                             searchPlaceholder="Search accounts..."
-                            className="mt-0.5 h-8 text-xs"
+                            className="mt-0.5 h-8 text-xs bg-white"
                           />
                         </div>
                         <div>
                           <label className="text-[11px] font-medium text-muted-foreground">Selling Price</label>
-                          <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                          <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
                         </div>
                         <div>
                           <label className="text-[11px] font-medium text-muted-foreground">Income Sub-Account</label>
@@ -584,7 +581,7 @@ export default function ItemMaster() {
                             onChange={v => setFormData({ ...formData, revenue_account_id: v })}
                             placeholder="Use category default"
                             searchPlaceholder="Search accounts..."
-                            className="mt-0.5 h-8 text-xs"
+                            className="mt-0.5 h-8 text-xs bg-white"
                           />
                         </div>
                       </div>
@@ -596,7 +593,7 @@ export default function ItemMaster() {
                           onChange={v => setFormData({ ...formData, inventory_account_id: v })}
                           placeholder="Use category default"
                           searchPlaceholder="Search accounts..."
-                          className="mt-0.5 h-8 text-xs"
+                          className="mt-0.5 h-8 text-xs bg-white"
                         />
                       </div>
                     </div>
@@ -635,11 +632,11 @@ export default function ItemMaster() {
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="text-[11px] font-medium text-muted-foreground">Quantity on Hand</label>
-                              <Input type="number" min="0" value={formData.initial_quantity} onChange={e => setFormData({ ...formData, initial_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                              <Input type="number" min="0" value={formData.initial_quantity} onChange={e => setFormData({ ...formData, initial_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
                             </div>
                             <div>
                               <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Expiry Date</label>
-                              <Input type="date" value={formData.expiry_date} onChange={e => setFormData({ ...formData, expiry_date: e.target.value })} className="mt-0.5 h-8 text-xs" />
+                              <Input type="date" value={formData.expiry_date} onChange={e => setFormData({ ...formData, expiry_date: e.target.value })} className="mt-0.5 h-8 text-xs bg-white" />
                             </div>
                           </div>
                           <div>
@@ -650,7 +647,7 @@ export default function ItemMaster() {
                               onChange={v => setFormData({ ...formData, location_id: v })}
                               placeholder="No specific location"
                               searchPlaceholder="Search locations..."
-                              className="mt-0.5 h-8 text-xs"
+                              className="mt-0.5 h-8 text-xs bg-white"
                             />
                             {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-0.5">No locations set up yet — add one in Stock Locations.</p>}
                           </div>
@@ -666,19 +663,19 @@ export default function ItemMaster() {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-[11px] font-medium text-muted-foreground">Min Stock Level</label>
-                        <Input type="number" min="0" value={formData.minimum_stock_level} onChange={e => setFormData({ ...formData, minimum_stock_level: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                        <Input type="number" min="0" value={formData.minimum_stock_level} onChange={e => setFormData({ ...formData, minimum_stock_level: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
                       </div>
                       <div>
                         <label className="text-[11px] font-medium text-muted-foreground">Max Stock Level</label>
-                        <Input type="number" min="0" value={formData.maximum_stock_level} onChange={e => setFormData({ ...formData, maximum_stock_level: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                        <Input type="number" min="0" value={formData.maximum_stock_level} onChange={e => setFormData({ ...formData, maximum_stock_level: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
                       </div>
                       <div>
                         <label className="text-[11px] font-medium text-muted-foreground">Reorder Qty</label>
-                        <Input type="number" min="0" value={formData.reorder_quantity} onChange={e => setFormData({ ...formData, reorder_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs" />
+                        <Input type="number" min="0" value={formData.reorder_quantity} onChange={e => setFormData({ ...formData, reorder_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
                       </div>
                       <div>
                         <label className="text-[11px] font-medium text-muted-foreground">Lead Time (days)</label>
-                        <Input type="number" min="0" value={formData.lead_time_days} onChange={e => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 7 })} className="mt-0.5 h-8 text-xs" />
+                        <Input type="number" min="0" value={formData.lead_time_days} onChange={e => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 7 })} className="mt-0.5 h-8 text-xs bg-white" />
                       </div>
                     </div>
                   </div>
