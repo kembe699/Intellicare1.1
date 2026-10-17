@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, UserPlus, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge, StatusBadgeTone } from '@/components/common';
@@ -63,6 +64,7 @@ export default function PatientReport() {
   const [dateTo, setDateTo] = useState(() => toLocalDateStr(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PatientReportData | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -71,6 +73,7 @@ export default function PatientReport() {
       const res = await authFetch(`/api/reports-v2/patients?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load patient report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || 'Failed to load patient report');
@@ -108,6 +111,7 @@ export default function PatientReport() {
       csvColumns={csvColumns}
       csvFilename={`patient-report-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Patient Report" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

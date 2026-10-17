@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FlaskConical, Users, TestTube2, Wallet, Loader2, TestTube } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge, StatusBadgeTone } from '@/components/common';
@@ -61,6 +62,7 @@ export default function LabReport() {
   const [dateTo, setDateTo] = useState(() => toLocalDateStr(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<LabReportData | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -69,6 +71,7 @@ export default function LabReport() {
       const res = await authFetch(`/api/reports-v2/laboratory?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load laboratory report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || 'Failed to load laboratory report');
@@ -135,6 +138,7 @@ export default function LabReport() {
       csvColumns={csvColumns}
       csvFilename={`laboratory-report-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Laboratory Report" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

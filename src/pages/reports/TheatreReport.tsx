@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, Activity, CheckCircle2, XCircle, Clock, Scissors, Stethoscope } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { fmtCurrency, CsvColumn } from '@/utils/reportUtils';
 
 interface ProcedureRow { procedureName: string; operationCount: number; totalRevenue: number; }
@@ -52,6 +53,7 @@ export default function TheatreReport() {
   const [dateTo, setDateTo] = useState(defaults.to);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<TheatreData | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -61,6 +63,7 @@ export default function TheatreReport() {
       const res = await authFetch(`/api/reports-v2/theatre?${params}`);
       if (!res.ok) throw new Error('Failed to load theatre report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (err: any) {
       toast.error(err.message || 'Failed to load theatre report');
     } finally {
@@ -95,6 +98,7 @@ export default function TheatreReport() {
       csvColumns={csvColumns}
       csvFilename={`theatre-report-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Theatre Report" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -3,7 +3,7 @@ import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, E
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFacilityInfo } from '@/hooks/useFacilityInfo';
+import { ReportLetterhead } from './ReportLetterhead';
 import { StatusBadge, StatusBadgeTone, LoadingState } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Button } from '@/components/ui/button';
@@ -134,7 +134,6 @@ const fmtDateTime = (val?: string | null): string => {
 
 export default function AuditSummaryReport() {
   const { user } = useAuth();
-  const facility = useFacilityInfo();
   const clinicId = user?.clinic || 1;
   const presets = getDatePresets();
 
@@ -326,29 +325,7 @@ export default function AuditSummaryReport() {
           </div>
         </div>
 
-        <div className="rounded-md border border-border overflow-hidden bg-card">
-          <div className="bg-sky-100 dark:bg-sky-950/40 text-center py-2 border-b border-border">
-            <h2 className="text-sm font-bold tracking-wide text-foreground">Staff Activity / Audit Log</h2>
-          </div>
-          <div className="p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              {facility.facilityLogo ? (
-                <img src={facility.facilityLogo} alt={facility.facilityName} className="h-16 w-16 object-contain rounded border border-border flex-shrink-0" />
-              ) : (
-                <div className="h-16 w-16 rounded border border-border flex-shrink-0" />
-              )}
-              <div>
-                <p className="font-semibold text-sm">{facility.facilityName || '—'}</p>
-                {facility.facilityWebsite && <p className="text-xs text-muted-foreground">{facility.facilityWebsite}</p>}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
-              <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
-              <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
-              <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
-            </div>
-          </div>
-        </div>
+        <ReportLetterhead title="Staff Activity / Audit Log" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} className="mb-0" />
 
         {/* ── Stat tiles — part of the pinned header, not the scrolling results ── */}
         {hasLoaded && data && (

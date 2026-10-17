@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from 'sonner';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { LoadingState } from '@/components/common';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { Button } from '@/components/ui/button';
@@ -86,7 +86,6 @@ function thisMonthRange() {
 
 export default function AccountingReport() {
   const { user } = useAuth();
-  const facility = useFacilityInfo();
   const defaults = thisMonthRange();
   const [dateFrom, setDateFrom] = useState(defaults.from);
   const [dateTo, setDateTo] = useState(defaults.to);
@@ -525,29 +524,7 @@ export default function AccountingReport() {
           </div>
         </div>
 
-        <div className="rounded-md border border-border overflow-hidden bg-card">
-          <div className="bg-sky-100 dark:bg-sky-950/40 text-center py-2 border-b border-border">
-            <h2 className="text-sm font-bold tracking-wide text-foreground">{option.label}</h2>
-          </div>
-          <div className="p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              {facility.facilityLogo ? (
-                <img src={facility.facilityLogo} alt={facility.facilityName} className="h-16 w-16 object-contain rounded border border-border flex-shrink-0" />
-              ) : (
-                <div className="h-16 w-16 rounded border border-border flex-shrink-0" />
-              )}
-              <div>
-                <p className="font-semibold text-sm">{facility.facilityName || '—'}</p>
-                {facility.facilityWebsite && <p className="text-xs text-muted-foreground">{facility.facilityWebsite}</p>}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs text-muted-foreground">
-              <span><span className="font-semibold text-foreground">From:</span> {fmtDate(dateFrom)}</span>
-              <span><span className="font-semibold text-foreground">To:</span> {fmtDate(dateTo)}</span>
-              <span><span className="font-semibold text-foreground">Report DateTime:</span> {generatedAt ? generatedAt.toLocaleString() : '—'}</span>
-            </div>
-          </div>
-        </div>
+        <ReportLetterhead title={option.label} dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} className="mb-0" />
       </div>
 
       {summary && hasLoaded && (option.mode === 'trial-balance' || option.mode === 'balance-sheet') && (

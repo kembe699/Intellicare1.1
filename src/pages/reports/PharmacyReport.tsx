@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Pill, Users, Package, DollarSign, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -68,6 +69,7 @@ export default function PharmacyReport() {
   const [dateTo, setDateTo] = useState(() => toLocalDateStr(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PharmacyReportData | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -76,6 +78,7 @@ export default function PharmacyReport() {
       const res = await authFetch(`/api/reports-v2/pharmacy?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load pharmacy report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || 'Failed to load pharmacy report');
@@ -115,6 +118,7 @@ export default function PharmacyReport() {
       csvColumns={csvColumns}
       csvFilename={`pharmacy-report-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Pharmacy Report" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

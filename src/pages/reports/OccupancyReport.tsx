@@ -7,6 +7,7 @@ import {
   Search, TrendingUp, Clock, CalendarDays, RefreshCw,
 } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { StatusBadge, type StatusBadgeTone, LoadingState} from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Input } from '@/components/ui/input';
@@ -92,6 +93,7 @@ export default function OccupancyReport() {
   const [data, setData] = useState<ReportPayload | null>(null);
   const [bedSearch, setBedSearch] = useState('');
   const [bedStatusFilter, setBedStatusFilter] = useState('all');
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = async (from = trendFrom, to = trendTo) => {
     setLoading(true);
@@ -100,6 +102,7 @@ export default function OccupancyReport() {
       const res = await authFetch(`/api/reports-v2/occupancy?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load occupancy report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (err: any) {
       toast.error(err.message || 'Failed to load occupancy report');
     } finally {
@@ -163,6 +166,7 @@ export default function OccupancyReport() {
       hideDateRange
       csvData={filteredBeds} csvColumns={csvColumns} csvFilename={`bed-occupancy-${new Date().toISOString().split('T')[0]}.csv`}
     >
+      <ReportLetterhead title="Bed / Ward Occupancy" dateFrom={trendFrom} dateTo={trendTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <LoadingState message="Loading report..." />
       ) : (

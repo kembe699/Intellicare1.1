@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Stethoscope, Users, ClipboardList, Wallet, Loader2, Info, UserCircle } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,6 +70,7 @@ export default function DoctorPerformanceReport() {
   const [dateTo, setDateTo] = useState(() => toLocalDateStr(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DoctorPerformanceData | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -77,6 +79,7 @@ export default function DoctorPerformanceReport() {
       const res = await authFetch(`/api/reports-v2/doctor-performance?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load doctor performance report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || 'Failed to load doctor performance report');
@@ -141,6 +144,7 @@ export default function DoctorPerformanceReport() {
       csvColumns={csvColumns}
       csvFilename={`doctor-performance-report-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Doctor Performance Report" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

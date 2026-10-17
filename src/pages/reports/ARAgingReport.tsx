@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, DollarSign, Clock, AlertTriangle, AlertOctagon, Search } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { StatusBadge, StatusBadgeTone, LoadingState} from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { fmtCurrency, fmtCount, fmtNum, fmtDate, CsvColumn } from '@/utils/reportUtils';
@@ -80,6 +81,7 @@ export default function ARAgingReport() {
   const [data, setData] = useState<ARAgingPayload | null>(null);
   const [search, setSearch] = useState('');
   const [bucketFilter, setBucketFilter] = useState<'all' | Bucket>('all');
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -90,6 +92,7 @@ export default function ARAgingReport() {
       const res = await authFetch(`/api/reports-v2/ar-aging?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load AR aging report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || 'Failed to load AR aging report');
@@ -151,6 +154,7 @@ export default function ARAgingReport() {
       onRefresh={fetchData} loading={loading}
       csvData={filteredItems} csvColumns={csvColumns} csvFilename={`ar-aging-report-${new Date().toISOString().split('T')[0]}.csv`}
     >
+      <ReportLetterhead title="Accounts Receivable Aging" dateFrom={dateFrom} dateTo={data?.asOf || new Date().toISOString().split('T')[0]} generatedAt={generatedAt} asOf />
       {loading && !data ? (
         <LoadingState message="Loading report..." />
       ) : (

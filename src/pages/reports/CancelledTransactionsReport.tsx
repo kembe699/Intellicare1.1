@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ban, RotateCcw, DollarSign, Loader2, ListX, UserCircle } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge, StatusBadgeTone } from '@/components/common';
@@ -84,6 +85,7 @@ export default function CancelledTransactionsReport() {
   const [dateTo, setDateTo] = useState(() => toLocalDateStr(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ReportResponse | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -92,6 +94,7 @@ export default function CancelledTransactionsReport() {
       const res = await authFetch(`/api/reports-v2/cancelled-transactions?${params}`);
       if (!res.ok) throw new Error('Failed to load cancelled/refunded transactions report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || 'Failed to load cancelled/refunded transactions report');
@@ -171,6 +174,7 @@ export default function CancelledTransactionsReport() {
       csvColumns={receiptCsvColumns}
       csvFilename={`cancelled-refunded-transactions-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Cancelled / Refunded Transactions" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading && !data ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

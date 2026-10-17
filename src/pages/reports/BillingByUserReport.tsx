@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, DollarSign, Receipt, Users, Trophy, UserCircle } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
+import { ReportLetterhead } from './ReportLetterhead';
 import { AdvancedDataTable, type Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { fmtCurrency, fmtCount, CsvColumn } from '@/utils/reportUtils';
 
@@ -57,6 +58,7 @@ export default function BillingByUserReport() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ReportResponse | null>(null);
   const [selectedCashier, setSelectedCashier] = useState('all');
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -68,6 +70,7 @@ export default function BillingByUserReport() {
       const res = await authFetch(`/api/reports-v2/billing-by-user?${params}`);
       if (!res.ok) throw new Error('Failed to load billing report');
       setData(await res.json());
+      setGeneratedAt(new Date());
     } catch (err: any) {
       toast.error(err.message || 'Failed to load billing report');
     } finally {
@@ -151,6 +154,7 @@ export default function BillingByUserReport() {
       csvColumns={csvColumns}
       csvFilename={`billing-by-user-${dateFrom}-${dateTo}.csv`}
     >
+      <ReportLetterhead title="Billing Report by User" dateFrom={dateFrom} dateTo={dateTo} generatedAt={generatedAt} />
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
