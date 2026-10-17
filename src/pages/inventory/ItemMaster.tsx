@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   Package, Edit, Search, Eye, RefreshCw, Download, Upload, FileSpreadsheet,
-  X, Check, Loader2, Layers, Calendar, MapPin, Percent, Barcode,
+  X, Check, Loader2, Calendar, MapPin, Percent, Barcode,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
@@ -459,249 +459,222 @@ export default function ItemMaster() {
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div className="p-3 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Basic Information</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Item Code</label>
-                        <div className="mt-0.5 flex gap-1">
-                          <Input readOnly disabled={!!editingItem} value={formData.item_code} className="h-8 text-xs font-mono bg-muted/40" />
-                          {!editingItem && (
-                            <Button type="button" variant="outline" size="icon" className="h-8 w-8 flex-shrink-0" title="Regenerate code" onClick={() => setFormData({ ...formData, item_code: generateItemCode() })}>
-                              <RefreshCw className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Category</label>
-                        <Combobox
-                          options={CATEGORY_OPTIONS}
-                          value={formData.item_category}
-                          onChange={v => setFormData({ ...formData, item_category: v })}
-                          searchPlaceholder="Search categories..."
-                          className="mt-0.5 h-8 text-xs bg-white"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Barcode className="w-3 h-3" /> Barcode</label>
-                      <div className="mt-0.5 flex gap-1">
-                        <Input
-                          value={formData.barcode}
-                          onChange={e => setFormData({ ...formData, barcode: e.target.value })}
-                          onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-                          placeholder="Scan, type, or generate..."
-                          className="h-8 text-xs font-mono bg-white"
-                        />
-                        <Button type="button" variant="outline" size="icon" className="h-8 w-8 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium text-muted-foreground">Item Name</label>
-                      <Input required value={formData.item_name} onChange={e => setFormData({ ...formData, item_name: e.target.value })} placeholder="Drug / item full name" className="mt-0.5 h-8 text-xs bg-white" />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium text-muted-foreground">Description</label>
-                      <textarea
-                        value={formData.item_description}
-                        onChange={e => setFormData({ ...formData, item_description: e.target.value })}
-                        placeholder="Strength, formulation, notes..."
-                        className="w-full mt-0.5 p-2 border border-input rounded-md resize-none h-10 text-xs bg-white shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium text-muted-foreground">Unit of Measure</label>
-                      <Combobox
-                        options={UOM_OPTIONS}
-                        value={formData.unit_of_measure}
-                        onChange={v => setFormData({ ...formData, unit_of_measure: v, reorder_unit: v })}
-                        searchPlaceholder="Search units..."
-                        className="mt-0.5 h-8 text-xs bg-white"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Units per pack</label>
-                        <Input
-                          type="number" min="1" step="1" value={formData.units_per_pack}
-                          onChange={e => setFormData({ ...formData, units_per_pack: parseInt(e.target.value, 10) || 1 })}
-                          className="mt-0.5 h-8 text-xs bg-white"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          e.g. 10 tablets per {formData.unit_of_measure || 'Strip'} — leave at 1 if stocked individually
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Dose unit (optional)</label>
-                        <Input
-                          value={formData.dose_unit_label} placeholder="e.g. Tablet"
-                          onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
-                          className="mt-0.5 h-8 text-xs bg-white"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          What one dose is called on the prescription/receipt
-                        </p>
-                      </div>
-                    </div>
+              <div className="p-5 bg-muted/20">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Item Name</label>
+                    <Input required value={formData.item_name} onChange={e => setFormData({ ...formData, item_name: e.target.value })} placeholder="Drug / item full name" className="h-10 text-sm bg-white" />
                   </div>
-
-                  <div className="space-y-3">
-                    <div className="space-y-2 rounded-lg border p-2.5 bg-card">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing, Costing & GL Accounts</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[11px] font-medium text-muted-foreground">Unit Cost</label>
-                          <Input type="number" step="0.01" min="0" value={formData.current_unit_cost} onChange={e => setFormData({ ...formData, current_unit_cost: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-medium text-muted-foreground">Cost Of Sale Sub-Account</label>
-                          <Combobox
-                            options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                            value={formData.cogs_account_id}
-                            onChange={v => setFormData({ ...formData, cogs_account_id: v })}
-                            placeholder="Use category default"
-                            searchPlaceholder="Search accounts..."
-                            className="mt-0.5 h-8 text-xs bg-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-medium text-muted-foreground">Selling Price</label>
-                          <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-medium text-muted-foreground">Income Sub-Account</label>
-                          <Combobox
-                            options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                            value={formData.revenue_account_id}
-                            onChange={v => setFormData({ ...formData, revenue_account_id: v })}
-                            placeholder="Use category default"
-                            searchPlaceholder="Search accounts..."
-                            className="mt-0.5 h-8 text-xs bg-white"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1 border-t">
-                        <label className="text-[11px] font-medium text-muted-foreground">Inventory Sub-Account</label>
-                        <Combobox
-                          options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                          value={formData.inventory_account_id}
-                          onChange={v => setFormData({ ...formData, inventory_account_id: v })}
-                          placeholder="Use category default"
-                          searchPlaceholder="Search accounts..."
-                          className="mt-0.5 h-8 text-xs bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
-                      <p className={`text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 ${editingItem ? 'text-emerald-700' : 'text-primary'}`}>
-                        <Layers className="w-3.5 h-3.5" />
-                        {editingItem ? 'Stock' : 'Opening Stock'}
-                      </p>
-                      {editingItem ? (
-                        <>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="text-[11px] font-medium text-muted-foreground">Current Quantity</p>
-                              <p className="mt-0.5 text-sm font-semibold text-foreground">{editingItem.quantity_on_hand ?? 0} {editingItem.unit_of_measure}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Nearest Expiry</p>
-                              <p className="mt-0.5 text-sm font-semibold text-foreground">{editingItem.nearest_expiry ? new Date(editingItem.nearest_expiry).toLocaleDateString() : '—'}</p>
-                            </div>
-                          </div>
-                          {/* Stock quantity is no longer editable from here — it used to let a
-                              quantity typed into this form silently create a batch receipt,
-                              bypassing the Transactions page (and its own record of who
-                              received what, when). Editing an item now only edits the item's
-                              own fields; stock changes go through Transactions instead. */}
-                          <p className="text-[11px] text-muted-foreground pt-1.5 mt-1 border-t">
-                            To update stock, go to{' '}
-                            <Link to="/inventory/transactions" className="font-medium text-primary hover:underline">
-                              Inventory Transactions
-                            </Link>.
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[11px] font-medium text-muted-foreground">Quantity on Hand</label>
-                              <Input type="number" min="0" value={formData.initial_quantity} onChange={e => setFormData({ ...formData, initial_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Expiry Date</label>
-                              <Input type="date" value={formData.expiry_date} onChange={e => setFormData({ ...formData, expiry_date: e.target.value })} className="mt-0.5 h-8 text-xs bg-white" />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> Storage Location</label>
-                            <Combobox
-                              options={[{ value: '', label: 'No specific location' }, ...locations.map((l: any) => ({ value: String(l.id), label: `${l.location_name}${l.location_code ? ` (${l.location_code})` : ''}` }))]}
-                              value={formData.location_id}
-                              onChange={v => setFormData({ ...formData, location_id: v })}
-                              placeholder="No specific location"
-                              searchPlaceholder="Search locations..."
-                              className="mt-0.5 h-8 text-xs bg-white"
-                            />
-                            {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-0.5">No locations set up yet — add one in Stock Locations.</p>}
-                          </div>
-                        </>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Item Category</label>
+                    <Combobox
+                      options={CATEGORY_OPTIONS}
+                      value={formData.item_category}
+                      onChange={v => setFormData({ ...formData, item_category: v })}
+                      searchPlaceholder="Search categories..."
+                      className="h-10 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Item Code</label>
+                    <div className="flex gap-1.5">
+                      <Input readOnly disabled={!!editingItem} value={formData.item_code} className="h-10 text-sm font-mono bg-muted/40" />
+                      {!editingItem && (
+                        <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" title="Regenerate code" onClick={() => setFormData({ ...formData, item_code: generateItemCode() })}>
+                          <RefreshCw className="w-4 h-4" />
+                        </Button>
                       )}
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reorder Levels</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Min Stock Level</label>
-                        <Input type="number" min="0" value={formData.minimum_stock_level} onChange={e => setFormData({ ...formData, minimum_stock_level: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Max Stock Level</label>
-                        <Input type="number" min="0" value={formData.maximum_stock_level} onChange={e => setFormData({ ...formData, maximum_stock_level: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Reorder Qty</label>
-                        <Input type="number" min="0" value={formData.reorder_quantity} onChange={e => setFormData({ ...formData, reorder_quantity: parseInt(e.target.value) || 0 })} className="mt-0.5 h-8 text-xs bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-medium text-muted-foreground">Lead Time (days)</label>
-                        <Input type="number" min="0" value={formData.lead_time_days} onChange={e => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 7 })} className="mt-0.5 h-8 text-xs bg-white" />
-                      </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-1.5"><Barcode className="w-3.5 h-3.5" /> Barcode</label>
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={formData.barcode}
+                        onChange={e => setFormData({ ...formData, barcode: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                        placeholder="Scan, type, or generate..."
+                        className="h-10 text-sm font-mono bg-white"
+                      />
+                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Unit Of Measure</label>
+                    <Combobox
+                      options={UOM_OPTIONS}
+                      value={formData.unit_of_measure}
+                      onChange={v => setFormData({ ...formData, unit_of_measure: v, reorder_unit: v })}
+                      searchPlaceholder="Search units..."
+                      className="h-10 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Units Per Pack</label>
+                    <Input
+                      type="number" min="1" step="1" value={formData.units_per_pack}
+                      onChange={e => setFormData({ ...formData, units_per_pack: parseInt(e.target.value, 10) || 1 })}
+                      className="h-10 text-sm bg-white"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      e.g. 10 tablets per {formData.unit_of_measure || 'Strip'} — leave at 1 if stocked individually
+                    </p>
+                  </div>
 
-                  <div className="space-y-1.5 rounded-lg border p-2.5 bg-card">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tracking Flags</p>
-                    <div className="grid grid-cols-1 gap-1.5">
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Dose Unit (optional)</label>
+                    <Input
+                      value={formData.dose_unit_label} placeholder="e.g. Tablet"
+                      onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
+                      className="h-10 text-sm bg-white"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      What one dose is called on the prescription/receipt
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Unit Cost</label>
+                    <Input type="number" step="0.01" min="0" value={formData.current_unit_cost} onChange={e => setFormData({ ...formData, current_unit_cost: parseFloat(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Selling Price</label>
+                    <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Cost Of Sale Sub-Account</label>
+                    <Combobox
+                      options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                      value={formData.cogs_account_id}
+                      onChange={v => setFormData({ ...formData, cogs_account_id: v })}
+                      placeholder="Use category default"
+                      searchPlaceholder="Search accounts..."
+                      className="h-10 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Income Sub-Account</label>
+                    <Combobox
+                      options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                      value={formData.revenue_account_id}
+                      onChange={v => setFormData({ ...formData, revenue_account_id: v })}
+                      placeholder="Use category default"
+                      searchPlaceholder="Search accounts..."
+                      className="h-10 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Inventory Sub-Account</label>
+                    <Combobox
+                      options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                      value={formData.inventory_account_id}
+                      onChange={v => setFormData({ ...formData, inventory_account_id: v })}
+                      placeholder="Use category default"
+                      searchPlaceholder="Search accounts..."
+                      className="h-10 text-sm bg-white"
+                    />
+                  </div>
+
+                  {editingItem ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-foreground mb-1.5">Current Quantity</label>
+                        <div className="h-10 flex items-center px-3 rounded-lg border bg-muted/40 text-sm font-semibold">{editingItem.quantity_on_hand ?? 0} {editingItem.unit_of_measure}</div>
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-1.5"><Calendar className="w-3.5 h-3.5" /> Nearest Expiry</label>
+                        <div className="h-10 flex items-center px-3 rounded-lg border bg-muted/40 text-sm font-semibold">{editingItem.nearest_expiry ? new Date(editingItem.nearest_expiry).toLocaleDateString() : '—'}</div>
+                      </div>
+                      {/* Stock quantity is no longer editable from here — it used to let a
+                          quantity typed into this form silently create a batch receipt,
+                          bypassing the Transactions page (and its own record of who
+                          received what, when). Editing an item now only edits the item's
+                          own fields; stock changes go through Transactions instead. */}
+                      <div className="flex items-end">
+                        <p className="text-xs text-muted-foreground">
+                          To update stock, go to{' '}
+                          <Link to="/inventory/transactions" className="font-medium text-primary hover:underline">
+                            Inventory Transactions
+                          </Link>.
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-foreground mb-1.5">Quantity On Hand</label>
+                        <Input type="number" min="0" value={formData.initial_quantity} onChange={e => setFormData({ ...formData, initial_quantity: parseInt(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-1.5"><Calendar className="w-3.5 h-3.5" /> Expiry Date</label>
+                        <Input type="date" value={formData.expiry_date} onChange={e => setFormData({ ...formData, expiry_date: e.target.value })} className="h-10 text-sm bg-white" />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-1.5"><MapPin className="w-3.5 h-3.5" /> Storage Location</label>
+                        <Combobox
+                          options={[{ value: '', label: 'No specific location' }, ...locations.map((l: any) => ({ value: String(l.id), label: `${l.location_name}${l.location_code ? ` (${l.location_code})` : ''}` }))]}
+                          value={formData.location_id}
+                          onChange={v => setFormData({ ...formData, location_id: v })}
+                          placeholder="No specific location"
+                          searchPlaceholder="Search locations..."
+                          className="h-10 text-sm bg-white"
+                        />
+                        {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-1">No locations set up yet — add one in Stock Locations.</p>}
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Min Stock Level</label>
+                    <Input type="number" min="0" value={formData.minimum_stock_level} onChange={e => setFormData({ ...formData, minimum_stock_level: parseInt(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Max Stock Level</label>
+                    <Input type="number" min="0" value={formData.maximum_stock_level} onChange={e => setFormData({ ...formData, maximum_stock_level: parseInt(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Reorder Quantity</label>
+                    <Input type="number" min="0" value={formData.reorder_quantity} onChange={e => setFormData({ ...formData, reorder_quantity: parseInt(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Lead Time (days)</label>
+                    <Input type="number" min="0" value={formData.lead_time_days} onChange={e => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 7 })} className="h-10 text-sm bg-white" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Tracking Flags</label>
+                    <div className="flex flex-wrap gap-3">
                       {[
                         { key: 'requires_batch_tracking', label: 'Batch Tracking' },
                         { key: 'requires_expiry_tracking', label: 'Expiry Tracking' },
                         { key: 'is_controlled_substance', label: 'Controlled Substance' },
                       ].map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-1.5 rounded-lg border p-1.5 cursor-pointer hover:bg-muted/40 transition-colors">
+                        <label key={key} className="flex items-center gap-2 h-10 px-3 rounded-lg border bg-white cursor-pointer hover:bg-muted/40 transition-colors">
                           <input
                             type="checkbox"
                             checked={formData[key as keyof typeof formData] as boolean}
                             onChange={e => setFormData({ ...formData, [key]: e.target.checked })}
                             className="rounded"
                           />
-                          <span className="text-[11px] font-medium">{label}</span>
+                          <span className="text-sm font-medium">{label}</span>
                         </label>
                       ))}
                     </div>
                   </div>
-                </div>
 
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Description</label>
+                    <textarea
+                      value={formData.item_description}
+                      onChange={e => setFormData({ ...formData, item_description: e.target.value })}
+                      placeholder="Strength, formulation, notes..."
+                      className="w-full p-3 border border-input rounded-lg resize-none h-20 text-sm bg-white shadow-sm"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="p-3 border-t bg-muted flex justify-end gap-2 sticky bottom-0">
