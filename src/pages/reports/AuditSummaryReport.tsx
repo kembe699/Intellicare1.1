@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
+import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -111,6 +112,14 @@ function humanizeAction(action: string): string {
     .filter(Boolean)
     .map(w => w.length <= 3 && w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
+}
+
+/** Renders a before/after field value for the diff table — never raw `[object Object]`, never a bare "null". */
+function formatDiffValue(v: any): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
 }
 
 const toLocalDateStr = (d: Date) => {
@@ -369,7 +378,7 @@ export default function AuditSummaryReport() {
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Most Common Action</p>
-                  <p className="text-2xl font-bold mt-1 truncate">{data?.totals.mostCommonAction?.action ?? '—'}</p>
+                  <p className="text-2xl font-bold mt-1 truncate">{data?.totals.mostCommonAction ? humanizeAction(data.totals.mostCommonAction.action) : '—'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {data?.totals.mostCommonAction ? `${fmtCount(data.totals.mostCommonAction.actionCount)} occurrences` : 'no activity in period'}
                   </p>
@@ -412,7 +421,7 @@ export default function AuditSummaryReport() {
               columns={[
                 { key: 'no', header: 'No', width: '56px', render: (v) => <span className="text-muted-foreground tabular-nums">{v}</span> },
                 { key: 'userName', header: 'User', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
-                { key: 'userRole', header: 'Role', sortable: true, render: (v) => <span className="text-muted-foreground capitalize">{v}</span> },
+                { key: 'userRole', header: 'Role', sortable: true, render: (v) => <span className="text-muted-foreground">{humanizeAction(v)}</span> },
                 { key: 'actionCount', header: 'Total Actions', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCount(v)}</span> },
                 {
                   key: '__topActions', header: 'Top Action Types',
@@ -426,7 +435,7 @@ export default function AuditSummaryReport() {
                             key={a.action}
                             status={a.action}
                             map={{ [a.action]: actionTone(a.action) }}
-                            label={`${a.action} ×${a.actionCount}`}
+                            label={`${humanizeAction(a.action)} ×${a.actionCount}`}
                           />
                         ))}
                       </div>
@@ -460,8 +469,8 @@ export default function AuditSummaryReport() {
                 { key: 'no', header: 'No', width: '56px', render: (v) => <span className="text-muted-foreground tabular-nums">{v}</span> },
                 { key: 'createdAt', header: 'Date & Time', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{fmtDateTime(v)}</span> },
                 { key: 'userName', header: 'User', sortable: true, render: (v) => <span className="font-medium whitespace-nowrap">{v}</span> },
-                { key: 'module', header: 'Module', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v}</span> },
-                { key: 'action', header: 'Action', sortable: true, render: (v) => <span className="whitespace-nowrap"><StatusBadge status={v} map={{ [v]: actionTone(v) }} /></span> },
+                { key: 'module', header: 'Module', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{humanizeAction(v)}</span> },
+                { key: 'action', header: 'Action', sortable: true, render: (v) => <span className="whitespace-nowrap"><StatusBadge status={v} map={{ [v]: actionTone(v) }} label={humanizeAction(v)} /></span> },
                 {
                   key: 'entityType', header: 'Entity',
                   render: (_v, row) => <span className="text-muted-foreground whitespace-nowrap">{row.entityType ? `${row.entityType}${row.entityId ? ` #${row.entityId}` : ''}` : '—'}</span>,
@@ -494,13 +503,15 @@ export default function AuditSummaryReport() {
     {/* ── Action detail modal — before/after values for a void, cancel, update, etc. ── */}
     {detailRow && (
       <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetailRow(null)}>
-        <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center p-4 border-b bg-muted/30">
             <div>
-              <h3 className="font-semibold text-sm">{detailRow.action}</h3>
+              <h3 className="font-semibold text-sm">{humanizeAction(detailRow.action)}</h3>
               <p className="text-xs text-muted-foreground">{detailRow.userName} · {fmtDateTime(detailRow.createdAt)}</p>
             </div>
-            <button type="button" className="text-muted-foreground hover:text-foreground text-sm" onClick={() => setDetailRow(null)}>✕</button>
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1 hover:bg-muted transition-colors" onClick={() => setDetailRow(null)} aria-label="Close">
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <div className="p-4 space-y-4 overflow-auto">
             {detailRow.description && (
@@ -509,20 +520,38 @@ export default function AuditSummaryReport() {
             {detailRow.entityType && (
               <p className="text-xs text-muted-foreground">{detailRow.entityType}{detailRow.entityId ? ` #${detailRow.entityId}` : ''}</p>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Before</p>
-                <pre className="text-xs bg-red-50 border border-red-100 rounded-md p-2.5 overflow-auto max-h-64 whitespace-pre-wrap break-words">
-                  {detailRow.oldValues ? JSON.stringify(detailRow.oldValues, null, 2) : '—'}
-                </pre>
+            {(detailRow.oldValues || detailRow.newValues) ? (
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-sky-100 dark:bg-sky-950/40 border-b border-border text-left">
+                      <th className="px-2.5 py-2 font-semibold text-foreground">Field</th>
+                      <th className="px-2.5 py-2 font-semibold text-red-700">Before</th>
+                      <th className="px-2.5 py-2 font-semibold text-emerald-700">After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from(new Set([
+                      ...Object.keys(detailRow.oldValues || {}),
+                      ...Object.keys(detailRow.newValues || {}),
+                    ])).sort().map(key => {
+                      const oldV = detailRow.oldValues?.[key];
+                      const newV = detailRow.newValues?.[key];
+                      const changed = JSON.stringify(oldV ?? null) !== JSON.stringify(newV ?? null);
+                      return (
+                        <tr key={key} className={cn('border-b border-border/60 last:border-0', changed && 'bg-amber-50 dark:bg-amber-950/20')}>
+                          <td className="px-2.5 py-1.5 align-top font-medium text-foreground whitespace-nowrap">{humanizeAction(key)}</td>
+                          <td className="px-2.5 py-1.5 align-top text-red-700 break-words max-w-[160px]">{formatDiffValue(oldV)}</td>
+                          <td className="px-2.5 py-1.5 align-top text-emerald-700 break-words max-w-[160px]">{formatDiffValue(newV)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">After</p>
-                <pre className="text-xs bg-emerald-50 border border-emerald-100 rounded-md p-2.5 overflow-auto max-h-64 whitespace-pre-wrap break-words">
-                  {detailRow.newValues ? JSON.stringify(detailRow.newValues, null, 2) : '—'}
-                </pre>
-              </div>
-            </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No before/after values recorded for this action.</p>
+            )}
           </div>
         </div>
       </div>
