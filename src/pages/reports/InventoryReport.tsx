@@ -253,10 +253,12 @@ export default function InventoryReport() {
       { key: 'quantityChange', header: 'Qty Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{v > 0 ? '+' : ''}{v}</span> },
       { key: 'fromLocation', header: 'From', render: v => v || '—' },
       { key: 'toLocation', header: 'To', render: v => v || '—' },
+      { key: 'userName', header: 'User', render: v => v || '—' },
+      { key: 'notes', header: 'Notes', render: v => v || '—' },
       { key: 'totalCost', header: 'Value', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
       { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
     ];
-    csvColumns = [{ header: 'Date', key: 'transactionDate', transform: v => fmtDate(v) }, { header: 'Transaction #', key: 'transactionNumber' }, { header: 'Type', key: 'transactionType' }, { header: 'Item', key: 'itemName' }, { header: 'Qty Change', key: 'quantityChange' }, { header: 'From', key: 'fromLocation' }, { header: 'To', key: 'toLocation' }, { header: 'Value', key: 'totalCost', transform: v => fmtCurrency(v) }, { header: 'Branch', key: 'branchName' }];
+    csvColumns = [{ header: 'Date', key: 'transactionDate', transform: v => fmtDate(v) }, { header: 'Transaction #', key: 'transactionNumber' }, { header: 'Type', key: 'transactionType' }, { header: 'Item', key: 'itemName' }, { header: 'Qty Change', key: 'quantityChange' }, { header: 'From', key: 'fromLocation' }, { header: 'To', key: 'toLocation' }, { header: 'User', key: 'userName' }, { header: 'Notes', key: 'notes' }, { header: 'Value', key: 'totalCost', transform: v => fmtCurrency(v) }, { header: 'Branch', key: 'branchName' }];
   } else if (option.mode === 'stock-movement-summary') {
     keyExtractor = r => r.groupLabel;
     columns = [

@@ -262,12 +262,13 @@ router.get('/stock-movement-detail', async (req, res) => {
               t.unit_cost AS "unitCost", t.total_cost AS "totalCost", t.cost_currency AS "costCurrency",
               i.item_name AS "itemName", i.item_code AS "itemCode",
               fl.location_name AS "fromLocation", tl.location_name AS "toLocation",
-              b.name AS "branchName", t.notes
+              b.name AS "branchName", t.notes, u.display_name AS "userName"
        FROM inventory_transactions t
        LEFT JOIN inventory_items i ON i.id = t.item_id
        LEFT JOIN stock_locations fl ON fl.id = t.from_location_id
        LEFT JOIN stock_locations tl ON tl.id = t.to_location_id
        LEFT JOIN branches b ON b.id = t.branch_id
+       LEFT JOIN users u ON u.id::text = t.created_by
        WHERE t.clinic_id = :clinicId AND t.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}${locationSql}${itemSql}
        ORDER BY t.transaction_date DESC, t.created_at DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
