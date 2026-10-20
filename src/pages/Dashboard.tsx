@@ -14,6 +14,7 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from 'recharts';
 import { toast } from 'sonner';
 
@@ -276,9 +277,9 @@ const Dashboard: React.FC = () => {
               ))}
               <div className="flex items-center gap-2 pl-2">
                 <Label htmlFor="dashFrom" className="text-xs text-muted-foreground">From</Label>
-                <Input id="dashFrom" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-auto" />
+                <DatePicker id="dashFrom" value={customFrom} onChange={setCustomFrom} className="w-auto" />
                 <Label htmlFor="dashTo" className="text-xs text-muted-foreground">To</Label>
-                <Input id="dashTo" type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-auto" />
+                <DatePicker id="dashTo" value={customTo} onChange={setCustomTo} className="w-auto" />
                 {isCustomRange && (
                   <button
                     type="button"
