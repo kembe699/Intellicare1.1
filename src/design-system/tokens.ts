@@ -73,41 +73,61 @@ export const colors = {
   // Base colors
   background: 'hsl(var(--background))',
   foreground: 'hsl(var(--foreground))',
-  
+  heading: 'hsl(var(--heading))',
+  label: 'hsl(var(--label))',
+  brandTeal: 'hsl(var(--brand-teal))',
+
   // Card colors
   card: 'hsl(var(--card))',
   cardForeground: 'hsl(var(--card-foreground))',
-  
+
   // Primary brand colors
   primary: 'hsl(var(--primary))',
   primaryForeground: 'hsl(var(--primary-foreground))',
-  
+  primaryHover: 'hsl(var(--primary-hover))',
+  primarySoft: 'hsl(var(--primary-soft))',
+
   // Secondary colors
   secondary: 'hsl(var(--secondary))',
   secondaryForeground: 'hsl(var(--secondary-foreground))',
-  
+
   // Muted colors
   muted: 'hsl(var(--muted))',
   mutedForeground: 'hsl(var(--muted-foreground))',
-  
+
   // Accent colors
   accent: 'hsl(var(--accent))',
   accentForeground: 'hsl(var(--accent-foreground))',
-  
-  // Status colors
+
+  // Status colors — each has a DEFAULT (solid), a soft background, and a
+  // matching border, for the pill-badge / alert-box pattern.
   success: 'hsl(var(--success))',
   successForeground: 'hsl(var(--success-foreground))',
+  successBg: 'hsl(var(--success-bg))',
+  successBorder: 'hsl(var(--success-border))',
   warning: 'hsl(var(--warning))',
   warningForeground: 'hsl(var(--warning-foreground))',
+  warningBg: 'hsl(var(--warning-bg))',
+  warningBorder: 'hsl(var(--warning-border))',
   destructive: 'hsl(var(--destructive))',
   destructiveForeground: 'hsl(var(--destructive-foreground))',
+  destructiveBg: 'hsl(var(--destructive-bg))',
+  destructiveBorder: 'hsl(var(--destructive-border))',
   info: 'hsl(var(--info))',
   infoForeground: 'hsl(var(--info-foreground))',
-  
+  infoBg: 'hsl(var(--info-bg))',
+  infoBorder: 'hsl(var(--info-border))',
+  neutral: 'hsl(var(--neutral))',
+  neutralForeground: 'hsl(var(--neutral-foreground))',
+  neutralBg: 'hsl(var(--neutral-bg))',
+  neutralBorder: 'hsl(var(--neutral-border))',
+
   // Border and input
   border: 'hsl(var(--border))',
   input: 'hsl(var(--input))',
   ring: 'hsl(var(--ring))',
+  disabledBg: 'hsl(var(--disabled-bg))',
+  skeleton: 'hsl(var(--skeleton))',
 } as const;
 
 /**
