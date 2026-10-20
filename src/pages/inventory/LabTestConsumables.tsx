@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 import { FlaskConical, Edit, Trash2, X, Check, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -34,6 +35,7 @@ interface StockLocation { id: string; location_name: string; }
 const empty = { lab_test_id: '', inventory_item_id: '', location_id: '', tests_per_unit: '', notes: '' };
 
 export default function LabTestConsumables() {
+  const confirm = useConfirm();
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -124,7 +126,13 @@ export default function LabTestConsumables() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Remove this link? The test will no longer deplete this item or check its stock.')) return;
+    const ok = await confirm({
+      title: 'Remove this link?',
+      description: 'The test will no longer deplete this item or check its stock.',
+      confirmLabel: 'Remove link',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       const res = await authFetch(`/api/inventory/lab-test-consumables/${id}`, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');

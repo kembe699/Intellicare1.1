@@ -16,7 +16,10 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      // rgba(20,54,60,0.45) per the Option B overlay spec — #14363C is
+      // exactly the `heading` token, so this rides on that token at 45%
+      // instead of a one-off arbitrary color.
+      "fixed inset-0 z-50 bg-heading/45 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
     {...props}

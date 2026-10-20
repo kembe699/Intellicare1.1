@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformAuthProvider, usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { DatabaseProvider } from "@/contexts/DatabaseContext.browser";
+import { ConfirmDialogProvider } from "@/hooks/useConfirm";
 import { Loader2 } from "lucide-react";
 
 const PlatformLogin = lazyWithRetry(() => import('./pages/platform/PlatformLogin'));
@@ -817,7 +818,9 @@ const AppContent = () => {
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <AppRoutes />
+      <ConfirmDialogProvider>
+        <AppRoutes />
+      </ConfirmDialogProvider>
     </TooltipProvider>
   );
 };
