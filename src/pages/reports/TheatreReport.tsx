@@ -128,9 +128,9 @@ export default function TheatreReport() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-info-bg dark:bg-info/40 border-b border-border text-xs uppercase tracking-wide text-foreground font-semibold">
-                    <th className="px-4 py-2 text-left">Procedure</th>
-                    <th className="px-4 py-2 text-right">Count</th>
-                    <th className="px-4 py-2 text-right">Revenue</th>
+                    <th scope="col" className="px-4 py-2 text-left">Procedure</th>
+                    <th scope="col" className="px-4 py-2 text-right">Count</th>
+                    <th scope="col" className="px-4 py-2 text-right">Revenue</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -164,9 +164,9 @@ export default function TheatreReport() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-info-bg dark:bg-info/40 border-b border-border text-xs uppercase tracking-wide text-foreground font-semibold">
-                    <th className="px-4 py-2 text-left">Surgeon</th>
-                    <th className="px-4 py-2 text-right">Count</th>
-                    <th className="px-4 py-2 text-right">Revenue</th>
+                    <th scope="col" className="px-4 py-2 text-left">Surgeon</th>
+                    <th scope="col" className="px-4 py-2 text-right">Count</th>
+                    <th scope="col" className="px-4 py-2 text-right">Revenue</th>
                   </tr>
                 </thead>
                 <tbody>

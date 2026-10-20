@@ -1022,14 +1022,14 @@ const PurchaseOrders: React.FC = () => {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-xs text-muted-foreground">
                           <tr>
-                            <th className="px-2 py-2 text-left font-medium w-8">#</th>
-                            <th className="px-2 py-2 text-left font-medium">Item</th>
-                            <th className="px-2 py-2 text-left font-medium">Description</th>
-                            <th className="px-2 py-2 text-right font-medium w-24">Qty</th>
-                            <th className="px-2 py-2 text-left font-medium w-20">UOM</th>
-                            <th className="px-2 py-2 text-right font-medium w-32">Unit Price</th>
-                            <th className="px-2 py-2 text-right font-medium w-32">Total</th>
-                            <th className="px-2 py-2 w-10"></th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium w-8">#</th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium">Item</th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium">Description</th>
+                            <th scope="col" className="px-2 py-2 text-right font-medium w-24">Qty</th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium w-20">UOM</th>
+                            <th scope="col" className="px-2 py-2 text-right font-medium w-32">Unit Price</th>
+                            <th scope="col" className="px-2 py-2 text-right font-medium w-32">Total</th>
+                            <th scope="col" className="px-2 py-2 w-10"></th>
                           </tr>
                         </thead>
                         <tbody>

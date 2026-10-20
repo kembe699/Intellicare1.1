@@ -741,10 +741,10 @@ export default function AccountingReport() {
                   <colgroup><col /><col className="w-36" /><col className="w-36" /><col className="w-36" /></colgroup>
                   <thead>
                     <tr className="border-b-2 border-foreground/70 text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="text-left font-semibold pb-1.5">Department</th>
-                      <th className="text-right font-semibold pb-1.5">Revenue</th>
-                      <th className="text-right font-semibold pb-1.5">Expenses</th>
-                      <th className="text-right font-semibold pb-1.5">Net Income</th>
+                      <th scope="col" className="text-left font-semibold pb-1.5">Department</th>
+                      <th scope="col" className="text-right font-semibold pb-1.5">Revenue</th>
+                      <th scope="col" className="text-right font-semibold pb-1.5">Expenses</th>
+                      <th scope="col" className="text-right font-semibold pb-1.5">Net Income</th>
                     </tr>
                   </thead>
                   <tbody>

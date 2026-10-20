@@ -145,8 +145,8 @@ function AgeSexSectionTable({ section, computedRows, overrideRows, onOverride, r
       <table className="w-full text-sm border-collapse dhis2-section">
         <thead>
           <tr className="border-b-2 border-foreground/20">
-            <th className="text-left py-2 pr-3">Indicator</th>
-            {(section.columns || []).map((c) => <th key={c.id} className="text-right py-2 px-2 whitespace-nowrap">{c.label}</th>)}
+            <th scope="col" className="text-left py-2 pr-3">Indicator</th>
+            {(section.columns || []).map((c) => <th scope="col" key={c.id} className="text-right py-2 px-2 whitespace-nowrap">{c.label}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -528,7 +528,7 @@ export default function Dhis2Report() {
                 <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm text-foreground">C. {definition.sections.C.title}</h4></div>
                 <CardContent className="p-5 overflow-x-auto">
                   <table className="w-full text-sm border-collapse dhis2-section">
-                    <thead><tr className="border-b-2 border-foreground/20"><th className="text-left py-2">Test</th><th className="text-right py-2">Tested</th><th className="text-right py-2">Positive</th><th className="text-right py-2">% positive</th></tr></thead>
+                    <thead><tr className="border-b-2 border-foreground/20"><th scope="col" className="text-left py-2">Test</th><th scope="col" className="text-right py-2">Tested</th><th scope="col" className="text-right py-2">Positive</th><th scope="col" className="text-right py-2">% positive</th></tr></thead>
                     <tbody>
                       {(definition.sections.C.rows || []).map((row) => {
                         const c = computed.sections.C[row.id] || { tested: 0, positive: 0, pct_positive: 0 };
@@ -611,7 +611,7 @@ export default function Dhis2Report() {
                 <div className="px-5 py-3.5 border-b border-border bg-muted/30"><h4 className="font-semibold text-sm text-foreground">G. {definition.sections.G.title}</h4></div>
                 <CardContent className="p-5 overflow-x-auto">
                   <table className="w-full text-sm border-collapse dhis2-section">
-                    <thead><tr className="border-b-2 border-foreground/20"><th className="text-left py-2">Item</th>{(definition.sections.G.columns || []).map((c) => <th key={c.id} className="text-right py-2">{c.label}</th>)}</tr></thead>
+                    <thead><tr className="border-b-2 border-foreground/20"><th scope="col" className="text-left py-2">Item</th>{(definition.sections.G.columns || []).map((c) => <th scope="col" key={c.id} className="text-right py-2">{c.label}</th>)}</tr></thead>
                     <tbody>
                       {(definition.sections.G.defaultItems || []).map((row) => {
                         const c = computed.sections.G[row.id] || { opening: 0, received: 0, used: 0, closing: 0, daysOutOfStock: 0, itemId: null };

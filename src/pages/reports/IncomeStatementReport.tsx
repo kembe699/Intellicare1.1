@@ -209,12 +209,12 @@ export default function IncomeStatementReport() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-2 text-left">Date</th>
-                <th className="px-4 py-2 text-right">Revenue</th>
-                <th className="px-4 py-2 text-right">Cost of Goods Sold</th>
-                <th className="px-4 py-2 text-right">Operating Expenses</th>
-                <th className="px-4 py-2 text-right">Miscellaneous</th>
-                <th className="px-4 py-2 text-right">Net Income</th>
+                <th scope="col" className="px-4 py-2 text-left">Date</th>
+                <th scope="col" className="px-4 py-2 text-right">Revenue</th>
+                <th scope="col" className="px-4 py-2 text-right">Cost of Goods Sold</th>
+                <th scope="col" className="px-4 py-2 text-right">Operating Expenses</th>
+                <th scope="col" className="px-4 py-2 text-right">Miscellaneous</th>
+                <th scope="col" className="px-4 py-2 text-right">Net Income</th>
               </tr>
             </thead>
             <tbody>

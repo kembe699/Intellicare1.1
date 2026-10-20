@@ -377,12 +377,12 @@ export default function SupplierProfile() {
                     <table className="w-full text-sm">
                       <thead className="bg-muted/30">
                         <tr className="text-left text-muted-foreground text-xs">
-                          <th className="px-4 py-2.5 font-medium">PO / Bill No.</th>
-                          <th className="px-4 py-2.5 font-medium">Date</th>
-                          <th className="px-4 py-2.5 font-medium">Status</th>
-                          <th className="px-4 py-2.5 font-medium text-right">Total</th>
-                          <th className="px-4 py-2.5 font-medium text-right">Paid</th>
-                          <th className="px-4 py-2.5 font-medium text-right">Balance Due</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">PO / Bill No.</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Date</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium text-right">Total</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium text-right">Paid</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium text-right">Balance Due</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">

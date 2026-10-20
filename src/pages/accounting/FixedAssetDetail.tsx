@@ -215,7 +215,7 @@ export default function FixedAssetDetail() {
                   <p className="text-sm text-muted-foreground text-center py-8">No depreciation has been posted for this asset yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b bg-muted/20"><th className="text-left py-2 px-4">Period</th><th className="text-right py-2 px-4">Amount</th><th className="text-right py-2 px-4">Book Value After</th></tr></thead>
+                    <thead><tr className="border-b bg-muted/20"><th scope="col" className="text-left py-2 px-4">Period</th><th scope="col" className="text-right py-2 px-4">Amount</th><th scope="col" className="text-right py-2 px-4">Book Value After</th></tr></thead>
                     <tbody>
                       {history.map((h: any) => (
                         <tr key={h.id} className="border-b border-border/50">

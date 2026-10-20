@@ -233,11 +233,11 @@ const FinancialReports: React.FC = () => {
                 <table className="w-full">
                   <thead className="border-b bg-muted/30">
                     <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-4 py-3 font-medium">Code</th>
-                      <th className="px-4 py-3 font-medium">Account Name</th>
-                      <th className="px-4 py-3 font-medium">Type</th>
-                      <th className="px-4 py-3 font-medium text-right">Debit ({BASE_CURRENCY})</th>
-                      <th className="px-4 py-3 font-medium text-right">Credit ({BASE_CURRENCY})</th>
+                      <th scope="col" className="px-4 py-3 font-medium">Code</th>
+                      <th scope="col" className="px-4 py-3 font-medium">Account Name</th>
+                      <th scope="col" className="px-4 py-3 font-medium">Type</th>
+                      <th scope="col" className="px-4 py-3 font-medium text-right">Debit ({BASE_CURRENCY})</th>
+                      <th scope="col" className="px-4 py-3 font-medium text-right">Credit ({BASE_CURRENCY})</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">

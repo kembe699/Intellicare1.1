@@ -157,16 +157,16 @@ const GeneralLedger: React.FC = () => {
               <table className="w-full min-w-[1100px] text-sm border-collapse">
                 <thead className="bg-muted sticky top-0 border-b z-10">
                   <tr className="text-left">
-                    <th className="pl-5 pr-2 py-3.5 w-10"></th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">GL Number</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Date</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Type</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground min-w-[220px]">Description</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Currency</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Debit ({BASE_CURRENCY})</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Credit ({BASE_CURRENCY})</th>
-                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Status</th>
-                    <th className="px-3 pr-5 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Actions</th>
+                    <th scope="col" className="pl-5 pr-2 py-3.5 w-10"></th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">GL Number</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Date</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Type</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground min-w-[220px]">Description</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Currency</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Debit ({BASE_CURRENCY})</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Credit ({BASE_CURRENCY})</th>
+                    <th scope="col" className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Status</th>
+                    <th scope="col" className="px-3 pr-5 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -232,10 +232,10 @@ const GeneralLedger: React.FC = () => {
                                 <table className="w-full text-sm">
                                   <thead className="bg-muted/40 border-b border-border/70">
                                     <tr className="text-xs text-muted-foreground">
-                                      <th className="px-4 py-2.5 text-left font-medium">Account</th>
-                                      <th className="px-4 py-2.5 text-right font-medium">Debit</th>
-                                      <th className="px-4 py-2.5 text-right font-medium">Credit</th>
-                                      <th className="px-4 py-2.5 text-left font-medium">Description</th>
+                                      <th scope="col" className="px-4 py-2.5 text-left font-medium">Account</th>
+                                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Debit</th>
+                                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Credit</th>
+                                      <th scope="col" className="px-4 py-2.5 text-left font-medium">Description</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-border/60">

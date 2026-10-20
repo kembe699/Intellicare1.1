@@ -130,10 +130,10 @@ const ReceiptItemsPanel: React.FC<{ details?: ReceiptServiceDetail[] | null; col
           </colgroup>
           <thead>
             <tr className="text-muted-foreground">
-              <th className="text-left py-1 font-normal">Item</th>
-              <th className="text-left py-1 font-normal pl-2">Qty</th>
-              <th className="text-right py-1 font-normal">Unit Price</th>
-              <th className="text-right py-1 font-normal">Total</th>
+              <th scope="col" className="text-left py-1 font-normal">Item</th>
+              <th scope="col" className="text-left py-1 font-normal pl-2">Qty</th>
+              <th scope="col" className="text-right py-1 font-normal">Unit Price</th>
+              <th scope="col" className="text-right py-1 font-normal">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -697,11 +697,11 @@ const CashierShift: React.FC = () => {
                       <table className="w-full text-sm">
                         <thead className="bg-muted sticky top-0">
                           <tr>
-                            <th className="p-2.5 text-left font-medium">Receipt #</th>
-                            <th className="p-2.5 text-left font-medium">Patient</th>
-                            <th className="p-2.5 text-left font-medium">Amount</th>
-                            <th className="p-2.5 text-left font-medium">Payment Method</th>
-                            <th className="p-2.5 text-left font-medium">Time</th>
+                            <th scope="col" className="p-2.5 text-left font-medium">Receipt #</th>
+                            <th scope="col" className="p-2.5 text-left font-medium">Patient</th>
+                            <th scope="col" className="p-2.5 text-left font-medium">Amount</th>
+                            <th scope="col" className="p-2.5 text-left font-medium">Payment Method</th>
+                            <th scope="col" className="p-2.5 text-left font-medium">Time</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1098,11 +1098,11 @@ const CashierShift: React.FC = () => {
                             <table className="w-full text-sm">
                               <thead className="bg-muted sticky top-0">
                                 <tr>
-                                  <th className="p-2 text-left font-medium">Receipt #</th>
-                                  <th className="p-2 text-left font-medium">Patient</th>
-                                  <th className="p-2 text-left font-medium">Amount</th>
-                                  <th className="p-2 text-left font-medium">Method</th>
-                                  <th className="p-2 text-left font-medium">Time</th>
+                                  <th scope="col" className="p-2 text-left font-medium">Receipt #</th>
+                                  <th scope="col" className="p-2 text-left font-medium">Patient</th>
+                                  <th scope="col" className="p-2 text-left font-medium">Amount</th>
+                                  <th scope="col" className="p-2 text-left font-medium">Method</th>
+                                  <th scope="col" className="p-2 text-left font-medium">Time</th>
                                 </tr>
                               </thead>
                               <tbody>

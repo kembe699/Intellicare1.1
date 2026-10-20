@@ -778,13 +778,13 @@ const ProcurementReports: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted sticky top-0">
-                    <th className={thClass}>PO / Item</th>
-                    <th className={thClass}>Supplier / Description</th>
-                    <th className={thClassCenter}>Qty</th>
-                    <th className={thClassRight}>Unit Price</th>
-                    <th className={thClassRight}>Line Total</th>
-                    <th className={thClass}>Date / Status</th>
-                    <th className={thClass}>Created By</th>
+                    <th scope="col" className={thClass}>PO / Item</th>
+                    <th scope="col" className={thClass}>Supplier / Description</th>
+                    <th scope="col" className={thClassCenter}>Qty</th>
+                    <th scope="col" className={thClassRight}>Unit Price</th>
+                    <th scope="col" className={thClassRight}>Line Total</th>
+                    <th scope="col" className={thClass}>Date / Status</th>
+                    <th scope="col" className={thClass}>Created By</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">

@@ -425,13 +425,13 @@ export default function ClaimDetails() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">#</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice #</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Patient</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Date</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Due Date</th>
-                      <th className="text-right py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Amount</th>
-                      <th className="text-center py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Status</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">#</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice #</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Patient</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Date</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Due Date</th>
+                      <th scope="col" className="text-right py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Amount</th>
+                      <th scope="col" className="text-center py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">

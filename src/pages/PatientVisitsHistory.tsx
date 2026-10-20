@@ -253,15 +253,15 @@ export default function PatientVisitsHistory() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted">
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground w-10"></th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Date</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Patient</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Age/Gender</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Doctor</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Chief Complaint</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Diagnosis</th>
-                    <th className="text-center py-2.5 px-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">Total Visits</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground w-10"></th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Date</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Patient</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Age/Gender</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Doctor</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Chief Complaint</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Diagnosis</th>
+                    <th scope="col" className="text-center py-2.5 px-3 font-medium text-muted-foreground">Status</th>
+                    <th scope="col" className="text-right py-2.5 px-3 font-medium text-muted-foreground">Total Visits</th>
                   </tr>
                 </thead>
                 <tbody>

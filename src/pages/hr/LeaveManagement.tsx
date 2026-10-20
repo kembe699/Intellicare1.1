@@ -267,10 +267,10 @@ export default function LeaveManagement() {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30">
                           <tr className="text-left text-muted-foreground text-xs">
-                            <th className="px-3 py-2 font-medium">Type</th>
-                            <th className="px-3 py-2 font-medium">Period</th>
-                            <th className="px-3 py-2 font-medium text-center">Days</th>
-                            <th className="px-3 py-2 font-medium text-center">Status</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Type</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-center">Days</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-center">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">

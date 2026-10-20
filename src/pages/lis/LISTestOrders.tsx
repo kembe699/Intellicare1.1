@@ -1134,7 +1134,7 @@ export default function LISTestOrders() {
       return `
       <div class="ic-section-title">Results: ${t.test_name}</div>
       <table class="ic-table">
-        <thead><tr><th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th></tr></thead>
+        <thead><tr><th scope="col" style="width:30%">Component</th><th scope="col" style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th scope="col" style="width:15%">Remark</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
     }).join('\n');
@@ -1237,7 +1237,7 @@ export default function LISTestOrders() {
       <div class="ic-section-title">Test: ${s.test_name} <span>Barcode: ${s.barcode}</span></div>
       <table class="ic-table">
         <thead><tr>
-          <th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th>
+          <th scope="col" style="width:30%">Component</th><th scope="col" style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th scope="col" style="width:15%">Remark</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;

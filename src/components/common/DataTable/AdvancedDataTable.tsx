@@ -322,7 +322,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
                 entirely — e.g. the reports section's banded look. */}
             <tr className={headerClassName || cn('border-b border-border', (stickyHeader || maxRows) ? 'bg-muted' : 'bg-muted/60')}>
               {selectable && (
-                <th className="px-4 py-2.5 text-left w-12">
+                <th scope="col" className="px-4 py-2.5 text-left w-12">
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={handleSelectAll}
@@ -333,6 +333,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
               {columns.map((column, index) => (
                 <th
                   key={index}
+                  scope="col"
                   className={cn(
                     'px-4 text-left text-xs font-semibold text-foreground',
                     compact ? 'py-2' : 'py-2.5',

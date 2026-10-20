@@ -196,7 +196,7 @@ export default function PatientReferralDetail() {
           </tr>`;
         }).join('');
         return `<table class="ic-table">
-          <thead><tr><th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th></tr></thead>
+          <thead><tr><th scope="col" style="width:30%">Component</th><th scope="col" style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th scope="col" style="width:15%">Remark</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
       })(),
@@ -362,12 +362,12 @@ export default function PatientReferralDetail() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-                          <th className="px-3 py-2 font-semibold">Test</th>
-                          <th className="px-3 py-2 font-semibold">Component</th>
-                          <th className="px-3 py-2 font-semibold">Value</th>
-                          <th className="px-3 py-2 font-semibold">Reference Range</th>
-                          <th className="px-3 py-2 font-semibold">Unit</th>
-                          <th className="px-3 py-2 font-semibold">Remark</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Test</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Component</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Value</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Reference Range</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Unit</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Remark</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">

@@ -86,7 +86,7 @@ export default function FixedAssetsReports() {
         <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center gap-2"><Wallet className="h-4 w-4" /><h4 className="font-semibold text-sm">Net Book Value by Category</h4></div>
         <CardContent className="p-0">
           <table className="w-full text-sm border-collapse">
-            <thead><tr className="border-b bg-muted/30"><th className="text-left py-2.5 px-4">Category</th><th className="text-left py-2.5 px-4">Nature</th><th className="text-right py-2.5 px-4">Assets</th><th className="text-right py-2.5 px-4">Cost</th><th className="text-right py-2.5 px-4">Accum. Depreciation</th><th className="text-right py-2.5 px-4">Book Value</th></tr></thead>
+            <thead><tr className="border-b bg-muted/30"><th scope="col" className="text-left py-2.5 px-4">Category</th><th scope="col" className="text-left py-2.5 px-4">Nature</th><th scope="col" className="text-right py-2.5 px-4">Assets</th><th scope="col" className="text-right py-2.5 px-4">Cost</th><th scope="col" className="text-right py-2.5 px-4">Accum. Depreciation</th><th scope="col" className="text-right py-2.5 px-4">Book Value</th></tr></thead>
             <tbody>
               {(nbv?.byCategory || []).map((row: any) => (
                 <tr key={row.category_name} className="border-b border-border/50">

@@ -363,10 +363,10 @@ export default function EmployeeProfile() {
                         <table className="w-full text-sm">
                           <thead className="bg-muted/30">
                             <tr className="text-left text-muted-foreground text-xs">
-                              <th className="px-3 py-2 font-medium">Date</th>
-                              <th className="px-3 py-2 font-medium text-right">Billed</th>
-                              <th className="px-3 py-2 font-medium text-right">Collected</th>
-                              <th className="px-3 py-2 font-medium text-center">Status</th>
+                              <th scope="col" className="px-3 py-2 font-medium">Date</th>
+                              <th scope="col" className="px-3 py-2 font-medium text-right">Billed</th>
+                              <th scope="col" className="px-3 py-2 font-medium text-right">Collected</th>
+                              <th scope="col" className="px-3 py-2 font-medium text-center">Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y">
@@ -425,10 +425,10 @@ export default function EmployeeProfile() {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30">
                           <tr className="text-left text-muted-foreground text-xs">
-                            <th className="px-3 py-2 font-medium">Bill No.</th>
-                            <th className="px-3 py-2 font-medium">Period</th>
-                            <th className="px-3 py-2 font-medium text-right">Amount</th>
-                            <th className="px-3 py-2 font-medium text-center">Status</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Bill No.</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-right">Amount</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-center">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -601,11 +601,11 @@ export default function EmployeeProfile() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30">
                       <tr className="text-left text-muted-foreground text-xs">
-                        <th className="px-3 py-2 font-medium">Run</th>
-                        <th className="px-3 py-2 font-medium">Period</th>
-                        <th className="px-3 py-2 font-medium">Status</th>
-                        <th className="px-3 py-2 font-medium text-right">Gross</th>
-                        <th className="px-3 py-2 font-medium text-right">Net</th>
+                        <th scope="col" className="px-3 py-2 font-medium">Run</th>
+                        <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                        <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                        <th scope="col" className="px-3 py-2 font-medium text-right">Gross</th>
+                        <th scope="col" className="px-3 py-2 font-medium text-right">Net</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">

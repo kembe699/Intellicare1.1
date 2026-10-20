@@ -275,17 +275,17 @@ export default function AntenatalProfile() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/20 text-xs text-muted-foreground uppercase">
                       <tr>
-                        <th className="text-left px-3 py-2">Date</th>
-                        <th className="text-left px-3 py-2">GA (wks)</th>
-                        <th className="text-left px-3 py-2">BP</th>
-                        <th className="text-left px-3 py-2">Weight</th>
-                        <th className="text-left px-3 py-2">Fundal Ht</th>
-                        <th className="text-left px-3 py-2">FHR</th>
-                        <th className="text-left px-3 py-2">Presentation</th>
-                        <th className="text-left px-3 py-2">Urine (P/G)</th>
-                        <th className="text-left px-3 py-2">Hb</th>
-                        <th className="text-left px-3 py-2">Next Appt.</th>
-                        <th className="text-left px-3 py-2">By</th>
+                        <th scope="col" className="text-left px-3 py-2">Date</th>
+                        <th scope="col" className="text-left px-3 py-2">GA (wks)</th>
+                        <th scope="col" className="text-left px-3 py-2">BP</th>
+                        <th scope="col" className="text-left px-3 py-2">Weight</th>
+                        <th scope="col" className="text-left px-3 py-2">Fundal Ht</th>
+                        <th scope="col" className="text-left px-3 py-2">FHR</th>
+                        <th scope="col" className="text-left px-3 py-2">Presentation</th>
+                        <th scope="col" className="text-left px-3 py-2">Urine (P/G)</th>
+                        <th scope="col" className="text-left px-3 py-2">Hb</th>
+                        <th scope="col" className="text-left px-3 py-2">Next Appt.</th>
+                        <th scope="col" className="text-left px-3 py-2">By</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">

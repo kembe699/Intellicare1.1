@@ -551,7 +551,7 @@ export default function TheatreOperationDetail() {
                   <p className="text-sm text-muted-foreground text-center py-4">No vitals recorded for this phase yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">BP</th><th className="text-left py-1.5">Pulse</th><th className="text-left py-1.5">Temp</th><th className="text-left py-1.5">RR</th><th className="text-left py-1.5">SpO2</th></tr></thead>
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="text-left py-1.5">Time</th><th scope="col" className="text-left py-1.5">BP</th><th scope="col" className="text-left py-1.5">Pulse</th><th scope="col" className="text-left py-1.5">Temp</th><th scope="col" className="text-left py-1.5">RR</th><th scope="col" className="text-left py-1.5">SpO2</th></tr></thead>
                     <tbody>
                       {vitalsForPhase.map((v) => (
                         <tr key={v.id} className="border-b border-border/50">
@@ -623,7 +623,7 @@ export default function TheatreOperationDetail() {
                   <p className="text-sm text-muted-foreground text-center py-4">Nothing recorded as used yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">Item</th><th className="text-right py-1.5">Qty</th><th className="text-left py-1.5">From</th></tr></thead>
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="text-left py-1.5">Time</th><th scope="col" className="text-left py-1.5">Item</th><th scope="col" className="text-right py-1.5">Qty</th><th scope="col" className="text-left py-1.5">From</th></tr></thead>
                     <tbody>
                       {operation.items.map((it) => (
                         <tr key={it.id} className="border-b border-border/50">
