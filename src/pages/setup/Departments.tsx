@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, Briefcase, Search, Settings, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Department {

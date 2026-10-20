@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirm } from '@/hooks/useConfirm';
 import { MapPinned, Trash2, Loader2, Plus } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

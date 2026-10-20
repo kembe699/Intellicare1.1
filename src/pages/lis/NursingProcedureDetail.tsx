@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 
 const PROCEDURE_TYPE_LABEL: Record<string, string> = {

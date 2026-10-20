@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirm } from '@/hooks/useConfirm';
 import { FlaskConical, Edit, Trash2, X, Check, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

@@ -15,7 +15,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
 import { Loader2, Plus, Receipt, CalendarClock, Database, ListTree } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 const DB_USAGE_COLOR = '#1A7A75'; // app primary teal — same as the dashboard's revenue chart
 

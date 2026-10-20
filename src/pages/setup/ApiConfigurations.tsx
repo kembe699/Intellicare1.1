@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { FlaskConical, MessageSquare, Image, CreditCard, Phone, Cpu, Grid, User, Key, RefreshCw, Copy, ShieldOff, CheckCircle, Clock, AlertCircle, ChevronRight, Loader2, Eye, EyeOff, Zap, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

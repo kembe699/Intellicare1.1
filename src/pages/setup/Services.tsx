@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, Wrench, X, Search, Download, Upload, FileText, Settings, Loader2, Percent, FlaskConical, Scan } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';

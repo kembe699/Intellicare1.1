@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Plus, Eye, Edit, Save, X, Send, CheckCircle, BookOpen, XCircle, RotateCcw, RefreshCw, Search, FileText, TrendingUp, TrendingDown, BarChart3, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader, LoadingState, StatusBadge, type StatusBadgeTone } from '@/components/common';

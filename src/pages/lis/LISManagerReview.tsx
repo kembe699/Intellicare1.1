@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';

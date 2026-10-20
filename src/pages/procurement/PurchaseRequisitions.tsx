@@ -18,7 +18,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { AttachmentField } from '@/components/procurement/AttachmentField';
 import { uploadProcurementAttachments } from '@/api/procurementAttachments';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { useNavigate } from 'react-router-dom';
 import {

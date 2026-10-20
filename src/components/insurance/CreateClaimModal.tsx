@@ -12,7 +12,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertCircle, CheckCircle, FileText, Users, DollarSign, Calendar } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface CreateClaimModalProps {
   onClose: () => void;

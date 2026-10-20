@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ArrowLeft, ArrowRightLeft, Plus, Trash2, Check, Loader2 } from 'lucide-react';
 
 interface StockLocation { id: string; location_name: string; location_type: string; department_name: string | null; }

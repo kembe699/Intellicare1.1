@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Building2, Plus, Search, Edit2, Trash2, Save, X, Loader2,
   Phone, Mail, MapPin, Clock, Globe, Shield, Users, CheckCircle,

@@ -12,7 +12,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { fmtCount, fmtDate, CsvColumn, getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // Same letterhead + "nothing loads until View is clicked" shape as the rest
 // of the Reports Center (Clinical/Inventory/Procurement/Accounting Reports).

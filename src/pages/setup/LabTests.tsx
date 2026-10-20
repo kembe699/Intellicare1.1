@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, TestTube, X, Database, Search, Download, Upload, FileText, Check, ChevronsUpDown, GripVertical, Cpu, Settings, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { LabTest, LabTestComponent } from '@/types';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 

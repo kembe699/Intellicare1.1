@@ -5,7 +5,7 @@ import {
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportLetterhead } from './ReportLetterhead';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { LoadingState } from '@/components/common';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';

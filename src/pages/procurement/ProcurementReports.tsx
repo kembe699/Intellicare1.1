@@ -12,7 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { StatusBadge, type StatusBadgeTone } from '@/components/common/StatusBadge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
 import * as docTemplate from '@/utils/documentTemplate';
 import {

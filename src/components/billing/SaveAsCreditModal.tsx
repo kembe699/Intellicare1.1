@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
 import { Loader2, FileText, Calendar, User, Receipt, Shield } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 interface SaveAsCreditModalProps {

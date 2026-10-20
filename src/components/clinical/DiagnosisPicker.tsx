@@ -4,7 +4,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, Plus, Star, X, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

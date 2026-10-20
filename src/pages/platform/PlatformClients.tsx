@@ -17,7 +17,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
 import { Loader2, Plus, Copy, CheckCircle2, Building2, Trash2, TriangleAlert } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface ClientRow {
   id: number;

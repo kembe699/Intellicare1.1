@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import * as docTemplate from '@/utils/documentTemplate';
 import { Wallet, ArrowLeft, Loader2, ShieldCheck, Ban, Banknote, Printer, Download, Check, FileSpreadsheet, QrCode, Copy, Clock } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

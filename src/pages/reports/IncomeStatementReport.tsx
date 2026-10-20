@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, TrendingUp, TrendingDown, CalendarRange, List } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { fmtCurrency, CsvColumn } from '@/utils/reportUtils';

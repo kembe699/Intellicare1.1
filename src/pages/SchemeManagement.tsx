@@ -5,7 +5,7 @@ import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Plus, Search, Eye, Edit, Trash2, DollarSign, Users, Shield, Settings,
   BarChart3, Loader2, Save, X, RefreshCw, CheckCircle, AlertCircle,

@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Settings, Save, Loader2 } from 'lucide-react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface FacilitySettings {
   queue_receipt_enabled: boolean;

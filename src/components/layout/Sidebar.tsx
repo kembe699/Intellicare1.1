@@ -60,9 +60,10 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { Combobox } from '@/components/ui/combobox';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 // privilege keys are from src/server/config/permissionsCatalog.js — the same
 // keys the backend's authorize() checks (src/server/middleware/authorize.js),
@@ -1077,10 +1078,11 @@ const NotificationBell: React.FC = () => {
         onClick={() => setOpen((o) => !o)}
         className="relative p-1.5 rounded-md hover:bg-accent transition-colors"
         title="Notifications"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
       >
         <Bell className="w-6 h-6 text-muted-foreground" strokeWidth={2.25} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs font-bold leading-none">
+          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-white text-xs font-bold leading-none">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -1171,14 +1173,27 @@ const NetworkStatus: React.FC = () => {
     };
   }, []);
 
-  const Icon = isOnline ? Wifi : WifiOff;
+  if (isOnline) {
+    return (
+      <span className="ic-badge ic-badge-success" title="Connected to the internet">
+        <Wifi className="h-3 w-3" aria-hidden="true" />
+        Online
+      </span>
+    );
+  }
+
   return (
-    <div
-      className={cn('flex items-center', isOnline ? 'text-green-600' : 'text-red-600')}
-      title={isOnline ? 'Connected to the internet' : 'No internet connection'}
-    >
-      <Icon className="w-6 h-6" strokeWidth={2.5} />
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="ic-badge ic-badge-danger" role="status">
+          <WifiOff className="h-3 w-3" aria-hidden="true" />
+          Offline
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        You are offline. Changes will sync when the connection returns.
+      </TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -1248,7 +1263,7 @@ export const TopBar: React.FC = () => {
         </span>
       </div>
       <div className="flex items-center gap-3">
-        <Link to="/help" className="p-1.5 rounded-md hover:bg-accent transition-colors" title="How To / Help Guide">
+        <Link to="/help" className="p-1.5 rounded-md hover:bg-accent transition-colors" title="How To / Help Guide" aria-label="Help guide">
           <HelpCircle className="w-6 h-6 text-muted-foreground" strokeWidth={2.25} />
         </Link>
         <NotificationBell />

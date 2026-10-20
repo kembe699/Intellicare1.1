@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo } from '@/components/clinical/GynaeFields';
 
 const EMPTY_VITALS = {

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // Platform Admin handles client credentials, quotations, and invoice
 // payments — sensitive enough to warrant its own idle timeout, unlike the

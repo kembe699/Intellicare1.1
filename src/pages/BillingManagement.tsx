@@ -7,7 +7,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { formatCurrency } from '@/utils/accountingApi';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import CreateClaimModal from '@/components/insurance/CreateClaimModal';
 import {
   Plus, Eye, DollarSign,

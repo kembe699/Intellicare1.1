@@ -4,7 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { 
   Download, Loader2, Users, Calendar, Stethoscope, Activity, 
   Search, Eye, ChevronDown, ChevronUp, User, Phone, FileText 

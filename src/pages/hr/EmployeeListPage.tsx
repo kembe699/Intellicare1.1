@@ -12,7 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Users, Search, Eye, Edit, Ban, CheckCircle, Loader2, X, Check, FileSpreadsheet, Stethoscope, Percent } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';

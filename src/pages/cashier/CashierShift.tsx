@@ -13,7 +13,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
+import { formatDuration } from '@/lib/format';
+import { EmptyState } from '@/components/common/EmptyState/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DollarSign, Clock, XCircle, ArrowRightLeft, Receipt, TrendingUp, Loader2, Undo2, Ban, FileText, Download, ChevronRight, ChevronDown } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -563,7 +566,18 @@ const CashierShift: React.FC = () => {
         />
 
         {loading ? (
-          <div className="text-center py-8">Loading...</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-3 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-6 w-16" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         ) : !currentShift ? (
           <Card>
             <CardContent className="py-12">
@@ -611,9 +625,16 @@ const CashierShift: React.FC = () => {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Shift Duration</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.floor((new Date().getTime() - new Date(currentShift.start_time).getTime()) / 3600000)}h
-                  </div>
+                  {currentShift.start_time && !Number.isNaN(new Date(currentShift.start_time).getTime()) ? (
+                    <div className="text-2xl font-bold">
+                      {formatDuration(new Date().getTime() - new Date(currentShift.start_time).getTime())}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold">—</div>
+                      <p className="text-xs text-muted-foreground mt-1">No shift open</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -665,7 +686,11 @@ const CashierShift: React.FC = () => {
               </CardHeader>
               <CardContent>
                 {shiftReceipts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">No receipts yet</div>
+                  <EmptyState
+                    icon={Receipt}
+                    title="No receipts yet"
+                    message="Receipts taken during this shift will show up here as payments come in."
+                  />
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <div className="max-h-[420px] overflow-y-auto">

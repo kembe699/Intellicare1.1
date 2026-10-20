@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, DirectoryPerson } from '@/lib/patientDirectory';
 
 // Registration + visit log for ANC (antenatal) care. A registration also

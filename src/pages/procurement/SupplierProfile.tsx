@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { cn } from '@/lib/utils';
 import {

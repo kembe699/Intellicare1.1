@@ -8,7 +8,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import {
   Package, Edit, Search, Eye, RefreshCw, Download, Upload, FileSpreadsheet,

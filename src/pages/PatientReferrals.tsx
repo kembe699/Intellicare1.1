@@ -9,7 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, type DirectoryPerson } from '@/lib/patientDirectory';
 import { AdvancedDataTable, type Column } from '@/components/common/DataTable/AdvancedDataTable';
 

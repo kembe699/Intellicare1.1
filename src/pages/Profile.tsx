@@ -31,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuth();

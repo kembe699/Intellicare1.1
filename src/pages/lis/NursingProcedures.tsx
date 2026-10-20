@@ -9,7 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Badge } from '@/components/ui/badge';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, DirectoryPerson } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { getStatusColor } from '@/lib/statusColors';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { ArrowRightLeft, Plus, Package, Check, X, Loader2, RefreshCw, Trash2 } from 'lucide-react';

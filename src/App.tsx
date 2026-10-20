@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 import { lazyWithRetry } from '@/lib/lazyWithRetry';
 import { RouteErrorBoundary } from '@/components/common/RouteErrorBoundary';
 import { LoadingState } from '@/components/common/LoadingState';
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -816,7 +815,6 @@ const AppRoutes = () => {
 const AppContent = () => {
   return (
     <TooltipProvider>
-      <Toaster />
       <Sonner />
       <ConfirmDialogProvider>
         <AppRoutes />

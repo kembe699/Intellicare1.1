@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { ReportLetterhead } from './ReportLetterhead';
 import { LoadingState } from '@/components/common';

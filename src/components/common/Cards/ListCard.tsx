@@ -42,7 +42,7 @@ export function ListCard<T>({
         ) : items.length === 0 ? (
           <EmptyState
             icon={emptyIcon}
-            message={emptyMessage}
+            title={emptyMessage}
             className="py-8"
           />
         ) : (

@@ -9,7 +9,7 @@ import { ArrowLeft, Scan, Check, Printer, Save, CheckCircle2, AlertTriangle, Loa
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import * as docTemplate from '@/utils/documentTemplate';
 
 interface RadiologyRequestItem {

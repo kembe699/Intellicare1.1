@@ -23,7 +23,7 @@ import { Combobox, MultiSelectCombobox } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 // ─── Types ──────────────────────────────────────────────────

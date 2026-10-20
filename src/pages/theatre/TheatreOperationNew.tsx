@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ArrowLeft, Loader2, CalendarClock, Search, X } from 'lucide-react';
 import { PatientOption, TheatreRoom, TheatreRequest, ROLE_LABEL } from './theatreShared';
 

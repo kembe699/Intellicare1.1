@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ArrowRightLeft, Download, RefreshCw, BarChart3, Loader2 } from 'lucide-react';
 import { formatCurrency, BASE_CURRENCY } from '@/utils/accountingApi';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ClipboardList, Plus, Search, X, Pill, Loader2, Ban, RefreshCw, FileSpreadsheet, Printer,
 } from 'lucide-react';

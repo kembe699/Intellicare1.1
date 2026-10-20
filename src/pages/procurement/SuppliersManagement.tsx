@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Building2, Edit, Search, Star, RefreshCw, CheckCircle, Ban, Eye, Truck, Loader2, X, Check, FileSpreadsheet } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

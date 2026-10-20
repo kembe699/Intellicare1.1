@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, DollarSign, Clock, AlertTriangle, AlertOctagon, Search } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { ReportLetterhead } from './ReportLetterhead';

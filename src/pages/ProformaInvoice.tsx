@@ -12,7 +12,7 @@ import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
 import {

@@ -12,7 +12,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import * as docTemplate from '@/utils/documentTemplate';
 import { type ReferralRow, REFERRAL_STATUS_TONE } from './PatientReferrals';
 

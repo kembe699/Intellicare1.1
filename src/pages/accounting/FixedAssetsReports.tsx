@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { FileBarChart, Wallet, Download } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import { NATURE_BADGE, NATURE_LABEL, fmt } from './fixedAssetsShared';

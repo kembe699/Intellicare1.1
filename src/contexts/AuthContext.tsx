@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@/types';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { getFacilityInfo, refreshFacilityInfo } from '@/hooks/useFacilityInfo';
 

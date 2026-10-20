@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge, StatusBadgeTone } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { fmtCurrency, fmtCount, CsvColumn } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // ── Types ────────────────────────────────────────────────────────────────
 

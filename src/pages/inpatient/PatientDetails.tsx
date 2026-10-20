@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Stethoscope, Pill, Syringe, ClipboardList, FlaskConical, Radio, LogOut, Loader2, X, Check, AlertTriangle, Receipt, Clock, BedDouble, User2, FileDown } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

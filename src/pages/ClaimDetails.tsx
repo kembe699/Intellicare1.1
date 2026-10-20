@@ -20,7 +20,7 @@ import {
   DollarSign, CheckCircle, XCircle, Send, Edit, AlertTriangle,
   Calendar, User, Shield, History, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 export default function ClaimDetails() {

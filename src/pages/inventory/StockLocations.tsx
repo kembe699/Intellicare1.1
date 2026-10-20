@@ -7,7 +7,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { MapPin, Edit, Search, Eye, RefreshCw, Warehouse, X, Check, Loader2, Package, Beaker, Pill, Stethoscope, Scissors } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Combobox } from '@/components/ui/combobox';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Plus, RefreshCw, Trash2, ArrowRightLeft, TrendingUp, TrendingDown,
   CheckCircle2, Coins, Wallet, History, Calculator, Settings,

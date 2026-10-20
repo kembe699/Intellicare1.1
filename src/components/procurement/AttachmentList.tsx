@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { FileText, Image as ImageIcon, Eye, Loader2, Paperclip } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   fetchProcurementAttachments, fetchProcurementAttachmentBlobUrl,
   type AttachmentEntityType, type ProcurementAttachment,

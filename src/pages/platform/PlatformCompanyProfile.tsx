@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, Loader2, Save, Stamp, Upload, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface CompanyProfileForm {
   company_name: string; address: string; city: string; phone: string; email: string; website: string; logo: string; stamp: string;

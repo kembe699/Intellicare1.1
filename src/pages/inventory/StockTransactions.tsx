@@ -7,7 +7,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ArrowLeftRight, Search, RefreshCw, Download, ArrowUpRight, ArrowDownRight,
   Check, Loader2,

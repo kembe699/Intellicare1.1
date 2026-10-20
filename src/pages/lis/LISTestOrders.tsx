@@ -9,7 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';

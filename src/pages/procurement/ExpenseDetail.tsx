@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ArrowLeft, ShieldCheck, Printer, Loader2, CheckCircle2,
   Clock, AlertCircle, Receipt, Calendar,

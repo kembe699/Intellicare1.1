@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { publicFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, CheckCircle2, AlertTriangle, Eraser, Wallet } from 'lucide-react';
 
 const MONTHS = [

@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from 'recharts';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface DashboardStats {
   totalPatients: number;

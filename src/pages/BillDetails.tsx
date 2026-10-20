@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

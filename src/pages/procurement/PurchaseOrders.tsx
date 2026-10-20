@@ -19,7 +19,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { AttachmentField } from '@/components/procurement/AttachmentField';
 import { AttachmentList } from '@/components/procurement/AttachmentList';
 import { uploadProcurementAttachments } from '@/api/procurementAttachments';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ShoppingCart, Plus, Eye, Search, RefreshCw, Check, CheckCircle,
   Shield, Download, FileText, FileSpreadsheet, Trash2, X, Loader2

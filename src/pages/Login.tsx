@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 const Login: React.FC = () => {
   const [code, setCode] = useState('');
@@ -214,20 +214,13 @@ const Login: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     required
-                    className="h-12 pl-4 pr-12 text-base border-slate-300 rounded-lg transition-all"
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#3D8A97';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '';
-                      e.currentTarget.style.boxShadow = '';
-                    }}
+                    className="h-12 pl-4 pr-12 text-base rounded-lg transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -254,27 +247,26 @@ const Login: React.FC = () => {
             </form>
 
           <div className="mt-8 space-y-4">
-            <div className="pt-6 border-t border-slate-200">
-              <div className="flex items-center justify-center gap-6 text-xs text-slate-500">
+            <div className="pt-6 border-t border-border">
+              <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-green-600" />
-                  <span className="font-medium">256-bit SSL</span>
+                  <Shield className="w-3.5 h-3.5 text-success" />
+                  <span className="font-medium">Encrypted connection</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                  <span className="font-medium">HIPAA Compliant</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                  <span className="font-medium">Daily backups</span>
                 </div>
-               
               </div>
             </div>
           </div>
         </div>
 
         <div className="text-center mt-8">
-          <p className="text-xs text-slate-500">
-            © 2024 IntelliCare. All rights reserved.
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} IntelliCare. All rights reserved.
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Need help? Contact support at{' '}
             <a 
               href="mailto:support@nilehc.tech" 

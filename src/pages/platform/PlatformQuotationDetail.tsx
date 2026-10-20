@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, CheckCircle2, Clock, Copy, CreditCard, Download, FileText, Loader2, Receipt, Save, Send, ServerCog, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';

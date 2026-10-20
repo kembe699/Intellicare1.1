@@ -13,7 +13,7 @@ import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { DepositReceipt } from '@/components/receipts/DepositReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';

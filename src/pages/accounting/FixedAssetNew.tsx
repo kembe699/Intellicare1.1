@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ArrowLeft, Loader2, Building2, Info, MapPinned, CalendarClock, Landmark, FileText } from 'lucide-react';
 import { Category, ChartAccount, Employee, Currency, NATURE_LABEL } from './fixedAssetsShared';
 

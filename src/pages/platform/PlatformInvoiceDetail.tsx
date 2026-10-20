@@ -17,7 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { CreditCard, Download, FileText, Loader2, Receipt } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { buildInvoiceHTML } from '@/utils/invoiceTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
 

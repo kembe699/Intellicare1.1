@@ -4,7 +4,7 @@ import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoadingState } from '@/components/common';
 import { PageHeader } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Plus, Edit, Trash2, Stethoscope, Save, X, Loader2, Search, Building2, Grid3X3, List, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

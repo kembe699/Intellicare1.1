@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Pill, Search, Check, Loader2, ClipboardList, History, Calendar, RefreshCw, AlertTriangle, Plus, X,
   CreditCard, Printer, Pencil, Shield, FileText, User, Stethoscope, PackageX, ChevronRight,

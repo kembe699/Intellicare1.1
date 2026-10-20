@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { RotateCcw, Search, X, Loader2, Check } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 

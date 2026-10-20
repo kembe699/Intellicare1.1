@@ -7,7 +7,7 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtCurrency, fmtCount, fmtDate, getDatePresets } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // ── Types ────────────────────────────────────────────────────────────────
 

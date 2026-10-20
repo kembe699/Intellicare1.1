@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronUp, ChevronDown, Loader2, Download, Columns } from 'lucide-react';
-import { LoadingState } from '@/components/common/LoadingState';
+import { ChevronUp, ChevronDown, Download, Columns } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, type EmptyStateProps } from '@/components/common/EmptyState/EmptyState';
 import { TablePagination } from './TablePagination';
 import { TableSearch } from './TableSearch';
 import { BulkActionsBar, BulkAction } from './BulkActionsBar';
@@ -35,10 +36,14 @@ export interface AdvancedDataTableProps<T> {
   data: T[];
   columns: Column<T>[];
   loading?: boolean;
-  /** Wording shown while the body loads. */
+  /** @deprecated unused now that loading renders skeleton rows instead of a message */
   loadingMessage?: string;
+  /** Plain-string empty state (title only) — kept for existing call sites; prefer `empty` for an icon/message/action. */
   emptyMessage?: string;
+  /** @deprecated pass `empty.icon` instead */
   emptyIcon?: React.ReactNode;
+  /** Richer empty state — icon, title, explanatory message, optional action button. Takes priority over emptyMessage/emptyIcon when given. */
+  empty?: Omit<EmptyStateProps, 'className'>;
   onRowClick?: (row: T, index: number) => void;
   className?: string;
   rowClassName?: (row: T, index: number) => string;
@@ -89,6 +94,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   loadingMessage = 'Loading...',
   emptyMessage = 'No data available',
   emptyIcon,
+  empty,
   onRowClick,
   className,
   rowClassName,
@@ -359,15 +365,20 @@ export function AdvancedDataTable<T extends Record<string, any>>({
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td
-                  colSpan={columns.length + (selectable ? 1 : 0)}
-                  className="align-middle p-0"
-                  style={{ height: `${emptyBodyHeight}px` }}
-                >
-                  <LoadingState variant="section" message={loadingMessage} className="py-0" />
-                </td>
-              </tr>
+              Array.from({ length: 4 }).map((_, rowIndex) => (
+                <tr key={`skeleton-${rowIndex}`} className="border-b border-border">
+                  {selectable && (
+                    <td className="px-4 py-2.5">
+                      <Skeleton className="h-3 w-3" />
+                    </td>
+                  )}
+                  {columns.map((column, colIndex) => (
+                    <td key={colIndex} className={cn('px-4', compact ? 'py-2' : 'py-2.5')}>
+                      <Skeleton className="h-3" style={{ width: `${55 + ((rowIndex * 13 + colIndex * 19) % 35)}%` }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : isEmpty ? (
               <tr>
                 <td
@@ -375,8 +386,14 @@ export function AdvancedDataTable<T extends Record<string, any>>({
                   className="text-center align-middle"
                   style={{ height: `${emptyBodyHeight}px` }}
                 >
-                  {emptyIcon && <div className="mb-4 flex justify-center">{emptyIcon}</div>}
-                  <p className="text-muted-foreground">{emptyMessage}</p>
+                  {empty ? (
+                    <EmptyState {...empty} />
+                  ) : (
+                    <>
+                      {emptyIcon && <div className="mb-4 flex justify-center">{emptyIcon}</div>}
+                      <p className="text-muted-foreground">{emptyMessage}</p>
+                    </>
+                  )}
                 </td>
               </tr>
             ) : paginatedData.map((row, rowIndex) => {
