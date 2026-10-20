@@ -408,7 +408,7 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
       {/* Outstanding by Patient */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
-          <span className="font-semibold text-[13px] text-foreground">Outstanding Balances by Patient</span>
+          <span className="font-semibold text-sm text-foreground">Outstanding Balances by Patient</span>
         </div>
         <div className="px-5 py-4">
           <AdvancedDataTable<any>
@@ -435,7 +435,7 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
           <div className="flex items-center justify-between">
-            <div><span className="font-semibold text-[13px] text-foreground">Overdue Bills</span><p className="text-xs text-muted-foreground mt-0.5">Bills past due date</p></div>
+            <div><span className="font-semibold text-sm text-foreground">Overdue Bills</span><p className="text-xs text-muted-foreground mt-0.5">Bills past due date</p></div>
             <Button size="sm" variant="outline" onClick={onRefresh}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button>
           </div>
         </div>
@@ -613,7 +613,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
       {/* Claims Table */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
-          <span className="font-semibold text-[13px] text-foreground">Insurance Batch Claims</span>
+          <span className="font-semibold text-sm text-foreground">Insurance Batch Claims</span>
           <p className="text-xs text-muted-foreground mt-0.5">Batch insurance claims grouped by scheme</p>
         </div>
         <div className="px-5 py-4">
@@ -749,7 +749,7 @@ function ReportsTab({ revenueSummary, revenueByCategory, collections, cashPositi
       {/* Revenue by Category */}
       {revenueByCategory && (
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30"><span className="font-semibold text-[13px] text-foreground">Revenue by Category</span></div>
+          <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30"><span className="font-semibold text-sm text-foreground">Revenue by Category</span></div>
           <div className="px-5 py-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {['clinical', 'lab', 'pharmacy', 'supply', 'procedure_charges', 'accommodation', 'other'].map(cat => {
@@ -774,7 +774,7 @@ function ReportsTab({ revenueSummary, revenueByCategory, collections, cashPositi
       {/* Collections by Method */}
       {collections && (
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30"><span className="font-semibold text-[13px] text-foreground">Collections by Payment Method</span></div>
+          <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30"><span className="font-semibold text-sm text-foreground">Collections by Payment Method</span></div>
           <div className="px-5 py-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {(collections.by_method || []).map((m: any) => (
@@ -796,7 +796,7 @@ function ReportsTab({ revenueSummary, revenueByCategory, collections, cashPositi
       {/* Revenue Summary Table */}
       {revenueSummary && revenueSummary.length > 0 && (
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30"><span className="font-semibold text-[13px] text-foreground">Revenue Summary</span></div>
+          <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30"><span className="font-semibold text-sm text-foreground">Revenue Summary</span></div>
           <div className="px-5 py-4">
             <AdvancedDataTable<any>
               data={revenueSummary}

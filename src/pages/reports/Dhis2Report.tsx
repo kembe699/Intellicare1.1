@@ -155,7 +155,7 @@ function AgeSexSectionTable({ section, computedRows, overrideRows, onOverride, r
             const overrides = overrideRows[row.id] || {};
             return (
               <tr key={row.id} className={cn('border-b border-border', row.isTotal && 'font-semibold border-t-2 border-foreground/20')}>
-                <td className="py-1.5 pr-3">{row.label}{row.isNotifiable ? <span className="ml-1.5 text-[10px] text-destructive uppercase">Notifiable</span> : null}</td>
+                <td className="py-1.5 pr-3">{row.label}{row.isNotifiable ? <span className="ml-1.5 text-xs text-destructive uppercase">Notifiable</span> : null}</td>
                 {AGE_SEX_COLS.map((col) => (
                   <td key={col} className="text-right py-1.5 px-2">
                     <EditableCell
@@ -469,7 +469,7 @@ export default function Dhis2Report() {
                 <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {definition.headerFields.map((f) => (
                     <div key={f.id}>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{f.label}</p>
                       {f.source === 'branch' ? (
                         <p className="text-sm font-medium text-foreground mt-0.5">
                           {user?.isAdmin ? (allBranches?.find((b) => b.id === branchId)?.name || '—') : (user?.primaryBranchName || '—')}
@@ -486,7 +486,7 @@ export default function Dhis2Report() {
                     </div>
                   ))}
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Reporting Month</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Reporting Month</p>
                     <p className="text-sm font-medium text-foreground mt-0.5">{period}</p>
                   </div>
                 </CardContent>
@@ -562,7 +562,7 @@ export default function Dhis2Report() {
                       const isComputedRow = secId === 'D' && (row.id === 'anc1' || row.id === 'anc4');
                       return (
                         <div key={row.id}>
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.label}</p>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">{row.label}</p>
                           {isComputedRow ? (
                             <div className="h-8 mt-0.5 flex items-center">
                               <EditableCell
@@ -594,7 +594,7 @@ export default function Dhis2Report() {
                 <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-5 gap-4">
                   {(definition.sections.F.rows || []).map((row) => (
                     <div key={row.id}>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.label}</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{row.label}</p>
                       <EditableCell
                         computedValue={computed.sections.F[row.id] ?? 0}
                         overrideValue={(overrides.F as any)?.[row.id]}
@@ -620,8 +620,8 @@ export default function Dhis2Report() {
                           <tr key={row.id} className="border-b border-border">
                             <td className="py-1.5">
                               {row.label}
-                              {c.unmapped && <span className="ml-1.5 text-[10px] text-muted-foreground italic">(not mapped — see Settings)</span>}
-                              {c.estimated && !c.unmapped && <span className="ml-1.5 text-[10px] text-amber-700 italic" title="No prior month's closing balance on file — opening estimated from current stock.">(opening estimated)</span>}
+                              {c.unmapped && <span className="ml-1.5 text-xs text-muted-foreground italic">(not mapped — see Settings)</span>}
+                              {c.estimated && !c.unmapped && <span className="ml-1.5 text-xs text-amber-700 italic" title="No prior month's closing balance on file — opening estimated from current stock.">(opening estimated)</span>}
                             </td>
                             {['opening', 'received', 'used', 'closing', 'daysOutOfStock'].map((col) => (
                               <td key={col} className="text-right py-1.5">
@@ -643,17 +643,17 @@ export default function Dhis2Report() {
                   {(definition.sections.H.fields || []).map((f) => (
                     f.id === 'prepared_by' ? (
                       <div key={f.id}>
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">{f.label}</p>
                         <p className="text-sm font-medium text-foreground mt-0.5">{signoff.prepared_by || user?.displayName || '—'}</p>
                         {preparedBySignature ? (
                           <img src={preparedBySignature} alt="Signature" className="h-8 mt-1 object-contain" />
                         ) : (
-                          <p className="text-[11px] text-muted-foreground mt-1">No signature on file — add one in Profile</p>
+                          <p className="text-xs text-muted-foreground mt-1">No signature on file — add one in Profile</p>
                         )}
                       </div>
                     ) : (
                       <div key={f.id}>
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">{f.label}</p>
                         <input
                           type={f.type === 'date' ? 'date' : 'text'} disabled={isFinal || !canWrite}
                           value={signoff[f.id] ?? ''}
@@ -666,7 +666,7 @@ export default function Dhis2Report() {
                 </CardContent>
               </Card>
 
-              <div className="text-center text-[11px] text-muted-foreground py-3 print:mt-6">
+              <div className="text-center text-xs text-muted-foreground py-3 print:mt-6">
                 Generated by Intellicare — {new Date().toLocaleString()}
               </div>
             </>
@@ -752,7 +752,7 @@ function Dhis2SettingsDialog({ open, onClose, definition, branchId, allBranches 
             <div className="grid grid-cols-2 gap-3">
               {definition.headerFields.filter((f) => f.editable).map((f) => (
                 <div key={f.id}>
-                  <label className="text-[11px] text-muted-foreground">{f.label}</label>
+                  <label className="text-xs text-muted-foreground">{f.label}</label>
                   <Input value={branchSettings[f.id] ?? ''} onChange={(e) => setBranchSettings((s) => ({ ...s, [f.id]: e.target.value }))} className="h-8 text-sm" />
                 </div>
               ))}

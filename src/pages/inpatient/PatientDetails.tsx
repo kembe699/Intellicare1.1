@@ -26,7 +26,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 function Field({ label, value, capitalize }: { label: string; value: React.ReactNode; capitalize?: boolean }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={`text-sm font-medium text-foreground ${capitalize ? 'capitalize' : ''}`}>{value}</p>
     </div>
   );
@@ -527,7 +527,7 @@ export default function PatientDetails() {
 
             {admission.diagnosis && (
               <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Diagnosis</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Diagnosis</p>
                 <p className="text-sm font-medium text-foreground mt-0.5">{admission.diagnosis}</p>
               </div>
             )}
@@ -550,7 +550,7 @@ export default function PatientDetails() {
               <TabsTrigger key={t.value} value={t.value} className="gap-1.5 px-3 py-2">
                 <t.icon className="h-3.5 w-3.5" />
                 {t.label}
-                {!!t.count && <Badge variant="neutral" className="ml-0.5 px-1.5 py-0 text-[10px]">{t.count}</Badge>}
+                {!!t.count && <Badge variant="neutral" className="ml-0.5 px-1.5 py-0 text-xs">{t.count}</Badge>}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -624,7 +624,7 @@ export default function PatientDetails() {
                           searchPlaceholder="Search stores..."
                           emptyText="No matching stores"
                         />
-                        <p className="text-[11px] mt-1 text-muted-foreground">Pick a store (e.g. a ward's own stock) to see and prescribe from its stock specifically.</p>
+                        <p className="text-xs mt-1 text-muted-foreground">Pick a store (e.g. a ward's own stock) to see and prescribe from its stock specifically.</p>
                       </div>
                     )}
 
@@ -715,7 +715,7 @@ export default function PatientDetails() {
                         className="mt-1"
                       />
                       {rxSuggestedQty != null && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {rxForm.dose_amount} × {findFrequency(rxForm.frequency)?.perDay}/day × {rxForm.duration_days} days = <strong>{rxSuggestedQty}</strong>
                           {rxQtyTouched && String(rxSuggestedQty) !== rxForm.quantity && (
                             <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxForm({ ...rxForm, quantity: String(rxSuggestedQty) }); }}>
@@ -725,7 +725,7 @@ export default function PatientDetails() {
                         </p>
                       )}
                       {rxForm.frequency && !findFrequency(rxForm.frequency)?.perDay && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {rxForm.frequency === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
                         </p>
                       )}
@@ -776,7 +776,7 @@ export default function PatientDetails() {
                           <p className="font-medium text-sm text-foreground truncate">
                             {p.medication_name}
                             {p.is_external && (
-                              <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">buy outside</span>
+                              <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">buy outside</span>
                             )}
                           </p>
                           <p className="text-xs text-muted-foreground">{p.dosage} • {p.frequency} • {p.route?.toUpperCase()} {p.duration ? `• ${p.duration}` : ''}</p>
@@ -918,7 +918,7 @@ export default function PatientDetails() {
                                   <Syringe className="h-3 w-3" />Administer
                                 </Button>
                               ) : (
-                                <span className="text-[10px] text-muted-foreground italic flex-shrink-0">Awaiting pharmacy dispensing</span>
+                                <span className="text-xs text-muted-foreground italic flex-shrink-0">Awaiting pharmacy dispensing</span>
                               )}
                             </div>
                           )}
@@ -985,7 +985,7 @@ export default function PatientDetails() {
                       <div key={l.id} className="p-4 flex items-center gap-3">
                         <FlaskConical className="h-4 w-4 text-primary shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{l.test_type} {!!l.urgent && <Badge variant="danger" className="text-[9px]">URGENT</Badge>}</div>
+                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{l.test_type} {!!l.urgent && <Badge variant="danger" className="text-xs">URGENT</Badge>}</div>
                           <p className="text-xs text-muted-foreground">Dr. {l.doctor_name} • {l.sample_type || 'N/A'}</p>
                         </div>
                         <Badge variant={l.status === 'completed' ? 'success' : 'outline'} className="capitalize flex-shrink-0">{l.status}</Badge>
@@ -1033,7 +1033,7 @@ export default function PatientDetails() {
                       <div key={r.id} className="p-4 flex items-center gap-3">
                         <Radio className="h-4 w-4 text-primary shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{r.imaging_type} {r.body_part ? `- ${r.body_part}` : ''} {!!r.urgent && <Badge variant="danger" className="text-[9px]">URGENT</Badge>}</div>
+                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{r.imaging_type} {r.body_part ? `- ${r.body_part}` : ''} {!!r.urgent && <Badge variant="danger" className="text-xs">URGENT</Badge>}</div>
                           <p className="text-xs text-muted-foreground">Dr. {r.doctor_name}</p>
                         </div>
                         <Badge variant={r.status === 'completed' ? 'success' : 'outline'} className="capitalize flex-shrink-0">{r.status}</Badge>

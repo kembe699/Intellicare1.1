@@ -740,7 +740,7 @@ export default function AccountingReport() {
                 <table className="w-full table-fixed text-sm border-collapse">
                   <colgroup><col /><col className="w-36" /><col className="w-36" /><col className="w-36" /></colgroup>
                   <thead>
-                    <tr className="border-b-2 border-foreground/70 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <tr className="border-b-2 border-foreground/70 text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="text-left font-semibold pb-1.5">Department</th>
                       <th className="text-right font-semibold pb-1.5">Revenue</th>
                       <th className="text-right font-semibold pb-1.5">Expenses</th>

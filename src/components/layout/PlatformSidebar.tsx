@@ -59,7 +59,7 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({ isOpen, onTogg
           </div>
 
           <div className="px-3 py-3 border-b border-sidebar-border bg-sidebar-accent/30">
-            <span className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60">Platform Admin</span>
+            <span className="text-xs uppercase tracking-wide text-sidebar-foreground/60">Platform Admin</span>
           </div>
 
           <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
@@ -76,7 +76,7 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({ isOpen, onTogg
                   to={item.href}
                   onClick={() => window.innerWidth < 1024 && onToggle()}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[13px]",
+                    "flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-sm",
                     isActive
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
                       : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -92,18 +92,18 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({ isOpen, onTogg
           <div className="px-3 py-3 border-t border-sidebar-border">
             <div className="flex items-center gap-3 mb-4 p-2 rounded-sm">
               <div className="w-9 h-9 rounded-sm bg-sidebar-accent flex items-center justify-center">
-                <span className="font-semibold text-[13px]">
+                <span className="font-semibold text-sm">
                   {admin?.name?.charAt(0).toUpperCase() || 'A'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[13px] truncate leading-tight">{admin?.name}</p>
-                <p className="text-[11px] text-sidebar-foreground/60 truncate leading-tight">{admin?.email}</p>
+                <p className="font-medium text-sm truncate leading-tight">{admin?.name}</p>
+                <p className="text-xs text-sidebar-foreground/60 truncate leading-tight">{admin?.email}</p>
               </div>
             </div>
             <button
               onClick={signOut}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors text-[13px]"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors text-sm"
             >
               <LogOut className="w-4 h-4" />
               <span>Sign Out</span>
@@ -140,7 +140,7 @@ export const PlatformTopBar: React.FC = () => {
   return (
     <header className="hidden lg:flex fixed top-0 left-64 right-0 z-30 h-14 items-center justify-between px-4 bg-background border-b border-border">
       <div className="flex items-center gap-3">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Signed in as</span>
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">Signed in as</span>
         <span className="text-sm font-semibold text-foreground">{admin.name}</span>
         <span className="text-xs text-muted-foreground">{admin.email}</span>
       </div>

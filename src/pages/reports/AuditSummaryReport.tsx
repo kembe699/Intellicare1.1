@@ -341,7 +341,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Actions Logged</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Actions Logged</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.totals.totalActions)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">matching the filters above</p>
                 </div>
@@ -352,7 +352,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Active Staff Count</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Active Staff Count</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.totals.activeStaffCount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">distinct users with activity</p>
                 </div>
@@ -363,7 +363,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Most Active User</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Most Active User</p>
                   <p className="text-2xl font-bold mt-1 truncate">{data?.totals.mostActiveUser?.userName ?? '—'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {data?.totals.mostActiveUser ? `${fmtCount(data.totals.mostActiveUser.actionCount)} actions` : 'no activity in period'}
@@ -376,7 +376,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Most Common Action</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Most Common Action</p>
                   <p className="text-2xl font-bold mt-1 truncate">{data?.totals.mostCommonAction ? humanizeAction(data.totals.mostCommonAction.action) : '—'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {data?.totals.mostCommonAction ? `${fmtCount(data.totals.mostCommonAction.actionCount)} occurrences` : 'no activity in period'}

@@ -931,7 +931,7 @@ const PurchaseOrders: React.FC = () => {
                         render: (v, item) => (
                           <>
                             <p className="font-medium text-xs">{v}</p>
-                            <Badge variant="outline" className="text-[10px] capitalize">{item.type}</Badge>
+                            <Badge variant="outline" className="text-xs capitalize">{item.type}</Badge>
                           </>
                         ),
                       },

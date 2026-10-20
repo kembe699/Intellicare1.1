@@ -123,7 +123,7 @@ export default function PatientReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Visits</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Visits</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.visits.total)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">in selected period</p>
                 </div>
@@ -134,7 +134,7 @@ export default function PatientReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Patients Registered</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Patients Registered</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.patientsRegistered.total)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {fmtCount(data?.patientsRegistered.fromPatients)} registry + {fmtCount(data?.patientsRegistered.fromLis)} LIS
@@ -147,7 +147,7 @@ export default function PatientReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Paid in Full</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Paid in Full</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCount(data?.paidInFull.count)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{fmtCurrency(data?.paidInFull.totalAmount)}</p>
                 </div>
@@ -158,7 +158,7 @@ export default function PatientReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Outstanding</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Outstanding</p>
                   <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(data?.outstanding.totalOutstanding)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {fmtCount(data?.outstanding.totalOutstandingCount)} bills owed &middot; {fmtCurrency(data?.outstanding.inPeriodOutstanding)} from this period

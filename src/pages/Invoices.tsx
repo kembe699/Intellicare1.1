@@ -47,7 +47,7 @@ const STATUS_MAP: Record<string, { className: string; icon: React.ReactNode }> =
 const statusBadge = (status: string) => {
   const s = STATUS_MAP[status] || STATUS_MAP.unpaid;
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${s.className}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${s.className}`}>
       {s.icon} {status}
     </span>
   );

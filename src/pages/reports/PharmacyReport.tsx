@@ -130,7 +130,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Dispensing Events</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Dispensing Events</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.dispensingVolume.totalEvents)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{fmtCount(data?.dispensingVolume.totalQty)} units dispensed</p>
                 </div>
@@ -141,7 +141,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Patients Dispensed To</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Patients Dispensed To</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.dispensingVolume.distinctPatients)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">unique patients in period</p>
                 </div>
@@ -152,7 +152,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Dispensing Value</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Dispensing Value</p>
                   <p className="text-2xl font-bold mt-1">{fmtCurrency(data?.dispensingVolume.totalDispensingValue)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">drug price &times; qty at time dispensed</p>
                 </div>
@@ -163,7 +163,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Billed / Collected</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Billed / Collected</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data?.cashSummary.totalCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">of {fmtCurrency(data?.cashSummary.totalBilled)} billed via Patient Bills</p>
                 </div>
@@ -253,8 +253,8 @@ export default function PharmacyReport() {
               <div className="p-4 flex flex-wrap gap-3">
                 {statusBreakdown.map(s => (
                   <div key={s.status} className="flex items-center gap-2 bg-muted/40 rounded-md px-3 py-1.5">
-                    <span className="text-[13px] capitalize">{s.status}</span>
-                    <span className="text-[13px] font-mono font-semibold">{fmtCount(s.count)}</span>
+                    <span className="text-sm capitalize">{s.status}</span>
+                    <span className="text-sm font-mono font-semibold">{fmtCount(s.count)}</span>
                   </div>
                 ))}
               </div>

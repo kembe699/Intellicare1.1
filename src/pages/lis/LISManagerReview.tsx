@@ -59,18 +59,18 @@ const matchesGroupSearch = (g: any, term: string) => {
 };
 
 const getRemarkBadge = (value: string, refRange: string) => {
-  if (!value || !refRange) return <span className="text-green-600 font-bold text-[10px] bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+  if (!value || !refRange) return <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
   const parts = refRange.split('-').map((p: string) => p.trim());
   if (parts.length === 2) {
     const min = parseFloat(parts[0]);
     const max = parseFloat(parts[1]);
     const val = parseFloat(value);
     if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-      if (val < min) return <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-      if (val > max) return <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
+      if (val < min) return <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
+      if (val > max) return <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
     }
   }
-  return <span className="text-green-600 font-bold text-[10px] bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+  return <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
 };
 
 // Local (not UTC) date string, so "today" matches the user's actual calendar day.
@@ -462,10 +462,10 @@ export default function LISManagerReview() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium truncate">{g.first_name} {g.last_name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-[11px] text-muted-foreground">{new Date(g.order_time).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(g.order_time).toLocaleString()}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">
@@ -486,10 +486,10 @@ export default function LISManagerReview() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium truncate">{g.first_name} {g.last_name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-[11px] text-muted-foreground">{new Date(g.order_time).toLocaleDateString()}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(g.order_time).toLocaleDateString()}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">
@@ -666,10 +666,10 @@ export default function LISManagerReview() {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{s.test_name}</div>
                       <div className="text-xs font-mono text-muted-foreground">{s.barcode}</div>
-                      <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                      <div className="text-xs text-muted-foreground flex items-center justify-between">
                         <span>{s.results.length} param{s.results.length > 1 ? 's' : ''}</span>
-                        {activeTab === 'history' && s.status === 'approved' && <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
-                        {activeTab === 'history' && s.status === 'queried' && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase font-bold">Queried</span>}
+                        {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
+                        {activeTab === 'history' && s.status === 'queried' && <span className="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase font-bold">Queried</span>}
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />

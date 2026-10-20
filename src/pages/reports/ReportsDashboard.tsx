@@ -68,7 +68,7 @@ export default function ReportsDashboard() {
             {sidebarOpen && (
               <div className="min-w-0">
                 <p className="font-bold text-sm text-white truncate">IntelliCare</p>
-                <p className="text-[10px] text-white/80 uppercase tracking-widest">Reports Center</p>
+                <p className="text-xs text-white/80 uppercase tracking-widest">Reports Center</p>
               </div>
             )}
           </div>
@@ -97,7 +97,7 @@ export default function ReportsDashboard() {
             return (
               <div key={group.label} className="mb-2">
                 {sidebarOpen && !(group as any).hideLabel && (
-                  <p className={`text-[10px] uppercase tracking-widest font-semibold px-3 pt-3 pb-1 ${group.color}`}>
+                  <p className={`text-xs uppercase tracking-widest font-semibold px-3 pt-3 pb-1 ${group.color}`}>
                     {group.label}
                   </p>
                 )}
@@ -134,7 +134,7 @@ export default function ReportsDashboard() {
         <div className="p-3 border-t border-white/10 space-y-2">
           <div className="flex items-center gap-2 px-2 py-1.5">
             <Shield className="h-3.5 w-3.5 text-white" />
-            {sidebarOpen && <span className="text-[10px] text-white">Secure Session Active</span>}
+            {sidebarOpen && <span className="text-xs text-white">Secure Session Active</span>}
           </div>
           <Button
             variant="ghost"
@@ -161,7 +161,7 @@ export default function ReportsDashboard() {
               {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
             </Button>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">
+              <h1 className="text-lg font-bold text-heading">
                 {currentCategory?.label || 'Reports Dashboard'}
               </h1>
               <p className="text-xs text-gray-500">

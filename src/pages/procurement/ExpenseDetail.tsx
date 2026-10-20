@@ -201,7 +201,7 @@ export default function ExpenseDetail() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div className="flex-1">
-            <h1 className="text-xl font-bold tracking-tight">{expense.description}</h1>
+            <h1 className="ic-text-title tracking-tight">{expense.description}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Expense #{expense.id} &nbsp;·&nbsp; {new Date(expense.expense_date).toLocaleDateString()}
             </p>

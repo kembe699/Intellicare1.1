@@ -570,14 +570,14 @@ const GoodsReceiptNotes: React.FC = () => {
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Rcvd Qty</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Rcvd Qty</Label>
                               <Input className="h-8 text-xs font-mono" type="number" min={0}
                                 max={line.quantity_expected}
                                 value={line.quantity_received}
                                 onChange={e => updateGRNLine(idx, 'quantity_received', parseInt(e.target.value) || 0)} />
                             </div>
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Condition</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Condition</Label>
                               <Combobox
                                 options={[
                                   { value: 'good', label: 'Good' },
@@ -593,12 +593,12 @@ const GoodsReceiptNotes: React.FC = () => {
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Batch #</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Batch #</Label>
                               <Input className="h-8 text-xs font-mono placeholder:text-muted-foreground/50" placeholder="Optional" value={line.batch_number}
                                 onChange={e => updateGRNLine(idx, 'batch_number', e.target.value)} />
                             </div>
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Expiry Date</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Expiry Date</Label>
                               <Input className="h-8 text-xs" type="date" value={line.expiry_date}
                                 onChange={e => updateGRNLine(idx, 'expiry_date', e.target.value)} />
                             </div>
@@ -668,7 +668,7 @@ const GoodsReceiptNotes: React.FC = () => {
                   { key: '__items', header: 'Items', align: 'center', render: (_v, grn) => <span className="text-xs">{grn.total_items_received || grn.line_count || 0}</span> },
                   {
                     key: 'status', header: 'Status', align: 'center', sortable: true,
-                    render: (v) => <Badge className={`text-[10px] ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
+                    render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
                   },
                   {
                     key: '__actions', header: 'Actions', align: 'center',

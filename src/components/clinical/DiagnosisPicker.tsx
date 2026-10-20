@@ -304,7 +304,7 @@ export function DiagnosisPicker({ orderId, readOnly, onNotesUpdated, className }
                 )}
               </CommandList>
               {codeVersion && (
-                <div className="border-t px-3 py-1.5 text-[10px] text-muted-foreground text-center">
+                <div className="border-t px-3 py-1.5 text-xs text-muted-foreground text-center">
                   {codeVersion.source} {codeVersion.version}
                 </div>
               )}
@@ -322,7 +322,7 @@ function IcdResultRow({ r }: { r: Icd10Result }) {
       <span className="text-sm truncate">
         <span className="font-mono font-medium">{r.code}</span> · {r.description}
       </span>
-      {r.chapter && <span className="text-[11px] text-muted-foreground truncate">{r.chapter}</span>}
+      {r.chapter && <span className="text-xs text-muted-foreground truncate">{r.chapter}</span>}
     </div>
   );
 }

@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: string }) {
     delivered: 'bg-blue-100 text-blue-700',
     closed: 'bg-slate-100 text-slate-600',
   };
-  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.closed}`}>{status}</span>;
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.closed}`}>{status}</span>;
 }
 
 export default function Antenatal() {

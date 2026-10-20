@@ -90,7 +90,7 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Clients</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Clients</p>
                 <p className="text-2xl font-bold mt-1">{data.totalClients}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{data.activeClients} active · {data.suspendedClients} suspended</p>
               </div>
@@ -101,7 +101,7 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
                 <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(data.totalRevenue)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">all-time, paid invoices</p>
               </div>
@@ -112,7 +112,7 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">This Month</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">This Month</p>
                 <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data.revenueThisMonth)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">revenue collected</p>
               </div>
@@ -123,7 +123,7 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Outstanding</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Outstanding</p>
                 <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(data.outstandingAmount)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{data.outstandingCount} unpaid invoice{data.outstandingCount === 1 ? '' : 's'}</p>
               </div>

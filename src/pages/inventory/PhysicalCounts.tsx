@@ -369,7 +369,7 @@ export default function PhysicalCounts() {
                   { key: 'variance_count', header: 'Variances', sortable: true, render: (v) => v || 0 },
                   {
                     key: 'status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
+                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
                   },
                   {
                     key: '__actions', header: 'Actions',
@@ -404,7 +404,7 @@ export default function PhysicalCounts() {
                   { key: 'variance_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
                   {
                     key: 'approval_status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v}</span>,
+                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v}</span>,
                   },
                   {
                     key: '__actions', header: 'Actions',
@@ -444,7 +444,7 @@ export default function PhysicalCounts() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-6 flex-1 overflow-auto space-y-4">
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
               <div className="border rounded-lg overflow-hidden">
                 <AdvancedDataTable<any>
                   data={selectedCount.lines || []}

@@ -254,7 +254,7 @@ const Dashboard: React.FC = () => {
       <div className="space-y-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{greetingDate}</p>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">
+          <h1 className="mt-1 ic-text-title">
             Welcome back{firstName ? `, ${firstName}` : ''}
             {facilityInfo.facilityName && (
               <> — <span className="text-primary">{facilityInfo.facilityName}</span></>

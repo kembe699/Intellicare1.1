@@ -38,9 +38,11 @@ export default {
         'mobile-sm': '14px',
         'mobile-base': '16px',
         'mobile-lg': '18px',
-        // Pinned in real px so it never drops below the 12px accessibility
-        // floor, regardless of the html root font-size.
+        // Pinned in real px, matching the Option B type scale's caption (12)
+        // and label (13) steps exactly — independent of the html root
+        // font-size, and the 12px one can never drop below the a11y floor.
         xs: ["12px", { lineHeight: "16px" }],
+        sm: ["13px", { lineHeight: "18px" }],
       },
       fontFamily: {
         sans: ["Inter Variable", "Inter", "Segoe UI", "Tahoma", "Arial", "system-ui", "sans-serif"],

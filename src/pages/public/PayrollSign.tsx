@@ -248,7 +248,7 @@ export default function PayrollSign() {
               {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Sign &amp; Confirm Payment
             </Button>
-            <p className="text-[11px] text-muted-foreground text-center">
+            <p className="text-xs text-muted-foreground text-center">
               By signing you confirm you personally received this amount. This cannot be undone.
             </p>
           </div>

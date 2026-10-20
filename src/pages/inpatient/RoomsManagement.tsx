@@ -377,28 +377,28 @@ export default function RoomsManagement() {
 
           {selectedRoom && (
             <div className="px-6 py-5">
-              <div className="grid grid-cols-2 gap-y-5 gap-x-8 text-[13px]">
+              <div className="grid grid-cols-2 gap-y-5 gap-x-8 text-sm">
                 <div>
-                  <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Room No.</span>
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wide mb-1.5">Room No.</span>
                   <span className="font-mono font-medium text-primary text-sm">{selectedRoom.room_number}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Ward</span>
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wide mb-1.5">Ward</span>
                   <span className="font-medium text-sm">{selectedRoom.ward_name || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Type</span>
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wide mb-1.5">Type</span>
                   <span>{ROOM_TYPE_LABEL[selectedRoom.room_type] || selectedRoom.room_type}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-1.5">Capacity</span>
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wide mb-1.5">Capacity</span>
                   <span>{selectedRoom.capacity || '-'}</span>
                 </div>
               </div>
 
               {selectedRoom.room_type === 'ward' && (
                 <div className="mt-7">
-                  <span className="text-muted-foreground block text-[11px] uppercase tracking-wide mb-3">Beds</span>
+                  <span className="text-muted-foreground block text-xs uppercase tracking-wide mb-3">Beds</span>
 
                   <div className="flex items-end gap-2 mb-4">
                     <div className="flex-1">
@@ -458,7 +458,7 @@ export default function RoomsManagement() {
                             )}
                           </div>
                           <div className="mt-2 flex justify-center">
-                            <StatusBadge status={bed.status} map={bedStatusToneMap} className="text-[10px] px-2 py-0.5" />
+                            <StatusBadge status={bed.status} map={bedStatusToneMap} className="text-xs px-2 py-0.5" />
                           </div>
                         </div>
                       ))}

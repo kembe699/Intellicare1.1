@@ -150,7 +150,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Billed)</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Billed)</p>
                   <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(displayCash?.totalBilled)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">across matched lab line items</p>
                 </div>
@@ -161,7 +161,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Collected)</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Collected)</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(displayCash?.totalCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {collection ? `${fmtCount(collection.exactItems)} exact · ${fmtCount(collection.estimatedItems)} estimated` : '—'}
@@ -174,7 +174,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Distinct Patients</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Distinct Patients</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.patientVolume.distinctPatients)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">had at least one lab test</p>
                 </div>
@@ -185,7 +185,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Tests Performed</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Tests Performed</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displayTestsPerformed)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">specimens registered in period</p>
                 </div>
@@ -237,9 +237,9 @@ export default function LabReport() {
                     render: (_v, t) => (
                       <>
                         {t.testName}
-                        {t.testCode && <span className="ml-1.5 text-[11px] font-mono text-muted-foreground">{t.testCode}</span>}
+                        {t.testCode && <span className="ml-1.5 text-xs font-mono text-muted-foreground">{t.testCode}</span>}
                         {t.volume == null && (
-                          <span className="ml-1.5 text-[11px] text-amber-600" title="Billed under this name but no matching LIS specimen was found in this period">not tracked in LIS</span>
+                          <span className="ml-1.5 text-xs text-amber-600" title="Billed under this name but no matching LIS specimen was found in this period">not tracked in LIS</span>
                         )}
                       </>
                     ),
@@ -250,7 +250,7 @@ export default function LabReport() {
                 ]}
               />
               {filteredByTest.length > 0 && (
-                <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-[13px] font-semibold -mt-px">
+                <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-semibold -mt-px">
                   <span>Total</span>
                   <span className="flex gap-8 font-mono">
                     <span>{fmtCount(filteredByTest.reduce((s, t) => s + (t.volume || 0), 0))}</span>
@@ -273,7 +273,7 @@ export default function LabReport() {
                 ) : statusBreakdown.map(s => (
                   <div key={s.status} className="flex items-center justify-between">
                     <StatusBadge status={s.status} map={SPECIMEN_STATUS_TONE_MAP} className="capitalize" />
-                    <span className="text-[13px] font-mono font-medium">{fmtCount(s.count)}</span>
+                    <span className="text-sm font-mono font-medium">{fmtCount(s.count)}</span>
                   </div>
                 ))}
               </div>

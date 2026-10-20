@@ -167,7 +167,7 @@ function MapDiagnosisDialog({ diagnosis, onClose, onMapped }: {
                         <Check className={selected?.code === r.code ? 'mr-2 h-4 w-4 opacity-100' : 'mr-2 h-4 w-4 opacity-0'} />
                         <div className="flex flex-col min-w-0">
                           <span className="truncate"><span className="font-mono font-medium">{r.code}</span> · {r.description}</span>
-                          {r.chapter && <span className="text-[11px] text-muted-foreground truncate">{r.chapter}</span>}
+                          {r.chapter && <span className="text-xs text-muted-foreground truncate">{r.chapter}</span>}
                         </div>
                       </CommandItem>
                     ))}

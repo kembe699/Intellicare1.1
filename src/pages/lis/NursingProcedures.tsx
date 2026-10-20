@@ -56,7 +56,7 @@ interface OrderItem { key: string; service_id: string; service_name: string; pri
 function StatusPill({ status }: { status: string }) {
   const done = status === 'completed';
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+    <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
       {done ? 'Completed' : 'Pending'}
     </span>
   );
@@ -246,7 +246,7 @@ export default function NursingProcedures() {
                       searchPlaceholder="Search..."
                       className="mt-1 h-9"
                     />
-                    {services.length === 0 && <p className="text-[11px] text-muted-foreground mt-1">Set these up under Setup → Services (category: Nursing).</p>}
+                    {services.length === 0 && <p className="text-xs text-muted-foreground mt-1">Set these up under Setup → Services (category: Nursing).</p>}
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground">Type</label>

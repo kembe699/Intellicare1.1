@@ -259,7 +259,7 @@ export default function LISLabQC() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">In Transit</span>
+                    <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">In Transit</span>
                     <div className="flex items-center gap-1.5">
                       <Button
                         variant="outline"

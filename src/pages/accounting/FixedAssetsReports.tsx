@@ -117,7 +117,7 @@ export default function FixedAssetsReports() {
         <CardContent className="p-5 grid grid-cols-3 sm:grid-cols-6 gap-4">
           {Object.entries(scheduleByPeriod).map(([period, amount]) => (
             <div key={period}>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{period}</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{period}</p>
               <p className="text-lg font-semibold">{fmt(amount)}</p>
             </div>
           ))}

@@ -66,7 +66,7 @@ const STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'success' | 'warning'>
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-sm font-medium text-foreground">{value}</p>
     </div>
   );
@@ -333,7 +333,7 @@ const PlatformQuotationDetail: React.FC = () => {
             </div>
             {quotation.scope_notes && (
               <div className="pt-4 border-t border-border">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Scope Notes</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Scope Notes</p>
                 <p className="text-sm text-foreground mt-0.5">{quotation.scope_notes}</p>
               </div>
             )}
@@ -394,7 +394,7 @@ const PlatformQuotationDetail: React.FC = () => {
         <Card>
           <CardContent className="p-5 space-y-5">
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Customer</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Customer</p>
               <p className="font-semibold text-foreground">{quotation.customer.name}</p>
               {quotation.customer.contact_person && <p className="text-sm text-muted-foreground">{quotation.customer.contact_person}</p>}
               {quotation.customer.email && <p className="text-sm text-muted-foreground">{quotation.customer.email}</p>}
@@ -402,7 +402,7 @@ const PlatformQuotationDetail: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-border space-y-2">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Status</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Status</p>
               {quotation.status === 'draft' && (
                 <Button variant="outline" className="w-full gap-1.5" onClick={() => changeStatus('sent')}>
                   <Send className="w-3.5 h-3.5" /> Mark as Sent
@@ -432,7 +432,7 @@ const PlatformQuotationDetail: React.FC = () => {
 
             {quotation.status === 'accepted' && (
               <div className="pt-4 border-t border-border space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Instance</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Instance</p>
                 {quotation.customer.status === 'converted' && quotation.customer.client_id ? (
                   <Link to={`/platform-admin/clients/${quotation.customer.client_id}`}>
                     <Button variant="outline" className="w-full gap-1.5">
@@ -449,7 +449,7 @@ const PlatformQuotationDetail: React.FC = () => {
 
             {quotation.status === 'accepted' && (
               <div className="pt-4 border-t border-border space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Invoice</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Invoice</p>
                 {quotation.invoice ? (
                   <Link to={`/platform-admin/invoices/${quotation.invoice.id}`}>
                     <Button variant="outline" className="w-full gap-1.5">

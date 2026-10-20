@@ -260,7 +260,7 @@ function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
                   options={[{ value: 'depreciating', label: 'Depreciating' }, { value: 'appreciating', label: 'Appreciating' }, { value: 'non_depreciating', label: 'Non-depreciating' }]}
                   value={nature} onChange={(v) => setNature(v as any)} searchPlaceholder="Search..." disabled={!!editingId}
                 />
-                {editingId && <p className="text-[11px] text-muted-foreground mt-1">Nature can't be changed once assets may already have been recorded under it.</p>}
+                {editingId && <p className="text-xs text-muted-foreground mt-1">Nature can't be changed once assets may already have been recorded under it.</p>}
               </div>
               {nature === 'depreciating' && (
                 <>

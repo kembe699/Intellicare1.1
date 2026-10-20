@@ -35,7 +35,7 @@ export const IcFormField: React.FC<IcFormFieldProps> = ({
     )}
     {children}
     {hint && !error && (
-      <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>
     )}
     {error && (
       <p className="ic-form-error">{error}</p>

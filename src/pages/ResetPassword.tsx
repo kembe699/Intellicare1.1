@@ -140,8 +140,8 @@ const ResetPassword: React.FC = () => {
 
             {/* Header Text */}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-slate-900 mb-1">Reset Password</h1>
-              <p className="text-slate-600 text-lg">Enter your new password below</p>
+              <h1 className="ic-text-title mb-1">Reset Password</h1>
+              <p className="text-muted-foreground">Enter your new password below</p>
             </div>
           </div>
 

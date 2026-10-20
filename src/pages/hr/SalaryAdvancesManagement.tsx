@@ -279,7 +279,7 @@ export default function SalaryAdvancesManagement() {
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">Amount ({actionAdvance?.currency})</Label>
                 <Input type="number" step="0.01" min="0.01" className="mt-1" value={actionForm.amount} onChange={e => setActionForm({ ...actionForm, amount: e.target.value })} />
-                <p className="text-[11px] text-muted-foreground mt-1">Outstanding balance: {actionAdvance?.currency} {actionAdvance?.balance_remaining.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Outstanding balance: {actionAdvance?.currency} {actionAdvance?.balance_remaining.toFixed(2)}</p>
               </div>
             )}
             <div>

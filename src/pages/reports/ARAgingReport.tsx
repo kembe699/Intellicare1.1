@@ -165,9 +165,9 @@ export default function ARAgingReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Outstanding</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Outstanding</p>
                   <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(summary.totalOutstanding)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{fmtCount(summary.totalCount)} bill{summary.totalCount === 1 ? '' : 's'} unpaid</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{fmtCount(summary.totalCount)} bill{summary.totalCount === 1 ? '' : 's'} unpaid</p>
                 </div>
                 <DollarSign className="h-5 w-5 text-primary" />
               </div>
@@ -175,9 +175,9 @@ export default function ARAgingReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Current (0-30d)</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Current (0-30d)</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(summary.buckets.current.amount)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{fmtCount(summary.buckets.current.count)} bills</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{fmtCount(summary.buckets.current.count)} bills</p>
                 </div>
                 <Clock className="h-5 w-5 text-primary" />
               </div>
@@ -185,11 +185,11 @@ export default function ARAgingReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">31-90 Days</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">31-90 Days</p>
                   <p className="text-2xl font-bold mt-1 text-amber-700">
                     {fmtCurrency(summary.buckets.d31_60.amount + summary.buckets.d61_90.amount)}
                   </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {fmtCount(summary.buckets.d31_60.count + summary.buckets.d61_90.count)} bills
                   </p>
                 </div>
@@ -199,9 +199,9 @@ export default function ARAgingReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">90+ Days (Critical)</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">90+ Days (Critical)</p>
                   <p className="text-2xl font-bold mt-1 text-red-700">{fmtCurrency(d90.amount)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">across {fmtCount(d90.count)} bill{d90.count === 1 ? '' : 's'}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">across {fmtCount(d90.count)} bill{d90.count === 1 ? '' : 's'}</p>
                 </div>
                 <AlertOctagon className="h-5 w-5 text-primary" />
               </div>

@@ -111,7 +111,7 @@ const statusBadge = (status: string) => {
   };
   const label = status === 'active' ? 'Invoiced' : (status || 'pending');
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
       {label}
     </span>
   );
@@ -918,7 +918,7 @@ export default function BillDetails() {
               <p className="text-xs text-muted-foreground">Balance</p>
               <p className={`text-lg font-bold ${amt(bill.balance_amount) <= 0 ? 'text-emerald-600' : payableBalance > 0 ? 'text-red-600' : 'text-indigo-600'}`}>{bill.bill_currency || 'SSP'} {amt(bill.balance_amount).toFixed(2)}</p>
               {amt(bill.balance_amount) > 0 && payableBalance <= 0 && (
-                <p className="text-[11px] text-indigo-600 mt-0.5">awaiting invoice payment</p>
+                <p className="text-xs text-indigo-600 mt-0.5">awaiting invoice payment</p>
               )}
             </div>
           </div>
@@ -949,7 +949,7 @@ export default function BillDetails() {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <h3 className="font-medium mb-4 text-lg border-b pb-2">Add Service / Product</h3>
             {patientSchemes.length > 0 && itemType === 'service' && (
-              <p className="text-[11px] text-sky-700 mb-2">
+              <p className="text-xs text-sky-700 mb-2">
                 Only services priced under this patient's insurance ({patientSchemes[0].scheme_name}) are shown.
               </p>
             )}
@@ -1056,7 +1056,7 @@ export default function BillDetails() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="rounded-lg border p-3 bg-muted/20 space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Quantity</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quantity</p>
                       <div className={cn('grid gap-2', itemType === 'product' ? 'grid-cols-3' : 'grid-cols-1')}>
                         <div>
                           <label className="text-xs font-medium text-muted-foreground">Qty</label>
@@ -1083,7 +1083,7 @@ export default function BillDetails() {
                     </div>
 
                     <div className="rounded-lg border p-3 bg-muted/20 space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pricing</p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs font-medium text-muted-foreground">Price</label>
@@ -1126,17 +1126,17 @@ export default function BillDetails() {
                   </div>
 
                   {itemType === 'service' && patientSchemes.length > 0 && options.length === 0 && !itemSearchQuery && (
-                    <p className="text-[11px] text-red-700">No services have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
+                    <p className="text-xs text-red-700">No services have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
                   )}
                   {selectedRaw && discountNum > 0 && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Price after discount: <span className="font-medium text-foreground">{amt(discountedPrice).toFixed(2)}</span>
                       {' '}<span className="line-through">{amt(basePrice).toFixed(2)}</span>
                     </p>
                   )}
 
                   {selectedRaw && (outOfStock || notEnoughStock) && (
-                    <p className="text-[11px] text-red-700 flex items-center gap-1.5">
+                    <p className="text-xs text-red-700 flex items-center gap-1.5">
                       <PackageX className="w-3.5 h-3.5 shrink-0" />
                       {outOfStock
                         ? `${selectedRaw.item_name || selectedRaw.name || 'This product'} is out of stock — receive stock before billing it.`
@@ -1222,7 +1222,7 @@ export default function BillDetails() {
                     className="mt-1"
                   />
                   {paymentForm.method === 'deposit' && depositBalance && amt(paymentForm.amount) < payableBalance - 0.01 && (
-                    <p className="text-[11px] text-amber-700 mt-1">
+                    <p className="text-xs text-amber-700 mt-1">
                       Deposit covers {amt(paymentForm.amount).toFixed(2)} of {payableBalance.toFixed(2)} — the remaining {(payableBalance - amt(paymentForm.amount)).toFixed(2)} will need another payment.
                     </p>
                   )}
@@ -1363,23 +1363,23 @@ export default function BillDetails() {
               {
                 key: '__status', header: 'Status', align: 'center',
                 render: (_v, s) => isUnbilledInsuranceLine(s) ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-sky-50 text-sky-700 border-sky-200" title={`Not billed in ${bill?.bill_currency || 'SSP'} — claimed from the insurer separately, from the Dispensing screen`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-sky-50 text-sky-700 border-sky-200" title={`Not billed in ${bill?.bill_currency || 'SSP'} — claimed from the insurer separately, from the Dispensing screen`}>
                     <Shield className="w-3 h-3" /> Insurance
                   </span>
                 ) : s.isVoided ? (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-red-50 text-red-700 border-red-200">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-red-50 text-red-700 border-red-200">
                     Voided
                   </span>
                 ) : s.paid ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
                     <Check className="w-3 h-3" /> Paid
                   </span>
                 ) : s.invoiced ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200" title="Already covered by a credit invoice — collect payment from the Invoices page">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200" title="Already covered by a credit invoice — collect payment from the Invoices page">
                     <FileText className="w-3 h-3" /> Invoiced
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200">
                     Unpaid
                   </span>
                 ),

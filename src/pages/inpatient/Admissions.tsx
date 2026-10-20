@@ -487,14 +487,14 @@ export default function Admissions() {
                 {
                   key: 'admission_type', header: 'Type', sortable: true,
                   render: (v) => (
-                    <Badge className={`text-[10px] capitalize ${v === 'emergency' ? 'bg-red-100 text-red-700' : v === 'transfer' ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
+                    <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-red-100 text-red-700' : v === 'transfer' ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
                       {v}
                     </Badge>
                   ),
                 },
                 {
                   key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <Badge variant={v === 'active' ? 'default' : 'secondary'} className="text-[10px] capitalize">{v}</Badge>,
+                  render: (v) => <Badge variant={v === 'active' ? 'default' : 'secondary'} className="text-xs capitalize">{v}</Badge>,
                 },
                 {
                   key: '__actions', header: 'Actions',

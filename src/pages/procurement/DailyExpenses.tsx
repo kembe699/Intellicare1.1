@@ -1062,7 +1062,7 @@ const DailyExpenses: React.FC = () => {
                         return (
                           <div className="leading-tight">
                             <span className="font-mono text-sm">{cur} {amt.toFixed(2)}</span>
-                            {base != null && <div className="text-[11px] text-muted-foreground font-mono">≈ {fmt(base)}</div>}
+                            {base != null && <div className="text-xs text-muted-foreground font-mono">≈ {fmt(base)}</div>}
                           </div>
                         );
                       },
@@ -1076,7 +1076,7 @@ const DailyExpenses: React.FC = () => {
                         return (
                           <div className="leading-tight">
                             <span className="font-mono font-bold text-orange-600 text-sm">{cur} {amt.toFixed(2)}</span>
-                            {base != null && <div className="text-[11px] text-muted-foreground font-mono">≈ {fmt(base)} to post</div>}
+                            {base != null && <div className="text-xs text-muted-foreground font-mono">≈ {fmt(base)} to post</div>}
                           </div>
                         );
                       },
@@ -1599,7 +1599,7 @@ const DailyExpenses: React.FC = () => {
                       if (!entered || entered <= 0) return null;
                       const base = toBaseCurrency(entered, selectedBill.po_currency);
                       return base != null ? (
-                        <p className="text-[11px] text-muted-foreground mt-1">Will post as ≈ {fmt(base)} at today's rate</p>
+                        <p className="text-xs text-muted-foreground mt-1">Will post as ≈ {fmt(base)} at today's rate</p>
                       ) : null;
                     })()}
                   </div>

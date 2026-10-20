@@ -294,7 +294,7 @@ const CashTransfer: React.FC = () => {
                     key: '__date', header: 'Date',
                     render: (_v, transfer) => (
                       <>
-                        <p className="text-[13px]">{fmtDate(getCreatedAt(transfer))}</p>
+                        <p className="text-sm">{fmtDate(getCreatedAt(transfer))}</p>
                         <p className="text-xs text-muted-foreground">{fmtTime(getCreatedAt(transfer))}</p>
                       </>
                     ),

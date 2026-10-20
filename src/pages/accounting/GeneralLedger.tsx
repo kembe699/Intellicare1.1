@@ -153,19 +153,19 @@ const GeneralLedger: React.FC = () => {
         <Card className="rounded-lg shadow-sm">
           <CardContent className="p-0">
             <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto">
-              <table className="w-full min-w-[1100px] text-[13px] border-collapse">
+              <table className="w-full min-w-[1100px] text-sm border-collapse">
                 <thead className="bg-muted sticky top-0 border-b z-10">
                   <tr className="text-left">
                     <th className="pl-5 pr-2 py-3.5 w-10"></th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">GL Number</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Date</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Type</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground min-w-[220px]">Description</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Currency</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Debit ({BASE_CURRENCY})</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Credit ({BASE_CURRENCY})</th>
-                    <th className="px-3 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Status</th>
-                    <th className="px-3 pr-5 py-3.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Actions</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">GL Number</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Date</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Type</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground min-w-[220px]">Description</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">Currency</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Debit ({BASE_CURRENCY})</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">Credit ({BASE_CURRENCY})</th>
+                    <th className="px-3 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Status</th>
+                    <th className="px-3 pr-5 py-3.5 text-xs font-medium uppercase tracking-wide text-muted-foreground text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -193,14 +193,14 @@ const GeneralLedger: React.FC = () => {
                             )}
                           </td>
                           <td className="px-3 py-3.5 whitespace-nowrap">
-                            <span className="font-mono text-[13px] font-medium">{entry.gl_number}</span>
+                            <span className="font-mono text-sm font-medium">{entry.gl_number}</span>
                           </td>
-                          <td className="px-3 py-3.5 text-[13px] whitespace-nowrap">{new Date(entry.transaction_date).toLocaleDateString()}</td>
+                          <td className="px-3 py-3.5 text-sm whitespace-nowrap">{new Date(entry.transaction_date).toLocaleDateString()}</td>
                           <td className="px-3 py-3.5 whitespace-nowrap">
                             <Badge variant="outline" className="text-xs capitalize">{entry.transaction_type}</Badge>
                           </td>
                           <td className="px-3 py-3.5 max-w-[320px]">
-                            <p className="text-[13px] truncate" title={entry.description}>{entry.description}</p>
+                            <p className="text-sm truncate" title={entry.description}>{entry.description}</p>
                           </td>
                           <td className="px-3 py-3.5 whitespace-nowrap">
                             <Badge variant="outline" className="text-xs">{entry.transaction_currency || BASE_CURRENCY}</Badge>
@@ -208,10 +208,10 @@ const GeneralLedger: React.FC = () => {
                               <span className="text-xs text-muted-foreground ml-1">@{entry.exchange_rate}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 text-right font-mono text-[13px] font-medium whitespace-nowrap">
+                          <td className="px-3 py-3.5 text-right font-mono text-sm font-medium whitespace-nowrap">
                             {formatCurrency(entry.base_total_debit ?? 0)}
                           </td>
-                          <td className="px-3 py-3.5 text-right font-mono text-[13px] font-medium whitespace-nowrap">
+                          <td className="px-3 py-3.5 text-right font-mono text-sm font-medium whitespace-nowrap">
                             {formatCurrency(entry.base_total_credit ?? 0)}
                           </td>
                           <td className="px-3 py-3.5 text-center whitespace-nowrap">

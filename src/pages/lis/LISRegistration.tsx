@@ -600,7 +600,7 @@ export default function LISRegistration() {
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-3 rounded-lg border p-3 bg-card">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Basic Information</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Basic Information</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground">First Name</label>
@@ -662,7 +662,7 @@ export default function LISRegistration() {
                 </div>
 
                 <div className="space-y-3 rounded-lg border p-3 bg-card">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Insurance &amp; Queue</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Insurance &amp; Queue</p>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><CreditCard className="w-3 h-3"/> Scheme</label>
                     <Combobox
@@ -683,12 +683,12 @@ export default function LISRegistration() {
                         placeholder="This patient's ID card / membership number with the scheme"
                         className="mt-1"
                       />
-                      <p className="text-[11px] text-muted-foreground mt-1">Enrolls the patient in this scheme so consultation/services bill at its price instead of cash.</p>
+                      <p className="text-xs text-muted-foreground mt-1">Enrolls the patient in this scheme so consultation/services bill at its price instead of cash.</p>
                     </div>
                   )}
                   {(!editingParticipant || !editingParticipant.is_queued) && (
                     <div className="pt-3 border-t space-y-3">
-                      <p className="text-[11px] font-medium text-muted-foreground uppercase">
+                      <p className="text-xs font-medium text-muted-foreground uppercase">
                         {editingParticipant ? 'Queue this Patient (Optional)' : 'Queue on Registration (Optional)'}
                       </p>
                       <div>
@@ -842,21 +842,21 @@ export default function LISRegistration() {
                 Sorry, a patient with this phone number already exists. If this is the same person, just queue them instead of creating a duplicate record.
               </p>
               <div className="bg-muted/50 rounded-md p-3 space-y-1 border">
-                <p className="font-medium text-[15px] flex items-center gap-2">
+                <p className="font-medium text-base flex items-center gap-2">
                   <UserCheck className="w-4 h-4 text-primary" />
                   {duplicatePatient.first_name} {duplicatePatient.last_name}
                 </p>
-                <p className="text-[13px] text-muted-foreground">ID: {duplicatePatient.participant_number}</p>
-                <p className="text-[13px] text-muted-foreground flex items-center gap-1.5">
+                <p className="text-sm text-muted-foreground">ID: {duplicatePatient.participant_number}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5" /> {duplicatePatient.phone}
                 </p>
                 {duplicatePatient.residence && (
-                  <p className="text-[13px] text-muted-foreground flex items-center gap-1.5">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5" /> {duplicatePatient.residence}
                   </p>
                 )}
                 {duplicatePatient.is_queued ? (
-                  <p className="text-[13px] text-emerald-600 font-medium pt-1">Already queued today</p>
+                  <p className="text-sm text-emerald-600 font-medium pt-1">Already queued today</p>
                 ) : null}
               </div>
             </div>

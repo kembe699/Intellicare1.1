@@ -157,7 +157,7 @@ export default function IncomeStatementReport() {
               type="button"
               onClick={() => setBasis(b)}
               aria-pressed={basis === b}
-              className={`px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 basis === b ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
               }`}
             >
@@ -170,7 +170,7 @@ export default function IncomeStatementReport() {
             type="button"
             onClick={() => setView('summary')}
             aria-pressed={view === 'summary'}
-            className={`px-3 py-1.5 text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5 ${
               view === 'summary' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
             }`}
           >
@@ -180,7 +180,7 @@ export default function IncomeStatementReport() {
             type="button"
             onClick={() => setView('daily')}
             aria-pressed={view === 'daily'}
-            className={`px-3 py-1.5 text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5 ${
               view === 'daily' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
             }`}
           >
@@ -255,7 +255,7 @@ export default function IncomeStatementReport() {
             <tbody>
               {/* ── Revenue section ── */}
               <tr className="bg-muted/50">
-                <td colSpan={2} className="px-4 py-2 font-semibold text-[13px] uppercase tracking-wide text-muted-foreground">
+                <td colSpan={2} className="px-4 py-2 font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                   Revenue
                 </td>
               </tr>
@@ -286,7 +286,7 @@ export default function IncomeStatementReport() {
 
               {/* ── Cost of Goods Sold ── */}
               <tr className="bg-muted/50">
-                <td colSpan={2} className="px-4 py-2 font-semibold text-[13px] uppercase tracking-wide text-muted-foreground">
+                <td colSpan={2} className="px-4 py-2 font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                   Cost of Goods Sold
                 </td>
               </tr>
@@ -315,7 +315,7 @@ export default function IncomeStatementReport() {
 
               {/* ── Operating Expenses ── */}
               <tr className="bg-muted/50">
-                <td colSpan={2} className="px-4 py-2 font-semibold text-[13px] uppercase tracking-wide text-muted-foreground">
+                <td colSpan={2} className="px-4 py-2 font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                   Operating Expenses
                 </td>
               </tr>
@@ -345,7 +345,7 @@ export default function IncomeStatementReport() {
               {/* ── Miscellaneous — called out on its own so a large balance here
                   can never hide inside a flat "Expenses" list unnoticed ── */}
               <tr className="bg-amber-50">
-                <td colSpan={2} className="px-4 py-2 font-semibold text-[13px] uppercase tracking-wide text-amber-800">
+                <td colSpan={2} className="px-4 py-2 font-semibold text-sm uppercase tracking-wide text-amber-800">
                   Miscellaneous
                 </td>
               </tr>

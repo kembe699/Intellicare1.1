@@ -834,7 +834,7 @@ const PurchaseRequisitions: React.FC = () => {
                                       <div className="flex flex-col flex-1 min-w-0">
                                         <span className="font-medium truncate">{item.item_name}</span>
                                       </div>
-                                      <span className="text-[10px] text-muted-foreground ml-2 shrink-0">
+                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
                                         {item.quantity_on_hand} {item.unit_of_measure}
                                       </span>
                                     </CommandItem>

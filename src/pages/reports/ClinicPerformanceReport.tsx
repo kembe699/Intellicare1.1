@@ -132,7 +132,7 @@ export default function ClinicPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue (Collected)</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Revenue (Collected)</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data?.summary.totalRevenueCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">of {fmtCurrency(data?.summary.totalRevenueBilled)} billed</p>
                 </div>
@@ -143,7 +143,7 @@ export default function ClinicPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Visits</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Visits</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.summary.totalVisits)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">across all clinics, this period</p>
                 </div>
@@ -154,7 +154,7 @@ export default function ClinicPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Top Category</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Top Category</p>
                   <p className="text-lg font-bold mt-1 truncate" title={data?.summary.topCategory?.category || '—'}>
                     {data?.summary.topCategory?.category || '—'}
                   </p>
@@ -169,7 +169,7 @@ export default function ClinicPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Top Clinic</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Top Clinic</p>
                   <p className="text-lg font-bold mt-1 truncate" title={data?.summary.topClinic?.name || '—'}>
                     {data?.summary.topClinic?.name || '—'}
                   </p>
@@ -233,7 +233,7 @@ export default function ClinicPerformanceReport() {
                     <>
                       {v}
                       {c.category === 'Uncategorized' && (
-                        <span className="ml-1.5 text-[11px] text-amber-600" title="Billed line items with no exact name match in the services catalog">not matched to catalog</span>
+                        <span className="ml-1.5 text-xs text-amber-600" title="Billed line items with no exact name match in the services catalog">not matched to catalog</span>
                       )}
                     </>
                   ),
@@ -257,7 +257,7 @@ export default function ClinicPerformanceReport() {
               ]}
             />
             {byCategory.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-[13px] font-semibold -mt-px">
+              <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-semibold -mt-px">
                 <span>Total</span>
                 <span className="flex gap-8 font-mono">
                   <span>{fmtCount(byCategory.reduce((s, c) => s + c.volume, 0))}</span>

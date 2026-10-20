@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<string, string> = { pending: 'Pending', in_progress: 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-sm font-medium text-foreground break-words">{value}</p>
     </div>
   );
@@ -135,7 +135,7 @@ function RequestCard({ request, canWrite, onChanged }: { request: RadiologyReque
         <h4 className="font-semibold text-sm text-foreground">{request.exam_name}</h4>
         <span className="text-xs text-muted-foreground font-mono">{request.request_number}</span>
         {request.urgent && (
-          <span className="flex items-center gap-1 text-[11px] font-medium text-destructive">
+          <span className="flex items-center gap-1 text-xs font-medium text-destructive">
             <AlertTriangle className="h-3 w-3" /> Urgent
           </span>
         )}
@@ -147,24 +147,24 @@ function RequestCard({ request, canWrite, onChanged }: { request: RadiologyReque
         <table className="w-full text-sm border-collapse">
           <tbody>
             <tr className="border-b border-border">
-              <td className="py-2 pr-4 w-36 shrink-0 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Requested</td>
+              <td className="py-2 pr-4 w-36 shrink-0 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Requested</td>
               <td className="py-2 font-medium text-foreground">{new Date(request.request_date).toLocaleString()}</td>
             </tr>
             {request.clinical_indication && (
               <tr className="border-b border-border">
-                <td className="py-2 pr-4 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Clinical Indication</td>
+                <td className="py-2 pr-4 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Clinical Indication</td>
                 <td className="py-2 font-medium text-foreground break-words">{request.clinical_indication}</td>
               </tr>
             )}
             {request.confirmed_by_name && (
               <tr className="border-b border-border">
-                <td className="py-2 pr-4 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Confirmed By</td>
+                <td className="py-2 pr-4 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Confirmed By</td>
                 <td className="py-2 font-medium text-foreground break-words">{request.confirmed_by_name} · {new Date(request.confirmed_at!).toLocaleString()}</td>
               </tr>
             )}
             {request.reported_by_name && (
               <tr>
-                <td className="py-2 pr-4 align-top text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">Reported By</td>
+                <td className="py-2 pr-4 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Reported By</td>
                 <td className="py-2 font-medium text-foreground break-words">{request.reported_by_name} · {new Date(request.reported_at!).toLocaleString()}</td>
               </tr>
             )}
@@ -281,7 +281,7 @@ export default function RadiologyRequestDetail() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-border">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">{requests.length} Exam{requests.length === 1 ? '' : 's'} Requested</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{requests.length} Exam{requests.length === 1 ? '' : 's'} Requested</p>
                     <div className="flex flex-wrap gap-1.5">
                       {counts.pending > 0 && <StatusBadge status="pending" map={STATUS_TONE} label={`${counts.pending} Pending`} />}
                       {counts.in_progress > 0 && <StatusBadge status="in_progress" map={STATUS_TONE} label={`${counts.in_progress} In Progress`} />}

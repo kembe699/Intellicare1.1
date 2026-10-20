@@ -434,7 +434,7 @@ export default function TheatreOperationDetail() {
                           <div key={t.id} className="pl-2 border-l-2 border-border/70">
                             <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
                             {t.status === 'approved' && Array.isArray(results) && results.length > 0 && (
-                              <table className="w-full text-[11px] mt-1">
+                              <table className="w-full text-xs mt-1">
                                 <tbody>
                                   {results.map((r: any) => (
                                     <tr key={r.id} className={r.flag ? 'text-destructive' : ''}>

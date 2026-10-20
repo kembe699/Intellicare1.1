@@ -137,7 +137,7 @@ export default function NewStockTransferRequest() {
               <div className="px-4">
                 <label className="text-xs font-medium text-muted-foreground">3. Items & quantities</label>
                 {!fromLocationId && (
-                  <p className="text-[11px] text-muted-foreground mt-1 mb-2">Pick a source store above to see what it has in stock.</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2">Pick a source store above to see what it has in stock.</p>
                 )}
                 <div className="space-y-2 mt-1">
                   {lines.map((line, idx) => (

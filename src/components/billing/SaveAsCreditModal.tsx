@@ -151,7 +151,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
                 <div>
                   <p className="text-xs text-muted-foreground">Insurance / Scheme</p>
                   <p className="font-semibold text-sm text-primary">{bill.schemeName || bill.scheme_name || schemeInfo?.scheme_name}</p>
-                  {schemeInfo?.is_insurance && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Insurance</span>}
+                  {schemeInfo?.is_insurance && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Insurance</span>}
                 </div>
               </div>
             )}

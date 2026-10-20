@@ -207,7 +207,7 @@ export default function LabTestConsumables() {
                     disabled={!!editingId || !formData.location_id || itemsLoading}
                   />
                   {!formData.location_id && !editingId && (
-                    <p className="text-[11px] text-muted-foreground mt-1">Only items actually stocked at the chosen location will be listed here.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Only items actually stocked at the chosen location will be listed here.</p>
                   )}
                 </div>
                 <div>

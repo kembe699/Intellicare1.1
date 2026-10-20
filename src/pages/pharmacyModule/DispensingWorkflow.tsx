@@ -1390,7 +1390,7 @@ export default function DispensingWorkflow() {
                     </div>
                     <div className="p-4 space-y-3">
                       {patientSchemes.length > 0 && (
-                        <p className="text-[11px] text-sky-700">
+                        <p className="text-xs text-sky-700">
                           Only drugs priced under this patient's insurance ({patientSchemes[0].scheme_name}) are shown.
                         </p>
                       )}
@@ -1438,13 +1438,13 @@ export default function DispensingWorkflow() {
                                 className="mt-1"
                               />
                               {patientSchemes.length > 0 && eligibleDrugs.length === 0 && (
-                                <p className="text-[11px] text-red-700 mt-1">No drugs have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
+                                <p className="text-xs text-red-700 mt-1">No drugs have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
                               )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div className="rounded-lg border p-3 bg-muted/20 space-y-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Quantity</p>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quantity</p>
                                 <div className="grid grid-cols-3 gap-2">
                                   <div>
                                     <Label className="text-xs font-medium text-muted-foreground">Qty</Label>
@@ -1470,9 +1470,9 @@ export default function DispensingWorkflow() {
                               </div>
 
                               <div className="rounded-lg border p-3 bg-muted/20 space-y-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing</p>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pricing</p>
                                 {patientSchemes.length > 0 && schemePricing ? (
-                                  <div className="text-[11px] font-semibold text-sky-700 inline-flex items-center gap-1 py-1.5">
+                                  <div className="text-xs font-semibold text-sky-700 inline-flex items-center gap-1 py-1.5">
                                     <Shield className="w-3 h-3" /> {schemeCurrencyCode} {parseFloat(schemePricing.scheme_price).toFixed(2)} (insurance)
                                   </div>
                                 ) : (
@@ -1516,7 +1516,7 @@ export default function DispensingWorkflow() {
                                       </div>
                                     </div>
                                     {selectedDrug && discountNum > 0 && (
-                                      <p className="text-[11px] text-muted-foreground">
+                                      <p className="text-xs text-muted-foreground">
                                         Price after discount: <span className="font-medium text-foreground">{fmt(discountedPrice)}</span>
                                         {' '}<span className="line-through">{fmt(basePrice)}</span>
                                       </p>
@@ -1527,7 +1527,7 @@ export default function DispensingWorkflow() {
                             </div>
 
                             {selectedDrug && (outOfStock || notEnoughStock) && (
-                              <p className="text-[11px] text-red-700 flex items-center gap-1.5">
+                              <p className="text-xs text-red-700 flex items-center gap-1.5">
                                 <PackageX className="w-3.5 h-3.5 shrink-0" />
                                 {outOfStock
                                   ? `${selectedDrug.drug_name} is out of stock — receive stock before billing it.`
@@ -1821,15 +1821,15 @@ export default function DispensingWorkflow() {
                                       return (
                                         <div className="whitespace-nowrap">
                                           {repricingLineId === l.id ? (
-                                            <div className="text-[10px] text-sky-700 inline-flex items-center gap-1">
+                                            <div className="text-xs text-sky-700 inline-flex items-center gap-1">
                                               <Loader2 className="w-3 h-3 animate-spin" /> Updating billed price…
                                             </div>
                                           ) : missingInsurancePrice ? (
-                                            <div className="text-[10px] font-medium text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-1 w-fit max-w-[160px]">
+                                            <div className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-1 w-fit max-w-[160px]">
                                               No insurance price — add insurance price first
                                             </div>
                                           ) : hasSchemePrice && !billHasScheme ? (
-                                            <div className="text-[11px] font-semibold text-sky-700 inline-flex items-center gap-1" title="This patient's insurance price — tracked separately in this currency for the insurance claim, never shown or billed in SSP">
+                                            <div className="text-xs font-semibold text-sky-700 inline-flex items-center gap-1" title="This patient's insurance price — tracked separately in this currency for the insurance claim, never shown or billed in SSP">
                                               <Shield className="w-3 h-3" />
                                               {schemeCurrencyCode} {schemeUnitPrice.toFixed(2)}
                                             </div>
@@ -1895,7 +1895,7 @@ export default function DispensingWorkflow() {
                                       return insufficientStock ? (
                                         <span className="inline-flex flex-col gap-0.5">
                                           <Badge variant="outline" className="w-fit gap-1 border-red-200 bg-red-50 text-red-700"><PackageX className="w-3 h-3" /> Out of stock</Badge>
-                                          <span className="text-[10px] text-red-600">Only {stockOnHand} {l.pack_unit_of_measure || ''} in stock — restock to dispense</span>
+                                          <span className="text-xs text-red-600">Only {stockOnHand} {l.pack_unit_of_measure || ''} in stock — restock to dispense</span>
                                         </span>
                                       ) : (
                                         <Badge

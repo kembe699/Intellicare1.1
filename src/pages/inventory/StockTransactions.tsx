@@ -352,7 +352,7 @@ export default function StockTransactions() {
                     key: 'transaction_type', header: 'Type', sortable: true,
                     render: (v) => {
                       const typeInfo = TX_TYPE_MAP[v] || { label: v, className: 'bg-slate-100 text-slate-600 border-slate-200' };
-                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${typeInfo.className}`}>{typeInfo.label}</span>;
+                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${typeInfo.className}`}>{typeInfo.label}</span>;
                     },
                   },
                   {

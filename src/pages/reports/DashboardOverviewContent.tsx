@@ -88,9 +88,9 @@ function ChartTooltip({ active, payload, label, valueLabel, format }: any) {
 function StatTile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
   return (
     <div className="bg-card px-4 py-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-xl font-semibold mt-1 tabular-nums">{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -240,7 +240,7 @@ export function DashboardOverviewContent() {
                     const pct = Math.round((m.total / maxPaymentTotal) * 100);
                     return (
                       <div key={m.method}>
-                        <div className="flex items-center justify-between text-[13px] mb-1">
+                        <div className="flex items-center justify-between text-sm mb-1">
                           <span className="capitalize text-foreground">{m.method}</span>
                           <span className="font-mono tabular-nums text-muted-foreground">{fmtCurrency(m.total)}</span>
                         </div>
@@ -267,14 +267,14 @@ export function DashboardOverviewContent() {
                     const pct = Math.round((c.revenue / maxClinicRevenue) * 100);
                     return (
                       <div key={c.clinicId}>
-                        <div className="flex items-center justify-between text-[13px] mb-1">
+                        <div className="flex items-center justify-between text-sm mb-1">
                           <span className="text-foreground">{c.clinicName}</span>
                           <span className="font-mono tabular-nums text-muted-foreground">{fmtCurrency(c.revenue)}</span>
                         </div>
                         <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
                           <div className="h-full rounded-full bg-foreground/70" style={{ width: `${pct}%` }} />
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-1">{fmtCount(c.visits)} visits</p>
+                        <p className="text-xs text-muted-foreground mt-1">{fmtCount(c.visits)} visits</p>
                       </div>
                     );
                   })}

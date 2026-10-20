@@ -47,7 +47,7 @@ function StatusBadge({ status }: { status: string }) {
     queued: 'bg-emerald-100 text-emerald-700',
     cancelled: 'bg-slate-100 text-slate-500',
   };
-  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.cancelled}`}>{status}</span>;
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.cancelled}`}>{status}</span>;
 }
 
 export default function Appointments() {

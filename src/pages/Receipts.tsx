@@ -90,7 +90,7 @@ const statusBadge = (status: Receipt['status']) => {
     pending_refund: 'bg-orange-50 text-orange-700 border-orange-200',
   };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
       {STATUS_LABELS[status] || status}
     </span>
   );
@@ -316,7 +316,7 @@ export default function Receipts() {
                     <>
                       {v}
                       {r.receipt_type && r.receipt_type !== 'payment' && (
-                        <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${r.receipt_type === 'deposit' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                        <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${r.receipt_type === 'deposit' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
                           {r.receipt_type === 'deposit' ? 'Deposit' : 'Deposit Refund'}
                         </span>
                       )}
@@ -416,7 +416,7 @@ export default function Receipts() {
                           const isVoided = !!billServices?.[s.index]?.isVoided;
                           if (isVoided) {
                             return (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-red-50 text-red-700 border-red-200">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-red-50 text-red-700 border-red-200">
                                 Voided
                               </span>
                             );
@@ -425,7 +425,7 @@ export default function Receipts() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 px-2 text-[11px] text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                               onClick={() => { setVoidItemIndex(s.index); setVoidReason(''); }}
                               disabled={loadingBill}
                             >
@@ -436,7 +436,7 @@ export default function Receipts() {
                       },
                     ]}
                   />
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                  <p className="text-xs text-muted-foreground mt-1.5">
                     Voiding an item removes it from the bill's total. Since it was already paid, the bill will show a credit for that amount rather than an automatic refund.
                   </p>
                 </div>

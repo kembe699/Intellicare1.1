@@ -52,7 +52,7 @@ export const MindrayIntegration: React.FC<MindrayIntegrationProps> = ({
   return (
     <div className="ic-card">
       <div className="ic-card-header flex justify-between items-center py-2">
-        <span className="font-semibold text-[13px] text-foreground flex items-center gap-2">
+        <span className="font-semibold text-sm text-foreground flex items-center gap-2">
           <Activity className="w-4 h-4 text-primary" />
           Fetch from Machine
         </span>

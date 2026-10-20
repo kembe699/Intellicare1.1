@@ -44,7 +44,7 @@ export const IcCardHeader: React.FC<IcCardHeaderProps> = ({
         <span className="[&>svg]:w-4 [&>svg]:h-4 [&>svg]:text-primary shrink-0">{icon}</span>
       )}
       {typeof title === 'string' ? (
-        <span className="text-[13px] font-semibold text-foreground">{title}</span>
+        <span className="text-sm font-semibold text-foreground">{title}</span>
       ) : (
         title
       )}

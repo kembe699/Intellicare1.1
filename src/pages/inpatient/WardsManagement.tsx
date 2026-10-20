@@ -196,7 +196,7 @@ export default function WardsManagement() {
                         placeholder="Select service..."
                         searchPlaceholder="Search services..."
                       />
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {formData.service_id
                           ? `Daily bed rate: ${fmt(services.find((s: any) => s.id === formData.service_id)?.price || 0)}`
                           : 'The daily bed rate is pulled from the selected service\'s price.'}

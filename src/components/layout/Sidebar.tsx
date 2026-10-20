@@ -401,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
             <div className="px-3 py-3 border-b border-sidebar-border bg-sidebar-accent/30">
               {user.role === 'doctor' && (
                 <div className="rounded-sm border border-sidebar-border px-3 py-2 bg-sidebar/60 mt-2">
-                  <div className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60">Current Room</div>
+                  <div className="text-xs uppercase tracking-wide text-sidebar-foreground/60">Current Room</div>
                   <Combobox
                     options={consultationRooms.map((room) => ({ value: room.id, label: room.room_number }))}
                     value={user.currentRoomId || ''}
@@ -409,13 +409,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     disabled={savingRoom}
                     placeholder="-- Select room --"
                     searchPlaceholder="Search rooms..."
-                    className="mt-2 w-full h-8 text-[12px]"
+                    className="mt-2 w-full h-8 text-xs"
                   />
                   {user.currentRoomId && (
                     <button
                       onClick={handleSignOutOfRoom}
                       disabled={savingRoom}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-sm border border-sidebar-border text-[11px] font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors disabled:opacity-50"
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-sm border border-sidebar-border text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors disabled:opacity-50"
                     >
                       <DoorOpen className="w-3.5 h-3.5" />
                       Sign out of room
@@ -441,7 +441,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     to={item.href}
                     onClick={() => window.innerWidth < 1024 && onToggle()}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[13px]",
+                      "flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-sm",
                       isActive
                         ? "bg-sidebar-primary text-sidebar-primary-foreground"
                         : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -454,7 +454,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               };
 
               const sectionLabel = (label: string) => (
-                <p key={label} className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 select-none">
+                <p key={label} className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/40 select-none">
                   {label}
                 </p>
               );
@@ -485,7 +485,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setNursingStationOpen(!nursingStationOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           nursingStationDropdown.items.some(item => location.pathname.startsWith(item.href))
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -504,7 +504,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname.startsWith(item.href);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -532,7 +532,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setInpatientOpen(!inpatientOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           location.pathname.startsWith('/inpatient')
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -551,7 +551,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -570,7 +570,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setTheatreOpen(!theatreOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           theatreDropdown.items.some(item => location.pathname.startsWith(item.href))
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -589,7 +589,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname.startsWith(item.href);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -610,7 +610,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setLisOpen(!lisOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           lisDropdown.items.some(item => location.pathname.startsWith(item.href))
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -629,7 +629,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname.startsWith(item.href);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -648,7 +648,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setPharmacyOpen(!pharmacyOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           location.pathname.startsWith('/pharmacy')
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -658,7 +658,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                           <Pill className="w-4 h-4" />
                           <span className="font-medium leading-none">Pharmacy</span>
                           {pendingRxCount > 0 && (
-                            <span className="ml-auto mr-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                            <span className="ml-auto mr-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
                               {pendingRxCount}
                             </span>
                           )}
@@ -672,13 +672,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
                                 <Icon className="w-4 h-4" /><span>{item.label}</span>
                                 {item.href === '/pharmacy-prescriptions' && pendingRxCount > 0 && (
-                                  <span className="ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{pendingRxCount}</span>
+                                  <span className="ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">{pendingRxCount}</span>
                                 )}
                               </Link>
                             );
@@ -697,7 +697,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setPatientsBillOpen(!patientsBillOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           (location.pathname.startsWith('/patients-bill') || location.pathname.startsWith('/receipts') || location.pathname.startsWith('/invoices') || location.pathname.startsWith('/proforma-invoices'))
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -716,7 +716,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -735,7 +735,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setAccountingOpen(!accountingOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           (location.pathname.startsWith('/accounting') || location.pathname.startsWith('/billing-management') || location.pathname.startsWith('/scheme-management') || location.pathname.startsWith('/accounts') || location.pathname.startsWith('/cashier'))
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -754,7 +754,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -776,7 +776,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setInventoryOpen(!inventoryOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           location.pathname.startsWith('/inventory')
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -795,7 +795,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -814,7 +814,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setProcurementOpen(!procurementOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           location.pathname.startsWith('/procurement')
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -833,7 +833,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -855,7 +855,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setHrOpen(!hrOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           location.pathname.startsWith('/hr')
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -874,7 +874,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -899,7 +899,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                       <button
                         onClick={() => setSetupOpen(!setupOpen)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-[13px]",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
                           location.pathname.startsWith('/setup')
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
@@ -918,7 +918,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             const isActive = location.pathname === item.href;
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-[12px]",
+                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
                                   isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
                                 )}
                               >
@@ -943,23 +943,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               className="flex items-center gap-3 mb-4 p-2 rounded-sm hover:bg-sidebar-accent transition-colors cursor-pointer"
             >
               <div className="w-9 h-9 rounded-sm bg-sidebar-accent flex items-center justify-center">
-                <span className="font-semibold text-[13px]">
+                <span className="font-semibold text-sm">
                   {user?.displayName?.charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[13px] truncate leading-tight">{user?.displayName}</p>
+                <p className="font-medium text-sm truncate leading-tight">{user?.displayName}</p>
                 {/* user.clinic is the clinic's id, so this read "admin • 6" —
                     a bare number with no meaning to the person reading it. The
                     branch is the context that actually matters here, and it is
                     already named at the top of the page, so the role stands on
                     its own. */}
-                <p className="text-[11px] text-sidebar-foreground/60 capitalize leading-tight">{user?.role}</p>
+                <p className="text-xs text-sidebar-foreground/60 capitalize leading-tight">{user?.role}</p>
               </div>
             </Link>
             <button
               onClick={signOut}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors text-[13px]"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors text-sm"
             >
               <LogOut className="w-4 h-4" />
               <span>Sign Out</span>
@@ -1080,7 +1080,7 @@ const NotificationBell: React.FC = () => {
       >
         <Bell className="w-6 h-6 text-muted-foreground" strokeWidth={2.25} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs font-bold leading-none">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -1116,7 +1116,7 @@ const NotificationBell: React.FC = () => {
                   <div className={cn('flex-1 min-w-0', n.is_read && 'ml-3.5')}>
                     <p className="text-sm font-medium text-foreground truncate group-hover:text-white">{n.title}</p>
                     {n.message && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5 group-hover:text-white">{n.message}</p>}
-                    <p className="text-[11px] text-muted-foreground mt-1 group-hover:text-white">{timeAgo(n.created_at)}</p>
+                    <p className="text-xs text-muted-foreground mt-1 group-hover:text-white">{timeAgo(n.created_at)}</p>
                   </div>
                 </button>
               ))}
@@ -1239,7 +1239,7 @@ export const TopBar: React.FC = () => {
   return (
     <header className="hidden lg:flex fixed top-0 left-64 right-0 z-30 h-14 items-center justify-between px-4 bg-background border-b border-border">
       <div className="flex items-center gap-3">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Branch</span>
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">Current Branch</span>
         <span className="text-sm font-semibold text-foreground">
           {isAllBranches ? 'All Branches' : (currentBranch?.name || user.primaryBranchName || 'All Branches')}
         </span>

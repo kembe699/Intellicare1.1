@@ -398,9 +398,9 @@ export default function PayrollRunDetail() {
                 <div key={t.currency} className="border rounded-lg p-3 bg-muted/20">
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">{t.currency}</p>
                   <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div><p className="text-[11px] text-muted-foreground">Gross</p><p className="font-mono font-bold">{docTemplate.formatCurrency(t.gross, t.currency)}</p></div>
-                    <div><p className="text-[11px] text-muted-foreground">Deductions</p><p className="font-mono font-bold text-amber-700">{docTemplate.formatCurrency(t.deductions, t.currency)}</p></div>
-                    <div><p className="text-[11px] text-muted-foreground">Net</p><p className="font-mono font-bold text-emerald-700">{docTemplate.formatCurrency(t.net, t.currency)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Gross</p><p className="font-mono font-bold">{docTemplate.formatCurrency(t.gross, t.currency)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Deductions</p><p className="font-mono font-bold text-amber-700">{docTemplate.formatCurrency(t.deductions, t.currency)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Net</p><p className="font-mono font-bold text-emerald-700">{docTemplate.formatCurrency(t.net, t.currency)}</p></div>
                   </div>
                 </div>
               ))}

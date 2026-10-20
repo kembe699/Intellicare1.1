@@ -195,7 +195,7 @@ const PlatformCompanyProfile: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-border">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3">Bank Details (optional — shown on quotations if set)</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Bank Details (optional — shown on quotations if set)</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Bank Name</Label>

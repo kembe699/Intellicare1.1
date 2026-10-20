@@ -112,13 +112,13 @@ const ReceiptItemsPanel: React.FC<{ details?: ReceiptServiceDetail[] | null; col
   <tr className="bg-muted/20 border-b">
     <td colSpan={colSpan} className="px-6 sm:px-10 py-2">
       {details.length === 0 ? (
-        <div className="text-[12px] text-muted-foreground py-1">
+        <div className="text-xs text-muted-foreground py-1">
           {receiptType === 'deposit' ? 'Deposit taken — not tied to any billed service.'
             : receiptType === 'deposit_refund' ? 'Deposit refund — money paid back to the patient, not tied to any billed service.'
             : 'No item details recorded for this receipt.'}
         </div>
       ) : (
-        <table className="w-full text-[12px] table-fixed">
+        <table className="w-full text-xs table-fixed">
           <colgroup>
             <col />
             <col className="w-12" />
@@ -669,7 +669,7 @@ const CashierShift: React.FC = () => {
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <div className="max-h-[420px] overflow-y-auto">
-                      <table className="w-full text-[13px]">
+                      <table className="w-full text-sm">
                         <thead className="bg-muted sticky top-0">
                           <tr>
                             <th className="p-2.5 text-left font-medium">Receipt #</th>
@@ -696,8 +696,8 @@ const CashierShift: React.FC = () => {
                                   </td>
                                   <td className="p-2.5">
                                     {receipt.patient_name}
-                                    {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700">Deposit</span>}
-                                    {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Deposit Refund</span>}
+                                    {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700">Deposit</span>}
+                                    {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Deposit Refund</span>}
                                   </td>
                                   <td className={cn('p-2.5', receipt.receipt_type === 'deposit_refund' && 'text-red-600 font-medium')}>
                                     {receipt.receipt_type === 'deposit_refund' ? '-' : ''}SSP {parseFloat(String(receipt.payment_amount || '0')).toFixed(2)}
@@ -1037,22 +1037,22 @@ const CashierShift: React.FC = () => {
                       <div className="p-3 rounded-lg border bg-emerald-50 border-emerald-200">
                         <div className="text-xs text-emerald-700">Collected</div>
                         <div className="text-lg font-bold text-emerald-700">{fmt(shiftReport.totals.collectedTotal)}</div>
-                        <div className="text-[11px] text-emerald-700/80">{shiftReport.activeReceipts.length} receipt{shiftReport.activeReceipts.length !== 1 ? 's' : ''}</div>
+                        <div className="text-xs text-emerald-700/80">{shiftReport.activeReceipts.length} receipt{shiftReport.activeReceipts.length !== 1 ? 's' : ''}</div>
                       </div>
                       <div className="p-3 rounded-lg border bg-red-50 border-red-200">
                         <div className="text-xs text-red-700 flex items-center gap-1"><Ban className="w-3 h-3" /> Voided</div>
                         <div className="text-lg font-bold text-red-700">{fmt(shiftReport.totals.voidedTotal)}</div>
-                        <div className="text-[11px] text-red-700/80">{shiftReport.voidedReceipts.length} receipt{shiftReport.voidedReceipts.length !== 1 ? 's' : ''}</div>
+                        <div className="text-xs text-red-700/80">{shiftReport.voidedReceipts.length} receipt{shiftReport.voidedReceipts.length !== 1 ? 's' : ''}</div>
                       </div>
                       <div className="p-3 rounded-lg border bg-amber-50 border-amber-200">
                         <div className="text-xs text-amber-700 flex items-center gap-1"><Undo2 className="w-3 h-3" /> Refunded</div>
                         <div className="text-lg font-bold text-amber-700">{fmt(shiftReport.totals.refundedTotal)}</div>
-                        <div className="text-[11px] text-amber-700/80">{shiftReport.refundedReceipts.length} receipt{shiftReport.refundedReceipts.length !== 1 ? 's' : ''}</div>
+                        <div className="text-xs text-amber-700/80">{shiftReport.refundedReceipts.length} receipt{shiftReport.refundedReceipts.length !== 1 ? 's' : ''}</div>
                       </div>
                       <div className="p-3 rounded-lg border bg-indigo-50 border-indigo-200">
                         <div className="text-xs text-indigo-700 flex items-center gap-1"><FileText className="w-3 h-3" /> Invoiced</div>
                         <div className="text-lg font-bold text-indigo-700">{fmt(shiftReport.totals.invoicedTotal)}</div>
-                        <div className="text-[11px] text-indigo-700/80">{shiftReport.invoices.length} invoice{shiftReport.invoices.length !== 1 ? 's' : ''}</div>
+                        <div className="text-xs text-indigo-700/80">{shiftReport.invoices.length} invoice{shiftReport.invoices.length !== 1 ? 's' : ''}</div>
                       </div>
                     </div>
 
@@ -1070,7 +1070,7 @@ const CashierShift: React.FC = () => {
                       ) : (
                         <div className="border rounded-lg overflow-hidden">
                           <div className="max-h-[420px] overflow-y-auto">
-                            <table className="w-full text-[13px]">
+                            <table className="w-full text-sm">
                               <thead className="bg-muted sticky top-0">
                                 <tr>
                                   <th className="p-2 text-left font-medium">Receipt #</th>
@@ -1097,8 +1097,8 @@ const CashierShift: React.FC = () => {
                                         </td>
                                         <td className="p-2">
                                           {receipt.patient_name}
-                                          {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700">Deposit</span>}
-                                          {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Deposit Refund</span>}
+                                          {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700">Deposit</span>}
+                                          {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Deposit Refund</span>}
                                         </td>
                                         <td className={cn('p-2', receipt.receipt_type === 'deposit_refund' && 'text-red-600 font-medium')}>
                                           {receipt.receipt_type === 'deposit_refund' ? '-' : ''}SSP {parseFloat(String(receipt.payment_amount || '0')).toFixed(2)}
@@ -1130,7 +1130,7 @@ const CashierShift: React.FC = () => {
                             { key: 'payment_amount', header: 'Amount', render: (v) => <span className="font-semibold text-red-700">SSP {Math.abs(parseFloat(String(v || '0'))).toFixed(2)}</span> },
                             {
                               key: 'kind', header: 'Type',
-                              render: (v) => <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${v === 'Voided' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{v}</span>,
+                              render: (v) => <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${v === 'Voided' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{v}</span>,
                             },
                             { key: 'notes', header: 'Reason', render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
                             { key: 'created_at', header: 'Time', render: (v) => new Date(v).toLocaleTimeString() },

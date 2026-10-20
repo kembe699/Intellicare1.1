@@ -519,7 +519,7 @@ export default function ItemMaster() {
                       onChange={e => setFormData({ ...formData, units_per_pack: parseInt(e.target.value, 10) || 1 })}
                       className="h-10 text-sm bg-white"
                     />
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       e.g. 10 tablets per {formData.unit_of_measure || 'Strip'} — leave at 1 if stocked individually
                     </p>
                   </div>
@@ -531,7 +531,7 @@ export default function ItemMaster() {
                       onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
                       className="h-10 text-sm bg-white"
                     />
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       What one dose is called on the prescription/receipt
                     </p>
                   </div>
@@ -622,7 +622,7 @@ export default function ItemMaster() {
                           searchPlaceholder="Search locations..."
                           className="h-10 text-sm bg-white"
                         />
-                        {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-1">No locations set up yet — add one in Stock Locations.</p>}
+                        {locations.length === 0 && <p className="text-xs text-muted-foreground mt-1">No locations set up yet — add one in Stock Locations.</p>}
                       </div>
                     </>
                   )}
@@ -782,7 +782,7 @@ export default function ItemMaster() {
                     key: '__status', header: 'Status',
                     render: (_v, item) => {
                       const status = stockStatus(item);
-                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${status.className}`}>{status.label}</span>;
+                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${status.className}`}>{status.label}</span>;
                     },
                   },
                   {
@@ -824,22 +824,22 @@ export default function ItemMaster() {
               ) : (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${stockStatus(selectedItem).className}`}>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${stockStatus(selectedItem).className}`}>
                       {stockStatus(selectedItem).label}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Category</p>
+                      <p className="text-xs text-muted-foreground uppercase font-semibold">Category</p>
                       <p className="font-medium capitalize">{selectedItem.item_category}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">UOM</p>
+                      <p className="text-xs text-muted-foreground uppercase font-semibold">UOM</p>
                       <p className="font-medium">{selectedItem.unit_of_measure}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Barcode</p>
+                      <p className="text-xs text-muted-foreground uppercase font-semibold">Barcode</p>
                       <p className="font-medium font-mono">{selectedItem.barcode || '—'}</p>
                     </div>
                   </div>
@@ -847,19 +847,19 @@ export default function ItemMaster() {
                   <div className="grid grid-cols-4 gap-3 text-sm border rounded-lg p-3 bg-muted/20">
                     <div className="text-center">
                       <p className="text-lg font-bold">{selectedItem.quantity_on_hand}</p>
-                      <p className="text-[10px] text-muted-foreground">On Hand</p>
+                      <p className="text-xs text-muted-foreground">On Hand</p>
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-bold">{selectedItem.reserved_quantity || 0}</p>
-                      <p className="text-[10px] text-muted-foreground">Reserved</p>
+                      <p className="text-xs text-muted-foreground">Reserved</p>
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-bold">{selectedItem.available_quantity ?? selectedItem.quantity_on_hand}</p>
-                      <p className="text-[10px] text-muted-foreground">Available</p>
+                      <p className="text-xs text-muted-foreground">Available</p>
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-bold font-mono">{formatCurrency((selectedItem.quantity_on_hand || 0) * (selectedItem.average_unit_cost || 0))}</p>
-                      <p className="text-[10px] text-muted-foreground">Stock Value</p>
+                      <p className="text-xs text-muted-foreground">Stock Value</p>
                     </div>
                   </div>
 

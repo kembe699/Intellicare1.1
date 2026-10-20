@@ -425,14 +425,14 @@ export default function BatchTracking() {
                     return (
                       <div>
                         <p className="text-xs">{new Date(v).toLocaleDateString()}</p>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border mt-0.5 ${expBadge.className}`}>{expBadge.label}</span>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border mt-0.5 ${expBadge.className}`}>{expBadge.label}</span>
                       </div>
                     );
                   },
                 },
                 {
                   key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
+                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
                 },
                 {
                   key: '__actions', header: 'Actions',

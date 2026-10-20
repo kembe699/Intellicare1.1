@@ -40,7 +40,7 @@ const statusBadge = (status: string) => {
     cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
   };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
@@ -598,7 +598,7 @@ export default function PrescriptionManagement() {
                         </button>
                       </div>
                       {patientSchemes.length === 0 && (
-                        <p className="text-[11px] text-muted-foreground mt-1">No active scheme membership — cash prices only.</p>
+                        <p className="text-xs text-muted-foreground mt-1">No active scheme membership — cash prices only.</p>
                       )}
                       {billingMode === 'scheme' && patientSchemes.length > 1 && (
                         <Combobox
@@ -611,7 +611,7 @@ export default function PrescriptionManagement() {
                         />
                       )}
                       {billingMode === 'scheme' && selectedSchemeId && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {loadingSchemeCatalog ? 'Loading scheme price list...' : `Only drugs priced under this scheme are shown below (${schemeProducts.length}).`}
                         </p>
                       )}
@@ -752,7 +752,7 @@ export default function PrescriptionManagement() {
                       prescriber's number, so a computed total is always traceable
                       back to dose x frequency x days. */}
                   {rxSuggestedQty != null && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
                       {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
                         <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
@@ -762,7 +762,7 @@ export default function PrescriptionManagement() {
                     </p>
                   )}
                   {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
                     </p>
                   )}
@@ -791,7 +791,7 @@ export default function PrescriptionManagement() {
                           {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                           {l.duration_days ? ` · ${l.duration_days}d` : ''}
                           {l.is_external ? (
-                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
                               buy outside
                             </span>
                           ) : l.selling_price > 0 ? (

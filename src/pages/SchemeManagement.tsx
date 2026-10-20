@@ -674,8 +674,8 @@ const SchemeManagement: React.FC = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">{scheme.scheme_code}</p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    {!!scheme.is_default && <Badge className="bg-green-100 text-green-800 text-[10px]">Default</Badge>}
-                    <Badge variant={scheme.is_active ? 'secondary' : 'destructive'} className="text-[10px] capitalize">{scheme.scheme_type}</Badge>
+                    {!!scheme.is_default && <Badge className="bg-green-100 text-green-800 text-xs">Default</Badge>}
+                    <Badge variant={scheme.is_active ? 'secondary' : 'destructive'} className="text-xs capitalize">{scheme.scheme_type}</Badge>
                   </div>
                 </div>
               </CardHeader>
@@ -683,7 +683,7 @@ const SchemeManagement: React.FC = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Currency</span>
-                    <Badge variant="outline" className="text-[10px] font-bold">{scheme.currency || currency.code}</Badge>
+                    <Badge variant="outline" className="text-xs font-bold">{scheme.currency || currency.code}</Badge>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Strategy</span>
@@ -940,14 +940,14 @@ const SchemeManagement: React.FC = () => {
                           <CheckCircle className="w-4 h-4 text-green-600 inline" />
                         </span>
                       ) : (
-                        <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => handleVerifyMember(m.id)} disabled={verifyingId === m.id}>
+                        <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => handleVerifyMember(m.id)} disabled={verifyingId === m.id}>
                           {verifyingId === m.id ? 'Verifying...' : 'Verify'}
                         </Button>
                       ),
                     },
                     {
                       key: 'is_active', header: 'Status', align: 'center',
-                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-[10px]">{v ? 'Active' : 'Inactive'}</Badge>,
+                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
                     },
                     {
                       key: '__actions', header: 'Actions', align: 'right',
@@ -1002,7 +1002,7 @@ const SchemeManagement: React.FC = () => {
                     { key: 'effective_from', header: 'Period', render: (v, d) => <span className="text-xs">{v || 'Always'}{d.effective_to ? ` - ${d.effective_to}` : ''}</span> },
                     {
                       key: 'is_active', header: 'Status', align: 'center',
-                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-[10px]">{v ? 'Active' : 'Inactive'}</Badge>,
+                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
                     },
                   ]}
                 />
@@ -1120,7 +1120,7 @@ const SchemeManagement: React.FC = () => {
                   onChange={v => setSchemeForm(f => ({...f, currency: v}))}
                   searchPlaceholder="Search..."
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">All prices for this scheme will be in this currency</p>
+                <p className="text-xs text-muted-foreground mt-1">All prices for this scheme will be in this currency</p>
               </div>
             </div>
 

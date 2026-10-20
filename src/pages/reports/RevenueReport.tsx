@@ -466,22 +466,22 @@ export default function RevenueReport() {
       {option.mode === 'cost-analysis' && costSummary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div className="bg-card rounded-lg border shadow-sm p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
             <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(costSummary.totalRevenue)}</p>
           </div>
           <div className="bg-card rounded-lg border shadow-sm p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Cost of Goods Sold</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Cost of Goods Sold</p>
             <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(costSummary.totalCOGS)}</p>
             {cogsByAccount.length > 0 && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">{cogsByAccount.map(a => a.accountName).join(', ')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{cogsByAccount.map(a => a.accountName).join(', ')}</p>
             )}
           </div>
           <div className="bg-card rounded-lg border shadow-sm p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Gross Margin</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Gross Margin</p>
             <p className={`text-2xl font-bold mt-1 ${costSummary.grossMargin >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(costSummary.grossMargin)}</p>
           </div>
           <div className="bg-card rounded-lg border shadow-sm p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Gross Margin %</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Gross Margin %</p>
             <p className="text-2xl font-bold mt-1">{fmtNum(costSummary.grossMarginPct, 1)}%</p>
           </div>
         </div>

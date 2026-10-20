@@ -151,7 +151,7 @@ export default function HowTo() {
                   <div className="flex items-start justify-between gap-3 pb-3 pt-1">
                     <ol className="space-y-2 list-decimal list-inside flex-1">
                       {entry.steps.map((step, i) => (
-                        <li key={i} className="text-[13px] leading-relaxed text-muted-foreground">
+                        <li key={i} className="text-sm leading-relaxed text-muted-foreground">
                           {highlight(step, highlightTerms)}
                         </li>
                       ))}
@@ -159,7 +159,7 @@ export default function HowTo() {
                     {entry.path && (
                       <Link
                         to={entry.path}
-                        className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline whitespace-nowrap"
+                        className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline whitespace-nowrap"
                       >
                         Go there <ArrowRight className="h-3 w-3" />
                       </Link>

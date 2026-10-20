@@ -689,7 +689,7 @@ export default function PatientsBill() {
       pending: 'bg-sky-50 text-sky-700 border-sky-200',
     };
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
         {status || 'pending'}
       </span>
     );
@@ -754,7 +754,7 @@ export default function PatientsBill() {
                   </label>
                   <button
                     type="button"
-                    className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+                    className="text-xs text-primary hover:underline flex items-center gap-0.5"
                     onClick={() => {
                       const next = !showDepositHistory;
                       setShowDepositHistory(next);
@@ -767,15 +767,15 @@ export default function PatientsBill() {
 
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Deposited</div>
+                    <div className="text-xs text-muted-foreground">Deposited</div>
                     <div className="text-sm font-semibold">{(depositBalance?.totalDeposited ?? 0).toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Used</div>
+                    <div className="text-xs text-muted-foreground">Used</div>
                     <div className="text-sm font-semibold">{(depositBalance?.totalUsed ?? 0).toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Remaining</div>
+                    <div className="text-xs text-muted-foreground">Remaining</div>
                     <div className="text-sm font-bold text-primary">{(depositBalance?.balance ?? 0).toFixed(2)}</div>
                   </div>
                 </div>
@@ -798,13 +798,13 @@ export default function PatientsBill() {
                 {showDepositHistory && (
                   <div className="border-t pt-2 mt-1">
                     {loadingDepositHistory ? (
-                      <div className="text-[11px] text-muted-foreground text-center py-2">Loading...</div>
+                      <div className="text-xs text-muted-foreground text-center py-2">Loading...</div>
                     ) : depositHistory.length === 0 ? (
-                      <div className="text-[11px] text-muted-foreground text-center py-2">No deposit activity yet.</div>
+                      <div className="text-xs text-muted-foreground text-center py-2">No deposit activity yet.</div>
                     ) : (
                       <div className="max-h-36 overflow-auto space-y-1">
                         {depositHistory.map((tx: any) => (
-                          <div key={tx.id} className="flex justify-between items-center text-[11px]">
+                          <div key={tx.id} className="flex justify-between items-center text-xs">
                             <span className="capitalize text-muted-foreground">
                               {tx.type.replace('_', ' ')} · {new Date(tx.created_at).toLocaleDateString()}
                             </span>
@@ -943,7 +943,7 @@ export default function PatientsBill() {
                 return (
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Items</label>
-                    <p className="text-[11px] text-muted-foreground mb-1">Check items to pay for just those — the amount follows your selection. Leave unchecked to pay the full balance below.</p>
+                    <p className="text-xs text-muted-foreground mb-1">Check items to pay for just those — the amount follows your selection. Leave unchecked to pay the full balance below.</p>
                     <div className="border rounded-lg divide-y max-h-40 overflow-auto">
                       {payable.map(({ s, i }) => (
                         <label key={i} className="flex items-center gap-2 p-2 text-sm cursor-pointer hover:bg-muted/40">
@@ -954,7 +954,7 @@ export default function PatientsBill() {
                       ))}
                     </div>
                     {settledCount > 0 && (
-                      <p className="text-[11px] text-muted-foreground mt-1">{settledCount} other item{settledCount > 1 ? 's' : ''} on this bill {settledCount > 1 ? 'are' : 'is'} already paid, voided, or invoiced.</p>
+                      <p className="text-xs text-muted-foreground mt-1">{settledCount} other item{settledCount > 1 ? 's' : ''} on this bill {settledCount > 1 ? 'are' : 'is'} already paid, voided, or invoiced.</p>
                     )}
                   </div>
                 );

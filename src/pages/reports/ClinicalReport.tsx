@@ -182,7 +182,7 @@ export default function ClinicalReport() {
       { key: 'gender', header: 'Gender', sortable: true },
       { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
       { key: 'visitDate', header: 'Registered', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
-      { key: 'source', header: 'Registry', render: v => <span className="text-[11px] uppercase text-muted-foreground">{v}</span> },
+      { key: 'source', header: 'Registry', render: v => <span className="text-xs uppercase text-muted-foreground">{v}</span> },
     ];
     csvColumns = [{ header: 'First Name', key: 'firstName' }, { header: 'Last Name', key: 'lastName' }, { header: 'Age', key: 'age' }, { header: 'Gender', key: 'gender' }, { header: 'Branch', key: 'branchName' }, { header: 'Registered', key: 'visitDate', transform: v => fmtDate(v) }];
   } else if (option.mode === 'workload') {

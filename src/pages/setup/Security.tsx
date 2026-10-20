@@ -617,7 +617,7 @@ const Security: React.FC = () => {
             <div className="bg-card rounded-lg border shadow-sm p-4 lg:sticky lg:top-4">
               <div className="flex items-center gap-2 mb-4">
                 <UserPlus className="w-5 h-5 text-primary" />
-                <h2 className="font-semibold text-[15px]">Create New User</h2>
+                <h2 className="font-semibold text-base">Create New User</h2>
               </div>
 
               <form onSubmit={handleCreateUser} className="space-y-4">
@@ -925,7 +925,7 @@ const Security: React.FC = () => {
                             />
                             <span>
                               {p.name}
-                              {p.module && <span className="block text-[11px] text-muted-foreground">{p.module}</span>}
+                              {p.module && <span className="block text-xs text-muted-foreground">{p.module}</span>}
                             </span>
                           </label>
                         ))
@@ -1004,7 +1004,7 @@ const Security: React.FC = () => {
                             />
                             <span>
                               {p.name}
-                              {p.module && <span className="block text-[11px] text-muted-foreground">{p.module}</span>}
+                              {p.module && <span className="block text-xs text-muted-foreground">{p.module}</span>}
                             </span>
                           </label>
                         ))

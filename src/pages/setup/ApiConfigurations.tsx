@@ -209,11 +209,11 @@ const ApiConfigurations: React.FC = () => {
                         </p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {isActive ? (
-                            <span className="text-[10px] text-green-600 font-medium flex items-center gap-1">
+                            <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                               <CheckCircle className="w-2.5 h-2.5" /> Active
                             </span>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <AlertCircle className="w-2.5 h-2.5" /> No token
                             </span>
                           )}

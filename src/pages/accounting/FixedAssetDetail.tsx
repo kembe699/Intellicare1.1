@@ -187,7 +187,7 @@ export default function FixedAssetDetail() {
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Acquisition Cost</p>
                 <p className="text-lg font-bold font-mono leading-tight truncate">{fmt(asset.acquisition_cost_original ?? asset.acquisition_cost)} {asset.acquisition_currency || ''}</p>
-                {hasFxNote && <p className="text-[11px] text-muted-foreground mt-0.5">= {fmt(asset.acquisition_cost)} base (rate {Number(asset.acquisition_exchange_rate).toFixed(4)})</p>}
+                {hasFxNote && <p className="text-xs text-muted-foreground mt-0.5">= {fmt(asset.acquisition_cost)} base (rate {Number(asset.acquisition_exchange_rate).toFixed(4)})</p>}
               </div>
             </div>
             <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">

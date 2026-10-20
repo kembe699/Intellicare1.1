@@ -371,13 +371,13 @@ export default function EmployeeProfile() {
                           <tbody className="divide-y">
                             {consultTrace.consultations.map((c: any, i: number) => (
                               <tr key={i}>
-                                <td className="px-3 py-2">{new Date(c.visit_date).toLocaleDateString()}{c.shared && <span className="ml-1.5 text-[10px] text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
+                                <td className="px-3 py-2">{new Date(c.visit_date).toLocaleDateString()}{c.shared && <span className="ml-1.5 text-xs text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
                                 <td className="px-3 py-2 text-right font-mono">{c.currency} {c.billed_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-right font-mono font-medium">{c.currency} {c.collected_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-center">
                                   {c.already_billed
-                                    ? <span className="text-[11px] text-muted-foreground">already billed</span>
-                                    : <span className="text-[11px] text-emerald-700">billable</span>}
+                                    ? <span className="text-xs text-muted-foreground">already billed</span>
+                                    : <span className="text-xs text-emerald-700">billable</span>}
                                 </td>
                               </tr>
                             ))}
@@ -408,7 +408,7 @@ export default function EmployeeProfile() {
                                 {creatingBill ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Receipt className="w-4 h-4 mr-2" />}
                                 Create Bill
                               </Button>
-                              {!employee.consultation_fee_percentage && <p className="text-[11px] text-amber-600">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
+                              {!employee.consultation_fee_percentage && <p className="text-xs text-amber-600">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
                             </>
                           )}
                         </div>

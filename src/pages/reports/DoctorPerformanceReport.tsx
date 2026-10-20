@@ -156,7 +156,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Doctors Active</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Doctors Active</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.totalDoctorsActive)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">in selected period</p>
                 </div>
@@ -167,7 +167,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Patients Seen</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Patients Seen</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.totalPatientsSeen)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">distinct patients, doctor-attributed visits</p>
                 </div>
@@ -178,7 +178,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Visits</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Visits</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.totalVisits)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">attributed to an active doctor</p>
                 </div>
@@ -189,7 +189,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Revenue Attributed</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Revenue Attributed</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(displaySummary?.totalRevenueAttributed)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">approximate — see note below</p>
                 </div>

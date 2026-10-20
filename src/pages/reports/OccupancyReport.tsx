@@ -181,7 +181,7 @@ export default function OccupancyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Beds</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Beds</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(summary.total_beds)}</p>
                 </div>
                 <BedDouble className="h-5 w-5 text-primary" />
@@ -190,7 +190,7 @@ export default function OccupancyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Occupied Beds</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Occupied Beds</p>
                   <p className="text-2xl font-bold mt-1 text-red-700">{fmtCount(summary.occupied_beds)}</p>
                 </div>
                 <UserCheck className="h-5 w-5 text-primary" />
@@ -199,7 +199,7 @@ export default function OccupancyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Available Beds</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Available Beds</p>
                   <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCount(summary.available_beds)}</p>
                 </div>
                 <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -208,7 +208,7 @@ export default function OccupancyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Occupancy Rate</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Occupancy Rate</p>
                   <p className="text-2xl font-bold mt-1 text-primary">{fmtNum(summary.occupancy_rate, 1)}%</p>
                 </div>
                 <Percent className="h-5 w-5 text-primary" />
@@ -218,7 +218,7 @@ export default function OccupancyReport() {
               <div className="bg-card rounded-lg border shadow-sm p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Other / Maintenance</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Other / Maintenance</p>
                     <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCount(summary.maintenance_beds)}</p>
                   </div>
                   <Wrench className="h-5 w-5 text-primary" />
@@ -302,7 +302,7 @@ export default function OccupancyReport() {
                 { key: 'room_number', header: 'Room', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 { key: 'bed_number', header: 'Bed', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
                 { key: 'bed_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
-                { key: 'status', header: 'Status', sortable: true, render: (v) => <StatusBadge status={v} map={bedStatusToneMap} className="text-[10px] px-2 py-0.5" /> },
+                { key: 'status', header: 'Status', sortable: true, render: (v) => <StatusBadge status={v} map={bedStatusToneMap} className="text-xs px-2 py-0.5" /> },
               ]}
             />
           </div>
@@ -338,15 +338,15 @@ export default function OccupancyReport() {
 
             <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 border-b">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Admissions in Period</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Admissions in Period</p>
                 <p className="text-xl font-bold mt-1">{fmtCount(trend.totalAdmissionsInPeriod)}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Currently Active (all-time)</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Currently Active (all-time)</p>
                 <p className="text-xl font-bold mt-1">{fmtCount(trend.currentActiveAdmissions)}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Avg. Length of Stay</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Avg. Length of Stay</p>
                 <p className="text-sm font-semibold mt-1.5 text-muted-foreground">{losLabel}</p>
               </div>
             </div>

@@ -565,9 +565,9 @@ const JournalEntriesPage: React.FC = () => {
               emptyMessage={journalEntries.length === 0 ? 'No journal entries found. Click "New Journal Entry" to create one.' : 'No entries match your search criteria.'}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
-                { key: 'je_number', header: 'JE Number', sortable: true, render: (v) => <span className="font-mono text-[13px] font-medium">{v}</span> },
-                { key: 'entry_date', header: 'Date', sortable: true, render: (v) => <span className="text-[13px]">{new Date(v).toLocaleDateString()}</span> },
-                { key: 'description', header: 'Description', render: (v) => <p className="text-[13px] truncate max-w-[200px]">{v}</p> },
+                { key: 'je_number', header: 'JE Number', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{v}</span> },
+                { key: 'entry_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{new Date(v).toLocaleDateString()}</span> },
+                { key: 'description', header: 'Description', render: (v) => <p className="text-sm truncate max-w-[200px]">{v}</p> },
                 {
                   key: 'transaction_currency', header: 'Currency',
                   render: (v, entry) => (
@@ -579,8 +579,8 @@ const JournalEntriesPage: React.FC = () => {
                     </>
                   ),
                 },
-                { key: 'base_total_debit', header: `Debit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-[13px] font-medium">{formatCurrency(v ?? 0)}</span> },
-                { key: 'base_total_credit', header: `Credit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-[13px] font-medium">{formatCurrency(v ?? 0)}</span> },
+                { key: 'base_total_debit', header: `Debit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{formatCurrency(v ?? 0)}</span> },
+                { key: 'base_total_credit', header: `Credit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{formatCurrency(v ?? 0)}</span> },
                 { key: 'status', header: 'Status', align: 'center', sortable: true, render: (v) => <StatusBadge status={v} map={JE_STATUS_TONE_MAP} /> },
                 {
                   key: '__actions', header: 'Actions', align: 'center',

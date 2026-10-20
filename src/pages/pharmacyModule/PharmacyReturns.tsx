@@ -146,7 +146,7 @@ export default function PharmacyReturns() {
                 {refundedToday > 0 && <> · today <strong className="text-foreground">{fmt(refundedToday)}</strong></>}
               </span>
               <span
-                className="text-[11px] text-muted-foreground"
+                className="text-xs text-muted-foreground"
                 title="Each refund posts a journal entry: pharmacy revenue is debited and cash at hand credited, so the income statement and cash balance both reflect the money returned."
               >
                 Refunds reduce pharmacy revenue and cash at hand in the accounts.

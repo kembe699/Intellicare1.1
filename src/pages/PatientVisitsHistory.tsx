@@ -245,7 +245,7 @@ export default function PatientVisitsHistory() {
         {/* Visits Table */}
         <div className="ic-card">
           <div className="ic-card-header">
-            <span className="font-semibold text-[13px] text-foreground">Patient Visits ({visits.length})</span>
+            <span className="font-semibold text-sm text-foreground">Patient Visits ({visits.length})</span>
           </div>
           <div className="ic-card-body">
             <div className="overflow-x-auto">

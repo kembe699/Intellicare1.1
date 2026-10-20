@@ -162,7 +162,7 @@ export default function PayrollManagement() {
                 value={form.payment_account_id} onChange={v => setForm({ ...form, payment_account_id: v })}
                 placeholder="Select account..." searchPlaceholder="Search accounts..." className="mt-1"
               />
-              <p className="text-[11px] text-muted-foreground mt-1">Can also be set later, before approving this run.</p>
+              <p className="text-xs text-muted-foreground mt-1">Can also be set later, before approving this run.</p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}>Cancel</Button>

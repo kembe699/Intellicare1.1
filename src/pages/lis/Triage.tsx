@@ -110,7 +110,7 @@ export default function Triage() {
       render: (v) => {
         const triaged = hasVitals(v);
         return (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${triaged ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${triaged ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
             {triaged ? 'Triaged' : 'Not Triaged'}
           </span>
         );
@@ -162,7 +162,7 @@ export default function Triage() {
                 )}
               </div>
               {selected?.triaged_by_name && (
-                <span className="text-[11px] text-muted-foreground text-right">
+                <span className="text-xs text-muted-foreground text-right">
                   Previously triaged by {selected.triaged_by_name}
                   {selected.triaged_at && <><br />{new Date(selected.triaged_at).toLocaleString()}</>}
                 </span>
