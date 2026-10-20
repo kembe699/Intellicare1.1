@@ -43,10 +43,10 @@ function bootSonner() {
         close: <X className="h-4 w-4" />,
       }}
       toastOptions={{
-        // Success stays at sonner's 4s default unless a call site overrides
-        // it; error has no default here — src/lib/notify.ts's `toast`
-        // wrapper is what actually sets error's duration to Infinity, since
-        // per-type durations aren't configurable at the Toaster level.
+        // Durations aren't set here — per-type durations aren't configurable
+        // at the Toaster level. src/lib/notify.ts's `toast` wrapper sets
+        // success to 4s and error to 6s (both auto-close; error just gets a
+        // bit longer since there's usually more to read).
         classNames: {
           toast:
             "group toast group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:border-border group-[.toaster]:shadow-md group-[.toaster]:rounded-lg group-[.toaster]:p-4",

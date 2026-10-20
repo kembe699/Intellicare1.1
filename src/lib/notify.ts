@@ -4,10 +4,9 @@ import { toast as sonnerToast, type ExternalToast } from 'sonner';
  * Drop-in replacement for `import { toast } from 'sonner'` — same shape and
  * call signatures, so every one of the app's ~1300 existing
  * `toast.success(...)` / `toast.error(...)` call sites keeps working
- * unchanged. The difference: `success` now auto-closes after 4s and
- * `error` now stays until the user dismisses it (optionally with a Retry
- * action), matching the Option B toast spec, instead of every call site
- * having to opt into that behavior individually.
+ * unchanged. Both `success` and `error` auto-close on their own (error gets
+ * a bit longer, since there's usually more to read) — a call site can still
+ * pass its own `duration` to override this for a specific toast.
  *
  * To adopt it, a file only needs to change its import from 'sonner' to
  * '@/lib/notify' — nothing else. (For new code, prefer the simpler
@@ -19,7 +18,7 @@ export const toast: typeof sonnerToast = Object.assign(
     success: (message: Parameters<typeof sonnerToast.success>[0], data?: ExternalToast) =>
       sonnerToast.success(message, { duration: 4000, ...data }),
     error: (message: Parameters<typeof sonnerToast.error>[0], data?: ExternalToast) =>
-      sonnerToast.error(message, { duration: Infinity, ...data }),
+      sonnerToast.error(message, { duration: 6000, ...data }),
     info: sonnerToast.info,
     warning: sonnerToast.warning,
     message: sonnerToast.message,
@@ -37,7 +36,7 @@ export const notify = {
   success(title: string, description?: string) {
     return toast.success(title, { description });
   },
-  /** Stays on screen until dismissed. Pass `retry` to add a "Retry" action button. */
+  /** Auto-closes after 6s, same as success just a bit longer. Pass `retry` to add a "Retry" action button. */
   error(title: string, description?: string, retry?: () => void) {
     return toast.error(title, {
       description,
