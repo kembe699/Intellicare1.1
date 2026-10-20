@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { usePDFDocument } from '@/hooks/usePDFDocument';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import RecordPaymentModal from '@/components/billing/RecordPaymentModal';
@@ -236,16 +237,14 @@ export default function Invoices() {
       </div>
 
       {/* Invoice Detail Modal */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+      <Dialog open={!!selectedInvoice} onOpenChange={(open) => { if (!open) closeDetail(); }}>
+        <DialogContent className="p-0 max-w-lg max-h-[90vh] flex flex-col">
+          {selectedInvoice && (
+          <>
+            <div className="flex justify-between items-center p-4 pr-12 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> {selectedInvoice.invoice_number}
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeDetail}>
-                <X className="w-4 h-4" />
-              </Button>
             </div>
 
             <div className="p-6 flex-1 overflow-auto space-y-4">
@@ -355,9 +354,10 @@ export default function Invoices() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Record Payment Modal */}
       {showPaymentModal && selectedInvoice && (

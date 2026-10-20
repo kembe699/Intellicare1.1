@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye, X } from 'lucide-react';
+import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { authFetch } from '@/api/apiClient';
@@ -8,6 +8,7 @@ import { ReportLetterhead } from './ReportLetterhead';
 import { StatusBadge, StatusBadgeTone, LoadingState } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { fmtCount, fmtDate, CsvColumn, getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
@@ -500,17 +501,15 @@ export default function AuditSummaryReport() {
     </ReportSubPageShell>
 
     {/* ── Action detail modal — before/after values for a void, cancel, update, etc. ── */}
-    {detailRow && (
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetailRow(null)}>
-        <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+    <Dialog open={!!detailRow} onOpenChange={(open) => { if (!open) setDetailRow(null); }}>
+      <DialogContent className="p-0 max-w-2xl max-h-[85vh] flex flex-col">
+        {detailRow && (
+        <>
+          <div className="flex justify-between items-center p-4 pr-12 border-b bg-muted/30">
             <div>
               <h3 className="font-semibold text-sm">{humanizeAction(detailRow.action)}</h3>
               <p className="text-xs text-muted-foreground">{detailRow.userName} · {fmtDateTime(detailRow.createdAt)}</p>
             </div>
-            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1 hover:bg-muted transition-colors" onClick={() => setDetailRow(null)} aria-label="Close">
-              <X className="w-4 h-4" />
-            </button>
           </div>
           <div className="p-4 space-y-4 overflow-auto">
             {detailRow.description && (
@@ -552,9 +551,10 @@ export default function AuditSummaryReport() {
               <p className="text-xs text-muted-foreground italic">No before/after values recorded for this action.</p>
             )}
           </div>
-        </div>
-      </div>
-    )}
+        </>
+        )}
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

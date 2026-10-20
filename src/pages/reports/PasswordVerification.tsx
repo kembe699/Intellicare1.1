@@ -18,6 +18,18 @@ export default function PasswordVerification() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // This is a full-route security gate, not a floating modal over other
+  // content (there's nothing underneath to scroll-lock or trap focus
+  // against) — so Escape-to-close is the one missing-modal-behavior that
+  // actually applies, matching the existing click-outside-to-leave gesture.
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') navigate('/dashboard');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate]);
+
   // If already verified, redirect
   React.useEffect(() => {
     const isVerified = sessionStorage.getItem('reports_verified');

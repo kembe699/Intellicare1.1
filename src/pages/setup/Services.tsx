@@ -997,18 +997,14 @@ const Services: React.FC = () => {
       </div>
 
       {/* Bulk Price Adjustment Modal */}
-      {showPriceAdjustment && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment
-              </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowPriceAdjustment(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="p-6 space-y-4">
+      <Dialog open={showPriceAdjustment} onOpenChange={setShowPriceAdjustment}>
+        <DialogContent className="p-0 max-w-md flex flex-col">
+          <div className="flex justify-between items-center p-4 pr-12 border-b bg-muted/30">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment
+            </h3>
+          </div>
+          <div className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">
                 Raise or lower the price on every matching service in one step, instead of editing services one at a time.
               </p>
@@ -1117,19 +1113,18 @@ const Services: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowPriceAdjustment(false)} disabled={applyingPriceAdj}>Cancel</Button>
-              <Button
-                onClick={handleApplyPriceAdjustment}
-                disabled={applyingPriceAdj || (priceAdjForm.mode === 'percentage' ? !priceAdjForm.percentage : !priceAdjForm.newRate)}
-              >
-                {applyingPriceAdj ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Percent className="w-4 h-4 mr-2" />}
-                {applyingPriceAdj ? 'Applying...' : 'Apply Adjustment'}
-              </Button>
-            </div>
+          <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowPriceAdjustment(false)} disabled={applyingPriceAdj}>Cancel</Button>
+            <Button
+              onClick={handleApplyPriceAdjustment}
+              disabled={applyingPriceAdj || (priceAdjForm.mode === 'percentage' ? !priceAdjForm.percentage : !priceAdjForm.newRate)}
+            >
+              {applyingPriceAdj ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Percent className="w-4 h-4 mr-2" />}
+              {applyingPriceAdj ? 'Applying...' : 'Apply Adjustment'}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };

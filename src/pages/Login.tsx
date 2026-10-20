@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, Eye, EyeOff, Shield, Lock, CheckCircle2, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
@@ -286,15 +287,23 @@ const Login: React.FC = () => {
       </div>
 
       {/* Forgot Password Modal */}
-      {showForgotPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Forgot Password?</h2>
-            <p className="text-slate-600 mb-6">Enter your instance code and email address and we'll send you a link to reset your password.</p>
+      <Dialog
+        open={showForgotPassword}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowForgotPassword(false);
+            setForgotPasswordCode('');
+            setForgotPasswordEmail('');
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl p-8 w-full max-w-md">
+            <h2 className="text-2xl font-bold text-heading mb-2">Forgot Password?</h2>
+            <p className="text-muted-foreground mb-6">Enter your instance code and email address and we'll send you a link to reset your password.</p>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="forgotCode" className="text-sm font-semibold text-slate-700">
+                <Label htmlFor="forgotCode" className="text-sm font-semibold text-label">
                   Instance Code
                 </Label>
                 <Input
@@ -304,20 +313,12 @@ const Login: React.FC = () => {
                   onChange={(e) => setForgotPasswordCode(e.target.value)}
                   placeholder="e.g. nationmc"
                   autoFocus
-                  className="h-12 pl-4 pr-4 text-base border-slate-300 rounded-lg"
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#3D8A97';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '';
-                    e.currentTarget.style.boxShadow = '';
-                  }}
+                  className="pl-4 pr-4 text-base rounded-lg"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="forgotEmail" className="text-sm font-semibold text-slate-700">
+                <Label htmlFor="forgotEmail" className="text-sm font-semibold text-label">
                   Email Address
                 </Label>
                 <Input
@@ -326,15 +327,7 @@ const Login: React.FC = () => {
                   value={forgotPasswordEmail}
                   onChange={(e) => setForgotPasswordEmail(e.target.value)}
                   placeholder="you@hospital.com"
-                  className="h-12 pl-4 pr-4 text-base border-slate-300 rounded-lg"
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#3D8A97';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '';
-                    e.currentTarget.style.boxShadow = '';
-                  }}
+                  className="pl-4 pr-4 text-base rounded-lg"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       handleForgotPassword();
@@ -347,7 +340,7 @@ const Login: React.FC = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1 h-12 border-2 border-slate-300 hover:bg-slate-50 font-medium rounded-lg"
+                  className="flex-1 h-12 font-medium rounded-lg"
                   onClick={() => {
                     setShowForgotPassword(false);
                     setForgotPasswordCode('');
@@ -374,9 +367,8 @@ const Login: React.FC = () => {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
           </div>
         </div>
