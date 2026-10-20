@@ -21,6 +21,7 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
 import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo, GynaeFieldsReadOnly } from '@/components/clinical/GynaeFields';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -2883,7 +2884,7 @@ export default function LISTestOrders() {
                         <span className="font-semibold text-foreground">Tests:</span> {order.specimens.map((s: any) => s.test_name).join(', ')}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Approved: {new Date(order.updated_at).toLocaleDateString()}
+                        Approved: {formatDate(order.updated_at)}
                       </div>
                     </button>
                   ))
@@ -3045,7 +3046,7 @@ export default function LISTestOrders() {
                       {selectedSummary.appointment_id && (
                         <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-violet-50 text-violet-700 border border-violet-200">
                           <CalendarClock className="w-3.5 h-3.5" />
-                          Follow-up appointment{selectedSummary.appointment_date ? ` (booked for ${new Date(selectedSummary.appointment_date).toLocaleDateString()})` : ''}
+                          Follow-up appointment{selectedSummary.appointment_date ? ` (booked for ${formatDate(selectedSummary.appointment_date)})` : ''}
                           {selectedSummary.appointment_reason ? ` — ${selectedSummary.appointment_reason}` : ''}
                         </div>
                       )}

@@ -13,6 +13,7 @@ import {
   Check, Loader2,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface Transaction {
   id: string;
@@ -338,7 +339,7 @@ export default function StockTransactions() {
                 pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                 columns={[
                   { key: 'transaction_number', header: 'Txn No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : ''}</span> },
+                  { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : ''}</span> },
                   {
                     key: 'item_name', header: 'Item', sortable: true,
                     render: (v, tx) => (

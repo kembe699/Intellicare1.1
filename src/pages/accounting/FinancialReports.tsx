@@ -14,6 +14,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { apiFetch, formatCurrency, getAccountTypeColor, TrialBalance, TrialBalanceAccount } from '@/utils/accountingApi';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { formatDate } from '@/lib/format';
 
 interface IncomeStatement {
   revenue: { items: any[]; total: number };
@@ -213,7 +214,7 @@ const FinancialReports: React.FC = () => {
                   <CardTitle className="flex items-center gap-2">
                     <Calculator className="w-5 h-5" /> Trial Balance
                   </CardTitle>
-                  <CardDescription>As of {new Date().toLocaleDateString()}</CardDescription>
+                  <CardDescription>As of {formatDate(new Date())}</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   {trialBalance.is_balanced
@@ -279,7 +280,7 @@ const FinancialReports: React.FC = () => {
                     <TrendingUp className="w-5 h-5" /> Income Statement (P&L)
                   </CardTitle>
                   <CardDescription>
-                    Period: {new Date(startDate).toLocaleDateString()} &mdash; {new Date(endDate).toLocaleDateString()}
+                    Period: {formatDate(startDate)} &mdash; {formatDate(endDate)}
                   </CardDescription>
                   {/* This statement stays on an accrual footing so it agrees with
                       the trial balance and balance sheet beside it — a balance
@@ -427,7 +428,7 @@ const FinancialReports: React.FC = () => {
                     <CardTitle className="flex items-center gap-2">
                       <PieChart className="w-5 h-5" /> Balance Sheet
                     </CardTitle>
-                    <CardDescription>As of {new Date().toLocaleDateString()}</CardDescription>
+                    <CardDescription>As of {formatDate(new Date())}</CardDescription>
                   </div>
                   <Badge className={isBalanced
                     ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'

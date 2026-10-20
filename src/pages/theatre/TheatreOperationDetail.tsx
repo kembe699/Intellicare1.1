@@ -22,6 +22,7 @@ import {
   TheatreOperation, PHASE_LABEL, STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE,
   patientName, formatDuration, StockLocation, StockItemOption, ROLE_LABEL,
 } from './theatreShared';
+import { formatDate } from '@/lib/format';
 
 type TeamRole = 'surgeon' | 'anesthetist' | 'scrub_nurse';
 const TEAM_ROLES: TeamRole[] = ['surgeon', 'anesthetist', 'scrub_nurse'];
@@ -426,7 +427,7 @@ export default function TheatreOperationDetail() {
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {patientVisits.slice(0, 5).map((v: any, i: number) => (
                     <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0 space-y-1.5">
-                      <p className="font-medium">{v.created_at ? new Date(v.created_at).toLocaleDateString() : ''}</p>
+                      <p className="font-medium">{v.created_at ? formatDate(v.created_at) : ''}</p>
                       {v.vitals && <p className="text-muted-foreground">Vitals: {Object.entries(v.vitals).filter(([, val]) => val).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</p>}
                       {v.tests?.map((t: any) => {
                         const results = labResultsBySpecimen[t.id];

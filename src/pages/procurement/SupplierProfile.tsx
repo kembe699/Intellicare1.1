@@ -15,6 +15,7 @@ import {
   Building2, Edit, Star, Phone, Mail, MapPin, CheckCircle, Ban, Loader2,
   Check, Receipt, Plus, FileText, ArrowLeft, Truck, Wallet, Clock, ClipboardList,
 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 const SUPPLIER_STATUS_TONE: Record<string, StatusBadgeTone> = {
   active: 'success',
@@ -388,7 +389,7 @@ export default function SupplierProfile() {
                         {bills.map((b: any) => (
                           <tr key={b.id}>
                             <td className="px-4 py-2.5 font-mono text-primary">{b.po_number}</td>
-                            <td className="px-4 py-2.5 text-muted-foreground">{new Date(b.order_date).toLocaleDateString()}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground">{formatDate(b.order_date)}</td>
                             <td className="px-4 py-2.5"><StatusBadge status={b.status} label={b.status} map={PO_STATUS_TONE} /></td>
                             <td className="px-4 py-2.5 text-right font-mono">{formatInCurrency(b.total_amount, b.po_currency)}</td>
                             <td className="px-4 py-2.5 text-right font-mono">{formatInCurrency(b.paid_amount, b.po_currency)}</td>

@@ -17,6 +17,7 @@ import { toast } from '@/lib/notify';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { DepositReceipt } from '@/components/receipts/DepositReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -806,7 +807,7 @@ export default function PatientsBill() {
                         {depositHistory.map((tx: any) => (
                           <div key={tx.id} className="flex justify-between items-center text-xs">
                             <span className="capitalize text-muted-foreground">
-                              {tx.type.replace('_', ' ')} · {new Date(tx.created_at).toLocaleDateString()}
+                              {tx.type.replace('_', ' ')} · {formatDate(tx.created_at)}
                             </span>
                             <span className={`font-medium ${tx.type === 'deposit' || tx.type === 'usage_reversal' ? 'text-emerald-600' : 'text-red-600'}`}>
                               {tx.type === 'deposit' || tx.type === 'usage_reversal' ? '+' : '-'}{parseFloat(tx.amount).toFixed(2)}
@@ -1320,7 +1321,7 @@ export default function PatientsBill() {
                 <span className="text-muted-foreground">Amount Due</span>
                 <span className="text-right font-bold">{parseFloat(invoiceData.balance_due).toFixed(2)}</span>
                 <span className="text-muted-foreground">Due Date</span>
-                <span className="text-right">{new Date(invoiceData.due_date).toLocaleDateString()}</span>
+                <span className="text-right">{formatDate(invoiceData.due_date)}</span>
               </div>
             </div>
             <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">

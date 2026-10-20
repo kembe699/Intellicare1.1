@@ -20,6 +20,7 @@ import {
 import * as docTemplate from '@/utils/documentTemplate';
 import { expenseVoucherStatus } from '@/lib/expenseStatus';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface Expense {
   id: number; expense_date: string; description: string; amount: string;
@@ -122,7 +123,7 @@ export default function ExpenseDetail() {
 
     const approvalsRows = [1, 2].map(level => {
       const a = approvals.find(ap => ap.approval_level === level);
-      return { cells: [APPROVAL_LEVELS[level - 1], a ? a.approved_by : '—', a ? new Date(a.approved_at).toLocaleDateString() : '—', a ? '✓ Approved' : 'Pending'], bold: !!a };
+      return { cells: [APPROVAL_LEVELS[level - 1], a ? a.approved_by : '—', a ? formatDate(a.approved_at) : '—', a ? '✓ Approved' : 'Pending'], bold: !!a };
     });
     const signers = [
       { label: 'Prepared By', name: expense.created_by || '' },
@@ -138,7 +139,7 @@ export default function ExpenseDetail() {
     const body = docTemplate.buildInfoGrid(
       { title: 'Voucher Details', rows: [
         { label: 'Voucher No', value: expense.voucher_number || '—', bold: true },
-        { label: 'Date', value: new Date(expense.expense_date).toLocaleDateString() },
+        { label: 'Date', value: formatDate(expense.expense_date) },
         { label: 'Prepared By', value: expense.created_by || '—' },
       ]},
       { title: 'Payment', rows: [
@@ -203,7 +204,7 @@ export default function ExpenseDetail() {
           <div className="flex-1">
             <h1 className="ic-text-title tracking-tight">{expense.description}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Expense #{expense.id} &nbsp;·&nbsp; {new Date(expense.expense_date).toLocaleDateString()}
+              Expense #{expense.id} &nbsp;·&nbsp; {formatDate(expense.expense_date)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -241,7 +242,7 @@ export default function ExpenseDetail() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="flex items-center gap-2 text-sm text-muted-foreground"><Calendar className="w-4 h-4" />Date</span>
-                  <span className="font-medium text-sm">{new Date(expense.expense_date).toLocaleDateString()}</span>
+                  <span className="font-medium text-sm">{formatDate(expense.expense_date)}</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="flex items-center gap-2 text-sm text-muted-foreground"><Tag className="w-4 h-4" />Category</span>
@@ -295,7 +296,7 @@ export default function ExpenseDetail() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm">{APPROVAL_LEVELS[level - 1]}</p>
                         {a ? (
-                          <p className="text-xs text-green-700">{a.approved_by} &nbsp;·&nbsp; {new Date(a.approved_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-green-700">{a.approved_by} &nbsp;·&nbsp; {formatDate(a.approved_at)}</p>
                         ) : isNext ? (
                           <p className="text-xs text-amber-600">Awaiting your approval</p>
                         ) : (

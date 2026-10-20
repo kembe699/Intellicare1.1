@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from 'recharts';
 import { toast } from '@/lib/notify';
+import { formatDate } from '@/lib/format';
 
 interface DashboardStats {
   totalPatients: number;
@@ -619,7 +620,7 @@ const Dashboard: React.FC = () => {
                 { key: 'patient_name', header: 'Patient', sortable: true },
                 { key: 'payment_method', header: 'Method', sortable: true, render: (v) => <span className="capitalize">{v}</span> },
                 { key: 'payment_amount', header: 'Amount', align: 'right', sortable: true, render: (v) => fmt(v) },
-                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString() },
+                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => formatDate(v) },
               ]}
             />
             </>

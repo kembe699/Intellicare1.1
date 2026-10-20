@@ -15,6 +15,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from '@/lib/notify';
 import * as docTemplate from '@/utils/documentTemplate';
 import { type ReferralRow, REFERRAL_STATUS_TONE } from './PatientReferrals';
+import { formatDate } from '@/lib/format';
 
 // Mirrors LISTestOrders.tsx's own print-time remark logic exactly — a
 // result's flag column is set by whoever entered it and isn't always
@@ -406,7 +407,7 @@ export default function PatientReferralDetail() {
                     {detail.prescriptions.map((p, i) => (
                       <div key={i} className="flex justify-between items-center px-3 py-2 text-sm">
                         <span>{p.drug_name}{p.dose_strength ? ` · ${p.dose_strength}` : ''}{p.frequency ? ` · ${p.frequency}` : ''}{p.duration_days ? ` · ${p.duration_days}d` : ''}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(p.prescription_date).toLocaleDateString()}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(p.prescription_date)}</span>
                       </div>
                     ))}
                   </div>

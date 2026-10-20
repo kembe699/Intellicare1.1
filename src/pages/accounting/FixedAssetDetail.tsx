@@ -14,6 +14,7 @@ import {
   Wallet, TrendingDown, Layers, UserCircle2,
 } from 'lucide-react';
 import { Asset, ChartAccount, NATURE_BADGE, NATURE_LABEL, fmt } from './fixedAssetsShared';
+import { formatDate } from '@/lib/format';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   active: 'success',
@@ -166,7 +167,7 @@ export default function FixedAssetDetail() {
             {asset.created_at && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Registered on</span>
-                <span>{new Date(asset.created_at).toLocaleDateString()}</span>
+                <span>{formatDate(asset.created_at)}</span>
               </div>
             )}
           </div>

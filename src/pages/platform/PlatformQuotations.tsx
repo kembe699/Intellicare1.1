@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, Plus, FileText, Eye } from 'lucide-react';
 import { toast } from '@/lib/notify';
+import { formatDate } from '@/lib/format';
 
 interface Customer { id: number; name: string; }
 interface QuotationRow {
@@ -259,7 +260,7 @@ const PlatformQuotations: React.FC = () => {
                   <TableCell className="font-medium text-foreground">{q.customer?.name}</TableCell>
                   <TableCell className="text-primary font-semibold">{q.currency} {Number(q.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge variant={STATUS_VARIANT[q.status]} className="capitalize">{q.status}</Badge></TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{new Date(q.valid_until).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{formatDate(q.valid_until)}</TableCell>
                   <TableCell className="text-right">
                     <Link to={`/platform-admin/quotations/${q.id}`}>
                       <Button variant="outline" size="sm"><Eye className="w-3.5 h-3.5 mr-1.5" /> View</Button>

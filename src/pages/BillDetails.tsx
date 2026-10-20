@@ -20,6 +20,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface ServiceLine {
   // Stable per-line id, assigned server-side once and never regenerated — lets
@@ -731,7 +732,7 @@ export default function BillDetails() {
     }));
 
     const paymentRows: docTemplate.TableRow[] = paymentHistory.map(p => ({
-      cells: [p.receipt_number, new Date(p.payment_date).toLocaleDateString(), p.payment_method, `${bill.bill_currency || 'SSP'} ${amt(p.payment_amount).toFixed(2)}`],
+      cells: [p.receipt_number, formatDate(p.payment_date), p.payment_method, `${bill.bill_currency || 'SSP'} ${amt(p.payment_amount).toFixed(2)}`],
     }));
 
     const bodyHTML = [
@@ -897,7 +898,7 @@ export default function BillDetails() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Bill Date</p>
-            <p className="text-sm font-medium">{new Date(bill.bill_date).toLocaleDateString()}</p>
+            <p className="text-sm font-medium">{formatDate(bill.bill_date)}</p>
           </div>
           {depositBalance && depositBalance.balance > 0 && (
             <div>
@@ -1435,7 +1436,7 @@ export default function BillDetails() {
                 <span className="text-muted-foreground">Amount Due</span>
                 <span className="text-right font-bold">{invoiceData.currency ? `${invoiceData.currency} ` : ''}{parseFloat(invoiceData.balance_due).toFixed(2)}</span>
                 <span className="text-muted-foreground">Due Date</span>
-                <span className="text-right">{new Date(invoiceData.due_date).toLocaleDateString()}</span>
+                <span className="text-right">{formatDate(invoiceData.due_date)}</span>
               </div>
             </div>
             <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">

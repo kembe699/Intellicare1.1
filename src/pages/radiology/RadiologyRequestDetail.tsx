@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from '@/lib/notify';
 import * as docTemplate from '@/utils/documentTemplate';
+import { formatDate } from '@/lib/format';
 
 interface RadiologyRequestItem {
   id: string;
@@ -53,7 +54,7 @@ function buildPrintHtml(request: RadiologyRequestItem, facilityInfo: ReturnType<
     { cells: ['Patient', `${request.first_name} ${request.last_name}`], bold: true },
     { cells: ['Patient No', request.participant_number] },
     { cells: ['Gender', request.gender || 'N/A'] },
-    { cells: ['Date of Birth', request.date_of_birth ? new Date(request.date_of_birth).toLocaleDateString() : 'N/A'] },
+    { cells: ['Date of Birth', request.date_of_birth ? formatDate(request.date_of_birth) : 'N/A'] },
     { cells: ['Exam', request.exam_name], bold: true },
     { cells: ['Requested By', request.doctor_name || '-'] },
     { cells: ['Request Date', new Date(request.request_date).toLocaleString()] },

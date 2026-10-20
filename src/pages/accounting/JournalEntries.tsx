@@ -15,6 +15,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { apiFetch, formatCurrency, Account, JournalEntry, CurrencyCode } from '@/utils/accountingApi';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const JE_STATUS_TONE_MAP: Record<string, StatusBadgeTone> = {
   draft: 'neutral',
@@ -566,7 +567,7 @@ const JournalEntriesPage: React.FC = () => {
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
                 { key: 'je_number', header: 'JE Number', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{v}</span> },
-                { key: 'entry_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{new Date(v).toLocaleDateString()}</span> },
+                { key: 'entry_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{formatDate(v)}</span> },
                 { key: 'description', header: 'Description', render: (v) => <p className="text-sm truncate max-w-[200px]">{v}</p> },
                 {
                   key: 'transaction_currency', header: 'Currency',
@@ -623,7 +624,7 @@ const JournalEntriesPage: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <Label className="text-muted-foreground text-xs">Date</Label>
-                    <p className="font-medium">{new Date(viewEntry.entry_date).toLocaleDateString()}</p>
+                    <p className="font-medium">{formatDate(viewEntry.entry_date)}</p>
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-xs">Status</Label>

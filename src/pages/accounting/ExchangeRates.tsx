@@ -21,6 +21,7 @@ import { PageHeader, LoadingState, StatusBadge } from '@/components/common';
 import { apiFetch } from '@/utils/accountingApi';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 const ACTIVE_STATUS_MAP = { active: 'success', inactive: 'neutral' } as const;
 const ADJUSTMENT_STATUS_MAP = { realized: 'success', pending: 'warning' } as const;
@@ -544,7 +545,7 @@ const ExchangeRates: React.FC = () => {
                             <StatusBadge status="active" map={ACTIVE_STATUS_MAP}
                               label={<span className="inline-flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Active</span>} />
                             <div className="text-xs text-muted-foreground mt-2">
-                              <p>{new Date(lr.effective_date).toLocaleDateString()}</p>
+                              <p>{formatDate(lr.effective_date)}</p>
                               <p className="capitalize">{lr.source}</p>
                             </div>
                           </div>
@@ -583,7 +584,7 @@ const ExchangeRates: React.FC = () => {
                     { key: 'rate', header: 'Rate', align: 'right', render: (v) => <span className="font-mono font-medium">{fmtNum(v, 4)}</span> },
                     { key: 'buy_rate', header: 'Buy', align: 'right', render: (v) => <span className="font-mono text-xs">{v ? fmtNum(v, 4) : '—'}</span> },
                     { key: 'sell_rate', header: 'Sell', align: 'right', render: (v) => <span className="font-mono text-xs">{v ? fmtNum(v, 4) : '—'}</span> },
-                    { key: 'effective_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'effective_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                     { key: 'source', header: 'Source', render: (v) => <span className="text-xs capitalize">{v}</span> },
                     {
                       key: 'is_active', header: 'Status', align: 'center',
@@ -814,7 +815,7 @@ const ExchangeRates: React.FC = () => {
                   emptyMessage="No exchange adjustments recorded yet."
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
-                    { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                     { key: 'from_currency', header: 'Currency', render: (v) => <Badge variant="outline" className="text-xs font-mono">{v}</Badge> },
                     { key: 'original_amount', header: 'Original', align: 'right', render: (v) => <span className="font-mono">{fmtNum(v)}</span> },
                     { key: 'original_rate', header: 'Rate Orig', align: 'right', render: (v) => <span className="font-mono text-xs">{fmtNum(v, 4)}</span> },
@@ -847,7 +848,7 @@ const ExchangeRates: React.FC = () => {
                   emptyMessage="No conversions recorded yet."
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
-                    { key: 'conversion_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'conversion_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                     { key: 'from_currency', header: 'From', render: (v) => <Badge variant="outline" className="text-xs font-mono">{v}</Badge> },
                     { key: 'amount_source', header: 'Amount', align: 'right', render: (v) => <span className="font-mono">{fmtNum(v)}</span> },
                     { key: 'rate_used', header: 'Rate', align: 'center', render: (v) => <span className="font-mono text-xs">{fmtNum(v, 4)}</span> },

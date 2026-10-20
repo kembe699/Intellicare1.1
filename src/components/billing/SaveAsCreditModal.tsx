@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatDate } from '@/lib/format';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import {
@@ -194,7 +195,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
               searchPlaceholder="Search..."
             />
             <p className="text-xs text-muted-foreground">
-              Due date: <span className="font-semibold">{dueDate.toLocaleDateString()}</span>
+              Due date: <span className="font-semibold">{formatDate(dueDate)}</span>
             </p>
           </div>
 
@@ -224,7 +225,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
                 </label>
                 <p className="text-xs text-muted-foreground mt-1">
                   Invoice of <span className="font-semibold">{currency} {totalAmount.toFixed(2)}</span> is due
-                  on <span className="font-semibold">{dueDate.toLocaleDateString()}</span>.
+                  on <span className="font-semibold">{formatDate(dueDate)}</span>.
                   This will be recorded as an outstanding receivable.
                 </p>
               </div>

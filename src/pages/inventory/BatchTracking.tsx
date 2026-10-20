@@ -13,6 +13,7 @@ import {
   CheckSquare, X, Check, Loader2,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface Batch {
   id: string;
@@ -424,7 +425,7 @@ export default function BatchTracking() {
                     const expBadge = expiryBadge(batch.days_to_expiry, batch.is_expired);
                     return (
                       <div>
-                        <p className="text-xs">{new Date(v).toLocaleDateString()}</p>
+                        <p className="text-xs">{formatDate(v)}</p>
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border mt-0.5 ${expBadge.className}`}>{expBadge.label}</span>
                       </div>
                     );

@@ -26,6 +26,7 @@ import {
   ClipboardCheck, Truck, AlertTriangle, FileText, Loader2, Download, FileSpreadsheet
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface GRNLine {
   id?: string;
@@ -142,7 +143,7 @@ const GoodsReceiptNotes: React.FC = () => {
       console.error('Error loading full GRN:', error);
     }
 
-    const receiptDate = new Date(fullGRN.receipt_date).toLocaleDateString();
+    const receiptDate = formatDate(fullGRN.receipt_date);
 
     const itemRows: docTemplate.TableRow[] = (fullGRN.lines || []).map((item, i) => ({
       bold: false,
@@ -154,7 +155,7 @@ const GoodsReceiptNotes: React.FC = () => {
         item.unit_of_measure,
         item.item_condition,
         item.batch_number || '-',
-        item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-'
+        item.expiry_date ? formatDate(item.expiry_date) : '-'
       ]
     }));
 
@@ -276,7 +277,7 @@ const GoodsReceiptNotes: React.FC = () => {
       { header: 'GRN Number', key: 'grn_number' },
       { header: 'PO Number', key: 'po_number' },
       { header: 'Supplier', key: 'supplier_name' },
-      { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Items', key: 'total_items_received' },
       { header: 'Status', key: 'status' },
       { header: 'Invoice Number', key: 'invoice_number', transform: (v) => v || '' },
@@ -664,7 +665,7 @@ const GoodsReceiptNotes: React.FC = () => {
                   { key: 'grn_number', header: 'GRN Number', sortable: true, render: (v) => <span className="font-mono text-xs font-medium">{v}</span> },
                   { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || '—'}</span> },
                   { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v) => <span className="text-xs">{v || '—'}</span> },
-                  { key: 'receipt_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'receipt_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{v ? formatDate(v) : '—'}</span> },
                   { key: '__items', header: 'Items', align: 'center', render: (_v, grn) => <span className="text-xs">{grn.total_items_received || grn.line_count || 0}</span> },
                   {
                     key: 'status', header: 'Status', align: 'center', sortable: true,
@@ -729,7 +730,7 @@ const GoodsReceiptNotes: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><span className="text-muted-foreground">Supplier:</span> <span className="font-medium">{selectedGRN.supplier_name}</span></div>
-                  <div><span className="text-muted-foreground">Receipt Date:</span> <span className="font-medium">{selectedGRN.receipt_date ? new Date(selectedGRN.receipt_date).toLocaleDateString() : '—'}</span></div>
+                  <div><span className="text-muted-foreground">Receipt Date:</span> <span className="font-medium">{selectedGRN.receipt_date ? formatDate(selectedGRN.receipt_date) : '—'}</span></div>
                   <div><span className="text-muted-foreground">Received By:</span> <span className="font-medium">{selectedGRN.received_by_name || '—'}</span></div>
                   <div><span className="text-muted-foreground">Location:</span> <span className="font-medium">{selectedGRN.received_location || '—'}</span></div>
                   <div><span className="text-muted-foreground">Condition:</span> <span className="font-medium capitalize">{selectedGRN.received_condition}</span></div>
@@ -773,7 +774,7 @@ const GoodsReceiptNotes: React.FC = () => {
                     },
                     { key: 'item_condition', header: 'Condition', render: (v) => <span className="capitalize">{v}</span> },
                     { key: 'batch_number', header: 'Batch', render: (v) => <span className="font-mono text-xs">{v || '—'}</span> },
-                    { key: 'expiry_date', header: 'Expiry', render: (v) => <span className="text-xs">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                    { key: 'expiry_date', header: 'Expiry', render: (v) => <span className="text-xs">{v ? formatDate(v) : '—'}</span> },
                     {
                       key: 'inspection_status', header: 'Inspection', align: 'center',
                       render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v}</Badge>,

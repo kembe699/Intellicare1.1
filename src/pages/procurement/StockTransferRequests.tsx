@@ -12,6 +12,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { ArrowRightLeft, Plus, Package, Check, X, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface TransferRequest {
   id: string;
@@ -150,7 +151,7 @@ export default function StockTransferRequests() {
                 { key: 'requested_by_name', header: 'Requested By', render: (v) => v || '—' },
                 { key: 'item_count', header: 'Items', align: 'right' },
                 { key: 'status', header: 'Status', render: (v) => <Badge className={getStatusColor(v)}>{String(v).replace('_', ' ')}</Badge> },
-                { key: 'created_at', header: 'Date', sortable: true, render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                { key: 'created_at', header: 'Date', sortable: true, render: (v) => v ? formatDate(v) : '—' },
                 {
                   key: 'id', header: 'Actions', align: 'center',
                   render: (_v, row) => (

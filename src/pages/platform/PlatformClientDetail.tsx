@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Plus, Receipt, CalendarClock, Database, ListTree } from 'lucide-react';
 import { toast } from '@/lib/notify';
+import { formatDate } from '@/lib/format';
 
 const DB_USAGE_COLOR = '#1A7A75'; // app primary teal — same as the dashboard's revenue chart
 
@@ -225,7 +226,7 @@ const PlatformClientDetail: React.FC = () => {
                 </Badge>
                 <p className="text-sm text-foreground">
                   {client.isCovered ? 'Covered through' : 'Coverage lapsed on'}{' '}
-                  <span className="font-semibold">{new Date(client.periodEnd as string).toLocaleDateString()}</span>
+                  <span className="font-semibold">{formatDate(client.periodEnd as string)}</span>
                 </p>
               </div>
             )}
@@ -281,7 +282,7 @@ const PlatformClientDetail: React.FC = () => {
                       {inv.plan_name} <span className="text-muted-foreground font-normal">({inv.billing_period})</span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(inv.period_start).toLocaleDateString()} – {new Date(inv.period_end).toLocaleDateString()}
+                      {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                     </TableCell>
                     <TableCell className="text-primary font-semibold">${Number(inv.amount).toFixed(2)}</TableCell>
                     <TableCell>

@@ -16,6 +16,7 @@ import { Combobox } from '@/components/ui/combobox';
 import RecordPaymentModal from '@/components/billing/RecordPaymentModal';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface Invoice {
   id: string;
@@ -211,7 +212,7 @@ export default function Invoices() {
                       const overdue = inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled';
                       return (
                         <>
-                          <span className={overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{new Date(v).toLocaleDateString()}</span>
+                          <span className={overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{formatDate(v)}</span>
                           {overdue && <span className="text-xs text-orange-600 ml-1">({inv.days_overdue}d)</span>}
                         </>
                       );
@@ -276,9 +277,9 @@ export default function Invoices() {
 
                         <div className="grid grid-cols-2 gap-y-2 text-sm">
                           <span className="text-muted-foreground">Invoice Date</span>
-                          <span className="text-right">{new Date(inv.created_at).toLocaleDateString()}</span>
+                          <span className="text-right">{formatDate(inv.created_at)}</span>
                           <span className="text-muted-foreground">Due Date</span>
-                          <span className="text-right">{new Date(inv.due_date).toLocaleDateString()}</span>
+                          <span className="text-right">{formatDate(inv.due_date)}</span>
                           <span className="text-muted-foreground">Payment Terms</span>
                           <span className="text-right">Net {inv.payment_terms} Days</span>
                           <span className="text-muted-foreground">Scheme</span>
@@ -314,7 +315,7 @@ export default function Invoices() {
                               data={inv.payments}
                               keyExtractor={(p, i) => p.id || i}
                               columns={[
-                                { key: 'payment_date', header: 'Date', render: (v) => new Date(v).toLocaleDateString() },
+                                { key: 'payment_date', header: 'Date', render: (v) => formatDate(v) },
                                 { key: 'amount', header: 'Amount', align: 'right', render: (v) => <span className="font-mono font-semibold text-emerald-600">{cur} {parseFloat(v).toFixed(2)}</span> },
                                 { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize">{(v || '').replace('_', ' ')}</span> },
                               ]}

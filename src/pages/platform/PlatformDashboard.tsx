@@ -12,6 +12,7 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import { Building2, CheckCircle2, Wallet, AlertTriangle, Loader2, Clock } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 const REVENUE_COLOR = '#1A7A75'; // app primary teal — matches DashboardOverview's revenue bar
 const ACTIVE_COLOR = 'hsl(var(--success))';
@@ -228,7 +229,7 @@ const PlatformDashboard: React.FC = () => {
                     </Link>
                   </TableCell>
                   <TableCell className="font-mono text-muted-foreground text-sm">{c.code}</TableCell>
-                  <TableCell className="text-muted-foreground">{new Date(c.periodEnd).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(c.periodEnd)}</TableCell>
                   <TableCell className="text-right">
                     <Badge variant={expiryTone(c.daysUntilExpiry)}>
                       {c.daysUntilExpiry < 0

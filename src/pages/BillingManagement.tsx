@@ -27,6 +27,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 type TabType = 'receivables' | 'insurance' | 'reports';
 
@@ -643,7 +644,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
                 },
                 { key: 'claim_amount', header: 'Amount', align: 'right', sortable: true, render: (v, claim) => <span className="font-bold">{claim.currency || 'SSP'} {parseFloat(v || 0).toFixed(2)}</span> },
                 { key: 'invoice_count', header: '# Invoices', align: 'center', render: (v) => v || 0 },
-                { key: 'created_at', header: 'Date Created', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                { key: 'created_at', header: 'Date Created', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                 {
                   key: 'status', header: 'Status', align: 'center', sortable: true,
                   render: (v) => <Badge className={`text-xs capitalize ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,

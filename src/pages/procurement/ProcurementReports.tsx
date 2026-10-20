@@ -21,6 +21,7 @@ import {
   ShoppingCart, ClipboardCheck, PackageCheck, Filter as FilterIcon, Stethoscope,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 type ReportTab = 'purchase' | 'delivery' | 'orders' | 'requisitions' | 'receipts' | 'consultant-bills';
 
@@ -237,7 +238,7 @@ const ProcurementReports: React.FC = () => {
       exportCSV(itemRows, [
         { header: 'PO Number', key: 'po_number' },
         { header: 'Supplier', key: 'supplier_name' },
-        { header: 'Order Date', key: 'order_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Order Date', key: 'order_date', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Status', key: 'status' },
         { header: 'Currency', key: 'po_currency' },
         { header: 'Item', key: 'item_name' },
@@ -253,7 +254,7 @@ const ProcurementReports: React.FC = () => {
         { header: 'PR Number', key: 'pr_number' },
         { header: 'Department', key: 'department' },
         { header: 'Requested By', key: 'created_by_name' },
-        { header: 'Date', key: 'requisition_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Date', key: 'requisition_date', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Status', key: 'status' },
         { header: 'Currency', key: 'currency' },
         { header: 'Total Estimated Amount', key: 'total_amount', transform: (v) => parseFloat(v || 0).toFixed(2) },
@@ -265,7 +266,7 @@ const ProcurementReports: React.FC = () => {
         { header: 'GRN Number', key: 'grn_number' },
         { header: 'Linked PO', key: 'po_number' },
         { header: 'Supplier', key: 'supplier_name' },
-        { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Status', key: 'status' },
         { header: 'Received By', key: 'received_by_name' },
         { header: 'Inspected By', key: 'inspected_by_name', transform: (v) => v || '' },
@@ -275,8 +276,8 @@ const ProcurementReports: React.FC = () => {
       exportCSV(consultantBillsReport, [
         { header: 'Bill No.', key: 'bill_number' },
         { header: 'Consultant', key: 'first_name', transform: (_v, row) => `${row.first_name} ${row.last_name}` },
-        { header: 'Period From', key: 'period_from', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
-        { header: 'Period To', key: 'period_to', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Period From', key: 'period_from', transform: (v) => v ? formatDate(v) : '' },
+        { header: 'Period To', key: 'period_to', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Revenue Collected', key: 'total_consultation_revenue', transform: (v) => parseFloat(v || 0).toFixed(2) },
         { header: 'Fee %', key: 'fee_percentage' },
         { header: 'Currency', key: 'currency' },
@@ -798,7 +799,7 @@ const ProcurementReports: React.FC = () => {
                         <td className="px-3 py-2 text-right font-mono">{fmtAmt(row.total_amount, row.po_currency)}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            {row.order_date ? new Date(row.order_date).toLocaleDateString() : '—'}
+                            {row.order_date ? formatDate(row.order_date) : '—'}
                             <StatusBadge status={row.status} map={poStatusMap} className="capitalize" />
                           </div>
                         </td>
@@ -857,7 +858,7 @@ const ProcurementReports: React.FC = () => {
                     </>
                   ),
                 },
-                { key: 'requisition_date', header: 'Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                { key: 'requisition_date', header: 'Date', render: (v) => v ? formatDate(v) : '—' },
                 { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={prStatusMap} className="capitalize" /> },
                 { key: 'currency', header: 'Currency', align: 'center', render: (v) => <span className="font-mono">{v || '—'}</span> },
                 { key: 'total_amount', header: 'Total Est. Amount', align: 'right', render: (v, row) => <span className="font-mono">{fmtAmt(v, row.currency)}</span> },
@@ -881,7 +882,7 @@ const ProcurementReports: React.FC = () => {
                 { key: 'grn_number', header: 'GRN Number', render: (v) => <span className="font-medium font-mono">{v}</span> },
                 { key: 'po_number', header: 'Linked PO', render: (v) => <span className="font-mono text-muted-foreground">{v || '—'}</span> },
                 { key: 'supplier_name', header: 'Supplier', render: (v) => v || '—' },
-                { key: 'receipt_date', header: 'Receipt Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                { key: 'receipt_date', header: 'Receipt Date', render: (v) => v ? formatDate(v) : '—' },
                 { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={grnStatusMap} className="capitalize" /> },
                 { key: 'received_by_name', header: 'Received By', render: (v) => v || '—' },
                 { key: 'inspected_by_name', header: 'Inspected By', render: (v) => v || '—' },
@@ -929,7 +930,7 @@ const ProcurementReports: React.FC = () => {
                 columns={[
                   { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-medium font-mono">{v}</span> },
                   { key: 'first_name', header: 'Consultant', render: (_v, row) => `${row.first_name} ${row.last_name}` },
-                  { key: 'period_from', header: 'Period', render: (_v, row) => `${new Date(row.period_from).toLocaleDateString()} – ${new Date(row.period_to).toLocaleDateString()}` },
+                  { key: 'period_from', header: 'Period', render: (_v, row) => `${formatDate(row.period_from)} – ${formatDate(row.period_to)}` },
                   { key: 'total_consultation_revenue', header: 'Revenue', align: 'right', render: (v, row) => <span className="font-mono">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
                   { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => `${v}%` },
                   { key: 'bill_amount', header: 'Bill Amount', align: 'right', render: (v, row) => <span className="font-mono font-bold">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },

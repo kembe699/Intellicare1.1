@@ -14,6 +14,7 @@ import { PageHeader, LoadingState, StatusBadge, type StatusBadgeTone } from '@/c
 import { apiFetch, formatCurrency, GLEntry, CurrencyCode } from '@/utils/accountingApi';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const GL_STATUS_TONE_MAP: Record<string, StatusBadgeTone> = {
   draft: 'neutral',
@@ -195,7 +196,7 @@ const GeneralLedger: React.FC = () => {
                           <td className="px-3 py-3.5 whitespace-nowrap">
                             <span className="font-mono text-sm font-medium">{entry.gl_number}</span>
                           </td>
-                          <td className="px-3 py-3.5 text-sm whitespace-nowrap">{new Date(entry.transaction_date).toLocaleDateString()}</td>
+                          <td className="px-3 py-3.5 text-sm whitespace-nowrap">{formatDate(entry.transaction_date)}</td>
                           <td className="px-3 py-3.5 whitespace-nowrap">
                             <Badge variant="outline" className="text-xs capitalize">{entry.transaction_type}</Badge>
                           </td>
@@ -290,7 +291,7 @@ const GeneralLedger: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Date</Label>
-                    <p className="text-sm font-medium">{new Date(viewEntry.transaction_date).toLocaleDateString()}</p>
+                    <p className="text-sm font-medium">{formatDate(viewEntry.transaction_date)}</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Type</Label>

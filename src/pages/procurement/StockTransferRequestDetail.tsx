@@ -11,6 +11,7 @@ import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { ArrowLeft, ArrowRightLeft, Check, X, Trash2, Loader2 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 interface DetailLine {
   id: string;
@@ -163,7 +164,7 @@ export default function StockTransferRequestDetail() {
 
             <div className="p-4 space-y-3">
               <div className="text-sm text-muted-foreground">
-                Requested by {detail.requested_by_name || '—'} on {detail.created_at ? new Date(detail.created_at).toLocaleDateString() : '—'}
+                Requested by {detail.requested_by_name || '—'} on {detail.created_at ? formatDate(detail.created_at) : '—'}
                 {detail.approved_by_name && ` · ${detail.status === 'rejected' ? 'Rejected' : 'Approved'} by ${detail.approved_by_name}`}
               </div>
               {detail.notes && <p className="text-sm">{detail.notes}</p>}

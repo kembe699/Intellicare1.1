@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface InventoryItem {
   id: string;
@@ -586,7 +587,7 @@ export default function ItemMaster() {
                       </div>
                       <div>
                         <label className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-1.5"><Calendar className="w-3.5 h-3.5" /> Nearest Expiry</label>
-                        <div className="h-10 flex items-center px-3 rounded-lg border bg-muted/40 text-sm font-semibold">{editingItem.nearest_expiry ? new Date(editingItem.nearest_expiry).toLocaleDateString() : '—'}</div>
+                        <div className="h-10 flex items-center px-3 rounded-lg border bg-muted/40 text-sm font-semibold">{editingItem.nearest_expiry ? formatDate(editingItem.nearest_expiry) : '—'}</div>
                       </div>
                       {/* Stock quantity is no longer editable from here — it used to let a
                           quantity typed into this form silently create a batch receipt,
@@ -874,7 +875,7 @@ export default function ItemMaster() {
                             { key: 'batch_number', header: 'Batch #', render: (v) => <span className="font-mono text-xs">{v}</span> },
                             { key: 'quantity_received', header: 'Received', align: 'right' },
                             { key: '__available', header: 'Available', align: 'right', render: (_v, b) => b.quantity_received - b.quantity_used },
-                            { key: 'expiry_date', header: 'Expiry', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                            { key: 'expiry_date', header: 'Expiry', render: (v) => v ? formatDate(v) : '—' },
                             { key: 'unit_cost', header: 'Unit Cost', align: 'right', render: (v) => <span className="font-mono">{formatCurrency(v)}</span> },
                           ]}
                         />
@@ -890,7 +891,7 @@ export default function ItemMaster() {
                           data={selectedItem.recent_transactions.slice(0, 10)}
                           keyExtractor={(tx) => tx.id}
                           columns={[
-                            { key: 'transaction_date', header: 'Date', render: (v) => <span className="text-xs">{v ? new Date(v).toLocaleDateString() : ''}</span> },
+                            { key: 'transaction_date', header: 'Date', render: (v) => <span className="text-xs">{v ? formatDate(v) : ''}</span> },
                             { key: 'transaction_type', header: 'Type', render: (v) => <span className="capitalize text-xs">{v}</span> },
                             {
                               key: 'quantity_change', header: 'Qty', align: 'right',

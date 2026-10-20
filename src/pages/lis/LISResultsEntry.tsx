@@ -13,6 +13,7 @@ import { MindrayIntegration } from '@/components/lab/MindrayIntegration';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 // Local (not UTC) date string, so "today" matches the user's actual calendar day.
 const toLocalDateStr = (d: Date) => {
@@ -561,7 +562,7 @@ export default function LISResultsEntry() {
                       <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(g.order_time).toLocaleDateString()}</div>
+                    <div className="text-xs text-muted-foreground">{formatDate(g.order_time)}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">

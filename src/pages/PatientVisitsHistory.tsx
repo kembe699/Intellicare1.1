@@ -10,6 +10,7 @@ import {
   Search, Eye, ChevronDown, ChevronUp, User, Phone, FileText 
 } from 'lucide-react';
 import { Combobox } from '@/components/ui/combobox';
+import { formatDate } from '@/lib/format';
 
 interface Visit {
   visit_id: string;
@@ -83,7 +84,7 @@ export default function PatientVisitsHistory() {
   const handleExport = () => {
     if (!data) return;
     const csv = `Patient Visits History (${dateFrom} to ${dateTo})\n\nDate,Patient,Age,Gender,Phone,Doctor,Chief Complaint,Diagnosis,Status,Total Visits\n${(data.visits || []).map((v: Visit) => 
-      `${v.visit_date ? new Date(v.visit_date).toLocaleDateString() : ''},${v.patient_name},${v.age || ''},${v.gender || ''},${v.phone || ''},${v.doctor_name || ''},"${(v.chief_complaint || '').replace(/"/g, '""')}","${(v.diagnosis || '').replace(/"/g, '""')}",${v.visit_status || ''},${v.total_visits || 0}`
+      `${v.visit_date ? formatDate(v.visit_date) : ''},${v.patient_name},${v.age || ''},${v.gender || ''},${v.phone || ''},${v.doctor_name || ''},"${(v.chief_complaint || '').replace(/"/g, '""')}","${(v.diagnosis || '').replace(/"/g, '""')}",${v.visit_status || ''},${v.total_visits || 0}`
     ).join('\n')}`;
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -287,7 +288,7 @@ export default function PatientVisitsHistory() {
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             <div className="text-sm font-medium">
-                              {visit.visit_date ? new Date(visit.visit_date).toLocaleDateString() : '-'}
+                              {visit.visit_date ? formatDate(visit.visit_date) : '-'}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {visit.visit_type || 'General'}
@@ -353,7 +354,7 @@ export default function PatientVisitsHistory() {
                                     <div>
                                       <span className="text-muted-foreground">Date of Birth:</span>
                                       <div className="font-medium">
-                                        {visit.date_of_birth ? new Date(visit.date_of_birth).toLocaleDateString() : '-'}
+                                        {visit.date_of_birth ? formatDate(visit.date_of_birth) : '-'}
                                       </div>
                                     </div>
                                     <div>
@@ -366,7 +367,7 @@ export default function PatientVisitsHistory() {
                                     <div>
                                       <span className="text-muted-foreground">Last Visit:</span>
                                       <div className="font-medium">
-                                        {visit.last_visit_date ? new Date(visit.last_visit_date).toLocaleDateString() : 'First visit'}
+                                        {visit.last_visit_date ? formatDate(visit.last_visit_date) : 'First visit'}
                                       </div>
                                     </div>
                                   </div>

@@ -20,6 +20,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { PrescriptionReceipt } from '@/components/receipts/PrescriptionReceipt';
 import { printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
+import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
 
@@ -514,7 +515,7 @@ export default function PrescriptionManagement() {
       { header: 'Rx Number', key: 'prescription_number' },
       { header: 'Patient', key: 'patient_name' },
       { header: 'Doctor', key: 'doctor_name', transform: (v) => v ? `Dr. ${v}` : '' },
-      { header: 'Date', key: 'prescription_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Date', key: 'prescription_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Dispensed', key: 'dispensed_count' },
       { header: 'Total Items', key: 'line_count' },
       { header: 'Status', key: 'status' },
@@ -860,7 +861,7 @@ export default function PrescriptionManagement() {
                   { key: 'prescription_number', header: 'Rx No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
                   { key: 'patient_name', header: 'Patient', render: (v) => v || 'Unknown' },
                   { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
-                  { key: 'prescription_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleDateString()}</span> },
+                  { key: 'prescription_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
                   { key: '__items', header: 'Items', render: (_v, rx) => <span className="text-muted-foreground">{rx.dispensed_count}/{rx.line_count}</span> },
                   { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
                 ]}
@@ -897,7 +898,7 @@ export default function PrescriptionManagement() {
                     <span className="text-muted-foreground">Doctor</span>
                     <span className="text-right">{selectedRx.doctor_name ? `Dr. ${selectedRx.doctor_name}` : '—'}</span>
                     <span className="text-muted-foreground">Date</span>
-                    <span className="text-right">{new Date(selectedRx.prescription_date).toLocaleDateString()}</span>
+                    <span className="text-right">{formatDate(selectedRx.prescription_date)}</span>
                   </div>
 
                   {selectedRx.prescription_notes && (

@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/notify';
 import { Wallet, Plus, Loader2, Check } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   draft: 'neutral',
@@ -120,7 +121,7 @@ export default function PayrollManagement() {
               { key: 'period_month', header: 'Period', render: (_v, r) => `${MONTHS[r.period_month - 1] || r.period_month} ${r.period_year}` },
               { key: 'employee_count', header: 'Employees', align: 'center' },
               { key: 'payment_account_name', header: 'Payment Account', render: (v) => v || '—' },
-              { key: 'run_date', header: 'Run Date', render: (v) => new Date(v).toLocaleDateString() },
+              { key: 'run_date', header: 'Run Date', render: (v) => formatDate(v) },
               {
                 key: 'status', header: 'Status',
                 render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} />,

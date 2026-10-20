@@ -10,6 +10,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { toast } from '@/lib/notify';
 import { RotateCcw, Search, X, Loader2, Check } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
 
@@ -177,7 +178,7 @@ export default function PharmacyReturns() {
                 { key: 'quantity_returned', header: 'Qty', sortable: true },
                 { key: 'amount_refunded', header: 'Refund', sortable: true, render: (v) => <span className="font-medium">{fmt(parseFloat(v) || 0)}</span> },
                 { key: 'return_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
-                { key: 'return_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                { key: 'return_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
                 { key: 'processed_by_name', header: 'Processed By', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
               ]}
             />

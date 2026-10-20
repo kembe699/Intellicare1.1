@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 const STATUS_CLASS: Record<string, string> = {
   in_progress: 'bg-sky-50 text-sky-700 border-sky-200', completed: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -362,7 +363,7 @@ export default function PhysicalCounts() {
                 pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                 columns={[
                   { key: 'count_number', header: 'Count No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'count_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'count_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
                   { key: 'count_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
                   { key: 'location_name', header: 'Location', render: (v) => v || 'All' },
                   { key: 'total_items_counted', header: 'Items', sortable: true, render: (v) => v || 0 },
@@ -439,7 +440,7 @@ export default function PhysicalCounts() {
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <div>
                 <h3 className="font-semibold text-lg font-mono">{selectedCount.count_number}</h3>
-                <p className="text-xs text-muted-foreground">{selectedCount.count_date ? new Date(selectedCount.count_date).toLocaleDateString() : ''} — {selectedCount.count_type?.replace(/_/g, ' ')}</p>
+                <p className="text-xs text-muted-foreground">{selectedCount.count_date ? formatDate(selectedCount.count_date) : ''} — {selectedCount.count_type?.replace(/_/g, ' ')}</p>
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
             </div>

@@ -11,6 +11,7 @@ import { PageHeader, LoadingState, StatusBadge } from '@/components/common';
 import { apiFetch, formatCurrency } from '@/utils/accountingApi';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface Receivable {
   id: string;
@@ -174,7 +175,7 @@ const Receivables: React.FC = () => {
                     const daysOver = getDaysOverdue(v);
                     return (
                       <div>
-                        <p>{new Date(v).toLocaleDateString()}</p>
+                        <p>{formatDate(v)}</p>
                         {isOverdue && daysOver > 0 && (
                           <p className="text-xs text-red-600 font-medium">{daysOver} days overdue</p>
                         )}

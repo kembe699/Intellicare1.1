@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ConfigType {
@@ -279,7 +280,7 @@ const ApiConfigurations: React.FC = () => {
                         <div>
                           <p className="text-xs text-muted-foreground">Created</p>
                           <p className="text-sm font-medium text-foreground mt-0.5">
-                            {new Date(selected.token.created_at).toLocaleDateString()} {new Date(selected.token.created_at).toLocaleTimeString()}
+                            {formatDate(selected.token.created_at)} {new Date(selected.token.created_at).toLocaleTimeString()}
                           </p>
                         </div>
                         <div>

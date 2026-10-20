@@ -22,6 +22,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import * as docTemplate from '@/utils/documentTemplate';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 function Field({ label, value, capitalize }: { label: string; value: React.ReactNode; capitalize?: boolean }) {
   return (
@@ -411,7 +412,7 @@ export default function PatientDetails() {
           : (parsedResults || '');
         return {
           cells: [
-            new Date(l.request_date).toLocaleDateString(),
+            formatDate(l.request_date),
             `${l.test_type}${l.urgent ? ' (Urgent)' : ''}`,
             l.sample_type || '-', l.status || '-',
             [resultText, l.result_notes].filter(Boolean).join('<br/>') || '-',
@@ -425,7 +426,7 @@ export default function PatientDetails() {
       [{ label: 'Date' }, { label: 'Imaging' }, { label: 'Body Part' }, { label: 'Status' }, { label: 'Findings / Impression' }],
       radRequests.map((r: any) => ({
         cells: [
-          new Date(r.request_date).toLocaleDateString(),
+          formatDate(r.request_date),
           `${r.imaging_type}${r.urgent ? ' (Urgent)' : ''}`,
           r.body_part || '-', r.status || '-',
           [r.findings ? `<strong>Findings:</strong> ${r.findings}` : '', r.impression ? `<strong>Impression:</strong> ${r.impression}` : ''].filter(Boolean).join('<br/>') || '-',
@@ -517,7 +518,7 @@ export default function PatientDetails() {
               </div>
               <div className="flex items-center gap-2.5">
                 <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Field label="Admitted" value={`${new Date(admission.admission_date).toLocaleDateString()} • ${days} day${days > 1 ? 's' : ''}`} />
+                <Field label="Admitted" value={`${formatDate(admission.admission_date)} • ${days} day${days > 1 ? 's' : ''}`} />
               </div>
               <div className="flex items-center gap-2.5">
                 <Receipt className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -782,7 +783,7 @@ export default function PatientDetails() {
                           <p className="text-xs text-muted-foreground">{p.dosage} • {p.frequency} • {p.route?.toUpperCase()} {p.duration ? `• ${p.duration}` : ''}</p>
                         </div>
                         <Badge variant={statusVariant(p.status)} className="capitalize flex-shrink-0">{p.status}</Badge>
-                        <p className="text-xs text-muted-foreground flex-shrink-0">{new Date(p.prescription_date).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground flex-shrink-0">{formatDate(p.prescription_date)}</p>
                       </div>
                     ))}
                   </div>
@@ -989,7 +990,7 @@ export default function PatientDetails() {
                           <p className="text-xs text-muted-foreground">Dr. {l.doctor_name} • {l.sample_type || 'N/A'}</p>
                         </div>
                         <Badge variant={l.status === 'completed' ? 'success' : 'outline'} className="capitalize flex-shrink-0">{l.status}</Badge>
-                        <p className="text-xs text-muted-foreground flex-shrink-0">{new Date(l.request_date).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground flex-shrink-0">{formatDate(l.request_date)}</p>
                       </div>
                     ))}
                   </div>
@@ -1037,7 +1038,7 @@ export default function PatientDetails() {
                           <p className="text-xs text-muted-foreground">Dr. {r.doctor_name}</p>
                         </div>
                         <Badge variant={r.status === 'completed' ? 'success' : 'outline'} className="capitalize flex-shrink-0">{r.status}</Badge>
-                        <p className="text-xs text-muted-foreground flex-shrink-0">{new Date(r.request_date).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground flex-shrink-0">{formatDate(r.request_date)}</p>
                       </div>
                     ))}
                   </div>

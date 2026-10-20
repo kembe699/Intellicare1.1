@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface PRLine {
   id?: string;
@@ -365,7 +366,7 @@ const PurchaseRequisitions: React.FC = () => {
     if (filteredPRs.length === 0) { toast.error('No requisitions to export'); return; }
     exportCSV(filteredPRs, [
       { header: 'PR Number', key: 'pr_number' },
-      { header: 'Date', key: 'requisition_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Date', key: 'requisition_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Requested By', key: 'requester_name' },
       { header: 'Department', key: 'department' },
       { header: 'Type', key: 'requisition_type' },
@@ -956,7 +957,7 @@ const PurchaseRequisitions: React.FC = () => {
                 pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                 columns={[
                   { key: 'pr_number', header: 'PR Number', sortable: true, render: (v) => <span className="text-sm font-mono font-medium">{v}</span> },
-                  { key: 'requisition_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'requisition_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{v ? formatDate(v) : '—'}</span> },
                   { key: 'requester_name', header: 'Requested By', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
                   { key: 'department', header: 'Department', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
                   { key: 'requisition_type', header: 'Type', align: 'center', render: (v) => <Badge variant="outline" className="text-xs capitalize">{v}</Badge> },
@@ -1007,7 +1008,7 @@ const PurchaseRequisitions: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-bold font-mono">{selectedPR.pr_number}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {selectedPR.requisition_date ? new Date(selectedPR.requisition_date).toLocaleDateString() : '—'}
+                      {selectedPR.requisition_date ? formatDate(selectedPR.requisition_date) : '—'}
                     </p>
                   </div>
                   <Badge className={`${getStatusColor(selectedPR.status)} text-sm`}>{selectedPR.status}</Badge>
@@ -1017,7 +1018,7 @@ const PurchaseRequisitions: React.FC = () => {
                   <div><span className="text-muted-foreground">Requested By:</span> <span className="font-medium">{selectedPR.requester_name || '—'}</span></div>
                   <div><span className="text-muted-foreground">Department:</span> <span className="font-medium">{selectedPR.department || '—'}</span></div>
                   <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline" className="capitalize text-xs ml-1">{selectedPR.requisition_type}</Badge></div>
-                  <div><span className="text-muted-foreground">Required By:</span> <span className="font-medium">{selectedPR.delivery_date_required ? new Date(selectedPR.delivery_date_required).toLocaleDateString() : '—'}</span></div>
+                  <div><span className="text-muted-foreground">Required By:</span> <span className="font-medium">{selectedPR.delivery_date_required ? formatDate(selectedPR.delivery_date_required) : '—'}</span></div>
                   {selectedPR.approver_name && <div><span className="text-muted-foreground">Approved By:</span> <span className="font-medium">{selectedPR.approver_name}</span></div>}
                   {selectedPR.rejection_reason && <div className="col-span-2"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-red-600">{selectedPR.rejection_reason}</span></div>}
                 </div>

@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
+import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
 
@@ -2034,7 +2035,7 @@ export default function DispensingWorkflow() {
                     render: (_v, h) => <span className="font-medium whitespace-nowrap">{fmt((parseFloat(h.unit_price) || 0) * (h.quantity_dispensed || 0))}</span>,
                   },
                   { key: 'pharmacist_name', header: 'Pharmacist', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                  { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? formatDate(v) : '—'}</span> },
                 ]}
               />
             </div>

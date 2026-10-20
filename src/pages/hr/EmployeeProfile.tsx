@@ -14,6 +14,7 @@ import {
   Users, Edit, Phone, Mail, MapPin, Loader2, Check, Plus, Trash2,
   ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt,
 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   active: 'success',
@@ -301,9 +302,9 @@ export default function EmployeeProfile() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Job Title</span><span>{employee.job_title || '—'}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Department</span><span>{employee.department || '—'}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Contract</span><span className="capitalize">{(employee.contract_type || '').replace('_', ' ')}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Hire Date</span><span>{employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : '—'}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Hire Date</span><span>{employee.hire_date ? formatDate(employee.hire_date) : '—'}</span></div>
                   {employee.termination_date && (
-                    <div className="flex justify-between"><span className="text-muted-foreground">Termination Date</span><span>{new Date(employee.termination_date).toLocaleDateString()}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Termination Date</span><span>{formatDate(employee.termination_date)}</span></div>
                   )}
                 </div>
 
@@ -371,7 +372,7 @@ export default function EmployeeProfile() {
                           <tbody className="divide-y">
                             {consultTrace.consultations.map((c: any, i: number) => (
                               <tr key={i}>
-                                <td className="px-3 py-2">{new Date(c.visit_date).toLocaleDateString()}{c.shared && <span className="ml-1.5 text-xs text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
+                                <td className="px-3 py-2">{formatDate(c.visit_date)}{c.shared && <span className="ml-1.5 text-xs text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
                                 <td className="px-3 py-2 text-right font-mono">{c.currency} {c.billed_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-right font-mono font-medium">{c.currency} {c.collected_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-center">
@@ -434,7 +435,7 @@ export default function EmployeeProfile() {
                           {consultantBills.map((b: any) => (
                             <tr key={b.id}>
                               <td className="px-3 py-2 font-mono text-primary">{b.bill_number}</td>
-                              <td className="px-3 py-2">{new Date(b.period_from).toLocaleDateString()} – {new Date(b.period_to).toLocaleDateString()}</td>
+                              <td className="px-3 py-2">{formatDate(b.period_from)} – {formatDate(b.period_to)}</td>
                               <td className="px-3 py-2 text-right font-mono">{b.currency} {parseFloat(b.bill_amount).toFixed(2)}</td>
                               <td className="px-3 py-2 text-center capitalize">{b.status}</td>
                             </tr>

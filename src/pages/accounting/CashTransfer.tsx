@@ -14,6 +14,7 @@ import { toast } from '@/lib/notify';
 import { ArrowRightLeft, Download, RefreshCw, BarChart3, Loader2 } from 'lucide-react';
 import { formatCurrency, BASE_CURRENCY } from '@/utils/accountingApi';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface LedgerAccount {
   id: string;
@@ -140,7 +141,7 @@ const CashTransfer: React.FC = () => {
     const csv = [
       ['Date', 'From Account', 'To Account', 'Amount', 'Notes'],
       ...transfers.map(t => [
-        new Date(t.created_at).toLocaleDateString(),
+        formatDate(t.created_at),
         t.from_account_name,
         t.to_account_name,
         parseFloat(String(t.amount)).toFixed(2),
@@ -171,10 +172,7 @@ const CashTransfer: React.FC = () => {
 
   const getCreatedAt = (t: Transfer) => t.createdAt || t.created_at;
 
-  const fmtDate = (val: string) => {
-    const d = parseDate(val);
-    return d ? d.toLocaleDateString() : '—';
-  };
+  const fmtDate = (val: string) => formatDate(parseDate(val));
 
   const fmtTime = (val: string) => {
     const d = parseDate(val);

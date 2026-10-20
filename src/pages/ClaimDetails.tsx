@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 export default function ClaimDetails() {
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -335,17 +336,17 @@ export default function ClaimDetails() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Created Date</p>
-                  <p className="font-semibold mt-0.5">{new Date(claim.created_at).toLocaleDateString()}</p>
+                  <p className="font-semibold mt-0.5">{formatDate(claim.created_at)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Submitted Date</p>
-                  <p className="font-semibold mt-0.5">{claim.submitted_at ? new Date(claim.submitted_at).toLocaleDateString() : '—'}</p>
+                  <p className="font-semibold mt-0.5">{claim.submitted_at ? formatDate(claim.submitted_at) : '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Date Range</p>
                   <p className="font-semibold mt-0.5">
-                    {claim.date_from ? new Date(claim.date_from).toLocaleDateString() : '—'} to{' '}
-                    {claim.date_to ? new Date(claim.date_to).toLocaleDateString() : '—'}
+                    {claim.date_from ? formatDate(claim.date_from) : '—'} to{' '}
+                    {claim.date_to ? formatDate(claim.date_to) : '—'}
                   </p>
                 </div>
                 <div>
@@ -354,7 +355,7 @@ export default function ClaimDetails() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Paid Date</p>
-                  <p className="font-semibold mt-0.5">{claim.paid_at ? new Date(claim.paid_at).toLocaleDateString() : '—'}</p>
+                  <p className="font-semibold mt-0.5">{claim.paid_at ? formatDate(claim.paid_at) : '—'}</p>
                 </div>
               </div>
               {claim.notes && (
@@ -450,8 +451,8 @@ export default function ClaimDetails() {
                             </td>
                             <td className="py-2 px-3 font-mono text-xs font-semibold text-primary">{inv.invoice_number}</td>
                             <td className="py-2 px-3">{inv.patient_name || '—'}</td>
-                            <td className="py-2 px-3 text-xs">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString() : '—'}</td>
-                            <td className="py-2 px-3 text-xs">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</td>
+                            <td className="py-2 px-3 text-xs">{inv.invoice_date ? formatDate(inv.invoice_date) : '—'}</td>
+                            <td className="py-2 px-3 text-xs">{inv.due_date ? formatDate(inv.due_date) : '—'}</td>
                             <td className="py-2 px-3 text-right font-bold">{inv.invoice_currency || claimCurrency} {parseFloat(inv.amount || 0).toFixed(2)}</td>
                             <td className="py-2 px-3 text-center">
                               <Badge variant="outline" className="text-xs capitalize">{inv.invoice_status || 'in claim'}</Badge>

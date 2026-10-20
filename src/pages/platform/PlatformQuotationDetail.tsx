@@ -21,6 +21,7 @@ import { toast } from '@/lib/notify';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface QuotationDetail {
   id: number;
@@ -321,8 +322,8 @@ const PlatformQuotationDetail: React.FC = () => {
         <Card>
           <CardContent className="p-5 space-y-5">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Field label="Issue Date" value={new Date(quotation.issue_date).toLocaleDateString()} />
-              <Field label="Valid Until" value={new Date(quotation.valid_until).toLocaleDateString()} />
+              <Field label="Issue Date" value={formatDate(quotation.issue_date)} />
+              <Field label="Valid Until" value={formatDate(quotation.valid_until)} />
               <Field label="Deployment" value={quotation.deployment_model === 'cloud' ? 'Cloud (SaaS)' : 'On-Premise'} />
               <Field label="Training" value={`${quotation.training_hours} hours`} />
             </div>
@@ -491,7 +492,7 @@ const PlatformQuotationDetail: React.FC = () => {
                 {instanceResult.invoice && (
                   <p className="text-muted-foreground">
                     First invoice created: <span className="text-primary font-semibold">${Number(instanceResult.invoice.amount).toFixed(2)}</span>{' '}
-                    ({instanceResult.invoice.billing_period}), due by {new Date(instanceResult.invoice.period_end).toLocaleDateString()}.
+                    ({instanceResult.invoice.billing_period}), due by {formatDate(instanceResult.invoice.period_end)}.
                   </p>
                 )}
               </div>

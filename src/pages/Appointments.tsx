@@ -12,6 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, DirectoryPerson } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDate } from '@/lib/format';
 
 // Follow-up / next-visit scheduling — booked from a patient's Visit Summary
 // (by the doctor who wants to see them again) or directly here (reception,
@@ -158,7 +159,7 @@ export default function Appointments() {
   };
 
   const columns: Column<AppointmentRow>[] = [
-    { key: 'scheduled_date', header: 'Date', render: (v) => <span className="whitespace-nowrap font-medium">{new Date(v).toLocaleDateString()}</span> },
+    { key: 'scheduled_date', header: 'Date', render: (v) => <span className="whitespace-nowrap font-medium">{formatDate(v)}</span> },
     { key: 'first_name', header: 'Patient', render: (_v, row) => <div><p className="font-medium text-sm">{row.first_name} {row.last_name}</p><p className="text-xs text-muted-foreground font-mono">{row.participant_number}</p></div> },
     { key: 'doctor_name', header: 'Doctor', render: (v) => v ? `Dr. ${v}` : <span className="text-muted-foreground">Any doctor</span> },
     { key: 'reason', header: 'Reason', render: (v) => <span className="text-sm">{v || '-'}</span> },

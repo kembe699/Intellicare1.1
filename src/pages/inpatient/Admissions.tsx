@@ -16,6 +16,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { exportCSV } from '@/utils/reportUtils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 
 export default function Admissions() {
@@ -225,7 +226,7 @@ export default function Admissions() {
       { header: 'Ward', key: 'ward_name' },
       { header: 'Room', key: 'room_number' },
       { header: 'Bed', key: 'bed_number' },
-      { header: 'Admission Date', key: 'admission_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Admission Date', key: 'admission_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Duration', key: 'admission_date', transform: (_v, row) => getDuration(row) },
       { header: 'Type', key: 'admission_type' },
       { header: 'Status', key: 'status' },
@@ -482,7 +483,7 @@ export default function Admissions() {
                 { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 { key: 'room_number', header: 'Room', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'admission_date', header: 'Admission Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                { key: 'admission_date', header: 'Admission Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
                 { key: '__duration', header: 'Duration', render: (_v, a) => <span className="text-muted-foreground">{getDuration(a)}</span> },
                 {
                   key: 'admission_type', header: 'Type', sortable: true,

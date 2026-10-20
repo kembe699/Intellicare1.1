@@ -14,6 +14,7 @@ import { toast } from '@/lib/notify';
 import { Wallet, Plus, Loader2, Check, HandCoins } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface Advance {
   id: string; advance_number: string; employee_id: string; first_name: string; last_name: string; employee_number: string;
@@ -189,7 +190,7 @@ export default function SalaryAdvancesManagement() {
               columns={[
                 { key: 'advance_number', header: 'Advance No.', render: (v) => <span className="font-mono text-xs">{v}</span> },
                 { key: 'first_name', header: 'Employee', render: (_v, a) => <span className="font-medium">{a.first_name} {a.last_name}</span> },
-                { key: 'request_date', header: 'Date', render: (v) => new Date(v).toLocaleDateString() },
+                { key: 'request_date', header: 'Date', render: (v) => formatDate(v) },
                 { key: 'amount', header: 'Amount', align: 'right', render: (v, a) => <span className="font-mono">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
                 { key: 'balance_remaining', header: 'Balance', align: 'right', render: (v, a) => <span className="font-mono text-amber-700">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
                 { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },

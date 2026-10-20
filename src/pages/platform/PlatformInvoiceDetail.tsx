@@ -20,6 +20,7 @@ import { CreditCard, Download, FileText, Loader2, Receipt } from 'lucide-react';
 import { toast } from '@/lib/notify';
 import { buildInvoiceHTML } from '@/utils/invoiceTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
+import { formatDate } from '@/lib/format';
 
 interface Payment {
   id: number;
@@ -172,7 +173,7 @@ const PlatformInvoiceDetail: React.FC = () => {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
-                <Field label="Issue Date" value={new Date(invoice.issue_date).toLocaleDateString()} />
+                <Field label="Issue Date" value={formatDate(invoice.issue_date)} />
                 <Field label="Currency" value={invoice.currency} />
               </div>
               {invoice.status !== 'paid' && (

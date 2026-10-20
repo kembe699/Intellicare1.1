@@ -13,6 +13,7 @@ import { AdvancedDataTable, Column } from '@/components/common/DataTable/Advance
 import { authFetch } from '@/api/apiClient';
 import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, DirectoryPerson } from '@/lib/patientDirectory';
+import { formatDate } from '@/lib/format';
 
 // Registration + visit log for ANC (antenatal) care. A registration also
 // arrives automatically the moment a female patient's "Antenatal Care" box
@@ -124,10 +125,10 @@ export default function Antenatal() {
   const columns: Column<AntenatalRow>[] = [
     { key: 'registration_number', header: 'Reg. No.', render: (v) => <span className="font-mono text-xs">{v}</span> },
     { key: 'first_name', header: 'Patient', render: (_v, row) => <div><p className="font-medium text-sm">{row.first_name} {row.last_name}</p><p className="text-xs text-muted-foreground font-mono">{row.participant_number}</p></div> },
-    { key: 'edd', header: 'EDD', render: (v) => v ? new Date(v).toLocaleDateString() : <span className="text-muted-foreground">-</span> },
+    { key: 'edd', header: 'EDD', render: (v) => v ? formatDate(v) : <span className="text-muted-foreground">-</span> },
     { key: 'gravida', header: 'G/P', render: (_v, row) => (row.gravida || row.para) ? `G${row.gravida || '-'} P${row.para || '-'}` : <span className="text-muted-foreground">-</span> },
     { key: 'visit_count', header: 'Visits', render: (v) => <Badge variant="outline">{v}</Badge> },
-    { key: 'last_visit_date', header: 'Last Visit', render: (v) => v ? new Date(v).toLocaleDateString() : <span className="text-muted-foreground">-</span> },
+    { key: 'last_visit_date', header: 'Last Visit', render: (v) => v ? formatDate(v) : <span className="text-muted-foreground">-</span> },
     { key: 'status', header: 'Status', render: (v) => <StatusBadge status={v} /> },
     { key: 'source', header: 'Source', render: (v) => <span className="text-xs text-muted-foreground capitalize">{v === 'auto' ? 'Auto (LIS)' : 'Manual'}</span> },
   ];

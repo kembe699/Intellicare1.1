@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface CoAAccount { id: string | number; account_code: string; account_name: string; account_type: string; current_balance?: number; balance?: number; }
 interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
@@ -224,7 +225,7 @@ const DailyExpenses: React.FC = () => {
       filteredExpenses,
       [
         { key: 'voucher_number', header: 'Voucher' },
-        { key: 'expense_date', header: 'Date', transform: (v: any) => (v ? new Date(v).toLocaleDateString() : '') },
+        { key: 'expense_date', header: 'Date', transform: (v: any) => (v ? formatDate(v) : '') },
         { key: 'description', header: 'Description' },
         { key: 'category', header: 'Category' },
         { key: 'account_name', header: 'Account' },
@@ -244,7 +245,7 @@ const DailyExpenses: React.FC = () => {
       filteredBills,
       [
         { key: 'po_number', header: 'PO Number' },
-        { key: 'order_date', header: 'Date', transform: (v: any) => (v ? new Date(v).toLocaleDateString() : '') },
+        { key: 'order_date', header: 'Date', transform: (v: any) => (v ? formatDate(v) : '') },
         { key: 'supplier_name', header: 'Supplier' },
         { key: 'po_currency', header: 'Currency' },
         { key: 'total_amount', header: 'PO Total', transform: (v: any) => parseFloat(String(v || 0)).toFixed(2) },
@@ -261,7 +262,7 @@ const DailyExpenses: React.FC = () => {
     if (filteredBills.length === 0) { toast.error('Nothing to export'); return; }
 
     const periodLabel = billFrom || billTo
-      ? `${billFrom ? new Date(billFrom).toLocaleDateString() : 'Earliest'} — ${billTo ? new Date(billTo).toLocaleDateString() : 'Latest'}`
+      ? `${billFrom ? formatDate(billFrom) : 'Earliest'} — ${billTo ? formatDate(billTo) : 'Latest'}`
       : 'All dates';
 
     const bodyHTML = [
@@ -645,7 +646,7 @@ const DailyExpenses: React.FC = () => {
 
   const printExpVoucher = (exp: DailyExpense) => {
     const body = docTemplate.buildInfoGrid(
-      { title: 'Expense Details', rows: [{ label: 'Voucher No', value: exp.voucher_number || '-', bold: true }, { label: 'Date', value: new Date(exp.expense_date).toLocaleDateString() }, { label: 'Category', value: exp.category || '-' }, { label: 'Method', value: exp.payment_method || 'Cash' }] },
+      { title: 'Expense Details', rows: [{ label: 'Voucher No', value: exp.voucher_number || '-', bold: true }, { label: 'Date', value: formatDate(exp.expense_date) }, { label: 'Category', value: exp.category || '-' }, { label: 'Method', value: exp.payment_method || 'Cash' }] },
       { title: 'Payment Info', rows: [{ label: 'Account', value: exp.account_name || '-' }, { label: 'Amount', value: fmt(parseFloat(String(exp.amount || 0))), bold: true }, { label: 'Prepared By', value: exp.created_by || '-' }] }
     ) + `<div class="ic-section-title">Description</div><p style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">${exp.description || '-'}</p>`
       + (exp.notes ? docTemplate.buildNotes(exp.notes) : '')
@@ -671,7 +672,7 @@ const DailyExpenses: React.FC = () => {
           ['', 'TOTAL', '', '', '', '', fmtC(parseFloat(String(bill.total_amount || 0)))]
         )
       : '';
-    const approvalsTableRows = approvals.map(a => ({ cells: [PO_APPROVAL_LEVELS[a.approval_level - 1] || `Level ${a.approval_level}`, a.approved_by, new Date(a.approved_at).toLocaleDateString()] }));
+    const approvalsTableRows = approvals.map(a => ({ cells: [PO_APPROVAL_LEVELS[a.approval_level - 1] || `Level ${a.approval_level}`, a.approved_by, formatDate(a.approved_at)] }));
     const approvalsTable = approvals.length > 0
       ? `<div class="ic-section-title">Approvals</div>` + docTemplate.buildTable(
           [{ label: 'Level' }, { label: 'Approved By' }, { label: 'Date' }],
@@ -685,7 +686,7 @@ const DailyExpenses: React.FC = () => {
       ...(approvals[2] ? [{ label: PO_APPROVAL_LEVELS[2], name: approvals[2].approved_by, signature: approvals[2].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[2], name: '' }]),
     ];
     const body = docTemplate.buildInfoGrid(
-      { title: 'Payment Details', rows: [{ label: 'Voucher No', value: voucherNo, bold: true }, { label: 'PO Number', value: bill.po_number }, { label: 'Payment Date', value: new Date(pay.payment_date).toLocaleDateString() }, { label: 'Method', value: pay.payment_method }, { label: 'Reference', value: pay.reference_number || '-' }] },
+      { title: 'Payment Details', rows: [{ label: 'Voucher No', value: voucherNo, bold: true }, { label: 'PO Number', value: bill.po_number }, { label: 'Payment Date', value: formatDate(pay.payment_date) }, { label: 'Method', value: pay.payment_method }, { label: 'Reference', value: pay.reference_number || '-' }] },
       { title: 'Supplier & Amount', rows: [{ label: 'Supplier', value: bill.supplier_name, bold: true }, { label: 'PO Total', value: fmtC(parseFloat(String(bill.total_amount || 0))) }, { label: 'Amount Paid', value: fmtC(parseFloat(pay.amount_paid || '0')), bold: true }, { label: 'Paid From', value: pay.account_name || '-' }] }
     ) + itemsSection
       + docTemplate.buildSummary([{ label: `PO Total (${cur})`, value: fmtC(parseFloat(String(bill.total_amount || 0))) }, { label: 'Previously Paid', value: fmtC(parseFloat(String(bill.paid_amount || 0))) }, { label: 'This Payment', value: fmtC(parseFloat(pay.amount_paid || '0')), isTotal: true }])
@@ -711,7 +712,7 @@ const DailyExpenses: React.FC = () => {
         cells: [
           PO_APPROVAL_LEVELS[level - 1],
           a ? a.approved_by : '—',
-          a ? new Date(a.approved_at).toLocaleDateString() : '—',
+          a ? formatDate(a.approved_at) : '—',
           a ? '✓ Approved' : 'Pending',
         ],
         bold: !!a,
@@ -763,7 +764,7 @@ const DailyExpenses: React.FC = () => {
     const body = docTemplate.buildInfoGrid(
       { title: 'Purchase Order', rows: [
         { label: 'PO Number', value: bill.po_number, bold: true },
-        { label: 'PO Date', value: new Date(bill.order_date).toLocaleDateString() },
+        { label: 'PO Date', value: formatDate(bill.order_date) },
         { label: 'Currency', value: cur },
         { label: 'Payment Terms', value: bill.payment_terms || '—' },
       ]},
@@ -889,7 +890,7 @@ const DailyExpenses: React.FC = () => {
                 <CardTitle className="text-base">
                   Expense History
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {expFrom === expTo ? new Date(expFrom).toLocaleDateString() : `${new Date(expFrom).toLocaleDateString()} — ${new Date(expTo).toLocaleDateString()}`}
+                    {expFrom === expTo ? formatDate(expFrom) : `${formatDate(expFrom)} — ${formatDate(expTo)}`}
                     {' · '}{filteredExpenses.length} item{filteredExpenses.length === 1 ? '' : 's'}
                     {' · '}<strong className="text-foreground">{fmt(filteredExpenses.reduce((sum, e) => sum + (parseFloat(String(e.amount || 0)) || 0), 0))}</strong>
                   </span>
@@ -919,7 +920,7 @@ const DailyExpenses: React.FC = () => {
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
                     { key: 'voucher_number', header: 'Voucher', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || <span className="text-amber-500 italic">pending</span>}</span> },
-                    { key: 'expense_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'expense_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap">{formatDate(v)}</span> },
                     { key: 'description', header: 'Description', render: (v) => <span className="font-medium max-w-[200px] truncate block">{v}</span> },
                     { key: 'category', header: 'Category', render: (v) => <Badge variant="outline" className="text-xs">{v || '-'}</Badge> },
                     { key: 'account_name', header: 'Account', render: (v) => <span className="text-xs text-muted-foreground">{v}</span> },
@@ -1051,7 +1052,7 @@ const DailyExpenses: React.FC = () => {
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
                     { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono font-medium text-xs">{v}</span> },
-                    { key: 'order_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap text-sm">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'order_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap text-sm">{formatDate(v)}</span> },
                     { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v) => <span className="font-medium text-sm">{v}</span> },
                     {
                       key: 'total_amount', header: 'PO Total', align: 'right', sortable: true,
@@ -1195,7 +1196,7 @@ const DailyExpenses: React.FC = () => {
                   columns={[
                     { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-mono font-medium text-xs">{v}</span> },
                     { key: 'first_name', header: 'Consultant', render: (_v, b) => <span className="font-medium text-sm">{b.first_name} {b.last_name}</span> },
-                    { key: 'period_from', header: 'Period', render: (_v, b) => <span className="text-xs whitespace-nowrap">{new Date(b.period_from).toLocaleDateString()} – {new Date(b.period_to).toLocaleDateString()}</span> },
+                    { key: 'period_from', header: 'Period', render: (_v, b) => <span className="text-xs whitespace-nowrap">{formatDate(b.period_from)} – {formatDate(b.period_to)}</span> },
                     { key: 'total_consultation_revenue', header: 'Revenue Collected', align: 'right', render: (v, b) => <span className="font-mono text-sm">{b.currency} {parseFloat(String(v || 0)).toFixed(2)}</span> },
                     { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => <span className="text-sm">{v}%</span> },
                     { key: 'bill_amount', header: 'Bill Amount', align: 'right', sortable: true, render: (v, b) => <span className="font-mono font-bold text-sm">{b.currency} {parseFloat(String(v || 0)).toFixed(2)}</span> },
@@ -1399,7 +1400,7 @@ const DailyExpenses: React.FC = () => {
 
                   {/* Expense summary */}
                   <div className="rounded-md border p-3 bg-muted/20 text-xs space-y-1">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Date</span><span>{new Date(approveExpense.expense_date).toLocaleDateString()}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Date</span><span>{formatDate(approveExpense.expense_date)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Category</span><span>{approveExpense.category || '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Account</span><span>{approveExpense.account_name}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Method</span><span>{approveExpense.payment_method || 'Cash'}</span></div>
@@ -1631,7 +1632,7 @@ const DailyExpenses: React.FC = () => {
                           <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center font-bold shrink-0">{a.approval_level}</span>
                           <span className="font-medium">{a.approved_by}</span>
                           {a.approved_by_title && <span className="text-muted-foreground">· {a.approved_by_title}</span>}
-                          <span className="text-muted-foreground ml-auto">{new Date(a.approved_at).toLocaleDateString()}</span>
+                          <span className="text-muted-foreground ml-auto">{formatDate(a.approved_at)}</span>
                         </div>
                       ))}
                     </div>
@@ -1686,7 +1687,7 @@ const DailyExpenses: React.FC = () => {
             {selectedConsultantBill && (
               <form onSubmit={handleConsultantPaySubmit} className="space-y-3 px-6 pb-6 pt-2">
                 <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Period</span><span>{new Date(selectedConsultantBill.period_from).toLocaleDateString()} – {new Date(selectedConsultantBill.period_to).toLocaleDateString()}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Period</span><span>{formatDate(selectedConsultantBill.period_from)} – {formatDate(selectedConsultantBill.period_to)}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Revenue Collected</span><span className="font-mono">{selectedConsultantBill.currency} {parseFloat(String(selectedConsultantBill.total_consultation_revenue || 0)).toFixed(2)}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Fee %</span><span>{selectedConsultantBill.fee_percentage}%</span></div>
                   <div className="flex justify-between font-semibold"><span>Bill Amount</span><span className="font-mono">{selectedConsultantBill.currency} {parseFloat(String(selectedConsultantBill.bill_amount || 0)).toFixed(2)}</span></div>

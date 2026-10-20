@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { usePDFDocument } from '@/hooks/usePDFDocument';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface Receipt {
   id: string;
@@ -336,7 +337,7 @@ export default function Receipts() {
                 },
                 { key: 'payment_amount', header: 'Amount', sortable: true, render: (v) => <span className="font-medium">{toAmount(v).toFixed(2)}</span> },
                 { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
-                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleDateString()}</span> },
+                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
                 { key: 'cashier_name', header: 'Cashier', render: (v) => <span className="text-muted-foreground">{v || 'Unknown'}</span> },
                 { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
               ]}
@@ -384,7 +385,7 @@ export default function Receipts() {
                 <span className="text-muted-foreground">Patient</span>
                 <span className="text-right">{selectedReceipt.patient_name || 'Walk-in Patient'}</span>
                 <span className="text-muted-foreground">Payment Date</span>
-                <span className="text-right">{new Date(selectedReceipt.payment_date).toLocaleDateString()}</span>
+                <span className="text-right">{formatDate(selectedReceipt.payment_date)}</span>
                 <span className="text-muted-foreground">Cashier</span>
                 <span className="text-right">{selectedReceipt.cashier_name || 'Unknown'}</span>
               </div>

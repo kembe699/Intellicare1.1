@@ -18,6 +18,7 @@ import { CreditCard, Download, Eye, FileText, Loader2, Search } from 'lucide-rea
 import { toast } from '@/lib/notify';
 import { buildInvoiceHTML } from '@/utils/invoiceTemplate';
 import { downloadDocumentAsPdf } from '@/utils/documentTemplate';
+import { formatDate } from '@/lib/format';
 
 interface InvoiceRow {
   id: number;
@@ -189,7 +190,7 @@ const PlatformInvoices: React.FC = () => {
                   <TableCell className="text-muted-foreground">{money(inv.amount_paid, inv.currency)}</TableCell>
                   <TableCell className={balance > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}>{money(balance, inv.currency)}</TableCell>
                   <TableCell><Badge variant={STATUS_VARIANT[inv.status]}>{STATUS_LABEL[inv.status]}</Badge></TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{new Date(inv.issue_date).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{formatDate(inv.issue_date)}</TableCell>
                   <TableCell className="text-right space-x-1.5 whitespace-nowrap">
                     <Link to={`/platform-admin/invoices/${inv.id}`}>
                       <Button variant="outline" size="sm" title="View invoice"><Eye className="w-3.5 h-3.5" /></Button>

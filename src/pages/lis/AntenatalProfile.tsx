@@ -12,6 +12,7 @@ import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import * as docTemplate from '@/utils/documentTemplate';
+import { formatDate } from '@/lib/format';
 
 interface AntenatalVisit {
   id: string;
@@ -249,7 +250,7 @@ export default function AntenatalProfile() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">LMP / EDD</p>
-                <p className="font-semibold">{profile.lmp ? new Date(profile.lmp).toLocaleDateString() : '-'} / {profile.edd ? new Date(profile.edd).toLocaleDateString() : '-'}</p>
+                <p className="font-semibold">{profile.lmp ? formatDate(profile.lmp) : '-'} / {profile.edd ? formatDate(profile.edd) : '-'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Gravida / Para</p>
@@ -290,7 +291,7 @@ export default function AntenatalProfile() {
                     <tbody className="divide-y">
                       {profile.visits.map(v => (
                         <tr key={v.id}>
-                          <td className="px-3 py-2 whitespace-nowrap">{new Date(v.visit_date).toLocaleDateString()}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.visit_date)}</td>
                           <td className="px-3 py-2">{v.gestational_age_weeks || '-'}</td>
                           <td className="px-3 py-2">{v.blood_pressure || '-'}</td>
                           <td className="px-3 py-2">{v.weight || '-'}</td>
@@ -299,7 +300,7 @@ export default function AntenatalProfile() {
                           <td className="px-3 py-2">{v.fetal_presentation || '-'}</td>
                           <td className="px-3 py-2">{v.urine_protein || '-'} / {v.urine_glucose || '-'}</td>
                           <td className="px-3 py-2">{v.hb_level || '-'}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{v.next_appointment ? new Date(v.next_appointment).toLocaleDateString() : '-'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{v.next_appointment ? formatDate(v.next_appointment) : '-'}</td>
                           <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{v.recorded_by_name || '-'}</td>
                         </tr>
                       ))}
