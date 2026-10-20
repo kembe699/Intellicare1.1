@@ -878,7 +878,7 @@ const ExchangeRates: React.FC = () => {
                     />
                   </div>
                   <div className="flex justify-center pb-2">
-                    <Button variant="ghost" size="icon" onClick={() => { const t = convFrom; setConvFrom(convTo); setConvTo(t); setConvResult(null); }}>
+                    <Button variant="ghost" size="icon" aria-label="Swap currencies" onClick={() => { const t = convFrom; setConvFrom(convTo); setConvTo(t); setConvResult(null); }}>
                       <ArrowRightLeft className="h-4 w-4" />
                     </Button>
                   </div>

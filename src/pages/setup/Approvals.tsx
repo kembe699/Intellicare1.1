@@ -281,28 +281,28 @@ const Approvals: React.FC = () => {
             {/* Transfer controls */}
             <div className="flex lg:flex-col items-center justify-center gap-2 py-2">
               <Button
-                type="button" variant="outline" size="icon" className="h-9 w-9" title="Grant all"
+                type="button" variant="outline" size="icon" aria-label="Grant all" className="h-9 w-9" title="Grant all"
                 onClick={() => grantTypes(types.filter((t) => !assignedKeys.has(t.key)).map((t) => t.key))}
                 disabled={saving || !selectedUserId}
               >
                 <ChevronsLeft className="w-4 h-4" />
               </Button>
               <Button
-                type="button" variant="outline" size="icon" className="h-9 w-9" title="Grant selected"
+                type="button" variant="outline" size="icon" aria-label="Grant selected" className="h-9 w-9" title="Grant selected"
                 onClick={() => grantTypes(Array.from(checkedAvailable))}
                 disabled={saving || !selectedUserId || checkedAvailable.size === 0}
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
               <Button
-                type="button" variant="outline" size="icon" className="h-9 w-9" title="Revoke selected"
+                type="button" variant="outline" size="icon" aria-label="Revoke selected" className="h-9 w-9" title="Revoke selected"
                 onClick={() => revokeTypes(Array.from(checkedAssigned))}
                 disabled={saving || !selectedUserId || checkedAssigned.size === 0}
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
               <Button
-                type="button" variant="outline" size="icon" className="h-9 w-9" title="Revoke all"
+                type="button" variant="outline" size="icon" aria-label="Revoke all" className="h-9 w-9" title="Revoke all"
                 onClick={() => revokeTypes(Array.from(assignedKeys))}
                 disabled={saving || !selectedUserId}
               >

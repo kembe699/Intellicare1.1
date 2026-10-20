@@ -841,7 +841,7 @@ export default function PatientsBill() {
                 <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchBills} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchBills} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
@@ -921,7 +921,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Record Payment
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedBill(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedBill(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1053,7 +1053,7 @@ export default function PatientsBill() {
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[80vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Create New Bill</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowNewBillModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowNewBillModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1144,7 +1144,7 @@ export default function PatientsBill() {
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Start Cashier Shift</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1203,7 +1203,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-primary" /> Accept Deposit
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowAcceptDepositModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowAcceptDepositModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1251,7 +1251,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Undo2 className="w-5 h-5 text-primary" /> Refund Deposit
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowRefundDepositModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowRefundDepositModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1306,7 +1306,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Invoice Created
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

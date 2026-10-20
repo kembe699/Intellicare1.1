@@ -323,7 +323,7 @@ export default function SalaryStructuresManagement() {
                           <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-medium">{c.is_percentage ? `${c.amount}%` : formatAmount(c.amount, form.currency)}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                            <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </Button>
                           </div>
@@ -341,7 +341,7 @@ export default function SalaryStructuresManagement() {
                           <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-medium">{c.is_percentage ? `${c.amount}%` : formatAmount(c.amount, form.currency)}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                            <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </Button>
                           </div>
@@ -375,8 +375,8 @@ export default function SalaryStructuresManagement() {
                     <Button size="sm" variant="outline" className="h-7" onClick={() => openAssign(s)}>
                       <Users2 className="w-3.5 h-3.5 mr-1.5" /> Assign
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}><Edit className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(s)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                    <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}><Edit className="w-3.5 h-3.5" /></Button>
+                    <Button size="icon" aria-label="Delete" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(s)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                   </div>
                 ),
               },

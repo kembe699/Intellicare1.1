@@ -382,10 +382,10 @@ const Clinics: React.FC = () => {
                   key: '__actions', header: '', align: 'right',
                   render: (_v, clinic) => (
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7">
+                      <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => handleEdit(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7 text-destructive hover:text-destructive">
+                      <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => handleDelete(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7 text-destructive hover:text-destructive">
                         {deletingId === clinic.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </Button>
                     </div>

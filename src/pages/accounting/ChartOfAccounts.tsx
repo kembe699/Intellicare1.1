@@ -388,7 +388,7 @@ const ChartOfAccounts: React.FC = () => {
                   Clear
                 </Button>
               )}
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={loadAccounts} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={loadAccounts} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -422,10 +422,10 @@ const ChartOfAccounts: React.FC = () => {
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, account) => (
                     <div className="flex items-center justify-center space-x-1">
-                      <Button size="icon" variant="ghost" onClick={() => handleView(account)} title="View">
+                      <Button size="icon" aria-label="View" variant="ghost" onClick={() => handleView(account)} title="View">
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleEdit(account)} title="Edit">
+                      <Button size="icon" aria-label="Edit" variant="ghost" onClick={() => handleEdit(account)} title="Edit">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                     </div>

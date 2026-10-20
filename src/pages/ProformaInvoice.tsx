@@ -497,7 +497,7 @@ export default function ProformaInvoicePage() {
                       <div className="text-xs text-muted-foreground font-mono mt-0.5">{selectedPatient.code || selectedPatient.id}</div>
                       {selectedPatient.phone && <div className="text-xs text-muted-foreground mt-0.5">{selectedPatient.phone}</div>}
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSelectedPatient(null)}>
+                    <Button variant="ghost" size="icon" aria-label="Close" className="h-6 w-6 shrink-0" onClick={() => setSelectedPatient(null)}>
                       <X className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -538,7 +538,7 @@ export default function ProformaInvoicePage() {
                       <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-medium text-muted-foreground">New Walk-in Patient</p>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowWalkInForm(false)}>
+                          <Button variant="ghost" size="icon" aria-label="Close" className="h-5 w-5" onClick={() => setShowWalkInForm(false)}>
                             <X className="w-3 h-3" />
                           </Button>
                         </div>
@@ -726,17 +726,17 @@ export default function ProformaInvoicePage() {
                         <div key={`${l.type}-${l.refId}`} className="p-2.5 rounded-lg border bg-muted/20">
                           <div className="flex items-start justify-between gap-2">
                             <div className="font-medium text-sm">{l.name}</div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive" onClick={() => removeFromCart(l.refId, l.type)}>
+                            <Button variant="ghost" size="icon" aria-label="Delete" className="h-6 w-6 shrink-0 text-destructive" onClick={() => removeFromCart(l.refId, l.type)}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                           <div className="flex items-center justify-between mt-1.5 gap-2">
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, -1)}>
+                              <Button variant="outline" size="icon" aria-label="Remove" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, -1)}>
                                 <Minus className="w-3 h-3" />
                               </Button>
                               <span className="text-sm font-mono w-6 text-center">{l.quantity}</span>
-                              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, 1)}>
+                              <Button variant="outline" size="icon" aria-label="Add" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, 1)}>
                                 <Plus className="w-3 h-3" />
                               </Button>
                             </div>
@@ -805,7 +805,7 @@ export default function ProformaInvoicePage() {
                     key: '__actions', header: 'Actions', align: 'right',
                     render: (_v, h) => (
                       <div className="flex justify-end gap-1.5">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePrint(h)} title="Print">
+                        <Button variant="ghost" size="icon" aria-label="Print" className="h-7 w-7" onClick={() => handlePrint(h)} title="Print">
                           <Printer className="w-3.5 h-3.5" />
                         </Button>
                         {h.status !== 'converted' ? (

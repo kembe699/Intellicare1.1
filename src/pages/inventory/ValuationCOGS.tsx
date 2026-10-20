@@ -113,7 +113,7 @@ export default function ValuationCOGS() {
         {activeMode === 'valuation' ? (
           <div className="mt-6 space-y-6">
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchValuation} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchValuation} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button variant="outline" size="sm" className="h-9" onClick={exportValuationCSV}>
@@ -201,7 +201,7 @@ export default function ValuationCOGS() {
                 <Input type="month" value={cogsPeriod} onChange={e => setCogsPeriod(e.target.value)} className="w-[180px] h-9" />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchCOGS} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchCOGS} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
                 <Button variant="outline" size="sm" className="h-9" onClick={exportCogsCSV}>

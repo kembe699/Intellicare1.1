@@ -139,7 +139,7 @@ export default function StockTransferRequests() {
               searchPlaceholder="Search..."
               pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
               toolbarExtra={
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={load} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={load} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               }

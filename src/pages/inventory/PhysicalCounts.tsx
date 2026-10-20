@@ -342,7 +342,7 @@ export default function PhysicalCounts() {
           <div className="p-4 border-b flex justify-between items-center bg-muted/30">
             <h3 className="font-medium">{activeMode === 'counts' ? 'Count Directory' : 'Adjustment Directory'}</h3>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               {activeMode === 'adjustments' && (
@@ -374,7 +374,7 @@ export default function PhysicalCounts() {
                   },
                   {
                     key: '__actions', header: 'Actions',
-                    render: (_v, c) => <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => viewCount(c)}><Eye className="w-3.5 h-3.5" /></Button>,
+                    render: (_v, c) => <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={() => viewCount(c)}><Eye className="w-3.5 h-3.5" /></Button>,
                   },
                 ]}
               />
@@ -411,12 +411,12 @@ export default function PhysicalCounts() {
                     key: '__actions', header: 'Actions',
                     render: (_v, adj) => adj.approval_status === 'pending' ? (
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
+                        <Button variant="ghost" size="icon" aria-label="Confirm" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
                           {processingAdj?.id === adj.id && processingAdj.action === 'approve'
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin text-success" />
                             : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
+                        <Button variant="ghost" size="icon" aria-label="Close" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
                           {processingAdj?.id === adj.id && processingAdj.action === 'reject'
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin text-destructive" />
                             : <XCircle className="w-3.5 h-3.5 text-destructive" />}
@@ -442,7 +442,7 @@ export default function PhysicalCounts() {
                 <h3 className="font-semibold text-lg font-mono">{selectedCount.count_number}</h3>
                 <p className="text-xs text-muted-foreground">{selectedCount.count_date ? formatDate(selectedCount.count_date) : ''} — {selectedCount.count_type?.replace(/_/g, ' ')}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-6 flex-1 overflow-auto space-y-4">
               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-muted text-muted-foreground border-border'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
@@ -509,7 +509,7 @@ export default function PhysicalCounts() {
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Count Item</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowAddLine(false)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowAddLine(false)}><X className="w-4 h-4" /></Button>
             </div>
             <form onSubmit={addCountLine}>
               <div className="p-6 space-y-4">
@@ -555,7 +555,7 @@ export default function PhysicalCounts() {
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-primary" /> Create Adjustment</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowCreateAdj(false)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowCreateAdj(false)}><X className="w-4 h-4" /></Button>
             </div>
             <form onSubmit={createAdjustment} className="flex-1 overflow-auto">
               <div className="p-6 space-y-4">

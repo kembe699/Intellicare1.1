@@ -879,7 +879,7 @@ export default function PatientDetails() {
                             <div className="space-y-2.5">
                               <div className="flex items-center justify-between">
                                 <p className="font-semibold text-sm text-foreground truncate">{p.medication_name}</p>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={() => setShowAdminForm(false)}><X className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" aria-label="Close" className="h-6 w-6 -mr-1" onClick={() => setShowAdminForm(false)}><X className="h-3.5 w-3.5" /></Button>
                               </div>
                               <Input placeholder="Dosage given" value={adminForm.dosage_given} onChange={e => setAdminForm({ ...adminForm, dosage_given: e.target.value })} />
                               <div className="grid grid-cols-2 gap-2">

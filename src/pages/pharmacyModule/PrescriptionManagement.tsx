@@ -844,7 +844,7 @@ export default function PrescriptionManagement() {
               <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
                 <FileSpreadsheet className="w-4 h-4" /> Export CSV
               </Button>
-              <Button variant="outline" size="icon" onClick={fetchPrescriptions} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" onClick={fetchPrescriptions} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -880,7 +880,7 @@ export default function PrescriptionManagement() {
                 <h3 className="font-semibold text-lg">{selectedRx.prescription_number}</h3>
                 <p className="text-xs text-muted-foreground">{selectedRx.patient_name || 'Unknown patient'}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedRx(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedRx(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

@@ -2013,7 +2013,7 @@ export default function DispensingWorkflow() {
                 <Input type="date" className="h-9 w-[150px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[150px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchHistory} disabled={historyLoading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchHistory} disabled={historyLoading}>
                   <RefreshCw className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
@@ -2050,7 +2050,7 @@ export default function DispensingWorkflow() {
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center px-5 py-4 border-b bg-muted/30">
               <h3 className="font-semibold text-base flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" /> Start Cashier Shift</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -2089,7 +2089,7 @@ export default function DispensingWorkflow() {
                 <Check className="w-4 h-4 text-primary" />
                 Invoice Created
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

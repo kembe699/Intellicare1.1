@@ -160,7 +160,7 @@ export default function NewStockTransferRequest() {
                         className="w-28 h-9"
                         disabled={!fromLocationId}
                       />
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => removeLine(idx)} disabled={lines.length === 1}>
+                      <Button type="button" variant="ghost" size="icon" aria-label="Delete" className="h-9 w-9" onClick={() => removeLine(idx)} disabled={lines.length === 1}>
                         <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </div>

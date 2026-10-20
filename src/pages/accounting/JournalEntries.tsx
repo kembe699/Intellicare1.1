@@ -587,18 +587,18 @@ const JournalEntriesPage: React.FC = () => {
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, entry) => (
                     <div className="flex items-center justify-center space-x-1">
-                      <Button size="icon" variant="ghost" onClick={() => handleView(entry)} title="View">
+                      <Button size="icon" aria-label="View" variant="ghost" onClick={() => handleView(entry)} title="View">
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       {entry.status === 'draft' && (
-                        <Button size="icon" variant="ghost" onClick={() => handleEdit(entry)} title="Edit">
+                        <Button size="icon" aria-label="Edit" variant="ghost" onClick={() => handleEdit(entry)} title="Edit">
                           <Edit className="w-3.5 h-3.5" />
                         </Button>
                       )}
                       {getStatusActions(entry).map((act) => {
                         const isActive = statusActionKey === `${entry.id}-${act.action}`;
                         return (
-                          <Button key={act.action} size="icon" variant={act.variant}
+                          <Button key={act.action} size="icon" aria-label={act.label} variant={act.variant}
                             onClick={() => changeStatus(entry.id, act.action, act.label)}
                             disabled={loading} title={act.label}>
                             {isActive ? <Loader2 className="w-3 h-3 animate-spin" /> : act.icon}

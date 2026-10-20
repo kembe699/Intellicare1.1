@@ -450,8 +450,8 @@ export default function PayrollRunDetail() {
                           <QrCode className="w-3.5 h-3.5 mr-1" /> Pay
                         </Button>
                       )}
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download Payslip"><Download className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => printPayslip(l)} title="Print Payslip"><Printer className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" aria-label="Download Payslip" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download Payslip"><Download className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" aria-label="Print Payslip" variant="ghost" className="h-7 w-7" onClick={() => printPayslip(l)} title="Print Payslip"><Printer className="w-3.5 h-3.5" /></Button>
                     </div>
                   ),
                 },

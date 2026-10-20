@@ -219,7 +219,7 @@ const GeneralLedger: React.FC = () => {
                             <StatusBadge status={entry.status} map={GL_STATUS_TONE_MAP} />
                           </td>
                           <td className="px-3 pr-5 py-3.5 text-center whitespace-nowrap">
-                            <Button size="icon" variant="ghost" className="hover:bg-muted" onClick={() => handleView(entry)} title="View Details">
+                            <Button size="icon" aria-label="View Details" variant="ghost" className="hover:bg-muted" onClick={() => handleView(entry)} title="View Details">
                               <Eye className="w-3.5 h-3.5" />
                             </Button>
                           </td>

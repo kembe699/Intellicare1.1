@@ -360,7 +360,7 @@ export default function Receipts() {
                   </span>
                 )}
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedReceipt(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedReceipt(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -500,7 +500,7 @@ export default function Receipts() {
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Cancel Receipt
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowCancelModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowCancelModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -554,7 +554,7 @@ export default function Receipts() {
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Void Line Item
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setVoidItemIndex(null); setVoidReason(''); }}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => { setVoidItemIndex(null); setVoidReason(''); }}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

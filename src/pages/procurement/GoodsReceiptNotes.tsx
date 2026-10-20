@@ -458,7 +458,7 @@ const GoodsReceiptNotes: React.FC = () => {
           title="Goods Receipt Notes"
           actions={
             <div className="flex gap-2">
-              <Button onClick={fetchGRNs} variant="outline" size="icon" disabled={loading}>
+              <Button onClick={fetchGRNs} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button onClick={openCreate}>
@@ -508,7 +508,7 @@ const GoodsReceiptNotes: React.FC = () => {
                           searchPlaceholder="Search..."
                           className="flex-1"
                         />
-                        <Button type="button" variant="outline" size="icon" onClick={fetchAvailablePOs} disabled={loadingLocations}>
+                        <Button type="button" variant="outline" size="icon" aria-label="Refresh" onClick={fetchAvailablePOs} disabled={loadingLocations}>
                           <RefreshCw className="w-4 h-4" />
                         </Button>
                       </div>
@@ -675,27 +675,27 @@ const GoodsReceiptNotes: React.FC = () => {
                     key: '__actions', header: 'Actions', align: 'center',
                     render: (_v, grn) => (
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-success" /></Button>
-                        <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" aria-label="Download" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-success" /></Button>
+                        <Button size="icon" aria-label="View" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
                         {grn.status === 'pending_inspection' && (
                           <>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => inspectGRN(grn.id)} disabled={processing?.id === grn.id}>
+                            <Button size="icon" aria-label="Inspect" variant="ghost" className="w-7 h-7" onClick={() => inspectGRN(grn.id)} disabled={processing?.id === grn.id}>
                               {processing?.id === grn.id && processing.action === 'inspect' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5 text-primary" />}
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
+                            <Button size="icon" aria-label="Confirm" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
                               {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
+                            <Button size="icon" aria-label="Close" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
                               {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
                         {grn.status === 'inspected' && (
                           <>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
+                            <Button size="icon" aria-label="Confirm" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
                               {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
+                            <Button size="icon" aria-label="Close" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
                               {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>

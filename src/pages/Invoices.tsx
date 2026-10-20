@@ -187,7 +187,7 @@ export default function Invoices() {
                 <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchInvoices} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchInvoices} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>

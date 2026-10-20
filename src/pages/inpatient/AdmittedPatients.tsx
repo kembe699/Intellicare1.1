@@ -129,7 +129,7 @@ export default function AdmittedPatients() {
               <span className="text-xs text-muted-foreground">to</span>
               <Input type="date" className="h-9 w-[150px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
               {(dateFrom || dateTo) && (
-                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => { setDateFrom(''); setDateTo(''); }} title="Clear date filter">
+                <Button type="button" variant="outline" size="icon" aria-label="Clear date filter" className="h-9 w-9" onClick={() => { setDateFrom(''); setDateTo(''); }} title="Clear date filter">
                   <X className="w-3.5 h-3.5" />
                 </Button>
               )}

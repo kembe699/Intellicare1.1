@@ -974,12 +974,12 @@ const Services: React.FC = () => {
                   key: '__actions', header: 'Actions', align: 'right',
                   render: (_v, service) => (
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(service)} disabled={deletingId === service.id} className="h-7 w-7">
+                      <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => handleEdit(service)} disabled={deletingId === service.id} className="h-7 w-7">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Delete"
                         onClick={() => handleDelete(service.id)}
                         disabled={deletingId === service.id}
                         className="h-7 w-7 text-destructive hover:text-destructive"

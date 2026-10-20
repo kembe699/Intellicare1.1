@@ -811,12 +811,12 @@ const Security: React.FC = () => {
                   key: '__actions', header: 'Actions',
                   render: (_v, u) => (
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEditForm(u)} className="h-7 w-7" title="Edit user">
+                      <Button variant="ghost" size="icon" aria-label="Edit user" onClick={() => openEditForm(u)} className="h-7 w-7" title="Edit user">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Reset password"
                         onClick={() => handleResetPassword(u)}
                         disabled={resettingUserId === u.id}
                         className="h-7 w-7"
@@ -826,7 +826,7 @@ const Security: React.FC = () => {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label={u.isActive ? 'Disable user' : 'Enable user'}
                         onClick={() => handleToggleUserStatus(u.id, u.isActive)}
                         disabled={togglingUserId === u.id}
                         className={`h-7 w-7 ${u.isActive ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
@@ -836,7 +836,7 @@ const Security: React.FC = () => {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Delete user"
                         onClick={() => openDeleteDialog(u)}
                         className="h-7 w-7 text-destructive hover:text-destructive"
                         title="Delete user"
@@ -938,16 +938,16 @@ const Security: React.FC = () => {
 
                 {/* Transfer controls */}
                 <div className="flex lg:flex-col items-center justify-center gap-2 py-2">
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Assign all" onClick={moveAllToAssigned} disabled={savingPrivileges}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Assign all" className="h-9 w-9" title="Assign all" onClick={moveAllToAssigned} disabled={savingPrivileges}>
                     <ChevronsLeft className="w-4 h-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Assign selected" onClick={moveToAssigned} disabled={savingPrivileges || checkedAvailable.size === 0}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Assign selected" className="h-9 w-9" title="Assign selected" onClick={moveToAssigned} disabled={savingPrivileges || checkedAvailable.size === 0}>
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Unassign selected" onClick={moveToAvailable} disabled={savingPrivileges || checkedAssigned.size === 0}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Unassign selected" className="h-9 w-9" title="Unassign selected" onClick={moveToAvailable} disabled={savingPrivileges || checkedAssigned.size === 0}>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Unassign all" onClick={moveAllToAvailable} disabled={savingPrivileges}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Unassign all" className="h-9 w-9" title="Unassign all" onClick={moveAllToAvailable} disabled={savingPrivileges}>
                     <ChevronsRight className="w-4 h-4" />
                   </Button>
                   {savingPrivileges && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mt-1" />}
@@ -967,7 +967,7 @@ const Security: React.FC = () => {
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPrivilege(); } }}
                         className="h-8 text-sm"
                       />
-                      <Button type="button" size="icon" className="h-8 w-8 shrink-0" onClick={handleAddPrivilege} disabled={addingPrivilege || !newPrivilegeName.trim()}>
+                      <Button type="button" size="icon" aria-label="Add" className="h-8 w-8 shrink-0" onClick={handleAddPrivilege} disabled={addingPrivilege || !newPrivilegeName.trim()}>
                         {addingPrivilege ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                       </Button>
                     </div>

@@ -481,7 +481,7 @@ export default function ItemMaster() {
                     <div className="flex gap-1.5">
                       <Input readOnly disabled={!!editingItem} value={formData.item_code} className="h-10 text-sm font-mono bg-muted/40" />
                       {!editingItem && (
-                        <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" title="Regenerate code" onClick={() => setFormData({ ...formData, item_code: generateItemCode() })}>
+                        <Button type="button" variant="outline" size="icon" aria-label="Regenerate code" className="h-10 w-10 flex-shrink-0" title="Regenerate code" onClick={() => setFormData({ ...formData, item_code: generateItemCode() })}>
                           <RefreshCw className="w-4 h-4" />
                         </Button>
                       )}
@@ -498,7 +498,7 @@ export default function ItemMaster() {
                         placeholder="Scan, type, or generate..."
                         className="h-10 text-sm font-mono bg-white"
                       />
-                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
+                      <Button type="button" variant="outline" size="icon" aria-label="Generate barcode" className="h-10 w-10 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
                         <RefreshCw className="w-4 h-4" />
                       </Button>
                     </div>
@@ -710,7 +710,7 @@ export default function ItemMaster() {
                   searchPlaceholder="Search..."
                   className="w-40 h-9"
                 />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchItems} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchItems} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
                 <div className="flex items-center gap-2 mr-1">
@@ -790,8 +790,8 @@ export default function ItemMaster() {
                     key: '__actions', header: 'Actions',
                     render: (_v, item) => (
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewItem(item); }}><Eye className="w-3.5 h-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(item); }}><Edit className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewItem(item); }}><Eye className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(item); }}><Edit className="w-3.5 h-3.5" /></Button>
                       </div>
                     ),
                   },
@@ -812,7 +812,7 @@ export default function ItemMaster() {
                 <h3 className="font-semibold text-lg font-mono">{selectedItem.item_code}</h3>
                 <p className="text-xs text-muted-foreground">{selectedItem.item_name}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedItem(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedItem(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -929,7 +929,7 @@ export default function ItemMaster() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Upload className="w-5 h-5 text-primary" /> Bulk Upload Items
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowBulkUpload(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowBulkUpload(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -999,7 +999,7 @@ export default function ItemMaster() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowPriceAdjustment(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowPriceAdjustment(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

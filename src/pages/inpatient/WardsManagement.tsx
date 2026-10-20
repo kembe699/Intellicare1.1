@@ -267,8 +267,8 @@ export default function WardsManagement() {
               key: '__actions', header: 'Actions', align: 'right',
               render: (_v, ward) => (
                 <div className="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={async () => { if (await confirm({ description: 'Delete this ward?', destructive: true })) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={async () => { if (await confirm({ description: 'Delete this ward?', destructive: true })) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               ),
             },

@@ -376,7 +376,7 @@ export default function LISCollection() {
                       onChange={(e) => setQueueSearch(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={fetchSpecimens} disabled={loading} title="Refresh">
+                  <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9 shrink-0" onClick={fetchSpecimens} disabled={loading} title="Refresh">
                     <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
                   </Button>
                 </div>
@@ -569,7 +569,7 @@ export default function LISCollection() {
                       onChange={(e) => setHistorySearch(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={exportToCSV} title="Export CSV">
+                  <Button variant="outline" size="icon" aria-label="Export CSV" className="h-9 w-9 shrink-0" onClick={exportToCSV} title="Export CSV">
                     <Download className="w-4 h-4" />
                   </Button>
                 </div>

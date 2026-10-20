@@ -489,12 +489,12 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, e) => (
                     <div className="flex items-center justify-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
                       {employmentType === 'consultant' && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" aria-label="Set fee %" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
                       )}
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
+                      <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
                         {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
                       </Button>
                     </div>

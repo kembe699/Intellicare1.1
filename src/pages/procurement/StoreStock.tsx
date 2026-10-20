@@ -162,7 +162,7 @@ export default function StoreStock() {
               searchPlaceholder="Search items..."
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               toolbarExtra={
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={load} disabled={loading || !locationId}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={load} disabled={loading || !locationId}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               }

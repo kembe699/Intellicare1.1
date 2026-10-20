@@ -677,7 +677,7 @@ const PurchaseRequisitions: React.FC = () => {
           icon={<ShoppingCart />}
           title="Purchase Requisitions"
           actions={
-            <Button onClick={fetchPRs} variant="outline" size="icon" disabled={loading}>
+            <Button onClick={fetchPRs} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           }

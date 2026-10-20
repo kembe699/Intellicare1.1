@@ -836,7 +836,7 @@ export default function BillDetails() {
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Void Line Item
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setVoidPromptIndex(null); setVoidReason(''); }}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => { setVoidPromptIndex(null); setVoidReason(''); }}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1390,7 +1390,7 @@ export default function BillDetails() {
                 render: (_v, s) => {
                   const realIndex = bill.services.indexOf(s);
                   return !s.paid && !s.isVoided && !s.invoiced ? (
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setVoidPromptIndex(realIndex)} disabled={voidingIndex !== null} title="Void item">
+                    <Button variant="ghost" size="icon" aria-label="Void item" className="h-6 w-6" onClick={() => setVoidPromptIndex(realIndex)} disabled={voidingIndex !== null} title="Void item">
                       {voidingIndex === realIndex ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : <X className="w-3.5 h-3.5 text-muted-foreground" />}
                     </Button>
                   ) : null;
@@ -1421,7 +1421,7 @@ export default function BillDetails() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Invoice Created
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

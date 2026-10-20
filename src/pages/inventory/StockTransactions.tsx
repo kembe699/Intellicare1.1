@@ -321,7 +321,7 @@ export default function StockTransactions() {
                 <Input type="date" className="h-9 w-[140px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[140px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchTransactions} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchTransactions} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
                 <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>

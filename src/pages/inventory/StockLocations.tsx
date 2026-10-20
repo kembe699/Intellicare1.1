@@ -229,7 +229,7 @@ export default function StockLocations() {
             exportFileName="stock-locations"
             pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
             toolbarExtra={
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchLocations} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchLocations} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             }
@@ -277,7 +277,7 @@ export default function StockLocations() {
           <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Stock at {selectedLocation.location_name}</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedLocation(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedLocation(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

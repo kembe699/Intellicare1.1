@@ -204,7 +204,7 @@ export default function RoomsManagement() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => refetchRooms()} disabled={roomsLoading}>
+          <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => refetchRooms()} disabled={roomsLoading}>
             <RefreshCw className={`w-4 h-4 ${roomsLoading ? 'animate-spin' : ''}`} />
           </Button>
         </div>

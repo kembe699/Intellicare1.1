@@ -195,7 +195,7 @@ export default function PharmacyReturns() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <RotateCcw className="w-5 h-5 text-primary" /> Process Drug Return
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

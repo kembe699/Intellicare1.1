@@ -373,7 +373,7 @@ export default function BatchTracking() {
                 searchPlaceholder="Search..."
                 className="w-40 h-9"
               />
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchBatches} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchBatches} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
@@ -460,7 +460,7 @@ export default function BatchTracking() {
                 <h3 className="font-semibold text-lg">Record Batch Usage</h3>
                 <p className="text-xs text-muted-foreground">{selectedBatch.item_name} — Batch {selectedBatch.batch_number} (Available: {selectedBatch.quantity_available})</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowUseModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowUseModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -511,7 +511,7 @@ export default function BatchTracking() {
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Trash2 className="w-5 h-5" /> Retire Batches
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowRetireModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowRetireModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

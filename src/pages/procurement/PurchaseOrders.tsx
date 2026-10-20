@@ -631,7 +631,7 @@ const PurchaseOrders: React.FC = () => {
           title="Purchase Orders"
           actions={
             <div className="flex gap-2">
-              <Button onClick={fetchOrders} variant="outline" size="icon" disabled={loading}>
+              <Button onClick={fetchOrders} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button onClick={() => setFormData({ supplier_id: '', order_date: new Date().toISOString().split('T')[0], delivery_address: '', requested_delivery_date: '', payment_terms: 'Net30', po_currency: currency.code, notes: '' })}>

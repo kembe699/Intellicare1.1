@@ -443,7 +443,7 @@ const ProcurementReports: React.FC = () => {
               <Button onClick={() => triggerPrint()} variant="outline" size="sm" className="gap-1.5">
                 <Printer className="w-3.5 h-3.5" /> Print
               </Button>
-              <Button onClick={handleRefresh} variant="outline" size="icon" disabled={loading}>
+              <Button onClick={handleRefresh} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>

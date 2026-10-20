@@ -561,7 +561,7 @@ export default function EmployeeProfile() {
                             <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-medium">{c.is_percentage ? formatInCurrency(employee.basic_salary * c.amount / 100, employee.salary_currency) : formatInCurrency(c.amount, employee.salary_currency)}</span>
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                              <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                                 <Trash2 className="w-3 h-3 text-destructive" />
                               </Button>
                             </div>
@@ -581,7 +581,7 @@ export default function EmployeeProfile() {
                             <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-medium">{c.is_percentage ? formatInCurrency(employee.basic_salary * c.amount / 100, employee.salary_currency) : formatInCurrency(c.amount, employee.salary_currency)}</span>
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                              <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                                 <Trash2 className="w-3 h-3 text-destructive" />
                               </Button>
                             </div>
