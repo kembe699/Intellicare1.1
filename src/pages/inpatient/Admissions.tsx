@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Search, LogIn, X, Check, Loader2, BedDouble, ClipboardList, Clock, Receipt, UserCheck, FileSpreadsheet } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +16,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { exportCSV } from '@/utils/reportUtils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 
 export default function Admissions() {
@@ -225,7 +226,7 @@ export default function Admissions() {
       { header: 'Ward', key: 'ward_name' },
       { header: 'Room', key: 'room_number' },
       { header: 'Bed', key: 'bed_number' },
-      { header: 'Admission Date', key: 'admission_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Admission Date', key: 'admission_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Duration', key: 'admission_date', transform: (_v, row) => getDuration(row) },
       { header: 'Type', key: 'admission_type' },
       { header: 'Status', key: 'status' },
@@ -243,18 +244,18 @@ export default function Admissions() {
 
         {/* Pending Admission Requests — raised by doctors from LIS Orders */}
         {admissionRequests.length > 0 && (
-          <Card className="border-amber-200">
+          <Card className="border-warning-border">
             <CardContent className="p-0">
-              <div className="px-5 py-3 border-b bg-amber-50/60 flex items-center justify-between">
-                <h3 className="font-semibold flex items-center gap-2 text-amber-800">
+              <div className="px-5 py-3 border-b bg-warning-bg/60 flex items-center justify-between">
+                <h3 className="font-semibold flex items-center gap-2 text-warning">
                   <ClipboardList className="h-4 w-4" /> Pending Admission Requests
                 </h3>
-                <Badge className="bg-amber-500 text-white">{admissionRequests.length}</Badge>
+                <Badge className="bg-warning text-white">{admissionRequests.length}</Badge>
               </div>
               <div className="divide-y">
                 {admissionRequests.map((req: any) => (
                   <div key={req.id} className="px-5 py-3 flex items-center gap-4 hover:bg-muted/30 transition-colors">
-                    <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs flex-shrink-0">
+                    <div className="h-9 w-9 rounded-full bg-warning-bg flex items-center justify-center text-warning font-bold text-xs flex-shrink-0">
                       {req.patient_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -303,8 +304,8 @@ export default function Admissions() {
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">Patient *</Label>
                 {formData.patient_id ? (
-                  <div className="mt-1 flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <Check className="h-4 w-4 text-green-600" />
+                  <div className="mt-1 flex items-center gap-2 p-3 bg-success-bg border border-success-border rounded-lg">
+                    <Check className="h-4 w-4 text-success" />
                     <span className="font-medium text-sm flex-1">{formData.patient_name}</span>
                     <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setFormData({ ...formData, patient_id: '', patient_name: '', request_id: '' })}><X className="h-3 w-3" /></Button>
                   </div>
@@ -356,12 +357,12 @@ export default function Admissions() {
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Bed *</Label>
                   {beds.length === 0 ? (
-                    <p className="text-sm text-amber-600 p-2 bg-amber-50 rounded mt-1">No available beds in this room</p>
+                    <p className="text-sm text-warning p-2 bg-warning-bg rounded mt-1">No available beds in this room</p>
                   ) : (
                     <div className="grid grid-cols-4 gap-2 mt-1">
                       {beds.map((b: any) => (
                         <button key={b.id} type="button" onClick={() => setFormData({ ...formData, bed_id: b.id })}
-                          className={`p-2.5 rounded-lg border-2 text-center text-xs transition-all ${formData.bed_id === b.id ? 'border-green-500 bg-green-50 font-semibold' : 'border-border hover:border-green-300'}`}>
+                          className={`p-2.5 rounded-lg border-2 text-center text-xs transition-all ${formData.bed_id === b.id ? 'border-success-border bg-success-bg font-semibold' : 'border-border hover:border-success-border'}`}>
                           <BedDouble className="h-3.5 w-3.5 mx-auto mb-1 opacity-50" />
                           {b.bed_number}
                         </button>
@@ -482,19 +483,19 @@ export default function Admissions() {
                 { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 { key: 'room_number', header: 'Room', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'admission_date', header: 'Admission Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                { key: 'admission_date', header: 'Admission Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
                 { key: '__duration', header: 'Duration', render: (_v, a) => <span className="text-muted-foreground">{getDuration(a)}</span> },
                 {
                   key: 'admission_type', header: 'Type', sortable: true,
                   render: (v) => (
-                    <Badge className={`text-[10px] capitalize ${v === 'emergency' ? 'bg-red-100 text-red-700' : v === 'transfer' ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
+                    <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : v === 'transfer' ? 'bg-warning-bg text-warning' : 'bg-primary/10 text-primary'}`}>
                       {v}
                     </Badge>
                   ),
                 },
                 {
                   key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <Badge variant={v === 'active' ? 'default' : 'secondary'} className="text-[10px] capitalize">{v}</Badge>,
+                  render: (v) => <Badge variant={v === 'active' ? 'default' : 'secondary'} className="text-xs capitalize">{v}</Badge>,
                 },
                 {
                   key: '__actions', header: 'Actions',

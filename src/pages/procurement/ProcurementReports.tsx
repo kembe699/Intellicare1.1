@@ -12,7 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { StatusBadge, type StatusBadgeTone } from '@/components/common/StatusBadge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
@@ -21,6 +21,7 @@ import {
   ShoppingCart, ClipboardCheck, PackageCheck, Filter as FilterIcon, Stethoscope,
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 type ReportTab = 'purchase' | 'delivery' | 'orders' | 'requisitions' | 'receipts' | 'consultant-bills';
 
@@ -237,7 +238,7 @@ const ProcurementReports: React.FC = () => {
       exportCSV(itemRows, [
         { header: 'PO Number', key: 'po_number' },
         { header: 'Supplier', key: 'supplier_name' },
-        { header: 'Order Date', key: 'order_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Order Date', key: 'order_date', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Status', key: 'status' },
         { header: 'Currency', key: 'po_currency' },
         { header: 'Item', key: 'item_name' },
@@ -253,7 +254,7 @@ const ProcurementReports: React.FC = () => {
         { header: 'PR Number', key: 'pr_number' },
         { header: 'Department', key: 'department' },
         { header: 'Requested By', key: 'created_by_name' },
-        { header: 'Date', key: 'requisition_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Date', key: 'requisition_date', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Status', key: 'status' },
         { header: 'Currency', key: 'currency' },
         { header: 'Total Estimated Amount', key: 'total_amount', transform: (v) => parseFloat(v || 0).toFixed(2) },
@@ -265,7 +266,7 @@ const ProcurementReports: React.FC = () => {
         { header: 'GRN Number', key: 'grn_number' },
         { header: 'Linked PO', key: 'po_number' },
         { header: 'Supplier', key: 'supplier_name' },
-        { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Status', key: 'status' },
         { header: 'Received By', key: 'received_by_name' },
         { header: 'Inspected By', key: 'inspected_by_name', transform: (v) => v || '' },
@@ -275,8 +276,8 @@ const ProcurementReports: React.FC = () => {
       exportCSV(consultantBillsReport, [
         { header: 'Bill No.', key: 'bill_number' },
         { header: 'Consultant', key: 'first_name', transform: (_v, row) => `${row.first_name} ${row.last_name}` },
-        { header: 'Period From', key: 'period_from', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
-        { header: 'Period To', key: 'period_to', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+        { header: 'Period From', key: 'period_from', transform: (v) => v ? formatDate(v) : '' },
+        { header: 'Period To', key: 'period_to', transform: (v) => v ? formatDate(v) : '' },
         { header: 'Revenue Collected', key: 'total_consultation_revenue', transform: (v) => parseFloat(v || 0).toFixed(2) },
         { header: 'Fee %', key: 'fee_percentage' },
         { header: 'Currency', key: 'currency' },
@@ -417,9 +418,9 @@ const ProcurementReports: React.FC = () => {
   const totalOrders = byCurrency.reduce((s: number, r: any) => s + parseInt(r.order_count || 0), 0);
   const uniqueSupplierCount = new Set((purchaseSummary?.bySupplier || []).map((r: any) => r.supplier_code || r.supplier_name)).size;
 
-  const thClass = "px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
-  const thClassRight = "px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
-  const thClassCenter = "px-3 py-2 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
+  const thClass = "px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground";
+  const thClassRight = "px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground";
+  const thClassCenter = "px-3 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground";
 
   const isNewReportTab = activeTab === 'orders' || activeTab === 'requisitions' || activeTab === 'receipts' || activeTab === 'purchase';
 
@@ -442,7 +443,7 @@ const ProcurementReports: React.FC = () => {
               <Button onClick={() => triggerPrint()} variant="outline" size="sm" className="gap-1.5">
                 <Printer className="w-3.5 h-3.5" /> Print
               </Button>
-              <Button onClick={handleRefresh} variant="outline" size="icon" disabled={loading}>
+              <Button onClick={handleRefresh} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -480,7 +481,7 @@ const ProcurementReports: React.FC = () => {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    <DollarSign className="w-4 h-4 text-success" />
                     <span className="text-xs text-muted-foreground">Total Spend</span>
                   </div>
                   {byCurrency.length === 0 ? (
@@ -521,7 +522,7 @@ const ProcurementReports: React.FC = () => {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp className="w-4 h-4 text-amber-500" />
+                    <TrendingUp className="w-4 h-4 text-warning" />
                     <span className="text-xs text-muted-foreground">Avg Order Value</span>
                   </div>
                   {byCurrency.length > 0 ? (
@@ -643,7 +644,7 @@ const ProcurementReports: React.FC = () => {
                         key: '__visual', header: 'Visual', width: '200px',
                         render: (_v, row) => (
                           <div className="w-full bg-muted rounded-full h-2">
-                            <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${maxCount > 0 ? (row.order_count / maxCount) * 100 : 0}%` }} />
+                            <div className="bg-success h-2 rounded-full" style={{ width: `${maxCount > 0 ? (row.order_count / maxCount) * 100 : 0}%` }} />
                           </div>
                         ),
                       },
@@ -667,8 +668,8 @@ const ProcurementReports: React.FC = () => {
               columns={[
                 { key: 'supplier_name', header: 'Supplier', render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'total_orders', header: 'Total Orders', align: 'center' },
-                { key: 'on_time', header: 'On Time', align: 'center', render: (v) => <Badge className="bg-emerald-100 text-emerald-700 text-xs">{v || 0}</Badge> },
-                { key: 'late', header: 'Late', align: 'center', render: (v) => <Badge className="bg-red-100 text-red-700 text-xs">{v || 0}</Badge> },
+                { key: 'on_time', header: 'On Time', align: 'center', render: (v) => <Badge className="bg-success-bg text-success text-xs">{v || 0}</Badge> },
+                { key: 'late', header: 'Late', align: 'center', render: (v) => <Badge className="bg-destructive-bg text-destructive text-xs">{v || 0}</Badge> },
                 { key: 'pending', header: 'Pending', align: 'center', render: (v) => <Badge className="bg-muted text-muted-foreground text-xs">{v || 0}</Badge> },
                 { key: 'avg_delivery_days', header: 'Avg Days', align: 'center', render: (v) => <span className="font-mono">{v ? parseFloat(v).toFixed(1) : '—'}</span> },
                 {
@@ -679,7 +680,7 @@ const ProcurementReports: React.FC = () => {
                     return (
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-16 bg-muted rounded-full h-2">
-                          <div className={`h-2 rounded-full ${onTimePct >= 80 ? 'bg-emerald-500' : onTimePct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                          <div className={`h-2 rounded-full ${onTimePct >= 80 ? 'bg-success' : onTimePct >= 50 ? 'bg-warning' : 'bg-destructive'}`}
                             style={{ width: `${onTimePct}%` }} />
                         </div>
                         <span className="text-xs font-medium">{onTimePct.toFixed(0)}%</span>
@@ -774,16 +775,16 @@ const ProcurementReports: React.FC = () => {
               <p className="text-xs text-muted-foreground">{poReport.length} order{poReport.length === 1 ? '' : 's'} in range · every line item shown under its PO</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted sticky top-0">
-                    <th className={thClass}>PO / Item</th>
-                    <th className={thClass}>Supplier / Description</th>
-                    <th className={thClassCenter}>Qty</th>
-                    <th className={thClassRight}>Unit Price</th>
-                    <th className={thClassRight}>Line Total</th>
-                    <th className={thClass}>Date / Status</th>
-                    <th className={thClass}>Created By</th>
+                    <th scope="col" className={thClass}>PO / Item</th>
+                    <th scope="col" className={thClass}>Supplier / Description</th>
+                    <th scope="col" className={thClassCenter}>Qty</th>
+                    <th scope="col" className={thClassRight}>Unit Price</th>
+                    <th scope="col" className={thClassRight}>Line Total</th>
+                    <th scope="col" className={thClass}>Date / Status</th>
+                    <th scope="col" className={thClass}>Created By</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -798,7 +799,7 @@ const ProcurementReports: React.FC = () => {
                         <td className="px-3 py-2 text-right font-mono">{fmtAmt(row.total_amount, row.po_currency)}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            {row.order_date ? new Date(row.order_date).toLocaleDateString() : '—'}
+                            {row.order_date ? formatDate(row.order_date) : '—'}
                             <StatusBadge status={row.status} map={poStatusMap} className="capitalize" />
                           </div>
                         </td>
@@ -857,7 +858,7 @@ const ProcurementReports: React.FC = () => {
                     </>
                   ),
                 },
-                { key: 'requisition_date', header: 'Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                { key: 'requisition_date', header: 'Date', render: (v) => v ? formatDate(v) : '—' },
                 { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={prStatusMap} className="capitalize" /> },
                 { key: 'currency', header: 'Currency', align: 'center', render: (v) => <span className="font-mono">{v || '—'}</span> },
                 { key: 'total_amount', header: 'Total Est. Amount', align: 'right', render: (v, row) => <span className="font-mono">{fmtAmt(v, row.currency)}</span> },
@@ -881,7 +882,7 @@ const ProcurementReports: React.FC = () => {
                 { key: 'grn_number', header: 'GRN Number', render: (v) => <span className="font-medium font-mono">{v}</span> },
                 { key: 'po_number', header: 'Linked PO', render: (v) => <span className="font-mono text-muted-foreground">{v || '—'}</span> },
                 { key: 'supplier_name', header: 'Supplier', render: (v) => v || '—' },
-                { key: 'receipt_date', header: 'Receipt Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                { key: 'receipt_date', header: 'Receipt Date', render: (v) => v ? formatDate(v) : '—' },
                 { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={grnStatusMap} className="capitalize" /> },
                 { key: 'received_by_name', header: 'Received By', render: (v) => v || '—' },
                 { key: 'inspected_by_name', header: 'Inspected By', render: (v) => v || '—' },
@@ -909,8 +910,8 @@ const ProcurementReports: React.FC = () => {
                       <p className="text-sm font-bold mb-2">{cur}</p>
                       <div className="grid grid-cols-3 gap-3">
                         <div><p className="text-xs text-muted-foreground mb-0.5">Total Billed</p><p className="font-mono font-bold text-lg">{fmtAmt(t.billed)}</p></div>
-                        <div><p className="text-xs text-muted-foreground mb-0.5">Paid</p><p className="font-mono font-bold text-lg text-emerald-700">{fmtAmt(t.paid)}</p></div>
-                        <div><p className="text-xs text-muted-foreground mb-0.5">Outstanding</p><p className="font-mono font-bold text-lg text-amber-700">{fmtAmt(t.outstanding)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Paid</p><p className="font-mono font-bold text-lg text-success">{fmtAmt(t.paid)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Outstanding</p><p className="font-mono font-bold text-lg text-warning">{fmtAmt(t.outstanding)}</p></div>
                       </div>
                     </div>
                   ))}
@@ -929,7 +930,7 @@ const ProcurementReports: React.FC = () => {
                 columns={[
                   { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-medium font-mono">{v}</span> },
                   { key: 'first_name', header: 'Consultant', render: (_v, row) => `${row.first_name} ${row.last_name}` },
-                  { key: 'period_from', header: 'Period', render: (_v, row) => `${new Date(row.period_from).toLocaleDateString()} – ${new Date(row.period_to).toLocaleDateString()}` },
+                  { key: 'period_from', header: 'Period', render: (_v, row) => `${formatDate(row.period_from)} – ${formatDate(row.period_to)}` },
                   { key: 'total_consultation_revenue', header: 'Revenue', align: 'right', render: (v, row) => <span className="font-mono">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
                   { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => `${v}%` },
                   { key: 'bill_amount', header: 'Bill Amount', align: 'right', render: (v, row) => <span className="font-mono font-bold">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },

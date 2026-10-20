@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Plus, Eye, Edit, Building2, CreditCard, Landmark, TrendingUp, TrendingDown, RefreshCw, Save, FileSpreadsheet, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -29,10 +29,10 @@ const ACTIVE_TONE_MAP: Record<string, StatusBadgeTone> = {
 
 const ACCOUNT_TYPES = [
   { value: 'asset', label: 'Asset', icon: Building2, color: 'text-primary', bg: 'bg-primary/10 dark:bg-primary/20' },
-  { value: 'liability', label: 'Liability', icon: CreditCard, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950' },
+  { value: 'liability', label: 'Liability', icon: CreditCard, color: 'text-destructive', bg: 'bg-destructive-bg dark:bg-destructive' },
   { value: 'equity', label: 'Equity', icon: Landmark, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950' },
-  { value: 'revenue', label: 'Revenue', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950' },
-  { value: 'expense', label: 'Expense', icon: TrendingDown, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950' },
+  { value: 'revenue', label: 'Revenue', icon: TrendingUp, color: 'text-success', bg: 'bg-success-bg dark:bg-success' },
+  { value: 'expense', label: 'Expense', icon: TrendingDown, color: 'text-warning', bg: 'bg-warning-bg dark:bg-warning' },
 ];
 
 const emptyForm = {
@@ -388,7 +388,7 @@ const ChartOfAccounts: React.FC = () => {
                   Clear
                 </Button>
               )}
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={loadAccounts} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={loadAccounts} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -422,10 +422,10 @@ const ChartOfAccounts: React.FC = () => {
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, account) => (
                     <div className="flex items-center justify-center space-x-1">
-                      <Button size="icon" variant="ghost" onClick={() => handleView(account)} title="View">
+                      <Button size="icon" aria-label="View" variant="ghost" onClick={() => handleView(account)} title="View">
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleEdit(account)} title="Edit">
+                      <Button size="icon" aria-label="Edit" variant="ghost" onClick={() => handleEdit(account)} title="Edit">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                     </div>

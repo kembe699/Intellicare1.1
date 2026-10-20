@@ -8,7 +8,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Building2, Plus, Settings, Loader2, Edit, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Category, ChartAccount, NATURE_LABEL } from './fixedAssetsShared';
@@ -260,7 +260,7 @@ function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
                   options={[{ value: 'depreciating', label: 'Depreciating' }, { value: 'appreciating', label: 'Appreciating' }, { value: 'non_depreciating', label: 'Non-depreciating' }]}
                   value={nature} onChange={(v) => setNature(v as any)} searchPlaceholder="Search..." disabled={!!editingId}
                 />
-                {editingId && <p className="text-[11px] text-muted-foreground mt-1">Nature can't be changed once assets may already have been recorded under it.</p>}
+                {editingId && <p className="text-xs text-muted-foreground mt-1">Nature can't be changed once assets may already have been recorded under it.</p>}
               </div>
               {nature === 'depreciating' && (
                 <>

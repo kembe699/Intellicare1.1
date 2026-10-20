@@ -6,7 +6,7 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtCurrency, fmtCount, CsvColumn } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -156,7 +156,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Doctors Active</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Doctors Active</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.totalDoctorsActive)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">in selected period</p>
                 </div>
@@ -167,7 +167,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Patients Seen</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Patients Seen</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.totalPatientsSeen)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">distinct patients, doctor-attributed visits</p>
                 </div>
@@ -178,7 +178,7 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Visits</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Visits</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.totalVisits)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">attributed to an active doctor</p>
                 </div>
@@ -189,8 +189,8 @@ export default function DoctorPerformanceReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Revenue Attributed</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(displaySummary?.totalRevenueAttributed)}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Revenue Attributed</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(displaySummary?.totalRevenueAttributed)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">approximate — see note below</p>
                 </div>
                 <Wallet className="h-5 w-5 text-primary" />
@@ -200,8 +200,8 @@ export default function DoctorPerformanceReport() {
 
           {/* ── Data quality disclosure: doctor_id attribution ── */}
           {data?.dataQuality.note && (
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 flex gap-2">
-              <Info className="h-4 w-4 shrink-0 mt-0.5 text-slate-500" />
+            <div className="bg-muted border border-border rounded-lg p-3 text-xs text-foreground flex gap-2">
+              <Info className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
               <div>
                 <p className="font-medium mb-0.5">Some visits could not be attributed to a doctor</p>
                 <p>{data.dataQuality.note}</p>
@@ -218,9 +218,9 @@ export default function DoctorPerformanceReport() {
               </p>
             </div>
             <AdvancedDataTable<DoctorRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total Revenue Attributed</span>

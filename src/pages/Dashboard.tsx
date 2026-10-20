@@ -14,8 +14,10 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from 'recharts';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
+import { formatDate } from '@/lib/format';
 
 interface DashboardStats {
   totalPatients: number;
@@ -254,7 +256,7 @@ const Dashboard: React.FC = () => {
       <div className="space-y-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{greetingDate}</p>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">
+          <h1 className="mt-1 ic-text-title">
             Welcome back{firstName ? `, ${firstName}` : ''}
             {facilityInfo.facilityName && (
               <> — <span className="text-primary">{facilityInfo.facilityName}</span></>
@@ -276,9 +278,9 @@ const Dashboard: React.FC = () => {
               ))}
               <div className="flex items-center gap-2 pl-2">
                 <Label htmlFor="dashFrom" className="text-xs text-muted-foreground">From</Label>
-                <Input id="dashFrom" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-auto" />
+                <DatePicker id="dashFrom" value={customFrom} onChange={setCustomFrom} className="w-auto" />
                 <Label htmlFor="dashTo" className="text-xs text-muted-foreground">To</Label>
-                <Input id="dashTo" type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-auto" />
+                <DatePicker id="dashTo" value={customTo} onChange={setCustomTo} className="w-auto" />
                 {isCustomRange && (
                   <button
                     type="button"
@@ -370,7 +372,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Awaiting approval</p>
-                        <p className={`mt-0.5 text-lg font-semibold ${labData.totals.awaitingApproval > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                        <p className={`mt-0.5 text-lg font-semibold ${labData.totals.awaitingApproval > 0 ? 'text-warning' : 'text-foreground'}`}>
                           {labData.totals.awaitingApproval}
                         </p>
                       </div>
@@ -388,7 +390,7 @@ const Dashboard: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 border-t border-border pt-3 mt-4 text-xs text-muted-foreground">
-                      <span className={`h-1.5 w-1.5 rounded-full ${labData.totals.outstanding > 0 ? 'bg-amber-500' : 'bg-success'}`} />
+                      <span className={`h-1.5 w-1.5 rounded-full ${labData.totals.outstanding > 0 ? 'bg-warning' : 'bg-success'}`} />
                       {labData.totals.outstanding > 0
                         ? `${labData.totals.outstanding} request${labData.totals.outstanding === 1 ? '' : 's'} still open`
                         : 'Queue clear'}
@@ -433,7 +435,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Not moving</p>
-                        <p className={`mt-0.5 text-lg font-semibold ${stockMovement.totals.neverMoved > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                        <p className={`mt-0.5 text-lg font-semibold ${stockMovement.totals.neverMoved > 0 ? 'text-warning' : 'text-foreground'}`}>
                           {stockMovement.totals.neverMoved}
                         </p>
                       </div>
@@ -540,10 +542,10 @@ const Dashboard: React.FC = () => {
                       // list, so it is coloured rather than left as raw text.
                       render: (v) => {
                         const label = String(v || '').replace(/_/g, ' ');
-                        const tone = v === 'approved' ? 'bg-emerald-100 text-emerald-800'
-                          : v === 'analyzed' ? 'bg-amber-100 text-amber-800'
-                          : v === 'pending_collection' ? 'bg-rose-100 text-rose-800'
-                          : 'bg-sky-100 text-sky-800';
+                        const tone = v === 'approved' ? 'bg-success-bg text-success'
+                          : v === 'analyzed' ? 'bg-warning-bg text-warning'
+                          : v === 'pending_collection' ? 'bg-destructive-bg text-destructive'
+                          : 'bg-info-bg text-info';
                         return <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>{label}</span>;
                       } },
                     { key: 'requestedAt', header: 'Requested', sortable: true, render: (v) => (v ? new Date(v).toLocaleString() : '—') },
@@ -618,7 +620,7 @@ const Dashboard: React.FC = () => {
                 { key: 'patient_name', header: 'Patient', sortable: true },
                 { key: 'payment_method', header: 'Method', sortable: true, render: (v) => <span className="capitalize">{v}</span> },
                 { key: 'payment_amount', header: 'Amount', align: 'right', sortable: true, render: (v) => fmt(v) },
-                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => new Date(v).toLocaleDateString() },
+                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => formatDate(v) },
               ]}
             />
             </>

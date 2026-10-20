@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportLetterhead } from './ReportLetterhead';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { LoadingState } from '@/components/common';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
@@ -173,7 +173,7 @@ export default function ProcurementReport() {
       { key: 'current', header: 'Current (0-30)', align: 'right', sortable: true, render: v => <span className="font-mono">{fmtCurrency(v)}</span> },
       { key: 'd31_60', header: '31-60 Days', align: 'right', sortable: true, render: v => <span className="font-mono">{fmtCurrency(v)}</span> },
       { key: 'd61_90', header: '61-90 Days', align: 'right', sortable: true, render: v => <span className="font-mono">{fmtCurrency(v)}</span> },
-      { key: 'd90_plus', header: '90+ Days', align: 'right', sortable: true, render: v => <span className="font-mono text-red-600">{fmtCurrency(v)}</span> },
+      { key: 'd90_plus', header: '90+ Days', align: 'right', sortable: true, render: v => <span className="font-mono text-destructive">{fmtCurrency(v)}</span> },
       { key: 'total', header: 'Total Outstanding', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
     ];
     csvColumns = [{ header: option.aggGroupBy === 'supplier' ? 'Supplier' : 'Branch', key: 'groupLabel' }, { header: 'Current (0-30)', key: 'current', transform: v => fmtCurrency(v) }, { header: '31-60 Days', key: 'd31_60', transform: v => fmtCurrency(v) }, { header: '61-90 Days', key: 'd61_90', transform: v => fmtCurrency(v) }, { header: '90+ Days', key: 'd90_plus', transform: v => fmtCurrency(v) }, { header: 'Total', key: 'total', transform: v => fmtCurrency(v) }];
@@ -308,7 +308,7 @@ export default function ProcurementReport() {
         </div>
       ) : (
         <AdvancedDataTable
-          headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+          headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
           data={numberedRows}
           keyExtractor={keyExtractor}
           columns={columnsWithNo}

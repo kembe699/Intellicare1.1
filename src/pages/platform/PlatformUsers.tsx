@@ -11,8 +11,9 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import { Loader2, UserPlus, Users, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface AdminUser {
   id: number;
@@ -148,7 +149,7 @@ const PlatformUsers: React.FC = () => {
                     {a.id === currentAdmin?.id && <span className="ml-2 text-xs text-muted-foreground font-normal">(you)</span>}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{a.email}</TableCell>
-                  <TableCell className="text-muted-foreground">{new Date(a.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(a.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     {a.id !== currentAdmin?.id && (
                       <Button variant="outline" size="sm" onClick={() => handleRemove(a)}>

@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
+import { useConfirm } from '@/hooks/useConfirm';
 import { FlaskConical, Edit, Trash2, X, Check, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -34,6 +35,7 @@ interface StockLocation { id: string; location_name: string; }
 const empty = { lab_test_id: '', inventory_item_id: '', location_id: '', tests_per_unit: '', notes: '' };
 
 export default function LabTestConsumables() {
+  const confirm = useConfirm();
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -124,7 +126,13 @@ export default function LabTestConsumables() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Remove this link? The test will no longer deplete this item or check its stock.')) return;
+    const ok = await confirm({
+      title: 'Remove this link?',
+      description: 'The test will no longer deplete this item or check its stock.',
+      confirmLabel: 'Remove link',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       const res = await authFetch(`/api/inventory/lab-test-consumables/${id}`, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');
@@ -207,7 +215,7 @@ export default function LabTestConsumables() {
                     disabled={!!editingId || !formData.location_id || itemsLoading}
                   />
                   {!formData.location_id && !editingId && (
-                    <p className="text-[11px] text-muted-foreground mt-1">Only items actually stocked at the chosen location will be listed here.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Only items actually stocked at the chosen location will be listed here.</p>
                   )}
                 </div>
                 <div>
@@ -245,7 +253,7 @@ export default function LabTestConsumables() {
               searchPlaceholder="Search..."
               pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
               toolbarExtra={
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={load} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={load} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               }
@@ -259,7 +267,7 @@ export default function LabTestConsumables() {
                   render: (v) => {
                     const n = Number(v || 0);
                     return (
-                      <span className={`font-semibold inline-flex items-center gap-1 ${n <= 0 ? 'text-red-600' : n < 10 ? 'text-amber-600' : 'text-foreground'}`}>
+                      <span className={`font-semibold inline-flex items-center gap-1 ${n <= 0 ? 'text-destructive' : n < 10 ? 'text-warning' : 'text-foreground'}`}>
                         {n <= 0 && <AlertTriangle className="w-3.5 h-3.5" />} {n.toLocaleString()}
                       </span>
                     );
@@ -284,7 +292,7 @@ export default function LabTestConsumables() {
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}>
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </div>
                   ),

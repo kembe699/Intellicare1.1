@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, Lock, Eye, EyeOff, BarChart3, ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 export default function PasswordVerification() {
   const [password, setPassword] = useState('');
@@ -17,6 +17,18 @@ export default function PasswordVerification() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // This is a full-route security gate, not a floating modal over other
+  // content (there's nothing underneath to scroll-lock or trap focus
+  // against) — so Escape-to-close is the one missing-modal-behavior that
+  // actually applies, matching the existing click-outside-to-leave gesture.
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') navigate('/dashboard');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate]);
 
   // If already verified, redirect
   React.useEffect(() => {
@@ -92,9 +104,9 @@ export default function PasswordVerification() {
           <Card className="border border-border/50 shadow-2xl bg-white/95 backdrop-blur overflow-hidden">
             <CardContent className="p-6">
               {isLocked && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-red-600">
+                <div className="mb-4 p-3 bg-destructive-bg border border-destructive-border rounded-lg flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-destructive">
                     <p className="font-semibold">Account Locked</p>
                     <p>Too many failed attempts.</p>
                   </div>

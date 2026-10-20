@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Plus, Edit2, Trash2, Building2, BedDouble, Check, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -126,15 +126,15 @@ export default function WardsManagement() {
               <p className="text-xs text-muted-foreground">Total Wards</p>
             </CardContent>
           </Card>
-          <Card className="rounded-lg shadow-sm border-green-200/50 bg-green-50/30">
+          <Card className="rounded-lg shadow-sm border-success-border/50 bg-success-bg/30">
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">{wards.reduce((s: number, w: any) => s + (w.total_beds || 0), 0)}</p>
+              <p className="text-2xl font-bold text-success">{wards.reduce((s: number, w: any) => s + (w.total_beds || 0), 0)}</p>
               <p className="text-xs text-muted-foreground">Total Beds</p>
             </CardContent>
           </Card>
-          <Card className="rounded-lg shadow-sm border-amber-200/50 bg-amber-50/30">
+          <Card className="rounded-lg shadow-sm border-warning-border/50 bg-warning-bg/30">
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-700">{wards.reduce((s: number, w: any) => s + (w.current_occupancy || 0), 0)}</p>
+              <p className="text-2xl font-bold text-warning">{wards.reduce((s: number, w: any) => s + (w.current_occupancy || 0), 0)}</p>
               <p className="text-xs text-muted-foreground">Occupied</p>
             </CardContent>
           </Card>
@@ -196,7 +196,7 @@ export default function WardsManagement() {
                         placeholder="Select service..."
                         searchPlaceholder="Search services..."
                       />
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {formData.service_id
                           ? `Daily bed rate: ${fmt(services.find((s: any) => s.id === formData.service_id)?.price || 0)}`
                           : 'The daily bed rate is pulled from the selected service\'s price.'}
@@ -250,7 +250,7 @@ export default function WardsManagement() {
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">{ward.current_occupancy || 0}/{ward.total_beds || 0}</span>
                     <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${occupancyPct > 80 ? 'bg-red-500' : occupancyPct > 50 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${occupancyPct}%` }} />
+                      <div className={`h-full rounded-full transition-all ${occupancyPct > 80 ? 'bg-destructive' : occupancyPct > 50 ? 'bg-warning' : 'bg-success'}`} style={{ width: `${occupancyPct}%` }} />
                     </div>
                     <span className="text-xs text-muted-foreground">{occupancyPct}%</span>
                   </div>
@@ -267,8 +267,8 @@ export default function WardsManagement() {
               key: '__actions', header: 'Actions', align: 'right',
               render: (_v, ward) => (
                 <div className="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={async () => { if (await confirm({ description: 'Delete this ward?', destructive: true })) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={() => handleEdit(ward)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={async () => { if (await confirm({ description: 'Delete this ward?', destructive: true })) deleteMutation.mutate(ward.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               ),
             },

@@ -2,14 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { FileText, Image as ImageIcon, Eye, Loader2, Paperclip } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   fetchProcurementAttachments, fetchProcurementAttachmentBlobUrl,
   type AttachmentEntityType, type ProcurementAttachment,
 } from '@/api/procurementAttachments';
 
 const fileIcon = (mime: string) => mime === 'application/pdf'
-  ? <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+  ? <FileText className="w-4 h-4 text-destructive flex-shrink-0" />
+  // eslint-disable-next-line no-restricted-syntax -- file-type icon color, not a status
   : <ImageIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />;
 
 const fmtSize = (bytes: number) => bytes < 1024 * 1024

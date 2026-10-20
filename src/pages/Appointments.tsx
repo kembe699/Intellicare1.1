@@ -9,9 +9,10 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, DirectoryPerson } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDate } from '@/lib/format';
 
 // Follow-up / next-visit scheduling — booked from a patient's Visit Summary
 // (by the doctor who wants to see them again) or directly here (reception,
@@ -43,11 +44,11 @@ const STATUS_OPTIONS = [
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    scheduled: 'bg-amber-100 text-amber-700',
-    queued: 'bg-emerald-100 text-emerald-700',
-    cancelled: 'bg-slate-100 text-slate-500',
+    scheduled: 'bg-warning-bg text-warning',
+    queued: 'bg-success-bg text-success',
+    cancelled: 'bg-muted text-muted-foreground',
   };
-  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.cancelled}`}>{status}</span>;
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.cancelled}`}>{status}</span>;
 }
 
 export default function Appointments() {
@@ -158,7 +159,7 @@ export default function Appointments() {
   };
 
   const columns: Column<AppointmentRow>[] = [
-    { key: 'scheduled_date', header: 'Date', render: (v) => <span className="whitespace-nowrap font-medium">{new Date(v).toLocaleDateString()}</span> },
+    { key: 'scheduled_date', header: 'Date', render: (v) => <span className="whitespace-nowrap font-medium">{formatDate(v)}</span> },
     { key: 'first_name', header: 'Patient', render: (_v, row) => <div><p className="font-medium text-sm">{row.first_name} {row.last_name}</p><p className="text-xs text-muted-foreground font-mono">{row.participant_number}</p></div> },
     { key: 'doctor_name', header: 'Doctor', render: (v) => v ? `Dr. ${v}` : <span className="text-muted-foreground">Any doctor</span> },
     { key: 'reason', header: 'Reason', render: (v) => <span className="text-sm">{v || '-'}</span> },

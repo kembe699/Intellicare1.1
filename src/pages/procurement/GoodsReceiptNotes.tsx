@@ -19,13 +19,14 @@ import { uploadProcurementAttachments } from '@/api/procurementAttachments';
 import * as docTemplate from '@/utils/documentTemplate';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   Package, Plus, Eye, Search, RefreshCw, CheckCircle, XCircle,
   ClipboardCheck, Truck, AlertTriangle, FileText, Loader2, Download, FileSpreadsheet
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface GRNLine {
   id?: string;
@@ -142,7 +143,7 @@ const GoodsReceiptNotes: React.FC = () => {
       console.error('Error loading full GRN:', error);
     }
 
-    const receiptDate = new Date(fullGRN.receipt_date).toLocaleDateString();
+    const receiptDate = formatDate(fullGRN.receipt_date);
 
     const itemRows: docTemplate.TableRow[] = (fullGRN.lines || []).map((item, i) => ({
       bold: false,
@@ -154,7 +155,7 @@ const GoodsReceiptNotes: React.FC = () => {
         item.unit_of_measure,
         item.item_condition,
         item.batch_number || '-',
-        item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-'
+        item.expiry_date ? formatDate(item.expiry_date) : '-'
       ]
     }));
 
@@ -276,7 +277,7 @@ const GoodsReceiptNotes: React.FC = () => {
       { header: 'GRN Number', key: 'grn_number' },
       { header: 'PO Number', key: 'po_number' },
       { header: 'Supplier', key: 'supplier_name' },
-      { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Receipt Date', key: 'receipt_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Items', key: 'total_items_received' },
       { header: 'Status', key: 'status' },
       { header: 'Invoice Number', key: 'invoice_number', transform: (v) => v || '' },
@@ -457,7 +458,7 @@ const GoodsReceiptNotes: React.FC = () => {
           title="Goods Receipt Notes"
           actions={
             <div className="flex gap-2">
-              <Button onClick={fetchGRNs} variant="outline" size="icon" disabled={loading}>
+              <Button onClick={fetchGRNs} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button onClick={openCreate}>
@@ -507,7 +508,7 @@ const GoodsReceiptNotes: React.FC = () => {
                           searchPlaceholder="Search..."
                           className="flex-1"
                         />
-                        <Button type="button" variant="outline" size="icon" onClick={fetchAvailablePOs} disabled={loadingLocations}>
+                        <Button type="button" variant="outline" size="icon" aria-label="Refresh" onClick={fetchAvailablePOs} disabled={loadingLocations}>
                           <RefreshCw className="w-4 h-4" />
                         </Button>
                       </div>
@@ -570,14 +571,14 @@ const GoodsReceiptNotes: React.FC = () => {
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Rcvd Qty</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Rcvd Qty</Label>
                               <Input className="h-8 text-xs font-mono" type="number" min={0}
                                 max={line.quantity_expected}
                                 value={line.quantity_received}
                                 onChange={e => updateGRNLine(idx, 'quantity_received', parseInt(e.target.value) || 0)} />
                             </div>
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Condition</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Condition</Label>
                               <Combobox
                                 options={[
                                   { value: 'good', label: 'Good' },
@@ -593,12 +594,12 @@ const GoodsReceiptNotes: React.FC = () => {
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Batch #</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Batch #</Label>
                               <Input className="h-8 text-xs font-mono placeholder:text-muted-foreground/50" placeholder="Optional" value={line.batch_number}
                                 onChange={e => updateGRNLine(idx, 'batch_number', e.target.value)} />
                             </div>
                             <div>
-                              <Label className="text-[10px] text-muted-foreground mb-1 block">Expiry Date</Label>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Expiry Date</Label>
                               <Input className="h-8 text-xs" type="date" value={line.expiry_date}
                                 onChange={e => updateGRNLine(idx, 'expiry_date', e.target.value)} />
                             </div>
@@ -664,38 +665,38 @@ const GoodsReceiptNotes: React.FC = () => {
                   { key: 'grn_number', header: 'GRN Number', sortable: true, render: (v) => <span className="font-mono text-xs font-medium">{v}</span> },
                   { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || '—'}</span> },
                   { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v) => <span className="text-xs">{v || '—'}</span> },
-                  { key: 'receipt_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'receipt_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{v ? formatDate(v) : '—'}</span> },
                   { key: '__items', header: 'Items', align: 'center', render: (_v, grn) => <span className="text-xs">{grn.total_items_received || grn.line_count || 0}</span> },
                   {
                     key: 'status', header: 'Status', align: 'center', sortable: true,
-                    render: (v) => <Badge className={`text-[10px] ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
+                    render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
                   },
                   {
                     key: '__actions', header: 'Actions', align: 'center',
                     render: (_v, grn) => (
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-emerald-600" /></Button>
-                        <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" aria-label="Download" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-success" /></Button>
+                        <Button size="icon" aria-label="View" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
                         {grn.status === 'pending_inspection' && (
                           <>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => inspectGRN(grn.id)} disabled={processing?.id === grn.id}>
+                            <Button size="icon" aria-label="Inspect" variant="ghost" className="w-7 h-7" onClick={() => inspectGRN(grn.id)} disabled={processing?.id === grn.id}>
                               {processing?.id === grn.id && processing.action === 'inspect' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5 text-primary" />}
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                            <Button size="icon" aria-label="Confirm" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
+                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                            <Button size="icon" aria-label="Close" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
+                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
                         {grn.status === 'inspected' && (
                           <>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                            <Button size="icon" aria-label="Confirm" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
+                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                            <Button size="icon" aria-label="Close" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
+                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
@@ -729,7 +730,7 @@ const GoodsReceiptNotes: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><span className="text-muted-foreground">Supplier:</span> <span className="font-medium">{selectedGRN.supplier_name}</span></div>
-                  <div><span className="text-muted-foreground">Receipt Date:</span> <span className="font-medium">{selectedGRN.receipt_date ? new Date(selectedGRN.receipt_date).toLocaleDateString() : '—'}</span></div>
+                  <div><span className="text-muted-foreground">Receipt Date:</span> <span className="font-medium">{selectedGRN.receipt_date ? formatDate(selectedGRN.receipt_date) : '—'}</span></div>
                   <div><span className="text-muted-foreground">Received By:</span> <span className="font-medium">{selectedGRN.received_by_name || '—'}</span></div>
                   <div><span className="text-muted-foreground">Location:</span> <span className="font-medium">{selectedGRN.received_location || '—'}</span></div>
                   <div><span className="text-muted-foreground">Condition:</span> <span className="font-medium capitalize">{selectedGRN.received_condition}</span></div>
@@ -752,8 +753,8 @@ const GoodsReceiptNotes: React.FC = () => {
                 </div>
 
                 {selectedGRN.inspection_notes && (
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950 text-sm border border-amber-200 dark:border-amber-800">
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Inspection Notes</p>
+                  <div className="p-3 rounded-lg bg-warning-bg dark:bg-warning text-sm border border-warning-border dark:border-warning-border">
+                    <p className="text-xs font-medium text-warning dark:text-warning mb-1">Inspection Notes</p>
                     {selectedGRN.inspection_notes}
                   </div>
                 )}
@@ -768,12 +769,12 @@ const GoodsReceiptNotes: React.FC = () => {
                     {
                       key: 'quantity_received', header: 'Received', align: 'center',
                       render: (v, line) => (
-                        <span className={`font-medium ${v < line.quantity_expected ? 'text-amber-600' : 'text-emerald-600'}`}>{v}</span>
+                        <span className={`font-medium ${v < line.quantity_expected ? 'text-warning' : 'text-success'}`}>{v}</span>
                       ),
                     },
                     { key: 'item_condition', header: 'Condition', render: (v) => <span className="capitalize">{v}</span> },
                     { key: 'batch_number', header: 'Batch', render: (v) => <span className="font-mono text-xs">{v || '—'}</span> },
-                    { key: 'expiry_date', header: 'Expiry', render: (v) => <span className="text-xs">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                    { key: 'expiry_date', header: 'Expiry', render: (v) => <span className="text-xs">{v ? formatDate(v) : '—'}</span> },
                     {
                       key: 'inspection_status', header: 'Inspection', align: 'center',
                       render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v}</Badge>,
@@ -792,7 +793,7 @@ const GoodsReceiptNotes: React.FC = () => {
                         {processing?.id === selectedGRN.id && processing.action === 'inspect' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <ClipboardCheck className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedGRN.id && processing.action === 'inspect' ? 'Marking Inspected...' : 'Mark Inspected'}
                       </Button>
-                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={processing?.id === selectedGRN.id}>
+                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-success hover:bg-success text-white" disabled={processing?.id === selectedGRN.id}>
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? 'Accepting...' : 'Accept'}
                       </Button>
@@ -804,7 +805,7 @@ const GoodsReceiptNotes: React.FC = () => {
                   )}
                   {selectedGRN.status === 'inspected' && (
                     <>
-                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={processing?.id === selectedGRN.id}>
+                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-success hover:bg-success text-white" disabled={processing?.id === selectedGRN.id}>
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? 'Accepting...' : 'Accept'}
                       </Button>

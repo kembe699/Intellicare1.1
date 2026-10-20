@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo } from '@/components/clinical/GynaeFields';
 
 const EMPTY_VITALS = {
@@ -110,7 +110,7 @@ export default function Triage() {
       render: (v) => {
         const triaged = hasVitals(v);
         return (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${triaged ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${triaged ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
             {triaged ? 'Triaged' : 'Not Triaged'}
           </span>
         );
@@ -162,7 +162,7 @@ export default function Triage() {
                 )}
               </div>
               {selected?.triaged_by_name && (
-                <span className="text-[11px] text-muted-foreground text-right">
+                <span className="text-xs text-muted-foreground text-right">
                   Previously triaged by {selected.triaged_by_name}
                   {selected.triaged_at && <><br />{new Date(selected.triaged_at).toLocaleString()}</>}
                 </span>

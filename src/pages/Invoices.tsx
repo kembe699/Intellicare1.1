@@ -3,18 +3,20 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Search, FileSpreadsheet, FileText, DollarSign, Clock, AlertTriangle,
   CheckCircle2, XCircle, RefreshCw, Loader2, X, Ban, Download, Printer,
 } from 'lucide-react';
 import { usePDFDocument } from '@/hooks/usePDFDocument';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import RecordPaymentModal from '@/components/billing/RecordPaymentModal';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface Invoice {
   id: string;
@@ -37,17 +39,17 @@ interface Invoice {
 }
 
 const STATUS_MAP: Record<string, { className: string; icon: React.ReactNode }> = {
-  unpaid: { className: 'bg-red-50 text-red-700 border-red-200', icon: <Clock className="w-3 h-3" /> },
-  partial: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: <AlertTriangle className="w-3 h-3" /> },
-  paid: { className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
+  unpaid: { className: 'bg-destructive-bg text-destructive border-destructive-border', icon: <Clock className="w-3 h-3" /> },
+  partial: { className: 'bg-warning-bg text-warning border-warning-border', icon: <AlertTriangle className="w-3 h-3" /> },
+  paid: { className: 'bg-success-bg text-success border-success-border', icon: <CheckCircle2 className="w-3 h-3" /> },
   overdue: { className: 'bg-orange-50 text-orange-700 border-orange-200', icon: <AlertTriangle className="w-3 h-3" /> },
-  cancelled: { className: 'bg-slate-100 text-slate-600 border-slate-200', icon: <XCircle className="w-3 h-3" /> },
+  cancelled: { className: 'bg-muted text-muted-foreground border-border', icon: <XCircle className="w-3 h-3" /> },
 };
 
 const statusBadge = (status: string) => {
   const s = STATUS_MAP[status] || STATUS_MAP.unpaid;
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${s.className}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${s.className}`}>
       {s.icon} {status}
     </span>
   );
@@ -185,7 +187,7 @@ export default function Invoices() {
                 <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchInvoices} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchInvoices} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
@@ -210,7 +212,7 @@ export default function Invoices() {
                       const overdue = inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled';
                       return (
                         <>
-                          <span className={overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{new Date(v).toLocaleDateString()}</span>
+                          <span className={overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}>{formatDate(v)}</span>
                           {overdue && <span className="text-xs text-orange-600 ml-1">({inv.days_overdue}d)</span>}
                         </>
                       );
@@ -220,7 +222,7 @@ export default function Invoices() {
                   {
                     key: 'balance_due', header: 'Balance', sortable: true,
                     render: (v, inv) => (
-                      <span className={`font-medium ${parseFloat(String(v)) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <span className={`font-medium ${parseFloat(String(v)) > 0 ? 'text-destructive' : 'text-success'}`}>
                         {inv.currency || currency.code} {parseFloat(String(v)).toFixed(2)}
                       </span>
                     ),
@@ -236,16 +238,14 @@ export default function Invoices() {
       </div>
 
       {/* Invoice Detail Modal */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+      <Dialog open={!!selectedInvoice} onOpenChange={(open) => { if (!open) closeDetail(); }}>
+        <DialogContent className="p-0 max-w-lg max-h-[90vh] flex flex-col">
+          {selectedInvoice && (
+          <>
+            <div className="flex justify-between items-center p-4 pr-12 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> {selectedInvoice.invoice_number}
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeDetail}>
-                <X className="w-4 h-4" />
-              </Button>
             </div>
 
             <div className="p-6 flex-1 overflow-auto space-y-4">
@@ -267,19 +267,19 @@ export default function Invoices() {
                           </div>
                           <div className="bg-muted/30 rounded-lg p-2.5 text-center">
                             <p className="text-xs text-muted-foreground">Paid</p>
-                            <p className="font-bold text-emerald-600">{cur} {parseFloat(inv.amount_paid).toFixed(2)}</p>
+                            <p className="font-bold text-success">{cur} {parseFloat(inv.amount_paid).toFixed(2)}</p>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-2.5 text-center">
                             <p className="text-xs text-muted-foreground">Balance</p>
-                            <p className={`font-bold ${parseFloat(inv.balance_due) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{cur} {parseFloat(inv.balance_due).toFixed(2)}</p>
+                            <p className={`font-bold ${parseFloat(inv.balance_due) > 0 ? 'text-destructive' : 'text-success'}`}>{cur} {parseFloat(inv.balance_due).toFixed(2)}</p>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-y-2 text-sm">
                           <span className="text-muted-foreground">Invoice Date</span>
-                          <span className="text-right">{new Date(inv.created_at).toLocaleDateString()}</span>
+                          <span className="text-right">{formatDate(inv.created_at)}</span>
                           <span className="text-muted-foreground">Due Date</span>
-                          <span className="text-right">{new Date(inv.due_date).toLocaleDateString()}</span>
+                          <span className="text-right">{formatDate(inv.due_date)}</span>
                           <span className="text-muted-foreground">Payment Terms</span>
                           <span className="text-right">Net {inv.payment_terms} Days</span>
                           <span className="text-muted-foreground">Scheme</span>
@@ -315,8 +315,8 @@ export default function Invoices() {
                               data={inv.payments}
                               keyExtractor={(p, i) => p.id || i}
                               columns={[
-                                { key: 'payment_date', header: 'Date', render: (v) => new Date(v).toLocaleDateString() },
-                                { key: 'amount', header: 'Amount', align: 'right', render: (v) => <span className="font-mono font-semibold text-emerald-600">{cur} {parseFloat(v).toFixed(2)}</span> },
+                                { key: 'payment_date', header: 'Date', render: (v) => formatDate(v) },
+                                { key: 'amount', header: 'Amount', align: 'right', render: (v) => <span className="font-mono font-semibold text-success">{cur} {parseFloat(v).toFixed(2)}</span> },
                                 { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize">{(v || '').replace('_', ' ')}</span> },
                               ]}
                             />
@@ -342,7 +342,7 @@ export default function Invoices() {
               </div>
               {selectedInvoice.status !== 'paid' && selectedInvoice.status !== 'cancelled' && (
                 <div className="flex gap-2">
-                  <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleCancel(selectedInvoice)} disabled={cancellingInvoice || markingPaid}>
+                  <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleCancel(selectedInvoice)} disabled={cancellingInvoice || markingPaid}>
                     {cancellingInvoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
                   </Button>
                   <Button variant="outline" onClick={() => handleMarkPaid(selectedInvoice)} disabled={markingPaid || cancellingInvoice}>
@@ -355,9 +355,10 @@ export default function Invoices() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Record Payment Modal */}
       {showPaymentModal && selectedInvoice && (

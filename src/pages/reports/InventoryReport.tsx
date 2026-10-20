@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportLetterhead } from './ReportLetterhead';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { LoadingState } from '@/components/common';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
@@ -203,7 +203,7 @@ export default function InventoryReport() {
       { key: 'quantityUsed', header: 'Used', align: 'right', render: v => <span className="font-mono text-muted-foreground">{fmtCount(v)}</span> },
       ...(option.mode !== 'retired-batches' ? [{ key: 'quantityRemaining', header: 'Remaining', align: 'right' as const, sortable: true, render: (v: any) => <span className="font-mono font-medium">{fmtCount(v)}</span> }] : []),
       { key: 'expiryDate', header: 'Expiry Date', sortable: true, render: v => v ? fmtDate(v) : '—' },
-      ...(option.mode === 'near-expiry' ? [{ key: 'daysToExpiry', header: 'Days Left', align: 'right' as const, sortable: true, render: (v: any) => <span className="font-mono font-medium text-amber-700">{v}</span> }] : []),
+      ...(option.mode === 'near-expiry' ? [{ key: 'daysToExpiry', header: 'Days Left', align: 'right' as const, sortable: true, render: (v: any) => <span className="font-mono font-medium text-warning">{v}</span> }] : []),
       { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
     ];
     csvColumns = [{ header: 'Batch #', key: 'batchNumber' }, { header: 'Item', key: 'itemName' }, { header: 'Received', key: 'quantityReceived' }, { header: 'Used', key: 'quantityUsed' }, { header: 'Expiry Date', key: 'expiryDate', transform: v => v ? fmtDate(v) : '' }, { header: 'Branch', key: 'branchName' }];
@@ -249,7 +249,7 @@ export default function InventoryReport() {
       { key: 'transactionNumber', header: 'Transaction #', sortable: true, render: v => <span className="font-mono text-xs text-primary">{v}</span> },
       { key: 'transactionType', header: 'Type', sortable: true, render: v => <span className="capitalize">{v}</span> },
       { key: 'itemName', header: 'Item', sortable: true },
-      { key: 'quantityChange', header: 'Qty Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{v > 0 ? '+' : ''}{v}</span> },
+      { key: 'quantityChange', header: 'Qty Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v < 0 ? 'text-destructive' : 'text-success'}`}>{v > 0 ? '+' : ''}{v}</span> },
       { key: 'fromLocation', header: 'From', render: v => v || '—' },
       { key: 'toLocation', header: 'To', render: v => v || '—' },
       { key: 'userName', header: 'User', render: v => v || '—' },
@@ -278,7 +278,7 @@ export default function InventoryReport() {
         key: 'testsRemaining', header: 'Tests Remaining', align: 'right', sortable: true,
         render: v => {
           const n = Number(v) || 0;
-          return <span className={`font-mono font-semibold ${n <= 0 ? 'text-red-600' : n < 10 ? 'text-amber-600' : 'text-foreground'}`}>{fmtCount(n)}</span>;
+          return <span className={`font-mono font-semibold ${n <= 0 ? 'text-destructive' : n < 10 ? 'text-warning' : 'text-foreground'}`}>{fmtCount(n)}</span>;
         },
       },
       {
@@ -293,8 +293,8 @@ export default function InventoryReport() {
         key: 'status', header: 'Status', sortable: true,
         render: v => (
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            v === 'Available' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' :
-            v === 'Unavailable' ? 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400' :
+            v === 'Available' ? 'bg-success-bg text-success dark:bg-success/40 dark:text-success' :
+            v === 'Unavailable' ? 'bg-destructive-bg text-destructive dark:bg-destructive/40 dark:text-destructive' :
             'bg-muted text-muted-foreground'
           }`}>{v}</span>
         ),
@@ -315,7 +315,7 @@ export default function InventoryReport() {
       { key: 'transaction_date', header: 'Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
       { key: 'transaction_number', header: 'Transaction #', sortable: true, render: v => <span className="font-mono text-xs text-primary">{v}</span> },
       { key: 'transaction_type', header: 'Type', sortable: true, render: v => <span className="capitalize">{String(v).replace(/_/g, ' ')}</span> },
-      { key: 'quantity_change', header: 'Qty Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{v > 0 ? '+' : ''}{v}</span> },
+      { key: 'quantity_change', header: 'Qty Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v < 0 ? 'text-destructive' : 'text-success'}`}>{v > 0 ? '+' : ''}{v}</span> },
       { key: 'from_location_name', header: 'From', render: v => v || '—' },
       { key: 'to_location_name', header: 'To', render: v => v || '—' },
       { key: 'created_by_name', header: 'Used / Recorded By', render: v => v || '—' },
@@ -453,7 +453,7 @@ export default function InventoryReport() {
         </div>
       ) : (
         <AdvancedDataTable
-          headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+          headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
           data={numberedRows}
           keyExtractor={keyExtractor}
           columns={columnsWithNo}

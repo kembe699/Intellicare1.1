@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Combobox } from '@/components/ui/combobox';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Plus, RefreshCw, Trash2, ArrowRightLeft, TrendingUp, TrendingDown,
   CheckCircle2, Coins, Wallet, History, Calculator, Settings,
@@ -21,6 +21,7 @@ import { PageHeader, LoadingState, StatusBadge } from '@/components/common';
 import { apiFetch } from '@/utils/accountingApi';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 const ACTIVE_STATUS_MAP = { active: 'success', inactive: 'neutral' } as const;
 const ADJUSTMENT_STATUS_MAP = { realized: 'success', pending: 'warning' } as const;
@@ -390,8 +391,8 @@ const ExchangeRates: React.FC = () => {
                       <p className="text-2xl font-bold tracking-tight font-mono">{lr ? fmtNum(displayRate) : '—'}</p>
                       <p className="text-xs text-muted-foreground">{lr ? `1 ${fc.code} = ${fmtNum(displayRate)} ${baseCurrCode}` : 'No rate set'}</p>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950">
-                      <DollarSign className="w-5 h-5 text-emerald-600" />
+                    <div className="p-2.5 rounded-lg bg-success-bg dark:bg-success">
+                      <DollarSign className="w-5 h-5 text-success" />
                     </div>
                   </div>
                 </CardContent>
@@ -532,7 +533,7 @@ const ExchangeRates: React.FC = () => {
                               <div className="text-xs text-muted-foreground space-y-0.5">
                                 {lr.buy_rate && <p>Buy: {fmtNum(lr.buy_rate)}</p>}
                                 {lr.sell_rate && <p>Sell: {fmtNum(lr.sell_rate)}</p>}
-                                {inverted && <p className="text-amber-600">↩ Derived from {lr.from_currency}→{lr.to_currency}</p>}
+                                {inverted && <p className="text-warning">↩ Derived from {lr.from_currency}→{lr.to_currency}</p>}
                               </div>
                             </>
                           ) : (
@@ -544,7 +545,7 @@ const ExchangeRates: React.FC = () => {
                             <StatusBadge status="active" map={ACTIVE_STATUS_MAP}
                               label={<span className="inline-flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Active</span>} />
                             <div className="text-xs text-muted-foreground mt-2">
-                              <p>{new Date(lr.effective_date).toLocaleDateString()}</p>
+                              <p>{formatDate(lr.effective_date)}</p>
                               <p className="capitalize">{lr.source}</p>
                             </div>
                           </div>
@@ -583,7 +584,7 @@ const ExchangeRates: React.FC = () => {
                     { key: 'rate', header: 'Rate', align: 'right', render: (v) => <span className="font-mono font-medium">{fmtNum(v, 4)}</span> },
                     { key: 'buy_rate', header: 'Buy', align: 'right', render: (v) => <span className="font-mono text-xs">{v ? fmtNum(v, 4) : '—'}</span> },
                     { key: 'sell_rate', header: 'Sell', align: 'right', render: (v) => <span className="font-mono text-xs">{v ? fmtNum(v, 4) : '—'}</span> },
-                    { key: 'effective_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'effective_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                     { key: 'source', header: 'Source', render: (v) => <span className="text-xs capitalize">{v}</span> },
                     {
                       key: 'is_active', header: 'Status', align: 'center',
@@ -593,7 +594,7 @@ const ExchangeRates: React.FC = () => {
                       key: '__actions', header: 'Actions', align: 'center',
                       render: (_v, r) => r.is_active ? (
                         <Button size="sm" variant="ghost" onClick={() => deactivateRate(r.id)}>
-                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
                         </Button>
                       ) : null,
                     },
@@ -681,7 +682,7 @@ const ExchangeRates: React.FC = () => {
                               <CheckCircle2 className="w-3 h-3" /> Set as Base
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => deactivateCurrency(c.code)}>
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
                             </Button>
                           </div>
                         )}
@@ -732,7 +733,7 @@ const ExchangeRates: React.FC = () => {
                               <>
                                 <p className="text-xs text-muted-foreground">= {fmtNum(cb.balance_in_base_currency)} {baseCurrCode}</p>
                                 {cb.unrealized_gain_loss !== 0 && (
-                                  <p className={`text-xs font-medium ${cb.unrealized_gain_loss > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  <p className={`text-xs font-medium ${cb.unrealized_gain_loss > 0 ? 'text-success' : 'text-destructive'}`}>
                                     {cb.unrealized_gain_loss > 0 ? '+' : ''}{fmtNum(cb.unrealized_gain_loss)} G/L
                                   </p>
                                 )}
@@ -763,13 +764,13 @@ const ExchangeRates: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-muted-foreground">Realized Gain/Loss</p>
-                      <p className={`text-2xl font-bold tracking-tight font-mono ${parseFloat(adjSummary.total_realized || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <p className={`text-2xl font-bold tracking-tight font-mono ${parseFloat(adjSummary.total_realized || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {fmtNum(adjSummary.total_realized)} {baseCurrCode}
                       </p>
                       <p className="text-xs text-muted-foreground">Settled transactions</p>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950">
-                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+                    <div className="p-2.5 rounded-lg bg-success-bg dark:bg-success">
+                      <TrendingUp className="w-5 h-5 text-success" />
                     </div>
                   </div>
                 </CardContent>
@@ -779,13 +780,13 @@ const ExchangeRates: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-muted-foreground">Unrealized Gain/Loss</p>
-                      <p className={`text-2xl font-bold tracking-tight font-mono ${parseFloat(adjSummary.total_unrealized || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <p className={`text-2xl font-bold tracking-tight font-mono ${parseFloat(adjSummary.total_unrealized || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {fmtNum(adjSummary.total_unrealized)} {baseCurrCode}
                       </p>
                       <p className="text-xs text-muted-foreground">Open positions</p>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950">
-                      <TrendingDown className="w-5 h-5 text-amber-600" />
+                    <div className="p-2.5 rounded-lg bg-warning-bg dark:bg-warning">
+                      <TrendingDown className="w-5 h-5 text-warning" />
                     </div>
                   </div>
                 </CardContent>
@@ -814,14 +815,14 @@ const ExchangeRates: React.FC = () => {
                   emptyMessage="No exchange adjustments recorded yet."
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
-                    { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                     { key: 'from_currency', header: 'Currency', render: (v) => <Badge variant="outline" className="text-xs font-mono">{v}</Badge> },
                     { key: 'original_amount', header: 'Original', align: 'right', render: (v) => <span className="font-mono">{fmtNum(v)}</span> },
                     { key: 'original_rate', header: 'Rate Orig', align: 'right', render: (v) => <span className="font-mono text-xs">{fmtNum(v, 4)}</span> },
                     { key: 'settlement_rate', header: 'Rate Settle', align: 'right', render: (v) => <span className="font-mono text-xs">{fmtNum(v, 4)}</span> },
                     {
                       key: 'realized_gain_loss', header: 'Realized G/L', align: 'right', sortable: true,
-                      render: (v) => <span className={`font-mono font-medium ${v >= 0 ? 'text-green-700' : 'text-red-700'}`}>{v >= 0 ? '+' : ''}{fmtNum(v)}</span>,
+                      render: (v) => <span className={`font-mono font-medium ${v >= 0 ? 'text-success' : 'text-destructive'}`}>{v >= 0 ? '+' : ''}{fmtNum(v)}</span>,
                     },
                     { key: 'adjustment_type', header: 'Type', render: (v) => <span className="text-xs capitalize">{v}</span> },
                     { key: 'adjustment_status', header: 'Status', render: (v) => <StatusBadge status={v} map={ADJUSTMENT_STATUS_MAP} className="capitalize" /> },
@@ -847,7 +848,7 @@ const ExchangeRates: React.FC = () => {
                   emptyMessage="No conversions recorded yet."
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
-                    { key: 'conversion_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{new Date(v).toLocaleDateString()}</span> },
+                    { key: 'conversion_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                     { key: 'from_currency', header: 'From', render: (v) => <Badge variant="outline" className="text-xs font-mono">{v}</Badge> },
                     { key: 'amount_source', header: 'Amount', align: 'right', render: (v) => <span className="font-mono">{fmtNum(v)}</span> },
                     { key: 'rate_used', header: 'Rate', align: 'center', render: (v) => <span className="font-mono text-xs">{fmtNum(v, 4)}</span> },
@@ -877,7 +878,7 @@ const ExchangeRates: React.FC = () => {
                     />
                   </div>
                   <div className="flex justify-center pb-2">
-                    <Button variant="ghost" size="icon" onClick={() => { const t = convFrom; setConvFrom(convTo); setConvTo(t); setConvResult(null); }}>
+                    <Button variant="ghost" size="icon" aria-label="Swap currencies" onClick={() => { const t = convFrom; setConvFrom(convTo); setConvTo(t); setConvResult(null); }}>
                       <ArrowRightLeft className="h-4 w-4" />
                     </Button>
                   </div>

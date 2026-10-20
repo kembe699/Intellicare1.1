@@ -19,7 +19,7 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import { Loader2, CalendarCheck, Search, Settings as SettingsIcon, Trash2, Plus } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface BookingRow {
   id: string;

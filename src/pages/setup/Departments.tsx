@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, Briefcase, Search, Settings, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 interface Department {
@@ -282,12 +282,12 @@ const Departments: React.FC = () => {
               key: '__actions', header: 'Actions', align: 'right',
               render: (_v, department) => (
                 <div className="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(department)} disabled={deletingId === department.id} className="h-7 w-7">
+                  <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => openEditDialog(department)} disabled={deletingId === department.id} className="h-7 w-7">
                     <Edit className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon" aria-label="Delete"
                     onClick={() => handleDelete(department.id)}
                     disabled={deletingId === department.id}
                     className="h-7 w-7 text-destructive hover:text-destructive"

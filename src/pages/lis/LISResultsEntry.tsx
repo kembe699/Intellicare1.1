@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { MindrayIntegration } from '@/components/lab/MindrayIntegration';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 // Local (not UTC) date string, so "today" matches the user's actual calendar day.
 const toLocalDateStr = (d: Date) => {
@@ -250,9 +251,9 @@ export default function LISResultsEntry() {
       const val = parseFloat(value);
       
       if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-        if (val < min) return <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-        if (val > max) return <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
-        return <span className="text-green-600 font-bold text-[10px] bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+        if (val < min) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">LOW</span>;
+        if (val > max) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">HIGH</span>;
+        return <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
       }
     }
     
@@ -534,10 +535,10 @@ export default function LISResultsEntry() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium truncate">{g.first_name} {g.last_name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-[11px] text-muted-foreground">{new Date(g.order_time).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(g.order_time).toLocaleString()}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">
@@ -558,10 +559,10 @@ export default function LISResultsEntry() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium truncate">{g.first_name} {g.last_name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-[11px] text-muted-foreground">{new Date(g.order_time).toLocaleDateString()}</div>
+                    <div className="text-xs text-muted-foreground">{formatDate(g.order_time)}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">
@@ -620,7 +621,7 @@ export default function LISResultsEntry() {
                     </Button>
                   )}
                   {selectedSpecimen?.status === 'approved' && (
-                    <span className="text-[10px] bg-green-100 text-green-800 px-2 py-1 rounded-full uppercase font-bold flex items-center gap-1">
+                    <span className="text-xs bg-success-bg text-success px-2 py-1 rounded-full uppercase font-bold flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Approved — Read Only
                     </span>
                   )}
@@ -794,18 +795,18 @@ export default function LISResultsEntry() {
                       )}
                     >
                       {isDone ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                       ) : (
                         <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{s.test_name}</div>
                         <div className="text-xs font-mono text-muted-foreground">{s.barcode}</div>
-                        <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                        <div className="text-xs text-muted-foreground flex items-center justify-between">
                           <span>{s.department || 'Lab'}</span>
-                          {activeTab === 'history' && s.status === 'approved' && <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
-                          {activeTab === 'history' && s.status === 'analyzed' && <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase font-bold">Analyzed</span>}
-                          {activeTab === 'history' && s.status === 'pending_manager_review' && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase font-bold">Review</span>}
+                          {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-success-bg text-success px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
+                          {activeTab === 'history' && s.status === 'analyzed' && <span className="text-xs bg-info-bg text-info px-1.5 py-0.5 rounded uppercase font-bold">Analyzed</span>}
+                          {activeTab === 'history' && s.status === 'pending_manager_review' && <span className="text-xs bg-warning-bg text-warning px-1.5 py-0.5 rounded uppercase font-bold">Review</span>}
                         </div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />

@@ -18,7 +18,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { AttachmentField } from '@/components/procurement/AttachmentField';
 import { uploadProcurementAttachments } from '@/api/procurementAttachments';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface PRLine {
   id?: string;
@@ -365,7 +366,7 @@ const PurchaseRequisitions: React.FC = () => {
     if (filteredPRs.length === 0) { toast.error('No requisitions to export'); return; }
     exportCSV(filteredPRs, [
       { header: 'PR Number', key: 'pr_number' },
-      { header: 'Date', key: 'requisition_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Date', key: 'requisition_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Requested By', key: 'requester_name' },
       { header: 'Department', key: 'department' },
       { header: 'Type', key: 'requisition_type' },
@@ -676,7 +677,7 @@ const PurchaseRequisitions: React.FC = () => {
           icon={<ShoppingCart />}
           title="Purchase Requisitions"
           actions={
-            <Button onClick={fetchPRs} variant="outline" size="icon" disabled={loading}>
+            <Button onClick={fetchPRs} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           }
@@ -834,7 +835,7 @@ const PurchaseRequisitions: React.FC = () => {
                                       <div className="flex flex-col flex-1 min-w-0">
                                         <span className="font-medium truncate">{item.item_name}</span>
                                       </div>
-                                      <span className="text-[10px] text-muted-foreground ml-2 shrink-0">
+                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
                                         {item.quantity_on_hand} {item.unit_of_measure}
                                       </span>
                                     </CommandItem>
@@ -956,7 +957,7 @@ const PurchaseRequisitions: React.FC = () => {
                 pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                 columns={[
                   { key: 'pr_number', header: 'PR Number', sortable: true, render: (v) => <span className="text-sm font-mono font-medium">{v}</span> },
-                  { key: 'requisition_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'requisition_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{v ? formatDate(v) : '—'}</span> },
                   { key: 'requester_name', header: 'Requested By', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
                   { key: 'department', header: 'Department', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
                   { key: 'requisition_type', header: 'Type', align: 'center', render: (v) => <Badge variant="outline" className="text-xs capitalize">{v}</Badge> },
@@ -978,10 +979,10 @@ const PurchaseRequisitions: React.FC = () => {
                         {pr.status === 'submitted' && (
                           <>
                             <Button size="sm" variant="ghost" onClick={() => approvePR(pr.id)} disabled={processing?.id === pr.id}>
-                              {processing?.id === pr.id && processing.action === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                              {processing?.id === pr.id && processing.action === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => rejectPR(pr.id)} disabled={processing?.id === pr.id}>
-                              {processing?.id === pr.id && processing.action === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                              {processing?.id === pr.id && processing.action === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
@@ -1007,7 +1008,7 @@ const PurchaseRequisitions: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-bold font-mono">{selectedPR.pr_number}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {selectedPR.requisition_date ? new Date(selectedPR.requisition_date).toLocaleDateString() : '—'}
+                      {selectedPR.requisition_date ? formatDate(selectedPR.requisition_date) : '—'}
                     </p>
                   </div>
                   <Badge className={`${getStatusColor(selectedPR.status)} text-sm`}>{selectedPR.status}</Badge>
@@ -1017,9 +1018,9 @@ const PurchaseRequisitions: React.FC = () => {
                   <div><span className="text-muted-foreground">Requested By:</span> <span className="font-medium">{selectedPR.requester_name || '—'}</span></div>
                   <div><span className="text-muted-foreground">Department:</span> <span className="font-medium">{selectedPR.department || '—'}</span></div>
                   <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline" className="capitalize text-xs ml-1">{selectedPR.requisition_type}</Badge></div>
-                  <div><span className="text-muted-foreground">Required By:</span> <span className="font-medium">{selectedPR.delivery_date_required ? new Date(selectedPR.delivery_date_required).toLocaleDateString() : '—'}</span></div>
+                  <div><span className="text-muted-foreground">Required By:</span> <span className="font-medium">{selectedPR.delivery_date_required ? formatDate(selectedPR.delivery_date_required) : '—'}</span></div>
                   {selectedPR.approver_name && <div><span className="text-muted-foreground">Approved By:</span> <span className="font-medium">{selectedPR.approver_name}</span></div>}
-                  {selectedPR.rejection_reason && <div className="col-span-2"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-red-600">{selectedPR.rejection_reason}</span></div>}
+                  {selectedPR.rejection_reason && <div className="col-span-2"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-destructive">{selectedPR.rejection_reason}</span></div>}
                 </div>
 
                 {selectedPR.notes && (
@@ -1070,7 +1071,7 @@ const PurchaseRequisitions: React.FC = () => {
                   )}
                   {selectedPR.status === 'submitted' && (
                     <>
-                      <Button size="sm" onClick={() => approvePR(selectedPR.id)} className="h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={processing?.id === selectedPR.id}>
+                      <Button size="sm" onClick={() => approvePR(selectedPR.id)} className="h-8 px-4 text-xs bg-success hover:bg-success text-white" disabled={processing?.id === selectedPR.id}>
                         {processing?.id === selectedPR.id && processing.action === 'approve' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedPR.id && processing.action === 'approve' ? 'Approving...' : 'Approve'}
                       </Button>

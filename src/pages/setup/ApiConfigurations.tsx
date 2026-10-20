@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { FlaskConical, MessageSquare, Image, CreditCard, Phone, Cpu, Grid, User, Key, RefreshCw, Copy, ShieldOff, CheckCircle, Clock, AlertCircle, ChevronRight, Loader2, Eye, EyeOff, Zap, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ConfigType {
@@ -209,11 +210,11 @@ const ApiConfigurations: React.FC = () => {
                         </p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {isActive ? (
-                            <span className="text-[10px] text-green-600 font-medium flex items-center gap-1">
+                            <span className="text-xs text-success font-medium flex items-center gap-1">
                               <CheckCircle className="w-2.5 h-2.5" /> Active
                             </span>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <AlertCircle className="w-2.5 h-2.5" /> No token
                             </span>
                           )}
@@ -279,7 +280,7 @@ const ApiConfigurations: React.FC = () => {
                         <div>
                           <p className="text-xs text-muted-foreground">Created</p>
                           <p className="text-sm font-medium text-foreground mt-0.5">
-                            {new Date(selected.token.created_at).toLocaleDateString()} {new Date(selected.token.created_at).toLocaleTimeString()}
+                            {formatDate(selected.token.created_at)} {new Date(selected.token.created_at).toLocaleTimeString()}
                           </p>
                         </div>
                         <div>
@@ -293,7 +294,7 @@ const ApiConfigurations: React.FC = () => {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Status</p>
-                          <p className="text-sm font-medium text-green-600 mt-0.5 flex items-center gap-1">
+                          <p className="text-sm font-medium text-success mt-0.5 flex items-center gap-1">
                             <CheckCircle className="w-3 h-3" /> Active
                           </p>
                         </div>
@@ -310,23 +311,23 @@ const ApiConfigurations: React.FC = () => {
 
                 {/* ── Newly Generated Token (one-time reveal) ── */}
                 {newToken && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                  <div className="bg-warning-bg border border-warning-border rounded-lg p-4 space-y-3">
                     <div className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-amber-600" />
-                      <p className="text-sm font-semibold text-amber-800">New Token Generated — Copy Now!</p>
+                      <Zap className="w-4 h-4 text-warning" />
+                      <p className="text-sm font-semibold text-warning">New Token Generated — Copy Now!</p>
                     </div>
-                    <p className="text-xs text-amber-700">
+                    <p className="text-xs text-warning">
                       This token will not be shown again. Copy it and paste it into the Lab Agent configuration.
                     </p>
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-white border border-amber-300 rounded-md px-3 py-2 font-mono text-sm text-foreground overflow-x-auto">
+                      <div className="flex-1 bg-white border border-warning-border rounded-md px-3 py-2 font-mono text-sm text-foreground overflow-x-auto">
                         {showToken ? newToken : '•'.repeat(Math.min(newToken.length, 48))}
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setShowToken(!showToken)}
-                        className="shrink-0 border-amber-300"
+                        className="shrink-0 border-warning-border"
                       >
                         {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </Button>
@@ -335,7 +336,7 @@ const ApiConfigurations: React.FC = () => {
                         onClick={handleCopy}
                         className={cn(
                           'shrink-0 transition-colors',
-                          copied ? 'bg-green-600 hover:bg-green-700' : ''
+                          copied ? 'bg-success hover:bg-success' : ''
                         )}
                       >
                         {copied ? (

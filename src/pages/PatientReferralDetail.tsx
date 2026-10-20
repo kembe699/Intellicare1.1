@@ -12,9 +12,10 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import * as docTemplate from '@/utils/documentTemplate';
 import { type ReferralRow, REFERRAL_STATUS_TONE } from './PatientReferrals';
+import { formatDate } from '@/lib/format';
 
 // Mirrors LISTestOrders.tsx's own print-time remark logic exactly — a
 // result's flag column is set by whoever entered it and isn't always
@@ -195,7 +196,7 @@ export default function PatientReferralDetail() {
           </tr>`;
         }).join('');
         return `<table class="ic-table">
-          <thead><tr><th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th></tr></thead>
+          <thead><tr><th scope="col" style="width:30%">Component</th><th scope="col" style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th scope="col" style="width:15%">Remark</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
       })(),
@@ -316,10 +317,10 @@ export default function PatientReferralDetail() {
                 </h4>
                 {detail.patient ? (
                   <div className="p-3 border rounded-lg bg-card text-sm grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div><div className="text-[10px] text-muted-foreground uppercase font-semibold">Name</div>{detail.patient.first_name} {detail.patient.last_name}</div>
-                    <div><div className="text-[10px] text-muted-foreground uppercase font-semibold">Age / Gender</div>{calculateAge(detail.patient.date_of_birth) ?? '—'}{detail.patient.gender ? ` · ${detail.patient.gender}` : ''}</div>
-                    <div><div className="text-[10px] text-muted-foreground uppercase font-semibold">ID</div><span className="font-mono">{detail.patient.participant_number}</span></div>
-                    <div><div className="text-[10px] text-muted-foreground uppercase font-semibold">Phone</div>{detail.patient.phone || '—'}</div>
+                    <div><div className="text-xs text-muted-foreground uppercase font-semibold">Name</div>{detail.patient.first_name} {detail.patient.last_name}</div>
+                    <div><div className="text-xs text-muted-foreground uppercase font-semibold">Age / Gender</div>{calculateAge(detail.patient.date_of_birth) ?? '—'}{detail.patient.gender ? ` · ${detail.patient.gender}` : ''}</div>
+                    <div><div className="text-xs text-muted-foreground uppercase font-semibold">ID</div><span className="font-mono">{detail.patient.participant_number}</span></div>
+                    <div><div className="text-xs text-muted-foreground uppercase font-semibold">Phone</div>{detail.patient.phone || '—'}</div>
                   </div>
                 ) : (
                   <div className="p-3 border rounded-lg text-sm text-muted-foreground text-center">Patient record not found.</div>
@@ -360,13 +361,13 @@ export default function PatientReferralDetail() {
                   <div className="border rounded-lg overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-muted/40 text-left text-[10px] uppercase text-muted-foreground">
-                          <th className="px-3 py-2 font-semibold">Test</th>
-                          <th className="px-3 py-2 font-semibold">Component</th>
-                          <th className="px-3 py-2 font-semibold">Value</th>
-                          <th className="px-3 py-2 font-semibold">Reference Range</th>
-                          <th className="px-3 py-2 font-semibold">Unit</th>
-                          <th className="px-3 py-2 font-semibold">Remark</th>
+                        <tr className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                          <th scope="col" className="px-3 py-2 font-semibold">Test</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Component</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Value</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Reference Range</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Unit</th>
+                          <th scope="col" className="px-3 py-2 font-semibold">Remark</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -376,14 +377,14 @@ export default function PatientReferralDetail() {
                             <tr key={i}>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.test || '—'}</td>
                               <td className="px-3 py-2 font-medium">{l.analyte}</td>
-                              <td className={`px-3 py-2 font-mono font-semibold ${remark.tone === 'high' ? 'text-red-600' : remark.tone === 'low' ? 'text-primary' : ''}`}>{l.value || '—'}</td>
+                              <td className={`px-3 py-2 font-mono font-semibold ${remark.tone === 'high' ? 'text-destructive' : remark.tone === 'low' ? 'text-primary' : ''}`}>{l.value || '—'}</td>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.reference_range || '—'}</td>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.unit || '—'}</td>
                               <td className="px-3 py-2">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                                  remark.tone === 'high' ? 'bg-red-100 text-red-700' :
-                                  remark.tone === 'low' ? 'bg-sky-100 text-sky-700' :
-                                  remark.tone === 'normal' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase ${
+                                  remark.tone === 'high' ? 'bg-destructive-bg text-destructive' :
+                                  remark.tone === 'low' ? 'bg-info-bg text-info' :
+                                  remark.tone === 'normal' ? 'bg-success-bg text-success' : 'bg-muted text-muted-foreground'
                                 }`}>{remark.label}</span>
                               </td>
                             </tr>
@@ -406,7 +407,7 @@ export default function PatientReferralDetail() {
                     {detail.prescriptions.map((p, i) => (
                       <div key={i} className="flex justify-between items-center px-3 py-2 text-sm">
                         <span>{p.drug_name}{p.dose_strength ? ` · ${p.dose_strength}` : ''}{p.frequency ? ` · ${p.frequency}` : ''}{p.duration_days ? ` · ${p.duration_days}d` : ''}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(p.prescription_date).toLocaleDateString()}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(p.prescription_date)}</span>
                       </div>
                     ))}
                   </div>
@@ -422,7 +423,7 @@ export default function PatientReferralDetail() {
                     <UserPlus className="w-3.5 h-3.5" /> Queue Patient
                   </h4>
                   {detail.referral.queued_order_id ? (
-                    <div className="p-3 border rounded-lg bg-emerald-50 border-emerald-200 text-sm text-emerald-800 flex items-center gap-2">
+                    <div className="p-3 border rounded-lg bg-success-bg border-success-border text-sm text-success flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4" /> Patient has been queued at {detail.referral.to_branch_name}.
                     </div>
                   ) : (

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ArrowLeft, Package, RefreshCw, MinusCircle, X, Check, Loader2 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -162,7 +162,7 @@ export default function StoreStock() {
               searchPlaceholder="Search items..."
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               toolbarExtra={
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={load} disabled={loading || !locationId}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={load} disabled={loading || !locationId}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               }

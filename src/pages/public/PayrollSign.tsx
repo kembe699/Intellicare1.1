@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { publicFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, CheckCircle2, AlertTriangle, Eraser, Wallet } from 'lucide-react';
 
 const MONTHS = [
@@ -162,7 +162,7 @@ export default function PayrollSign() {
   const fmt = (n: any, cur: string) => `${cur} ${parseFloat(n || 0).toFixed(2)}`;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-start sm:items-center justify-center p-4">
+    <div className="min-h-screen bg-muted flex items-start sm:items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-xl shadow-sm border p-6 space-y-5">
         <div className="flex items-center gap-2 text-primary">
           <Wallet className="w-5 h-5" />
@@ -178,14 +178,14 @@ export default function PayrollSign() {
 
         {stage === 'invalid' && (
           <div className="flex flex-col items-center py-10 gap-3 text-center">
-            <AlertTriangle className="w-8 h-8 text-amber-500" />
+            <AlertTriangle className="w-8 h-8 text-warning" />
             <p className="text-sm text-muted-foreground">{errorMsg}</p>
           </div>
         )}
 
         {stage === 'already_signed' && (
           <div className="flex flex-col items-center py-10 gap-3 text-center">
-            <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+            <CheckCircle2 className="w-8 h-8 text-success" />
             <p className="font-medium">Already Confirmed</p>
             <p className="text-sm text-muted-foreground">This payment has already been signed for and paid.</p>
           </div>
@@ -225,16 +225,16 @@ export default function PayrollSign() {
               <p className="text-xs text-muted-foreground mt-1">{payData.run_number} — {MONTHS[payData.period_month - 1]} {payData.period_year}</p>
             </div>
 
-            <div className="rounded-lg border bg-slate-50 p-4 space-y-1.5 text-sm">
+            <div className="rounded-lg border bg-muted p-4 space-y-1.5 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Basic Salary</span><span className="font-mono">{fmt(payData.basic_salary, payData.currency)}</span></div>
               {(payData.components || []).filter((c: any) => c.component_type === 'allowance').map((c: any, i: number) => (
                 <div key={i} className="flex justify-between"><span className="text-muted-foreground">{c.name}</span><span className="font-mono">{fmt(c.amount, payData.currency)}</span></div>
               ))}
               <div className="flex justify-between font-medium pt-1.5 border-t"><span>Gross Pay</span><span className="font-mono">{fmt(payData.gross_pay, payData.currency)}</span></div>
               {(payData.components || []).filter((c: any) => c.component_type === 'deduction').map((c: any, i: number) => (
-                <div key={i} className="flex justify-between text-amber-700"><span>{c.name}</span><span className="font-mono">-{fmt(c.amount, payData.currency)}</span></div>
+                <div key={i} className="flex justify-between text-warning"><span>{c.name}</span><span className="font-mono">-{fmt(c.amount, payData.currency)}</span></div>
               ))}
-              <div className="flex justify-between font-bold text-base pt-1.5 border-t"><span>Net Pay</span><span className="font-mono text-emerald-700">{fmt(payData.net_pay, payData.currency)}</span></div>
+              <div className="flex justify-between font-bold text-base pt-1.5 border-t"><span>Net Pay</span><span className="font-mono text-success">{fmt(payData.net_pay, payData.currency)}</span></div>
             </div>
 
             <div>
@@ -248,7 +248,7 @@ export default function PayrollSign() {
               {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Sign &amp; Confirm Payment
             </Button>
-            <p className="text-[11px] text-muted-foreground text-center">
+            <p className="text-xs text-muted-foreground text-center">
               By signing you confirm you personally received this amount. This cannot be undone.
             </p>
           </div>
@@ -256,7 +256,7 @@ export default function PayrollSign() {
 
         {stage === 'done' && result && (
           <div className="flex flex-col items-center py-8 gap-3 text-center">
-            <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+            <CheckCircle2 className="w-10 h-10 text-success" />
             <p className="font-semibold text-lg">Payment Confirmed</p>
             <p className="text-sm text-muted-foreground">
               {result.employee_name}, your payment of <span className="font-mono font-medium text-foreground">{fmt(result.net_pay, result.currency)}</span> for {result.run_number} has been recorded.

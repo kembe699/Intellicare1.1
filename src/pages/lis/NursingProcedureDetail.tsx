@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 
 const PROCEDURE_TYPE_LABEL: Record<string, string> = {
@@ -164,9 +164,9 @@ export default function NursingProcedureDetail() {
             <div className="lg:col-span-2 space-y-6">
               {canFulfill && pending.length > 0 && (
                 <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-                  <div className="px-5 py-3.5 border-b border-border bg-amber-50 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-700" />
-                    <h4 className="font-semibold text-sm text-amber-900">Pending Orders ({pending.length})</h4>
+                  <div className="px-5 py-3.5 border-b border-border bg-warning-bg flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-warning" />
+                    <h4 className="font-semibold text-sm text-warning">Pending Orders ({pending.length})</h4>
                   </div>
                   <div className="divide-y">
                     {pending.map(row => {
@@ -215,7 +215,7 @@ export default function NursingProcedureDetail() {
                     <div key={row.id} className="p-4 flex justify-between items-start gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="capitalize text-[10px]">{row.entry_type === 'procedure' ? 'Procedure' : 'Note'}</Badge>
+                          <Badge variant="outline" className="capitalize text-xs">{row.entry_type === 'procedure' ? 'Procedure' : 'Note'}</Badge>
                           {row.procedure_type && <span className="text-xs text-muted-foreground capitalize">{PROCEDURE_TYPE_LABEL[row.procedure_type] || row.procedure_type}</span>}
                         </div>
                         <p className="text-sm mt-1 whitespace-pre-wrap">{row.description}</p>
@@ -224,7 +224,7 @@ export default function NursingProcedureDetail() {
                           {row.status === 'completed' ? `By ${row.nurse_name || 'Unknown'}` : `Ordered by ${row.ordered_by_name || 'Unknown'}`} · {new Date(row.performed_at).toLocaleString()}
                         </p>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${row.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${row.status === 'completed' ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
                         {row.status === 'completed' ? 'Completed' : 'Pending'}
                       </span>
                     </div>

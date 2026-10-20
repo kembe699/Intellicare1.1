@@ -17,9 +17,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { CreditCard, Download, FileText, Loader2, Receipt } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { buildInvoiceHTML } from '@/utils/invoiceTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
+import { formatDate } from '@/lib/format';
 
 interface Payment {
   id: number;
@@ -53,7 +54,7 @@ const money = (amount: string | number, currency: string) =>
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-sm font-medium text-foreground">{value}</p>
     </div>
   );
@@ -159,20 +160,20 @@ const PlatformInvoiceDetail: React.FC = () => {
             <CardContent className="p-5 space-y-5">
               <div className="grid grid-cols-3 gap-4">
                 <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
                   <p className="text-lg font-bold text-foreground mt-1">{money(invoice.total_amount, invoice.currency)}</p>
                 </div>
                 <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Paid</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Paid</p>
                   <p className="text-lg font-bold text-foreground mt-1">{money(invoice.amount_paid, invoice.currency)}</p>
                 </div>
                 <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Balance Due</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Balance Due</p>
                   <p className="text-lg font-bold text-primary mt-1">{money(balance, invoice.currency)}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
-                <Field label="Issue Date" value={new Date(invoice.issue_date).toLocaleDateString()} />
+                <Field label="Issue Date" value={formatDate(invoice.issue_date)} />
                 <Field label="Currency" value={invoice.currency} />
               </div>
               {invoice.status !== 'paid' && (
@@ -187,7 +188,7 @@ const PlatformInvoiceDetail: React.FC = () => {
 
           <Card>
             <CardContent className="p-5">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3">Payment History</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Payment History</p>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -216,7 +217,7 @@ const PlatformInvoiceDetail: React.FC = () => {
 
         <Card>
           <CardContent className="p-5">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Billed To</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Billed To</p>
             <p className="font-semibold text-foreground">{invoice.customer.name}</p>
             {invoice.customer.contact_person && <p className="text-sm text-muted-foreground">{invoice.customer.contact_person}</p>}
             {invoice.customer.email && <p className="text-sm text-muted-foreground">{invoice.customer.email}</p>}

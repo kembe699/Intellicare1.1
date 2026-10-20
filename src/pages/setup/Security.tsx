@@ -23,7 +23,7 @@ import { Combobox, MultiSelectCombobox } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -617,7 +617,7 @@ const Security: React.FC = () => {
             <div className="bg-card rounded-lg border shadow-sm p-4 lg:sticky lg:top-4">
               <div className="flex items-center gap-2 mb-4">
                 <UserPlus className="w-5 h-5 text-primary" />
-                <h2 className="font-semibold text-[15px]">Create New User</h2>
+                <h2 className="font-semibold text-base">Create New User</h2>
               </div>
 
               <form onSubmit={handleCreateUser} className="space-y-4">
@@ -811,12 +811,12 @@ const Security: React.FC = () => {
                   key: '__actions', header: 'Actions',
                   render: (_v, u) => (
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEditForm(u)} className="h-7 w-7" title="Edit user">
+                      <Button variant="ghost" size="icon" aria-label="Edit user" onClick={() => openEditForm(u)} className="h-7 w-7" title="Edit user">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Reset password"
                         onClick={() => handleResetPassword(u)}
                         disabled={resettingUserId === u.id}
                         className="h-7 w-7"
@@ -826,17 +826,17 @@ const Security: React.FC = () => {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label={u.isActive ? 'Disable user' : 'Enable user'}
                         onClick={() => handleToggleUserStatus(u.id, u.isActive)}
                         disabled={togglingUserId === u.id}
-                        className={`h-7 w-7 ${u.isActive ? 'text-destructive hover:text-destructive' : 'text-emerald-600 hover:text-emerald-600'}`}
+                        className={`h-7 w-7 ${u.isActive ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
                         title={u.isActive ? 'Disable user' : 'Enable user'}
                       >
                         {togglingUserId === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : u.isActive ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Delete user"
                         onClick={() => openDeleteDialog(u)}
                         className="h-7 w-7 text-destructive hover:text-destructive"
                         title="Delete user"
@@ -925,7 +925,7 @@ const Security: React.FC = () => {
                             />
                             <span>
                               {p.name}
-                              {p.module && <span className="block text-[11px] text-muted-foreground">{p.module}</span>}
+                              {p.module && <span className="block text-xs text-muted-foreground">{p.module}</span>}
                             </span>
                           </label>
                         ))
@@ -938,16 +938,16 @@ const Security: React.FC = () => {
 
                 {/* Transfer controls */}
                 <div className="flex lg:flex-col items-center justify-center gap-2 py-2">
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Assign all" onClick={moveAllToAssigned} disabled={savingPrivileges}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Assign all" className="h-9 w-9" title="Assign all" onClick={moveAllToAssigned} disabled={savingPrivileges}>
                     <ChevronsLeft className="w-4 h-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Assign selected" onClick={moveToAssigned} disabled={savingPrivileges || checkedAvailable.size === 0}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Assign selected" className="h-9 w-9" title="Assign selected" onClick={moveToAssigned} disabled={savingPrivileges || checkedAvailable.size === 0}>
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Unassign selected" onClick={moveToAvailable} disabled={savingPrivileges || checkedAssigned.size === 0}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Unassign selected" className="h-9 w-9" title="Unassign selected" onClick={moveToAvailable} disabled={savingPrivileges || checkedAssigned.size === 0}>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Unassign all" onClick={moveAllToAvailable} disabled={savingPrivileges}>
+                  <Button type="button" variant="outline" size="icon" aria-label="Unassign all" className="h-9 w-9" title="Unassign all" onClick={moveAllToAvailable} disabled={savingPrivileges}>
                     <ChevronsRight className="w-4 h-4" />
                   </Button>
                   {savingPrivileges && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mt-1" />}
@@ -967,7 +967,7 @@ const Security: React.FC = () => {
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPrivilege(); } }}
                         className="h-8 text-sm"
                       />
-                      <Button type="button" size="icon" className="h-8 w-8 shrink-0" onClick={handleAddPrivilege} disabled={addingPrivilege || !newPrivilegeName.trim()}>
+                      <Button type="button" size="icon" aria-label="Add" className="h-8 w-8 shrink-0" onClick={handleAddPrivilege} disabled={addingPrivilege || !newPrivilegeName.trim()}>
                         {addingPrivilege ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                       </Button>
                     </div>
@@ -1004,7 +1004,7 @@ const Security: React.FC = () => {
                             />
                             <span>
                               {p.name}
-                              {p.module && <span className="block text-[11px] text-muted-foreground">{p.module}</span>}
+                              {p.module && <span className="block text-xs text-muted-foreground">{p.module}</span>}
                             </span>
                           </label>
                         ))
@@ -1253,10 +1253,10 @@ const Security: React.FC = () => {
               </div>
             </div>
             {newCredentials?.emailDelivered === true && (
-              <p className="text-xs text-emerald-600">It was also emailed to {newCredentials?.email}.</p>
+              <p className="text-xs text-success">It was also emailed to {newCredentials?.email}.</p>
             )}
             {newCredentials?.emailDelivered === false && (
-              <p className="text-xs text-amber-600">The email could not be sent — please share this password with them directly.</p>
+              <p className="text-xs text-warning">The email could not be sent — please share this password with them directly.</p>
             )}
             <p className="text-xs text-muted-foreground">
               It cannot be shown again. If it is lost, reset the account instead.

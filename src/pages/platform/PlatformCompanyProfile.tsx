@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, Loader2, Save, Stamp, Upload, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface CompanyProfileForm {
   company_name: string; address: string; city: string; phone: string; email: string; website: string; logo: string; stamp: string;
@@ -195,7 +195,7 @@ const PlatformCompanyProfile: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-border">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3">Bank Details (optional — shown on quotations if set)</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Bank Details (optional — shown on quotations if set)</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Bank Name</Label>

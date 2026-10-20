@@ -5,7 +5,7 @@ import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Plus, Search, Eye, Edit, Trash2, DollarSign, Users, Shield, Settings,
   BarChart3, Loader2, Save, X, RefreshCw, CheckCircle, AlertCircle,
@@ -674,8 +674,8 @@ const SchemeManagement: React.FC = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">{scheme.scheme_code}</p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    {!!scheme.is_default && <Badge className="bg-green-100 text-green-800 text-[10px]">Default</Badge>}
-                    <Badge variant={scheme.is_active ? 'secondary' : 'destructive'} className="text-[10px] capitalize">{scheme.scheme_type}</Badge>
+                    {!!scheme.is_default && <Badge className="bg-success-bg text-success text-xs">Default</Badge>}
+                    <Badge variant={scheme.is_active ? 'secondary' : 'destructive'} className="text-xs capitalize">{scheme.scheme_type}</Badge>
                   </div>
                 </div>
               </CardHeader>
@@ -683,7 +683,7 @@ const SchemeManagement: React.FC = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Currency</span>
-                    <Badge variant="outline" className="text-[10px] font-bold">{scheme.currency || currency.code}</Badge>
+                    <Badge variant="outline" className="text-xs font-bold">{scheme.currency || currency.code}</Badge>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Strategy</span>
@@ -745,7 +745,7 @@ const SchemeManagement: React.FC = () => {
                     setSelectedSchemeId(scheme.id); setActiveTab('membership');
                   }}><Users className="w-3 h-3 mr-1" />Members</Button>
                   {!scheme.is_default && (
-                    <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => handleDeleteScheme(scheme.id)}>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteScheme(scheme.id)}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   )}
@@ -810,8 +810,8 @@ const SchemeManagement: React.FC = () => {
                       key: '__markup', header: 'Markup/Disc', align: 'right',
                       render: (_v, sp) => (
                         <>
-                          {sp.markup_percentage > 0 && <span className="text-green-600">+{sp.markup_percentage}%</span>}
-                          {sp.discount_percentage > 0 && <span className="text-red-600">-{sp.discount_percentage}%</span>}
+                          {sp.markup_percentage > 0 && <span className="text-success">+{sp.markup_percentage}%</span>}
+                          {sp.discount_percentage > 0 && <span className="text-destructive">-{sp.discount_percentage}%</span>}
                         </>
                       ),
                     },
@@ -823,7 +823,7 @@ const SchemeManagement: React.FC = () => {
                     {
                       key: '__actions', header: 'Actions', align: 'right',
                       render: (_v, sp) => (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => handleDeleteServicePrice(sp.id)}>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteServicePrice(sp.id)}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       ),
@@ -881,7 +881,7 @@ const SchemeManagement: React.FC = () => {
                     {
                       key: '__actions', header: 'Actions', align: 'right',
                       render: (_v, pp) => (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => handleDeleteProductPrice(pp.id)}>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteProductPrice(pp.id)}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       ),
@@ -937,22 +937,22 @@ const SchemeManagement: React.FC = () => {
                       key: 'verified', header: 'Verified', align: 'center',
                       render: (v, m) => v ? (
                         <span title={m.verified_by ? `Verified by ${m.verified_by}${m.verified_date ? ` on ${m.verified_date}` : ''}` : undefined}>
-                          <CheckCircle className="w-4 h-4 text-green-600 inline" />
+                          <CheckCircle className="w-4 h-4 text-success inline" />
                         </span>
                       ) : (
-                        <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => handleVerifyMember(m.id)} disabled={verifyingId === m.id}>
+                        <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => handleVerifyMember(m.id)} disabled={verifyingId === m.id}>
                           {verifyingId === m.id ? 'Verifying...' : 'Verify'}
                         </Button>
                       ),
                     },
                     {
                       key: 'is_active', header: 'Status', align: 'center',
-                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-[10px]">{v ? 'Active' : 'Inactive'}</Badge>,
+                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
                     },
                     {
                       key: '__actions', header: 'Actions', align: 'right',
                       render: (_v, m) => (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => handleRemoveMember(m.id)}>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleRemoveMember(m.id)}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       ),
@@ -1002,7 +1002,7 @@ const SchemeManagement: React.FC = () => {
                     { key: 'effective_from', header: 'Period', render: (v, d) => <span className="text-xs">{v || 'Always'}{d.effective_to ? ` - ${d.effective_to}` : ''}</span> },
                     {
                       key: 'is_active', header: 'Status', align: 'center',
-                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-[10px]">{v ? 'Active' : 'Inactive'}</Badge>,
+                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
                     },
                   ]}
                 />
@@ -1031,7 +1031,7 @@ const SchemeManagement: React.FC = () => {
               columns={[
                 { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'scheme_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
-                { key: 'active_members', header: 'Active', align: 'right', render: (v) => <span className="text-green-600 font-bold">{v}</span> },
+                { key: 'active_members', header: 'Active', align: 'right', render: (v) => <span className="text-success font-bold">{v}</span> },
                 { key: 'inactive_members', header: 'Inactive', align: 'right', render: (v) => <span className="text-muted-foreground">{v}</span> },
                 { key: 'total_members', header: 'Total', align: 'right', render: (v) => <span className="font-bold">{v}</span> },
               ]}
@@ -1053,10 +1053,10 @@ const SchemeManagement: React.FC = () => {
                 { key: 'services_priced', header: 'Services Priced', align: 'right', render: (v) => v || 0 },
                 {
                   key: 'avg_margin_pct', header: 'Avg Margin %', align: 'right',
-                  render: (v) => v !== null ? <span className={parseFloat(v) >= 0 ? 'text-green-600' : 'text-red-600'}>{parseFloat(v || 0).toFixed(1)}%</span> : '-',
+                  render: (v) => v !== null ? <span className={parseFloat(v) >= 0 ? 'text-success' : 'text-destructive'}>{parseFloat(v || 0).toFixed(1)}%</span> : '-',
                 },
-                { key: 'above_base', header: 'Above Base', align: 'right', render: (v) => <span className="text-green-600">{v || 0}</span> },
-                { key: 'below_base', header: 'Below Base', align: 'right', render: (v) => <span className="text-red-600">{v || 0}</span> },
+                { key: 'above_base', header: 'Above Base', align: 'right', render: (v) => <span className="text-success">{v || 0}</span> },
+                { key: 'below_base', header: 'Below Base', align: 'right', render: (v) => <span className="text-destructive">{v || 0}</span> },
                 { key: 'at_base', header: 'At Base', align: 'right', render: (v) => v || 0 },
               ]}
             />
@@ -1120,7 +1120,7 @@ const SchemeManagement: React.FC = () => {
                   onChange={v => setSchemeForm(f => ({...f, currency: v}))}
                   searchPlaceholder="Search..."
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">All prices for this scheme will be in this currency</p>
+                <p className="text-xs text-muted-foreground mt-1">All prices for this scheme will be in this currency</p>
               </div>
             </div>
 
@@ -1487,17 +1487,17 @@ const SchemeManagement: React.FC = () => {
                   <Badge variant={matchedSchemes === csvSchemeColumns.length ? 'default' : 'destructive'}>
                     {matchedSchemes}/{csvSchemeColumns.length} schemes matched
                   </Badge>
-                  <Badge className="bg-green-100 text-green-800">{totalPrices} prices to upload</Badge>
+                  <Badge className="bg-success-bg text-success">{totalPrices} prices to upload</Badge>
                 </div>
 
                 <AdvancedDataTable<any>
                   data={csvParsedRows.slice(0, 100)}
                   keyExtractor={(row, idx) => idx}
-                  rowClassName={(row) => row.matched ? '' : 'bg-red-50'}
+                  rowClassName={(row) => row.matched ? '' : 'bg-destructive-bg'}
                   columns={[
                     {
                       key: 'matched', header: 'Status',
-                      render: (v) => v ? <CheckCircle className="w-3.5 h-3.5 text-green-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500" />,
+                      render: (v) => v ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <AlertCircle className="w-3.5 h-3.5 text-destructive" />,
                     },
                     { key: 'code', header: 'Code', render: (v) => <span className="font-mono">{v}</span> },
                     { key: 'name', header: 'Name', render: (v) => <span className="max-w-[200px] truncate block">{v}</span> },

@@ -6,22 +6,39 @@
  */
 
 export const BRAND = {
-  primary:      '#1A7A75',  // logo dark teal — CSS: hsl(var(--primary))
-  primaryDark:  '#155E5A',  // teal hover/active
-  primaryLight: '#4ECDC4',  // logo light teal — for light-tone tints
-  primaryLight10: 'rgba(26,122,117,0.10)', // teal/10 bg tint
-  primaryMid:   'rgba(26,122,117,0.06)',   // teal/6 subtle tint (table headers, card headers)
-  navy:         '#0F172A',  // deep navy — headings/body text
-  gray:         '#64748B',  // slate-500 — secondary text, labels
-  grayLight:    '#94A3B8',  // slate-400 — placeholder, muted icons
-  border:       '#E2E8F0',  // slate-200 — card/panel borders
-  borderLight:  '#F1F5F9',  // slate-100 — dividers inside cards
-  bgPage:       '#F8FAFC',  // slate-50 — page background
+  brandTeal:    '#0A96A1',  // logo, accents
+  primary:      '#077A84',  // buttons, links, focus ring — CSS: hsl(var(--primary))
+  primaryHover: '#06656D',  // teal hover/active
+  primarySoft:  '#E3F3F4',  // selected chip / info badge background
+  primaryLight10: 'rgba(7,122,132,0.10)', // primary/10 bg tint
+  primaryMid:   'rgba(7,122,132,0.06)',   // primary/6 subtle tint (table headers, card headers)
+  heading:      '#14363C',  // heading ink — page/card titles
+  body:         '#1B2A2F',  // body text
+  label:        '#34484E',  // label text
+  gray:         '#50646A',  // muted text — passes 4.5:1 on white
+  grayLight:    '#94A3B8',  // placeholder, muted icons
+  border:       '#D3DFE0',  // card/panel borders, table header line
+  inputBorder:  '#BFCFD1',  // input borders
+  borderLight:  '#EEF1F2',  // row dividers inside cards
+  bgPage:       '#F8FAFC',  // page background (kept as-is)
   bgCard:       '#FFFFFF',  // white — card/panel background
-  success:      '#16A34A',  // green-600
-  warning:      '#D97706',  // amber-600
-  danger:       '#DC2626',  // red-600
-  info:         '#1A7A75',  // same as primary
+  tableHeaderBg:'#F6F9F9',  // table header background
+  disabledBg:   '#F1F5F5',  // disabled field background
+  skeleton:     '#E3EBEC',  // loading skeleton
+  success:      '#1D7A46',
+  successBg:    '#E5F4EC',
+  successBorder:'#A9DFC0',
+  warning:      '#8A5300',
+  warningBg:    '#FDF1DC',
+  warningBorder:'#F2D49B',
+  danger:       '#B42318',
+  dangerBg:     '#FDE8E6',
+  dangerBorder: '#F4C7C2',
+  info:         '#06656D',
+  infoBg:       '#E3F3F4',
+  infoBorder:   '#BFE0E2',
+  neutral:      '#50646A',
+  neutralBg:    '#EEF1F2',
 } as const;
 
 export const RADIUS = {
@@ -40,13 +57,11 @@ export const SHADOW = {
 } as const;
 
 export const FONT = {
-  sizeXs:   '10px',
-  sizeSm:   '11px',
-  sizeBase: '13px',
-  sizeMd:   '14px',
-  sizeLg:   '16px',
-  sizeXl:   '18px',
-  size2xl:  '20px',
+  sizeCaption: '12px', // minimum — nothing below this
+  sizeLabel:   '13px',
+  sizeBase:    '15px', // body
+  sizeSection: '18px', // section/card title
+  sizeTitle:   '24px', // page title (h1)
   weightNormal:   '400',
   weightMedium:   '500',
   weightSemibold: '600',
@@ -60,20 +75,43 @@ export const SPACING = {
   formGap:    '16px',   // gap between form fields
 } as const;
 
-/** Status badge color map — use with IcBadge or Badge component */
+/** Status badge color map — use with IcBadge or Badge component.
+ *  Every entry is one of the five semantic tones (success/warning/danger/
+ *  info/neutral) per the Option B status-badge mapping table. */
+const SUCCESS  = { bg: '#E5F4EC', text: '#1D7A46', border: '#A9DFC0' };
+const WARNING  = { bg: '#FDF1DC', text: '#8A5300', border: '#F2D49B' };
+const DANGER   = { bg: '#FDE8E6', text: '#B42318', border: '#F4C7C2' };
+const INFO     = { bg: '#E3F3F4', text: '#06656D', border: '#BFE0E2' };
+const NEUTRAL  = { bg: '#EEF1F2', text: '#50646A', border: '#D3DFE0' };
+
 export const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  active:     { bg: '#F0FDF4', text: '#16A34A', border: '#BBF7D0' },
-  completed:  { bg: '#F0FDFA', text: '#0D9488', border: '#99F6E4' },
-  inactive:   { bg: '#F8FAFC', text: '#64748B', border: '#E2E8F0' },
-  closed:     { bg: '#F8FAFC', text: '#64748B', border: '#E2E8F0' },
-  pending:    { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' },
-  waiting:    { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' },
-  cancelled:  { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
-  paid:       { bg: '#F0FDF4', text: '#16A34A', border: '#BBF7D0' },
-  unpaid:     { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
-  partial:    { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' },
-  normal:     { bg: '#F0FDFA', text: '#0D9488', border: '#99F6E4' },
-  high:       { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
-  low:        { bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' },
-  critical:   { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
+  // success — paid, completed, balanced, active
+  active:     SUCCESS,
+  completed:  SUCCESS,
+  balanced:   SUCCESS,
+  paid:       SUCCESS,
+  normal:     SUCCESS,
+  // warning — partial, pending, waiting, due
+  pending:    WARNING,
+  waiting:    WARNING,
+  partial:    WARNING,
+  due:        WARNING,
+  // danger — unpaid, overdue, failed, short, rejected
+  unpaid:     DANGER,
+  overdue:    DANGER,
+  failed:     DANGER,
+  short:      DANGER,
+  rejected:   DANGER,
+  high:       DANGER,
+  critical:   DANGER,
+  // info — in progress, processing
+  in_progress:  INFO,
+  'in-progress':INFO,
+  processing:   INFO,
+  low:          INFO,
+  // neutral — cancelled, draft, inactive
+  cancelled:  NEUTRAL,
+  draft:      NEUTRAL,
+  inactive:   NEUTRAL,
+  closed:     NEUTRAL,
 };

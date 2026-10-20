@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Plus, Eye, Edit, Save, X, Send, CheckCircle, BookOpen, XCircle, RotateCcw, RefreshCw, Search, FileText, TrendingUp, TrendingDown, BarChart3, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader, LoadingState, StatusBadge, type StatusBadgeTone } from '@/components/common';
@@ -15,6 +15,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { apiFetch, formatCurrency, Account, JournalEntry, CurrencyCode } from '@/utils/accountingApi';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const JE_STATUS_TONE_MAP: Record<string, StatusBadgeTone> = {
   draft: 'neutral',
@@ -565,9 +566,9 @@ const JournalEntriesPage: React.FC = () => {
               emptyMessage={journalEntries.length === 0 ? 'No journal entries found. Click "New Journal Entry" to create one.' : 'No entries match your search criteria.'}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
-                { key: 'je_number', header: 'JE Number', sortable: true, render: (v) => <span className="font-mono text-[13px] font-medium">{v}</span> },
-                { key: 'entry_date', header: 'Date', sortable: true, render: (v) => <span className="text-[13px]">{new Date(v).toLocaleDateString()}</span> },
-                { key: 'description', header: 'Description', render: (v) => <p className="text-[13px] truncate max-w-[200px]">{v}</p> },
+                { key: 'je_number', header: 'JE Number', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{v}</span> },
+                { key: 'entry_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{formatDate(v)}</span> },
+                { key: 'description', header: 'Description', render: (v) => <p className="text-sm truncate max-w-[200px]">{v}</p> },
                 {
                   key: 'transaction_currency', header: 'Currency',
                   render: (v, entry) => (
@@ -579,25 +580,25 @@ const JournalEntriesPage: React.FC = () => {
                     </>
                   ),
                 },
-                { key: 'base_total_debit', header: `Debit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-[13px] font-medium">{formatCurrency(v ?? 0)}</span> },
-                { key: 'base_total_credit', header: `Credit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-[13px] font-medium">{formatCurrency(v ?? 0)}</span> },
+                { key: 'base_total_debit', header: `Debit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{formatCurrency(v ?? 0)}</span> },
+                { key: 'base_total_credit', header: `Credit (${BASE_CURRENCY})`, align: 'right', sortable: true, render: (v) => <span className="font-mono text-sm font-medium">{formatCurrency(v ?? 0)}</span> },
                 { key: 'status', header: 'Status', align: 'center', sortable: true, render: (v) => <StatusBadge status={v} map={JE_STATUS_TONE_MAP} /> },
                 {
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, entry) => (
                     <div className="flex items-center justify-center space-x-1">
-                      <Button size="icon" variant="ghost" onClick={() => handleView(entry)} title="View">
+                      <Button size="icon" aria-label="View" variant="ghost" onClick={() => handleView(entry)} title="View">
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       {entry.status === 'draft' && (
-                        <Button size="icon" variant="ghost" onClick={() => handleEdit(entry)} title="Edit">
+                        <Button size="icon" aria-label="Edit" variant="ghost" onClick={() => handleEdit(entry)} title="Edit">
                           <Edit className="w-3.5 h-3.5" />
                         </Button>
                       )}
                       {getStatusActions(entry).map((act) => {
                         const isActive = statusActionKey === `${entry.id}-${act.action}`;
                         return (
-                          <Button key={act.action} size="icon" variant={act.variant}
+                          <Button key={act.action} size="icon" aria-label={act.label} variant={act.variant}
                             onClick={() => changeStatus(entry.id, act.action, act.label)}
                             disabled={loading} title={act.label}>
                             {isActive ? <Loader2 className="w-3 h-3 animate-spin" /> : act.icon}
@@ -623,7 +624,7 @@ const JournalEntriesPage: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <Label className="text-muted-foreground text-xs">Date</Label>
-                    <p className="font-medium">{new Date(viewEntry.entry_date).toLocaleDateString()}</p>
+                    <p className="font-medium">{formatDate(viewEntry.entry_date)}</p>
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-xs">Status</Label>

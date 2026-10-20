@@ -12,7 +12,7 @@ import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
@@ -497,7 +497,7 @@ export default function ProformaInvoicePage() {
                       <div className="text-xs text-muted-foreground font-mono mt-0.5">{selectedPatient.code || selectedPatient.id}</div>
                       {selectedPatient.phone && <div className="text-xs text-muted-foreground mt-0.5">{selectedPatient.phone}</div>}
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSelectedPatient(null)}>
+                    <Button variant="ghost" size="icon" aria-label="Close" className="h-6 w-6 shrink-0" onClick={() => setSelectedPatient(null)}>
                       <X className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -538,7 +538,7 @@ export default function ProformaInvoicePage() {
                       <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-medium text-muted-foreground">New Walk-in Patient</p>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowWalkInForm(false)}>
+                          <Button variant="ghost" size="icon" aria-label="Close" className="h-5 w-5" onClick={() => setShowWalkInForm(false)}>
                             <X className="w-3 h-3" />
                           </Button>
                         </div>
@@ -684,7 +684,7 @@ export default function ProformaInvoicePage() {
 
               {savedProforma ? (
                 <div className="p-4 space-y-3">
-                  <div className="p-3 rounded-lg border border-green-200 bg-green-50 text-sm text-green-800 flex items-start gap-2">
+                  <div className="p-3 rounded-lg border border-success-border bg-success-bg text-sm text-success flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                       <div className="font-semibold">{savedProforma.proforma_number} saved</div>
@@ -726,17 +726,17 @@ export default function ProformaInvoicePage() {
                         <div key={`${l.type}-${l.refId}`} className="p-2.5 rounded-lg border bg-muted/20">
                           <div className="flex items-start justify-between gap-2">
                             <div className="font-medium text-sm">{l.name}</div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive" onClick={() => removeFromCart(l.refId, l.type)}>
+                            <Button variant="ghost" size="icon" aria-label="Delete" className="h-6 w-6 shrink-0 text-destructive" onClick={() => removeFromCart(l.refId, l.type)}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                           <div className="flex items-center justify-between mt-1.5 gap-2">
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, -1)}>
+                              <Button variant="outline" size="icon" aria-label="Remove" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, -1)}>
                                 <Minus className="w-3 h-3" />
                               </Button>
                               <span className="text-sm font-mono w-6 text-center">{l.quantity}</span>
-                              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, 1)}>
+                              <Button variant="outline" size="icon" aria-label="Add" className="h-6 w-6" onClick={() => updateQuantity(l.refId, l.type, 1)}>
                                 <Plus className="w-3 h-3" />
                               </Button>
                             </div>
@@ -796,16 +796,16 @@ export default function ProformaInvoicePage() {
                   {
                     key: 'status', header: 'Status',
                     render: (v) => v === 'converted' ? (
-                      <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><CheckCircle2 className="w-3 h-3" /> Converted</span>
+                      <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><CheckCircle2 className="w-3 h-3" /> Converted</span>
                     ) : (
-                      <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><Clock className="w-3 h-3" /> Draft</span>
+                      <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><Clock className="w-3 h-3" /> Draft</span>
                     ),
                   },
                   {
                     key: '__actions', header: 'Actions', align: 'right',
                     render: (_v, h) => (
                       <div className="flex justify-end gap-1.5">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePrint(h)} title="Print">
+                        <Button variant="ghost" size="icon" aria-label="Print" className="h-7 w-7" onClick={() => handlePrint(h)} title="Print">
                           <Printer className="w-3.5 h-3.5" />
                         </Button>
                         {h.status !== 'converted' ? (

@@ -7,7 +7,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   ClipboardCheck, Plus, RefreshCw, Eye, CheckCircle, XCircle, AlertTriangle,
@@ -16,12 +16,13 @@ import {
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 const STATUS_CLASS: Record<string, string> = {
-  in_progress: 'bg-sky-50 text-sky-700 border-sky-200', completed: 'bg-amber-50 text-amber-700 border-amber-200',
-  reconciled: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  pending: 'bg-slate-100 text-slate-600 border-slate-200', approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  rejected: 'bg-red-50 text-red-700 border-red-200',
+  in_progress: 'bg-info-bg text-info border-info-border', completed: 'bg-warning-bg text-warning border-warning-border',
+  reconciled: 'bg-success-bg text-success border-success-border',
+  pending: 'bg-muted text-muted-foreground border-border', approved: 'bg-success-bg text-success border-success-border',
+  rejected: 'bg-destructive-bg text-destructive border-destructive-border',
 };
 
 const defaultCountForm = () => ({ count_type: 'full_count', location_id: '' });
@@ -341,7 +342,7 @@ export default function PhysicalCounts() {
           <div className="p-4 border-b flex justify-between items-center bg-muted/30">
             <h3 className="font-medium">{activeMode === 'counts' ? 'Count Directory' : 'Adjustment Directory'}</h3>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               {activeMode === 'adjustments' && (
@@ -362,18 +363,18 @@ export default function PhysicalCounts() {
                 pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                 columns={[
                   { key: 'count_number', header: 'Count No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'count_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'count_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
                   { key: 'count_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
                   { key: 'location_name', header: 'Location', render: (v) => v || 'All' },
                   { key: 'total_items_counted', header: 'Items', sortable: true, render: (v) => v || 0 },
                   { key: 'variance_count', header: 'Variances', sortable: true, render: (v) => v || 0 },
                   {
                     key: 'status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
+                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
                   },
                   {
                     key: '__actions', header: 'Actions',
-                    render: (_v, c) => <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => viewCount(c)}><Eye className="w-3.5 h-3.5" /></Button>,
+                    render: (_v, c) => <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={() => viewCount(c)}><Eye className="w-3.5 h-3.5" /></Button>,
                   },
                 ]}
               />
@@ -398,27 +399,27 @@ export default function PhysicalCounts() {
                   { key: 'physical_count', header: 'Physical', sortable: true },
                   {
                     key: 'variance', header: 'Variance', sortable: true,
-                    render: (v) => <span className={`font-mono ${v > 0 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
+                    render: (v) => <span className={`font-mono ${v > 0 ? 'text-success' : v < 0 ? 'text-destructive' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
                   },
                   { key: 'variance_value', header: 'Value', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
                   { key: 'variance_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
                   {
                     key: 'approval_status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v}</span>,
+                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v}</span>,
                   },
                   {
                     key: '__actions', header: 'Actions',
                     render: (_v, adj) => adj.approval_status === 'pending' ? (
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
+                        <Button variant="ghost" size="icon" aria-label="Confirm" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
                           {processingAdj?.id === adj.id && processingAdj.action === 'approve'
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                            : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-success" />
+                            : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
+                        <Button variant="ghost" size="icon" aria-label="Close" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
                           {processingAdj?.id === adj.id && processingAdj.action === 'reject'
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
-                            : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-destructive" />
+                            : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                         </Button>
                       </div>
                     ) : null,
@@ -439,18 +440,18 @@ export default function PhysicalCounts() {
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <div>
                 <h3 className="font-semibold text-lg font-mono">{selectedCount.count_number}</h3>
-                <p className="text-xs text-muted-foreground">{selectedCount.count_date ? new Date(selectedCount.count_date).toLocaleDateString() : ''} — {selectedCount.count_type?.replace(/_/g, ' ')}</p>
+                <p className="text-xs text-muted-foreground">{selectedCount.count_date ? formatDate(selectedCount.count_date) : ''} — {selectedCount.count_type?.replace(/_/g, ' ')}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-6 flex-1 overflow-auto space-y-4">
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-muted text-muted-foreground border-border'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
               <div className="border rounded-lg overflow-hidden">
                 <AdvancedDataTable<any>
                   data={selectedCount.lines || []}
                   keyExtractor={(line) => line.id}
                   emptyMessage="No items counted yet."
-                  rowClassName={(line) => line.variance !== 0 ? 'bg-red-50/50' : ''}
+                  rowClassName={(line) => line.variance !== 0 ? 'bg-destructive-bg/50' : ''}
                   columns={[
                     {
                       key: 'item_name', header: 'Item',
@@ -465,7 +466,7 @@ export default function PhysicalCounts() {
                     { key: 'counted_quantity', header: 'Counted', align: 'right' },
                     {
                       key: 'variance', header: 'Variance', align: 'right',
-                      render: (v) => <span className={`font-mono ${v > 0 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
+                      render: (v) => <span className={`font-mono ${v > 0 ? 'text-success' : v < 0 ? 'text-destructive' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
                     },
                   ]}
                 />
@@ -508,7 +509,7 @@ export default function PhysicalCounts() {
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Count Item</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowAddLine(false)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowAddLine(false)}><X className="w-4 h-4" /></Button>
             </div>
             <form onSubmit={addCountLine}>
               <div className="p-6 space-y-4">
@@ -554,7 +555,7 @@ export default function PhysicalCounts() {
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-primary" /> Create Adjustment</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowCreateAdj(false)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowCreateAdj(false)}><X className="w-4 h-4" /></Button>
             </div>
             <form onSubmit={createAdjustment} className="flex-1 overflow-auto">
               <div className="p-6 space-y-4">

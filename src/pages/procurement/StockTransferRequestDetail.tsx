@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { getStatusColor } from '@/lib/statusColors';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { ArrowLeft, ArrowRightLeft, Check, X, Trash2, Loader2 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 interface DetailLine {
   id: string;
@@ -163,11 +164,11 @@ export default function StockTransferRequestDetail() {
 
             <div className="p-4 space-y-3">
               <div className="text-sm text-muted-foreground">
-                Requested by {detail.requested_by_name || '—'} on {detail.created_at ? new Date(detail.created_at).toLocaleDateString() : '—'}
+                Requested by {detail.requested_by_name || '—'} on {detail.created_at ? formatDate(detail.created_at) : '—'}
                 {detail.approved_by_name && ` · ${detail.status === 'rejected' ? 'Rejected' : 'Approved'} by ${detail.approved_by_name}`}
               </div>
               {detail.notes && <p className="text-sm">{detail.notes}</p>}
-              {detail.rejection_reason && <p className="text-sm text-red-600">Reason: {detail.rejection_reason}</p>}
+              {detail.rejection_reason && <p className="text-sm text-destructive">Reason: {detail.rejection_reason}</p>}
 
               <div className="border rounded-lg divide-y">
                 {detail.items?.map((line) => (
@@ -179,7 +180,7 @@ export default function StockTransferRequestDetail() {
                     <div className="text-right">
                       <p>{Number(line.quantity_requested).toLocaleString()} {line.unit_of_measure}</p>
                       {Number(line.quantity_fulfilled) > 0 && (
-                        <p className="text-xs text-green-600">{Number(line.quantity_fulfilled).toLocaleString()} moved</p>
+                        <p className="text-xs text-success">{Number(line.quantity_fulfilled).toLocaleString()} moved</p>
                       )}
                     </div>
                   </div>
@@ -192,7 +193,7 @@ export default function StockTransferRequestDetail() {
                 {canCancel && (
                   <Button variant="outline" onClick={cancel} disabled={processing}>Cancel</Button>
                 )}
-                <Button variant="outline" className="text-red-600" onClick={reject} disabled={processing}>
+                <Button variant="outline" className="text-destructive" onClick={reject} disabled={processing}>
                   <X className="w-4 h-4 mr-2" /> Reject
                 </Button>
                 <Button onClick={approve} disabled={processing}>

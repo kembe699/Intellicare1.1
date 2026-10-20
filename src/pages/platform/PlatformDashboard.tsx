@@ -12,6 +12,7 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import { Building2, CheckCircle2, Wallet, AlertTriangle, Loader2, Clock } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 const REVENUE_COLOR = '#1A7A75'; // app primary teal — matches DashboardOverview's revenue bar
 const ACTIVE_COLOR = 'hsl(var(--success))';
@@ -90,7 +91,7 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Clients</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Clients</p>
                 <p className="text-2xl font-bold mt-1">{data.totalClients}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{data.activeClients} active · {data.suspendedClients} suspended</p>
               </div>
@@ -101,7 +102,7 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Revenue</p>
                 <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(data.totalRevenue)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">all-time, paid invoices</p>
               </div>
@@ -112,8 +113,8 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">This Month</p>
-                <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data.revenueThisMonth)}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">This Month</p>
+                <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(data.revenueThisMonth)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">revenue collected</p>
               </div>
               <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -123,8 +124,8 @@ const PlatformDashboard: React.FC = () => {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Outstanding</p>
-                <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(data.outstandingAmount)}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Outstanding</p>
+                <p className="text-2xl font-bold mt-1 text-warning">{fmtCurrency(data.outstandingAmount)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{data.outstandingCount} unpaid invoice{data.outstandingCount === 1 ? '' : 's'}</p>
               </div>
               <AlertTriangle className="h-5 w-5 text-primary" />
@@ -228,7 +229,7 @@ const PlatformDashboard: React.FC = () => {
                     </Link>
                   </TableCell>
                   <TableCell className="font-mono text-muted-foreground text-sm">{c.code}</TableCell>
-                  <TableCell className="text-muted-foreground">{new Date(c.periodEnd).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(c.periodEnd)}</TableCell>
                   <TableCell className="text-right">
                     <Badge variant={expiryTone(c.daysUntilExpiry)}>
                       {c.daysUntilExpiry < 0

@@ -4,7 +4,7 @@ import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoadingState } from '@/components/common';
 import { PageHeader } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Plus, Edit, Trash2, Stethoscope, Save, X, Loader2, Search, Building2, Grid3X3, List, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -382,10 +382,10 @@ const Clinics: React.FC = () => {
                   key: '__actions', header: '', align: 'right',
                   render: (_v, clinic) => (
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7">
+                      <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => handleEdit(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7 text-destructive hover:text-destructive">
+                      <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => handleDelete(clinic)} disabled={deletingId === clinic.id} className="h-7 w-7 text-destructive hover:text-destructive">
                         {deletingId === clinic.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </Button>
                     </div>

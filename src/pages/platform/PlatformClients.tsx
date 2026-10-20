@@ -17,7 +17,8 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
 import { Loader2, Plus, Copy, CheckCircle2, Building2, Trash2, TriangleAlert } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
+import { formatDate } from '@/lib/format';
 
 interface ClientRow {
   id: number;
@@ -262,7 +263,7 @@ const PlatformClients: React.FC = () => {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Client created
+                  <CheckCircle2 className="w-5 h-5 text-success" /> Client created
                 </DialogTitle>
               </DialogHeader>
               <div className="px-5 py-4 space-y-3 text-sm">
@@ -277,7 +278,7 @@ const PlatformClients: React.FC = () => {
                 {result.invoice && (
                   <p className="text-muted-foreground">
                     First invoice created: <span className="text-primary font-semibold">${Number(result.invoice.amount).toFixed(2)}</span>{' '}
-                    ({result.invoice.billing_period}), due by {new Date(result.invoice.period_end).toLocaleDateString()}. The client is
+                    ({result.invoice.billing_period}), due by {formatDate(result.invoice.period_end)}. The client is
                     automatically suspended if it's not marked paid by then.
                   </p>
                 )}

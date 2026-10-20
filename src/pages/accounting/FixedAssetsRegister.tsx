@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Asset, NATURE_BADGE, NATURE_LABEL, fmt } from './fixedAssetsShared';
 
 export default function FixedAssetsRegister() {

@@ -6,7 +6,7 @@ import Barcode from 'react-barcode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -376,7 +376,7 @@ export default function LISCollection() {
                       onChange={(e) => setQueueSearch(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={fetchSpecimens} disabled={loading} title="Refresh">
+                  <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9 shrink-0" onClick={fetchSpecimens} disabled={loading} title="Refresh">
                     <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
                   </Button>
                 </div>
@@ -402,23 +402,23 @@ export default function LISCollection() {
                       >
                         {isSelected ? <CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> : <Circle className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
                         <span className={cn("font-medium text-sm truncate flex-1 min-w-0", isSelected && "text-primary")}>{g.first_name} {g.last_name}</span>
-                        <span className="text-[11px] text-muted-foreground shrink-0">
+                        <span className="text-xs text-muted-foreground shrink-0">
                           {g.specimens.length} test{g.specimens.length !== 1 ? 's' : ''}
                         </span>
                         {unpaidCount > 0 && payableCount > 0 ? (
-                          <span className="text-[11px] font-medium text-orange-600 shrink-0">{payableCount} ready · {unpaidCount} unpaid</span>
+                          <span className="text-xs font-medium text-orange-600 shrink-0">{payableCount} ready · {unpaidCount} unpaid</span>
                         ) : unpaidCount > 0 ? (
-                          <span className="text-[11px] font-medium text-orange-600 shrink-0">Unpaid</span>
+                          <span className="text-xs font-medium text-orange-600 shrink-0">Unpaid</span>
                         ) : pendingCount > 0 ? (
-                          <span className="text-[11px] font-medium text-green-600 shrink-0">Ready to collect</span>
+                          <span className="text-xs font-medium text-success shrink-0">Ready to collect</span>
                         ) : (
-                          <span className="text-[11px] font-medium text-blue-600 shrink-0">Awaiting dispatch</span>
+                          <span className="text-xs font-medium text-info shrink-0">Awaiting dispatch</span>
                         )}
                         {g.insuranceBalance > 0 && (
-                          <span className="text-[11px] font-medium text-sky-600 shrink-0">Insurance</span>
+                          <span className="text-xs font-medium text-info shrink-0">Insurance</span>
                         )}
                         {g.hasRecollection && (
-                          <span className="text-[11px] font-medium text-red-600 shrink-0">Recollection</span>
+                          <span className="text-xs font-medium text-destructive shrink-0">Recollection</span>
                         )}
                       </button>
                     );
@@ -440,7 +440,7 @@ export default function LISCollection() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <div className="text-lg font-semibold">{selectedGroup.first_name} {selectedGroup.last_name}</div>
                       {selectedGroup.insuranceBalance > 0 && (
-                        <span className="bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full text-[11px] font-medium">Insurance</span>
+                        <span className="bg-info-bg text-info px-2 py-0.5 rounded-full text-xs font-medium">Insurance</span>
                       )}
                     </div>
                     <div className="text-sm font-mono text-muted-foreground">{selectedGroup.participant_number}</div>
@@ -455,9 +455,9 @@ export default function LISCollection() {
                           key: '__status', header: '', width: '2rem',
                           render: (_v, s) => (
                             s.status === 'collected' ? (
-                              <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              <CheckCircle2 className="w-4 h-4 text-success" />
                             ) : s.status === 'recollection_required' ? (
-                              <AlertCircle className="w-4 h-4 text-red-600" />
+                              <AlertCircle className="w-4 h-4 text-destructive" />
                             ) : (
                               <Circle className="w-4 h-4 text-muted-foreground/50" />
                             )
@@ -514,7 +514,7 @@ export default function LISCollection() {
 
                   <div className="p-4 border-t bg-muted/30 space-y-2">
                     {unpaidPendingInSelected.length > 0 && (
-                      <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                      <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         {unpaidPendingInSelected.length} test{unpaidPendingInSelected.length > 1 ? 's' : ''} still unpaid — collect payment to unlock {unpaidPendingInSelected.length > 1 ? 'them' : 'it'}. {payablePendingInSelected.length > 0 ? 'The rest are ready to collect below.' : ''}
                       </div>
@@ -569,7 +569,7 @@ export default function LISCollection() {
                       onChange={(e) => setHistorySearch(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={exportToCSV} title="Export CSV">
+                  <Button variant="outline" size="icon" aria-label="Export CSV" className="h-9 w-9 shrink-0" onClick={exportToCSV} title="Export CSV">
                     <Download className="w-4 h-4" />
                   </Button>
                 </div>
@@ -629,12 +629,12 @@ export default function LISCollection() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <div className={cn("font-medium text-sm truncate", isSelected && "text-primary")}>{g.first_name} {g.last_name}</div>
-                            <span className="text-[11px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
+                            <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
                               {g.specimens.length} test{g.specimens.length !== 1 ? 's' : ''}
                             </span>
                           </div>
                           <div className="text-xs font-mono text-muted-foreground mt-0.5">{g.participant_number}</div>
-                          <div className="text-[11px] text-muted-foreground mt-1">{new Date(g.latestTime).toLocaleString()}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{new Date(g.latestTime).toLocaleString()}</div>
                         </div>
                       </button>
                     );
@@ -663,7 +663,7 @@ export default function LISCollection() {
                           <div className="text-xs font-medium text-foreground">
                             Order • {new Date(o.order_time).toLocaleString()}
                           </div>
-                          <div className="text-[11px] text-muted-foreground">
+                          <div className="text-xs text-muted-foreground">
                             {o.requested_by_name ? `Dr. ${o.requested_by_name} • ` : ''}{o.specimens.length} test{o.specimens.length !== 1 ? 's' : ''}
                           </div>
                         </div>

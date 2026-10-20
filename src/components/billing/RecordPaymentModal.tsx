@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { Loader2, DollarSign } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 interface RecordPaymentModalProps {
   invoice: any;
@@ -87,7 +87,7 @@ export default function RecordPaymentModal({ invoice, onClose, onSuccess }: Reco
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-green-600" />
+            <DollarSign className="h-5 w-5 text-success" />
             Record Payment
           </DialogTitle>
         </DialogHeader>
@@ -103,11 +103,11 @@ export default function RecordPaymentModal({ invoice, onClose, onSuccess }: Reco
           </div>
           <div className="flex justify-between text-sm mt-1">
             <span className="text-muted-foreground">Already Paid:</span>
-            <span className="font-semibold text-green-600">{currency} {parseFloat(invoice.amount_paid).toFixed(2)}</span>
+            <span className="font-semibold text-success">{currency} {parseFloat(invoice.amount_paid).toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-sm mt-1 pt-1 border-t">
             <span className="text-muted-foreground font-medium">Balance Due:</span>
-            <span className="font-bold text-red-600">{currency} {balanceDue.toFixed(2)}</span>
+            <span className="font-bold text-destructive">{currency} {balanceDue.toFixed(2)}</span>
           </div>
         </div>
 

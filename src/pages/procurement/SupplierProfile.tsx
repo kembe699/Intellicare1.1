@@ -8,13 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { cn } from '@/lib/utils';
 import {
   Building2, Edit, Star, Phone, Mail, MapPin, CheckCircle, Ban, Loader2,
   Check, Receipt, Plus, FileText, ArrowLeft, Truck, Wallet, Clock, ClipboardList,
 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 const SUPPLIER_STATUS_TONE: Record<string, StatusBadgeTone> = {
   active: 'success',
@@ -40,7 +41,7 @@ const supplierStatus = (s: any) => {
 const renderStars = (rating: number) => {
   const stars = [];
   for (let i = 1; i <= 5; i++) {
-    stars.push(<Star key={i} className={`w-4 h-4 ${i <= rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />);
+    stars.push(<Star key={i} className={`w-4 h-4 ${i <= rating ? 'text-warning fill-warning' : 'text-gray-300'}`} />);
   }
   return <div className="flex gap-0.5">{stars}</div>;
 };
@@ -309,23 +310,23 @@ export default function SupplierProfile() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 min-w-0">
-                    <p className="text-xs text-amber-800">Outstanding</p>
+                  <div className="p-4 rounded-lg bg-warning-bg border border-warning-border min-w-0">
+                    <p className="text-xs text-warning">Outstanding</p>
                     {billByCurrency.length === 0 ? (
-                      <p className="text-xl font-bold font-mono text-amber-900">{formatInCurrency(0, supplier.currency)}</p>
+                      <p className="text-xl font-bold font-mono text-warning">{formatInCurrency(0, supplier.currency)}</p>
                     ) : (
                       billByCurrency.map(c => (
-                        <p key={c.currency} className="text-xl font-bold font-mono text-amber-900 leading-tight">{formatInCurrency(c.total_outstanding, c.currency)}</p>
+                        <p key={c.currency} className="text-xl font-bold font-mono text-warning leading-tight">{formatInCurrency(c.total_outstanding, c.currency)}</p>
                       ))
                     )}
                   </div>
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 min-w-0">
-                    <p className="text-xs text-emerald-800">Paid</p>
+                  <div className="p-4 rounded-lg bg-success-bg border border-success-border min-w-0">
+                    <p className="text-xs text-success">Paid</p>
                     {billByCurrency.length === 0 ? (
-                      <p className="text-xl font-bold font-mono text-emerald-900">{formatInCurrency(0, supplier.currency)}</p>
+                      <p className="text-xl font-bold font-mono text-success">{formatInCurrency(0, supplier.currency)}</p>
                     ) : (
                       billByCurrency.map(c => (
-                        <p key={c.currency} className="text-xl font-bold font-mono text-emerald-900 leading-tight">{formatInCurrency(c.total_paid, c.currency)}</p>
+                        <p key={c.currency} className="text-xl font-bold font-mono text-success leading-tight">{formatInCurrency(c.total_paid, c.currency)}</p>
                       ))
                     )}
                   </div>
@@ -376,23 +377,23 @@ export default function SupplierProfile() {
                     <table className="w-full text-sm">
                       <thead className="bg-muted/30">
                         <tr className="text-left text-muted-foreground text-xs">
-                          <th className="px-4 py-2.5 font-medium">PO / Bill No.</th>
-                          <th className="px-4 py-2.5 font-medium">Date</th>
-                          <th className="px-4 py-2.5 font-medium">Status</th>
-                          <th className="px-4 py-2.5 font-medium text-right">Total</th>
-                          <th className="px-4 py-2.5 font-medium text-right">Paid</th>
-                          <th className="px-4 py-2.5 font-medium text-right">Balance Due</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">PO / Bill No.</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Date</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium text-right">Total</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium text-right">Paid</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium text-right">Balance Due</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {bills.map((b: any) => (
                           <tr key={b.id}>
                             <td className="px-4 py-2.5 font-mono text-primary">{b.po_number}</td>
-                            <td className="px-4 py-2.5 text-muted-foreground">{new Date(b.order_date).toLocaleDateString()}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground">{formatDate(b.order_date)}</td>
                             <td className="px-4 py-2.5"><StatusBadge status={b.status} label={b.status} map={PO_STATUS_TONE} /></td>
                             <td className="px-4 py-2.5 text-right font-mono">{formatInCurrency(b.total_amount, b.po_currency)}</td>
                             <td className="px-4 py-2.5 text-right font-mono">{formatInCurrency(b.paid_amount, b.po_currency)}</td>
-                            <td className={cn("px-4 py-2.5 text-right font-mono font-semibold", parseFloat(b.balance_due) > 0 ? "text-amber-700" : "text-emerald-700")}>
+                            <td className={cn("px-4 py-2.5 text-right font-mono font-semibold", parseFloat(b.balance_due) > 0 ? "text-warning" : "text-success")}>
                               {formatInCurrency(b.balance_due, b.po_currency)}
                             </td>
                           </tr>

@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import {
   Users, Edit, Phone, Mail, MapPin, Loader2, Check, Plus, Trash2,
   ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt,
 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   active: 'success',
@@ -301,9 +302,9 @@ export default function EmployeeProfile() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Job Title</span><span>{employee.job_title || '—'}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Department</span><span>{employee.department || '—'}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Contract</span><span className="capitalize">{(employee.contract_type || '').replace('_', ' ')}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Hire Date</span><span>{employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : '—'}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Hire Date</span><span>{employee.hire_date ? formatDate(employee.hire_date) : '—'}</span></div>
                   {employee.termination_date && (
-                    <div className="flex justify-between"><span className="text-muted-foreground">Termination Date</span><span>{new Date(employee.termination_date).toLocaleDateString()}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Termination Date</span><span>{formatDate(employee.termination_date)}</span></div>
                   )}
                 </div>
 
@@ -362,22 +363,22 @@ export default function EmployeeProfile() {
                         <table className="w-full text-sm">
                           <thead className="bg-muted/30">
                             <tr className="text-left text-muted-foreground text-xs">
-                              <th className="px-3 py-2 font-medium">Date</th>
-                              <th className="px-3 py-2 font-medium text-right">Billed</th>
-                              <th className="px-3 py-2 font-medium text-right">Collected</th>
-                              <th className="px-3 py-2 font-medium text-center">Status</th>
+                              <th scope="col" className="px-3 py-2 font-medium">Date</th>
+                              <th scope="col" className="px-3 py-2 font-medium text-right">Billed</th>
+                              <th scope="col" className="px-3 py-2 font-medium text-right">Collected</th>
+                              <th scope="col" className="px-3 py-2 font-medium text-center">Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y">
                             {consultTrace.consultations.map((c: any, i: number) => (
                               <tr key={i}>
-                                <td className="px-3 py-2">{new Date(c.visit_date).toLocaleDateString()}{c.shared && <span className="ml-1.5 text-[10px] text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
+                                <td className="px-3 py-2">{formatDate(c.visit_date)}{c.shared && <span className="ml-1.5 text-xs text-warning" title="Split with another provider seen the same day">split</span>}</td>
                                 <td className="px-3 py-2 text-right font-mono">{c.currency} {c.billed_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-right font-mono font-medium">{c.currency} {c.collected_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-center">
                                   {c.already_billed
-                                    ? <span className="text-[11px] text-muted-foreground">already billed</span>
-                                    : <span className="text-[11px] text-emerald-700">billable</span>}
+                                    ? <span className="text-xs text-muted-foreground">already billed</span>
+                                    : <span className="text-xs text-success">billable</span>}
                                 </td>
                               </tr>
                             ))}
@@ -408,7 +409,7 @@ export default function EmployeeProfile() {
                                 {creatingBill ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Receipt className="w-4 h-4 mr-2" />}
                                 Create Bill
                               </Button>
-                              {!employee.consultation_fee_percentage && <p className="text-[11px] text-amber-600">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
+                              {!employee.consultation_fee_percentage && <p className="text-xs text-warning">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
                             </>
                           )}
                         </div>
@@ -424,17 +425,17 @@ export default function EmployeeProfile() {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30">
                           <tr className="text-left text-muted-foreground text-xs">
-                            <th className="px-3 py-2 font-medium">Bill No.</th>
-                            <th className="px-3 py-2 font-medium">Period</th>
-                            <th className="px-3 py-2 font-medium text-right">Amount</th>
-                            <th className="px-3 py-2 font-medium text-center">Status</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Bill No.</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-right">Amount</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-center">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {consultantBills.map((b: any) => (
                             <tr key={b.id}>
                               <td className="px-3 py-2 font-mono text-primary">{b.bill_number}</td>
-                              <td className="px-3 py-2">{new Date(b.period_from).toLocaleDateString()} – {new Date(b.period_to).toLocaleDateString()}</td>
+                              <td className="px-3 py-2">{formatDate(b.period_from)} – {formatDate(b.period_to)}</td>
                               <td className="px-3 py-2 text-right font-mono">{b.currency} {parseFloat(b.bill_amount).toFixed(2)}</td>
                               <td className="px-3 py-2 text-center capitalize">{b.status}</td>
                             </tr>
@@ -457,7 +458,7 @@ export default function EmployeeProfile() {
                 </div>
                 <div className="bg-card rounded-lg border shadow-sm p-4">
                   <p className="text-xs text-muted-foreground mb-1">Net Pay</p>
-                  <p className="text-xl font-bold font-mono text-emerald-700">{formatInCurrency(netPay, employee.salary_currency)}</p>
+                  <p className="text-xl font-bold font-mono text-success">{formatInCurrency(netPay, employee.salary_currency)}</p>
                 </div>
               </div>
 
@@ -556,11 +557,11 @@ export default function EmployeeProfile() {
                     ) : (
                       <div className="space-y-1.5">
                         {allowances.map((c: any) => (
-                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-emerald-50/50">
+                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-success-bg/50">
                             <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-medium">{c.is_percentage ? formatInCurrency(employee.basic_salary * c.amount / 100, employee.salary_currency) : formatInCurrency(c.amount, employee.salary_currency)}</span>
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                              <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                                 <Trash2 className="w-3 h-3 text-destructive" />
                               </Button>
                             </div>
@@ -576,11 +577,11 @@ export default function EmployeeProfile() {
                     ) : (
                       <div className="space-y-1.5">
                         {deductions.map((c: any) => (
-                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-amber-50/50">
+                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-warning-bg/50">
                             <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-medium">{c.is_percentage ? formatInCurrency(employee.basic_salary * c.amount / 100, employee.salary_currency) : formatInCurrency(c.amount, employee.salary_currency)}</span>
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                              <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                                 <Trash2 className="w-3 h-3 text-destructive" />
                               </Button>
                             </div>
@@ -600,11 +601,11 @@ export default function EmployeeProfile() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30">
                       <tr className="text-left text-muted-foreground text-xs">
-                        <th className="px-3 py-2 font-medium">Run</th>
-                        <th className="px-3 py-2 font-medium">Period</th>
-                        <th className="px-3 py-2 font-medium">Status</th>
-                        <th className="px-3 py-2 font-medium text-right">Gross</th>
-                        <th className="px-3 py-2 font-medium text-right">Net</th>
+                        <th scope="col" className="px-3 py-2 font-medium">Run</th>
+                        <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                        <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                        <th scope="col" className="px-3 py-2 font-medium text-right">Gross</th>
+                        <th scope="col" className="px-3 py-2 font-medium text-right">Net</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">

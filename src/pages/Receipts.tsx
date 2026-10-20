@@ -5,13 +5,14 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { PaymentReceipt, printThermalReceipt } from '@/components/receipts/PaymentReceipt';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { FileText, Search, Download, Loader2, X, Printer, Ban, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { usePDFDocument } from '@/hooks/usePDFDocument';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface Receipt {
   id: string;
@@ -83,14 +84,14 @@ const STATUS_LABELS: Record<string, string> = {
 
 const statusBadge = (status: Receipt['status']) => {
   const map: Record<string, string> = {
-    active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    voided: 'bg-red-50 text-red-700 border-red-200',
-    refunded: 'bg-amber-50 text-amber-700 border-amber-200',
+    active: 'bg-success-bg text-success border-success-border',
+    voided: 'bg-destructive-bg text-destructive border-destructive-border',
+    refunded: 'bg-warning-bg text-warning border-warning-border',
     pending_void: 'bg-orange-50 text-orange-700 border-orange-200',
     pending_refund: 'bg-orange-50 text-orange-700 border-orange-200',
   };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
       {STATUS_LABELS[status] || status}
     </span>
   );
@@ -316,7 +317,7 @@ export default function Receipts() {
                     <>
                       {v}
                       {r.receipt_type && r.receipt_type !== 'payment' && (
-                        <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${r.receipt_type === 'deposit' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                        <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${r.receipt_type === 'deposit' ? 'bg-info-bg text-info border-info-border' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
                           {r.receipt_type === 'deposit' ? 'Deposit' : 'Deposit Refund'}
                         </span>
                       )}
@@ -336,7 +337,7 @@ export default function Receipts() {
                 },
                 { key: 'payment_amount', header: 'Amount', sortable: true, render: (v) => <span className="font-medium">{toAmount(v).toFixed(2)}</span> },
                 { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
-                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleDateString()}</span> },
+                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
                 { key: 'cashier_name', header: 'Cashier', render: (v) => <span className="text-muted-foreground">{v || 'Unknown'}</span> },
                 { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
               ]}
@@ -354,12 +355,12 @@ export default function Receipts() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> {selectedReceipt.receipt_number}
                 {selectedReceipt.receipt_type && selectedReceipt.receipt_type !== 'payment' && (
-                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded border ${selectedReceipt.receipt_type === 'deposit' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded border ${selectedReceipt.receipt_type === 'deposit' ? 'bg-info-bg text-info border-info-border' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
                     {selectedReceipt.receipt_type === 'deposit' ? 'Deposit' : 'Deposit Refund'}
                   </span>
                 )}
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedReceipt(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedReceipt(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -384,7 +385,7 @@ export default function Receipts() {
                 <span className="text-muted-foreground">Patient</span>
                 <span className="text-right">{selectedReceipt.patient_name || 'Walk-in Patient'}</span>
                 <span className="text-muted-foreground">Payment Date</span>
-                <span className="text-right">{new Date(selectedReceipt.payment_date).toLocaleDateString()}</span>
+                <span className="text-right">{formatDate(selectedReceipt.payment_date)}</span>
                 <span className="text-muted-foreground">Cashier</span>
                 <span className="text-right">{selectedReceipt.cashier_name || 'Unknown'}</span>
               </div>
@@ -405,7 +406,7 @@ export default function Receipts() {
                   <AdvancedDataTable<any>
                     data={displayServices}
                     keyExtractor={(s, i) => i}
-                    rowClassName={(s) => billServices?.[s.index]?.isVoided ? 'bg-red-50/40' : ''}
+                    rowClassName={(s) => billServices?.[s.index]?.isVoided ? 'bg-destructive-bg/40' : ''}
                     columns={[
                       { key: 'serviceName', header: 'Service', render: (v, s) => <span className={billServices?.[s.index]?.isVoided ? 'line-through text-muted-foreground' : ''}>{v}</span> },
                       { key: 'quantity', header: 'Qty', align: 'right', render: (v, s) => <span className={billServices?.[s.index]?.isVoided ? 'line-through text-muted-foreground' : ''}>{v}</span> },
@@ -416,7 +417,7 @@ export default function Receipts() {
                           const isVoided = !!billServices?.[s.index]?.isVoided;
                           if (isVoided) {
                             return (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-red-50 text-red-700 border-red-200">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-destructive-bg text-destructive border-destructive-border">
                                 Voided
                               </span>
                             );
@@ -425,7 +426,7 @@ export default function Receipts() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 px-2 text-[11px] text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive-bg"
                               onClick={() => { setVoidItemIndex(s.index); setVoidReason(''); }}
                               disabled={loadingBill}
                             >
@@ -436,7 +437,7 @@ export default function Receipts() {
                       },
                     ]}
                   />
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                  <p className="text-xs text-muted-foreground mt-1.5">
                     Voiding an item removes it from the bill's total. Since it was already paid, the bill will show a credit for that amount rather than an automatic refund.
                   </p>
                 </div>
@@ -474,7 +475,7 @@ export default function Receipts() {
 
             <div className="p-4 border-t bg-muted/30 flex justify-between gap-2">
               {selectedReceipt.status === 'active' ? (
-                <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={() => setShowCancelModal(true)}>
+                <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setShowCancelModal(true)}>
                   <Ban className="w-4 h-4 mr-2" /> Cancel Receipt
                 </Button>
               ) : <span />}
@@ -496,10 +497,10 @@ export default function Receipts() {
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <h3 className="font-semibold text-lg flex items-center gap-2 text-red-600">
+              <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Cancel Receipt
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowCancelModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowCancelModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -533,7 +534,7 @@ export default function Receipts() {
               <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancellationReason(''); setCancelItemsOnVoid(false); }}>Cancel</Button>
               <Button
                 variant="outline"
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive"
                 onClick={handleCancelReceipt}
                 disabled={cancelling || !cancellationReason.trim()}
               >
@@ -550,10 +551,10 @@ export default function Receipts() {
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <h3 className="font-semibold text-lg flex items-center gap-2 text-red-600">
+              <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Void Line Item
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setVoidItemIndex(null); setVoidReason(''); }}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => { setVoidItemIndex(null); setVoidReason(''); }}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -575,7 +576,7 @@ export default function Receipts() {
               <Button variant="outline" onClick={() => { setVoidItemIndex(null); setVoidReason(''); }}>Cancel</Button>
               <Button
                 variant="outline"
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive"
                 onClick={handleVoidItem}
                 disabled={voidingItem || !voidReason.trim()}
               >

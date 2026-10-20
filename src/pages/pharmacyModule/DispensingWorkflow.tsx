@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Pill, Search, Check, Loader2, ClipboardList, History, Calendar, RefreshCw, AlertTriangle, Plus, X,
   CreditCard, Printer, Pencil, Shield, FileText, User, Stethoscope, PackageX, ChevronRight,
@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
+import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
 
@@ -1263,11 +1264,11 @@ export default function DispensingWorkflow() {
                 className={cn(
                   "hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full border",
                   hasActiveShift
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-amber-200 bg-amber-50 text-amber-700"
+                    ? "border-success-border bg-success-bg text-success"
+                    : "border-warning-border bg-warning-bg text-warning"
                 )}
               >
-                <span className={cn("w-1.5 h-1.5 rounded-full", hasActiveShift ? "bg-emerald-500" : "bg-amber-500")} />
+                <span className={cn("w-1.5 h-1.5 rounded-full", hasActiveShift ? "bg-success" : "bg-warning")} />
                 {hasActiveShift ? 'Shift Active' : 'No Active Shift'}
               </span>
             )}
@@ -1290,8 +1291,8 @@ export default function DispensingWorkflow() {
 
         {/* Cashier shift banner — payments collected from this screen require an open shift */}
         {!checkingShift && !hasActiveShift && (
-          <div className="mt-4 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 text-sm text-amber-800">
+          <div className="mt-4 px-4 py-3 rounded-xl border border-warning-border bg-warning-bg flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-sm text-warning">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               No active cashier shift — you can dispense, but collecting payment here requires an open shift.
             </div>
@@ -1368,11 +1369,11 @@ export default function DispensingWorkflow() {
                     {selectedRx && <span className="text-xs font-mono text-muted-foreground shrink-0">· {selectedRx.prescription_number}</span>}
                     {selectedRx && !checkingBill && (
                       billBalance > 0 && activeBill?.scheme_id ? (
-                        <Badge variant="outline" className="shrink-0 border-sky-200 bg-sky-50 text-sky-700 gap-1"><Shield className="w-3 h-3" /> Insurance Billed</Badge>
+                        <Badge variant="outline" className="shrink-0 border-info-border bg-info-bg text-info gap-1"><Shield className="w-3 h-3" /> Insurance Billed</Badge>
                       ) : billBalance > 0 ? (
-                        <Badge variant="outline" className="shrink-0 border-red-200 bg-red-50 text-red-700 gap-1"><AlertTriangle className="w-3 h-3" /> Balance Due</Badge>
+                        <Badge variant="outline" className="shrink-0 border-destructive-border bg-destructive-bg text-destructive gap-1"><AlertTriangle className="w-3 h-3" /> Balance Due</Badge>
                       ) : activeBill ? (
-                        <Badge variant="outline" className="shrink-0 border-emerald-200 bg-emerald-50 text-emerald-700 gap-1"><Check className="w-3 h-3" /> Bill Settled</Badge>
+                        <Badge variant="outline" className="shrink-0 border-success-border bg-success-bg text-success gap-1"><Check className="w-3 h-3" /> Bill Settled</Badge>
                       ) : null
                     )}
                   </div>
@@ -1390,7 +1391,7 @@ export default function DispensingWorkflow() {
                     </div>
                     <div className="p-4 space-y-3">
                       {patientSchemes.length > 0 && (
-                        <p className="text-[11px] text-sky-700">
+                        <p className="text-xs text-info">
                           Only drugs priced under this patient's insurance ({patientSchemes[0].scheme_name}) are shown.
                         </p>
                       )}
@@ -1438,13 +1439,13 @@ export default function DispensingWorkflow() {
                                 className="mt-1"
                               />
                               {patientSchemes.length > 0 && eligibleDrugs.length === 0 && (
-                                <p className="text-[11px] text-red-700 mt-1">No drugs have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
+                                <p className="text-xs text-destructive mt-1">No drugs have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
                               )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div className="rounded-lg border p-3 bg-muted/20 space-y-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Quantity</p>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quantity</p>
                                 <div className="grid grid-cols-3 gap-2">
                                   <div>
                                     <Label className="text-xs font-medium text-muted-foreground">Qty</Label>
@@ -1455,7 +1456,7 @@ export default function DispensingWorkflow() {
                                     <Input value={selectedDrug ? doseUnitLabel(selectedDrug) : ''} readOnly disabled className="mt-1 bg-muted/40" />
                                   </div>
                                   <div>
-                                    <Label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-red-700' : 'text-muted-foreground')}>Stock</Label>
+                                    <Label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-destructive' : 'text-muted-foreground')}>Stock</Label>
                                     <Input
                                       // Stock is pack-tracked (Strip/Bottle/etc.) while Qty/UOM
                                       // above are dose units — labeled with the item's own
@@ -1463,16 +1464,16 @@ export default function DispensingWorkflow() {
                                       value={selectedDrug?.stock_on_hand != null ? `${selectedDrug.stock_on_hand} ${selectedDrug.unit_of_measure || ''}`.trim() : ''}
                                       readOnly
                                       disabled
-                                      className={cn('mt-1', outOfStock ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-muted/40')}
+                                      className={cn('mt-1', outOfStock ? 'bg-destructive-bg border-destructive-border text-destructive font-semibold' : 'bg-muted/40')}
                                     />
                                   </div>
                                 </div>
                               </div>
 
                               <div className="rounded-lg border p-3 bg-muted/20 space-y-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing</p>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pricing</p>
                                 {patientSchemes.length > 0 && schemePricing ? (
-                                  <div className="text-[11px] font-semibold text-sky-700 inline-flex items-center gap-1 py-1.5">
+                                  <div className="text-xs font-semibold text-info inline-flex items-center gap-1 py-1.5">
                                     <Shield className="w-3 h-3" /> {schemeCurrencyCode} {parseFloat(schemePricing.scheme_price).toFixed(2)} (insurance)
                                   </div>
                                 ) : (
@@ -1516,7 +1517,7 @@ export default function DispensingWorkflow() {
                                       </div>
                                     </div>
                                     {selectedDrug && discountNum > 0 && (
-                                      <p className="text-[11px] text-muted-foreground">
+                                      <p className="text-xs text-muted-foreground">
                                         Price after discount: <span className="font-medium text-foreground">{fmt(discountedPrice)}</span>
                                         {' '}<span className="line-through">{fmt(basePrice)}</span>
                                       </p>
@@ -1527,7 +1528,7 @@ export default function DispensingWorkflow() {
                             </div>
 
                             {selectedDrug && (outOfStock || notEnoughStock) && (
-                              <p className="text-[11px] text-red-700 flex items-center gap-1.5">
+                              <p className="text-xs text-destructive flex items-center gap-1.5">
                                 <PackageX className="w-3.5 h-3.5 shrink-0" />
                                 {outOfStock
                                   ? `${selectedDrug.drug_name} is out of stock — receive stock before billing it.`
@@ -1580,10 +1581,10 @@ export default function DispensingWorkflow() {
                             </div>
                             <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
                               <div>
-                                <span className={cn("text-sm font-semibold", billBalance > 0 ? "text-red-700" : "text-emerald-700")}>
+                                <span className={cn("text-sm font-semibold", billBalance > 0 ? "text-destructive" : "text-success")}>
                                   {billBalance > 0 ? 'Balance Due' : 'Bill Settled'}
                                 </span>
-                                <span className={cn("block text-base font-bold", billBalance > 0 ? "text-red-700" : "text-emerald-700")}>{fmt(billBalance)}</span>
+                                <span className={cn("block text-base font-bold", billBalance > 0 ? "text-destructive" : "text-success")}>{fmt(billBalance)}</span>
                               </div>
                               <Button size="sm" variant="outline" className="shrink-0" onClick={() => navigate(`/patients-bill/${activeBill.id}`)} title="Open this bill on Patient Bills to invoice or review it in full">
                                 <FileText className="w-3.5 h-3.5 mr-1.5" /> View Bill
@@ -1591,19 +1592,19 @@ export default function DispensingWorkflow() {
                             </div>
                           </div>
                           {patientSchemes.length > 0 && (
-                            <div className="px-3 py-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800">
+                            <div className="px-3 py-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info">
                               Active membership: {patientSchemes.map((s: any) => s.scheme_name).join(', ')} — pick "Credit (Invoice)" below to bill this to a scheme/insurance instead of collecting cash now.
                             </div>
                           )}
 
                           {!hasActiveShift && paymentForm.method !== 'credit' && (
-                            <div className="px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                            <div className="px-3 py-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before recording this payment.
                             </div>
                           )}
 
                           {paymentForm.method === 'credit' && (
-                            <div className="px-3 py-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800 flex items-center gap-2">
+                            <div className="px-3 py-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info flex items-center gap-2">
                               <CreditCard className="w-3.5 h-3.5 flex-shrink-0" /> No money is collected now — this creates an invoice due later, payable from the Invoices page. Dispensing still stays blocked until the balance clears.
                             </div>
                           )}
@@ -1716,12 +1717,12 @@ export default function DispensingWorkflow() {
                             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking billing status...
                           </div>
                         ) : billBalance > 0 && activeBill?.scheme_id ? (
-                          <div className="px-3.5 py-3 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800 flex items-center gap-2.5">
+                          <div className="px-3.5 py-3 rounded-lg border border-info-border bg-info-bg text-xs text-info flex items-center gap-2.5">
                             <Shield className="w-4 h-4 flex-shrink-0" />
                             Billed under scheme {activeBill.scheme_name || ''} ({fmt(billBalance)}) — the cashier will invoice this later, so dispensing is not blocked.
                           </div>
                         ) : activeBill && billBalance <= 0 ? (
-                          <div className="px-3.5 py-3 rounded-lg border border-emerald-200 bg-emerald-50 text-xs text-emerald-800 flex items-center gap-2.5">
+                          <div className="px-3.5 py-3 rounded-lg border border-success-border bg-success-bg text-xs text-success flex items-center gap-2.5">
                             <Check className="w-4 h-4 flex-shrink-0" />
                             Bill {activeBill.bill_number} is settled — dispensing is unblocked.
                           </div>
@@ -1821,20 +1822,20 @@ export default function DispensingWorkflow() {
                                       return (
                                         <div className="whitespace-nowrap">
                                           {repricingLineId === l.id ? (
-                                            <div className="text-[10px] text-sky-700 inline-flex items-center gap-1">
+                                            <div className="text-xs text-info inline-flex items-center gap-1">
                                               <Loader2 className="w-3 h-3 animate-spin" /> Updating billed price…
                                             </div>
                                           ) : missingInsurancePrice ? (
-                                            <div className="text-[10px] font-medium text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-1 w-fit max-w-[160px]">
+                                            <div className="text-xs font-medium text-destructive bg-destructive-bg border border-destructive-border rounded px-1.5 py-1 w-fit max-w-[160px]">
                                               No insurance price — add insurance price first
                                             </div>
                                           ) : hasSchemePrice && !billHasScheme ? (
-                                            <div className="text-[11px] font-semibold text-sky-700 inline-flex items-center gap-1" title="This patient's insurance price — tracked separately in this currency for the insurance claim, never shown or billed in SSP">
+                                            <div className="text-xs font-semibold text-info inline-flex items-center gap-1" title="This patient's insurance price — tracked separately in this currency for the insurance claim, never shown or billed in SSP">
                                               <Shield className="w-3 h-3" />
                                               {schemeCurrencyCode} {schemeUnitPrice.toFixed(2)}
                                             </div>
                                           ) : (
-                                            <span className={cn(hasSchemePrice && billHasScheme ? "text-sky-700 font-medium inline-flex items-center gap-1" : "text-muted-foreground")} title={hasSchemePrice && billHasScheme ? "Scheme rate — already included in this bill's total" : undefined}>
+                                            <span className={cn(hasSchemePrice && billHasScheme ? "text-info font-medium inline-flex items-center gap-1" : "text-muted-foreground")} title={hasSchemePrice && billHasScheme ? "Scheme rate — already included in this bill's total" : undefined}>
                                               {hasSchemePrice && billHasScheme && <Shield className="w-3 h-3" />}
                                               {fmt(unitPrice)}
                                             </span>
@@ -1857,7 +1858,7 @@ export default function DispensingWorkflow() {
                                                 onChange={e => setEditQty(e.target.value)}
                                                 className="w-16 h-8 text-sm px-1.5"
                                               />
-                                              <button type="button" onClick={() => handleSaveLineQty(l)} disabled={savingLineQty} className="text-emerald-600 hover:text-emerald-700">
+                                              <button type="button" onClick={() => handleSaveLineQty(l)} disabled={savingLineQty} className="text-success hover:text-success">
                                                 {savingLineQty ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-4 h-4" />}
                                               </button>
                                               <button type="button" onClick={() => setEditingLineId(null)} className="text-muted-foreground hover:text-foreground">
@@ -1894,15 +1895,15 @@ export default function DispensingWorkflow() {
                                       const selectable = (v === 'pending' || v === 'partial') && remaining > 0 && !missingInsurancePrice && !insufficientStock;
                                       return insufficientStock ? (
                                         <span className="inline-flex flex-col gap-0.5">
-                                          <Badge variant="outline" className="w-fit gap-1 border-red-200 bg-red-50 text-red-700"><PackageX className="w-3 h-3" /> Out of stock</Badge>
-                                          <span className="text-[10px] text-red-600">Only {stockOnHand} {l.pack_unit_of_measure || ''} in stock — restock to dispense</span>
+                                          <Badge variant="outline" className="w-fit gap-1 border-destructive-border bg-destructive-bg text-destructive"><PackageX className="w-3 h-3" /> Out of stock</Badge>
+                                          <span className="text-xs text-destructive">Only {stockOnHand} {l.pack_unit_of_measure || ''} in stock — restock to dispense</span>
                                         </span>
                                       ) : (
                                         <Badge
                                           variant="outline"
                                           className={cn(
                                             "capitalize font-medium",
-                                            selectable ? "border-sky-200 bg-sky-50 text-sky-700" : v === 'dispensed' ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"
+                                            selectable ? "border-info-border bg-info-bg text-info" : v === 'dispensed' ? "border-success-border bg-success-bg text-success" : "border-border bg-muted text-muted-foreground"
                                           )}
                                         >
                                           {v}
@@ -1937,7 +1938,7 @@ export default function DispensingWorkflow() {
                                           onClick={() => handleRemoveLine(l)}
                                           disabled={removingLineId === l.id}
                                           title="Remove this item before it's dispensed"
-                                          className="text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                                          className="text-muted-foreground hover:text-destructive disabled:opacity-50"
                                         >
                                           {removingLineId === l.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                                         </button>
@@ -1951,13 +1952,13 @@ export default function DispensingWorkflow() {
                                   repeating here — only the insurance claim action (unrelated to
                                   paying the SSP balance) stays with the table. */}
                               {schemeTotal > 0 && (
-                                <div className="border-t px-4 py-3 flex items-center justify-between gap-3 bg-sky-50/60">
+                                <div className="border-t px-4 py-3 flex items-center justify-between gap-3 bg-info-bg/60">
                                   <div>
-                                    <span className="text-sm font-medium text-sky-700">Scheme Total</span>
-                                    <span className="block text-xs text-sky-600">{schemeCurrencyCode} {schemeTotal.toFixed(2)} — claimable from insurer</span>
+                                    <span className="text-sm font-medium text-info">Scheme Total</span>
+                                    <span className="block text-xs text-info">{schemeCurrencyCode} {schemeTotal.toFixed(2)} — claimable from insurer</span>
                                   </div>
                                   <Button
-                                    size="sm" variant="outline" className="border-sky-300 text-sky-700 hover:bg-sky-100 shrink-0"
+                                    size="sm" variant="outline" className="border-info-border text-info hover:bg-info-bg shrink-0"
                                     onClick={handleCreateInsuranceInvoice}
                                     disabled={creatingInsuranceInvoice || insuranceInvoicedRxId === selectedRx.id}
                                   >
@@ -2012,7 +2013,7 @@ export default function DispensingWorkflow() {
                 <Input type="date" className="h-9 w-[150px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[150px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchHistory} disabled={historyLoading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchHistory} disabled={historyLoading}>
                   <RefreshCw className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
@@ -2034,7 +2035,7 @@ export default function DispensingWorkflow() {
                     render: (_v, h) => <span className="font-medium whitespace-nowrap">{fmt((parseFloat(h.unit_price) || 0) * (h.quantity_dispensed || 0))}</span>,
                   },
                   { key: 'pharmacist_name', header: 'Pharmacist', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                  { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                  { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? formatDate(v) : '—'}</span> },
                 ]}
               />
             </div>
@@ -2049,7 +2050,7 @@ export default function DispensingWorkflow() {
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center px-5 py-4 border-b bg-muted/30">
               <h3 className="font-semibold text-base flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" /> Start Cashier Shift</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -2088,7 +2089,7 @@ export default function DispensingWorkflow() {
                 <Check className="w-4 h-4 text-primary" />
                 Invoice Created
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

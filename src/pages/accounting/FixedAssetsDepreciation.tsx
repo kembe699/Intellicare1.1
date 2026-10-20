@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, TrendingDown } from 'lucide-react';
 import { fmt } from './fixedAssetsShared';
 
@@ -75,7 +75,7 @@ export default function FixedAssetsDepreciation() {
         <Card>
           <CardContent className="p-0">
             <table className="w-full text-sm border-collapse">
-              <thead><tr className="border-b bg-muted/30"><th className="text-left py-2.5 px-4">Period</th><th className="text-right py-2.5 px-4">Assets</th><th className="text-right py-2.5 px-4">Total Depreciation</th><th className="text-left py-2.5 px-4">Posted</th></tr></thead>
+              <thead><tr className="border-b bg-muted/30"><th scope="col" className="text-left py-2.5 px-4">Period</th><th scope="col" className="text-right py-2.5 px-4">Assets</th><th scope="col" className="text-right py-2.5 px-4">Total Depreciation</th><th scope="col" className="text-left py-2.5 px-4">Posted</th></tr></thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr><td colSpan={4} className="text-center py-8 text-muted-foreground">No depreciation runs yet.</td></tr>

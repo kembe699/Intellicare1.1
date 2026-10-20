@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge, StatusBadgeTone } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { fmtCurrency, fmtCount, fmtDate, CsvColumn } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -186,7 +186,7 @@ export default function CancelledTransactionsReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Cancelled / Refunded Count</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Cancelled / Refunded Count</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.cancelledCount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">in selected period</p>
                 </div>
@@ -197,7 +197,7 @@ export default function CancelledTransactionsReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Cancelled / Refunded Value</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Cancelled / Refunded Value</p>
                   <p className="text-2xl font-bold mt-1">{fmtCurrency(displaySummary?.cancelledValue)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">total across both statuses</p>
                 </div>
@@ -208,7 +208,7 @@ export default function CancelledTransactionsReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Voided Receipts</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Voided Receipts</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.voidedReceiptCount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">payment records voided</p>
                 </div>
@@ -219,7 +219,7 @@ export default function CancelledTransactionsReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Refunded Receipts</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Refunded Receipts</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displaySummary?.refundedReceiptCount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">payments refunded to patient</p>
                 </div>
@@ -237,9 +237,9 @@ export default function CancelledTransactionsReport() {
               </p>
             </div>
             <AdvancedDataTable<CancelledReceiptRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total</span>
@@ -298,9 +298,9 @@ export default function CancelledTransactionsReport() {
               </div>
             </div>
             <AdvancedDataTable<VoidedLineItemRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total</span>

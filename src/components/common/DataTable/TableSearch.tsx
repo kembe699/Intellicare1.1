@@ -37,11 +37,12 @@ export const TableSearch: React.FC<TableSearchProps> = ({
 
   return (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
       <Input
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className="pl-9 pr-9 h-9"
       />
       {localValue && (
@@ -49,6 +50,7 @@ export const TableSearch: React.FC<TableSearchProps> = ({
           variant="ghost"
           size="sm"
           onClick={handleClear}
+          aria-label="Clear search"
           className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
         >
           <X className="h-4 w-4" />

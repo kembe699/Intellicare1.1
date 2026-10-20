@@ -4,7 +4,7 @@ import { Loader2, Eye, EyeOff, CheckCircle2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -94,10 +94,10 @@ const ResetPassword: React.FC = () => {
 
   if (verifying) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary/5 to-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-muted flex items-center justify-center p-4">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-slate-600">Verifying reset link...</p>
+          <p className="text-muted-foreground">Verifying reset link...</p>
         </div>
       </div>
     );
@@ -105,12 +105,12 @@ const ResetPassword: React.FC = () => {
 
   if (!tokenValid) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary/5 to-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 text-center">
+          <div className="bg-white rounded-2xl shadow-2xl border border-border p-8 text-center">
             <Lock className="w-8 h-8 text-primary mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Invalid Reset Link</h2>
-            <p className="text-slate-600 mb-6">{error}</p>
+            <h2 className="text-2xl font-bold text-heading mb-2">Invalid Reset Link</h2>
+            <p className="text-muted-foreground mb-6">{error}</p>
             <Button
               onClick={() => navigate('/login')}
               className="w-full h-12 text-white font-semibold rounded-lg bg-primary"
@@ -124,9 +124,9 @@ const ResetPassword: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary/5 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8">
+        <div className="bg-white rounded-2xl shadow-2xl border border-border p-8">
           {/* Header - Logo and Text Side by Side */}
           <div className="flex items-center gap-6 mb-8">
             {/* Logo */}
@@ -140,15 +140,15 @@ const ResetPassword: React.FC = () => {
 
             {/* Header Text */}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-slate-900 mb-1">Reset Password</h1>
-              <p className="text-slate-600 text-lg">Enter your new password below</p>
+              <h1 className="ic-text-title mb-1">Reset Password</h1>
+              <p className="text-muted-foreground">Enter your new password below</p>
             </div>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600 text-center">{error}</p>
+            <div className="mb-6 p-4 bg-destructive-bg border border-destructive-border rounded-lg">
+              <p className="text-sm text-destructive text-center">{error}</p>
             </div>
           )}
 
@@ -156,7 +156,7 @@ const ResetPassword: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* New Password */}
             <div className="space-y-2">
-              <Label htmlFor="newPassword" className="text-sm font-semibold text-slate-700">
+              <Label htmlFor="newPassword" className="text-sm font-semibold text-foreground">
                 New Password
               </Label>
               <div className="relative">
@@ -168,7 +168,7 @@ const ResetPassword: React.FC = () => {
                   placeholder="Enter new password"
                   required
                   autoFocus
-                  className="h-12 pl-4 pr-12 text-base border-slate-300 rounded-lg"
+                  className="h-12 pl-4 pr-12 text-base border-border rounded-lg"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = '#3D8A97';
                     e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
@@ -181,17 +181,17 @@ const ResetPassword: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              <p className="text-xs text-slate-500">Must be at least 6 characters</p>
+              <p className="text-xs text-muted-foreground">Must be at least 6 characters</p>
             </div>
 
             {/* Confirm Password */}
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-semibold text-slate-700">
+              <Label htmlFor="confirmPassword" className="text-sm font-semibold text-foreground">
                 Confirm Password
               </Label>
               <div className="relative">
@@ -202,7 +202,7 @@ const ResetPassword: React.FC = () => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm new password"
                   required
-                  className="h-12 pl-4 pr-12 text-base border-slate-300 rounded-lg"
+                  className="h-12 pl-4 pr-12 text-base border-border rounded-lg"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = '#3D8A97';
                     e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
@@ -215,7 +215,7 @@ const ResetPassword: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>

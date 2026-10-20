@@ -4,12 +4,13 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { 
   Download, Loader2, Users, Calendar, Stethoscope, Activity, 
   Search, Eye, ChevronDown, ChevronUp, User, Phone, FileText 
 } from 'lucide-react';
 import { Combobox } from '@/components/ui/combobox';
+import { formatDate } from '@/lib/format';
 
 interface Visit {
   visit_id: string;
@@ -83,7 +84,7 @@ export default function PatientVisitsHistory() {
   const handleExport = () => {
     if (!data) return;
     const csv = `Patient Visits History (${dateFrom} to ${dateTo})\n\nDate,Patient,Age,Gender,Phone,Doctor,Chief Complaint,Diagnosis,Status,Total Visits\n${(data.visits || []).map((v: Visit) => 
-      `${v.visit_date ? new Date(v.visit_date).toLocaleDateString() : ''},${v.patient_name},${v.age || ''},${v.gender || ''},${v.phone || ''},${v.doctor_name || ''},"${(v.chief_complaint || '').replace(/"/g, '""')}","${(v.diagnosis || '').replace(/"/g, '""')}",${v.visit_status || ''},${v.total_visits || 0}`
+      `${v.visit_date ? formatDate(v.visit_date) : ''},${v.patient_name},${v.age || ''},${v.gender || ''},${v.phone || ''},${v.doctor_name || ''},"${(v.chief_complaint || '').replace(/"/g, '""')}","${(v.diagnosis || '').replace(/"/g, '""')}",${v.visit_status || ''},${v.total_visits || 0}`
     ).join('\n')}`;
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -106,9 +107,9 @@ export default function PatientVisitsHistory() {
   const doctors = data?.doctors || [];
 
   const statusColors: Record<string, string> = {
-    completed: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    cancelled: 'bg-red-100 text-red-800',
+    completed: 'bg-success-bg text-success',
+    pending: 'bg-warning-bg text-warning',
+    cancelled: 'bg-destructive-bg text-destructive',
     scheduled: 'bg-primary/10 text-primary',
   };
 
@@ -245,22 +246,22 @@ export default function PatientVisitsHistory() {
         {/* Visits Table */}
         <div className="ic-card">
           <div className="ic-card-header">
-            <span className="font-semibold text-[13px] text-foreground">Patient Visits ({visits.length})</span>
+            <span className="font-semibold text-sm text-foreground">Patient Visits ({visits.length})</span>
           </div>
           <div className="ic-card-body">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted">
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground w-10"></th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Date</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Patient</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Age/Gender</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Doctor</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Chief Complaint</th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Diagnosis</th>
-                    <th className="text-center py-2.5 px-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">Total Visits</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground w-10"></th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Date</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Patient</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Age/Gender</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Doctor</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Chief Complaint</th>
+                    <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Diagnosis</th>
+                    <th scope="col" className="text-center py-2.5 px-3 font-medium text-muted-foreground">Status</th>
+                    <th scope="col" className="text-right py-2.5 px-3 font-medium text-muted-foreground">Total Visits</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -287,7 +288,7 @@ export default function PatientVisitsHistory() {
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             <div className="text-sm font-medium">
-                              {visit.visit_date ? new Date(visit.visit_date).toLocaleDateString() : '-'}
+                              {visit.visit_date ? formatDate(visit.visit_date) : '-'}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {visit.visit_type || 'General'}
@@ -353,7 +354,7 @@ export default function PatientVisitsHistory() {
                                     <div>
                                       <span className="text-muted-foreground">Date of Birth:</span>
                                       <div className="font-medium">
-                                        {visit.date_of_birth ? new Date(visit.date_of_birth).toLocaleDateString() : '-'}
+                                        {visit.date_of_birth ? formatDate(visit.date_of_birth) : '-'}
                                       </div>
                                     </div>
                                     <div>
@@ -366,7 +367,7 @@ export default function PatientVisitsHistory() {
                                     <div>
                                       <span className="text-muted-foreground">Last Visit:</span>
                                       <div className="font-medium">
-                                        {visit.last_visit_date ? new Date(visit.last_visit_date).toLocaleDateString() : 'First visit'}
+                                        {visit.last_visit_date ? formatDate(visit.last_visit_date) : 'First visit'}
                                       </div>
                                     </div>
                                   </div>

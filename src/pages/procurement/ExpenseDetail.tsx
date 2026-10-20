@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ArrowLeft, ShieldCheck, Printer, Loader2, CheckCircle2,
   Clock, AlertCircle, Receipt, Calendar,
@@ -20,6 +20,7 @@ import {
 import * as docTemplate from '@/utils/documentTemplate';
 import { expenseVoucherStatus } from '@/lib/expenseStatus';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface Expense {
   id: number; expense_date: string; description: string; amount: string;
@@ -122,7 +123,7 @@ export default function ExpenseDetail() {
 
     const approvalsRows = [1, 2].map(level => {
       const a = approvals.find(ap => ap.approval_level === level);
-      return { cells: [APPROVAL_LEVELS[level - 1], a ? a.approved_by : '—', a ? new Date(a.approved_at).toLocaleDateString() : '—', a ? '✓ Approved' : 'Pending'], bold: !!a };
+      return { cells: [APPROVAL_LEVELS[level - 1], a ? a.approved_by : '—', a ? formatDate(a.approved_at) : '—', a ? '✓ Approved' : 'Pending'], bold: !!a };
     });
     const signers = [
       { label: 'Prepared By', name: expense.created_by || '' },
@@ -138,7 +139,7 @@ export default function ExpenseDetail() {
     const body = docTemplate.buildInfoGrid(
       { title: 'Voucher Details', rows: [
         { label: 'Voucher No', value: expense.voucher_number || '—', bold: true },
-        { label: 'Date', value: new Date(expense.expense_date).toLocaleDateString() },
+        { label: 'Date', value: formatDate(expense.expense_date) },
         { label: 'Prepared By', value: expense.created_by || '—' },
       ]},
       { title: 'Payment', rows: [
@@ -174,8 +175,8 @@ export default function ExpenseDetail() {
   if (error || !expense) return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center gap-4">
-        <AlertCircle className="w-10 h-10 text-red-500" />
-        <p className="text-red-600 font-semibold">{error || 'Expense not found'}</p>
+        <AlertCircle className="w-10 h-10 text-destructive" />
+        <p className="text-destructive font-semibold">{error || 'Expense not found'}</p>
         <Button variant="outline" onClick={() => navigate(-1)}><ArrowLeft className="w-4 h-4 mr-2" />Back</Button>
       </div>
     </AppLayout>
@@ -201,14 +202,14 @@ export default function ExpenseDetail() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div className="flex-1">
-            <h1 className="text-xl font-bold tracking-tight">{expense.description}</h1>
+            <h1 className="ic-text-title tracking-tight">{expense.description}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Expense #{expense.id} &nbsp;·&nbsp; {new Date(expense.expense_date).toLocaleDateString()}
+              Expense #{expense.id} &nbsp;·&nbsp; {formatDate(expense.expense_date)}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {isPending && (
-              <Badge className="text-sm px-3 py-1 bg-amber-100 text-amber-800 border-amber-300">
+              <Badge className="text-sm px-3 py-1 bg-warning-bg text-warning border-warning-border">
                 <Clock className="w-3.5 h-3.5 mr-1" /> Pending Approval ({approvalCount}/2)
               </Badge>
             )}
@@ -218,7 +219,7 @@ export default function ExpenseDetail() {
               </Badge>
             )}
             {isPaid && (
-              <Badge className="text-sm px-3 py-1 bg-green-100 text-green-800 border-green-300">
+              <Badge className="text-sm px-3 py-1 bg-success-bg text-success border-success-border">
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Paid
               </Badge>
             )}
@@ -241,7 +242,7 @@ export default function ExpenseDetail() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="flex items-center gap-2 text-sm text-muted-foreground"><Calendar className="w-4 h-4" />Date</span>
-                  <span className="font-medium text-sm">{new Date(expense.expense_date).toLocaleDateString()}</span>
+                  <span className="font-medium text-sm">{formatDate(expense.expense_date)}</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="flex items-center gap-2 text-sm text-muted-foreground"><Tag className="w-4 h-4" />Category</span>
@@ -288,16 +289,16 @@ export default function ExpenseDetail() {
                   const a = approvals.find(ap => ap.approval_level === level);
                   const isNext = level === nextLevel && isPending;
                   return (
-                    <div key={level} className={`flex items-center gap-3 rounded-lg p-3 border ${a ? 'bg-green-50 border-green-200' : isNext ? 'bg-amber-50 border-amber-200' : 'bg-muted/20 border-transparent'}`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${a ? 'bg-green-500 text-white' : isNext ? 'bg-amber-400 text-white' : 'bg-muted text-muted-foreground'}`}>
+                    <div key={level} className={`flex items-center gap-3 rounded-lg p-3 border ${a ? 'bg-success-bg border-success-border' : isNext ? 'bg-warning-bg border-warning-border' : 'bg-muted/20 border-transparent'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${a ? 'bg-success text-white' : isNext ? 'bg-warning text-white' : 'bg-muted text-muted-foreground'}`}>
                         {a ? '✓' : level}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm">{APPROVAL_LEVELS[level - 1]}</p>
                         {a ? (
-                          <p className="text-xs text-green-700">{a.approved_by} &nbsp;·&nbsp; {new Date(a.approved_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-success">{a.approved_by} &nbsp;·&nbsp; {formatDate(a.approved_at)}</p>
                         ) : isNext ? (
-                          <p className="text-xs text-amber-600">Awaiting your approval</p>
+                          <p className="text-xs text-warning">Awaiting your approval</p>
                         ) : (
                           <p className="text-xs text-muted-foreground">Pending</p>
                         )}
@@ -310,10 +311,10 @@ export default function ExpenseDetail() {
                 })}
 
                 {fullyApproved && (
-                  <div className="mt-3 rounded-lg bg-green-50 border border-green-200 p-4 text-center">
-                    <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                    <p className="font-semibold text-green-800">Fully Authorized</p>
-                    <p className="text-sm text-green-600 mt-0.5">Voucher: <span className="font-mono font-bold">{expense.voucher_number}</span></p>
+                  <div className="mt-3 rounded-lg bg-success-bg border border-success-border p-4 text-center">
+                    <CheckCircle2 className="w-8 h-8 text-success mx-auto mb-2" />
+                    <p className="font-semibold text-success">Fully Authorized</p>
+                    <p className="text-sm text-success mt-0.5">Voucher: <span className="font-mono font-bold">{expense.voucher_number}</span></p>
                     <Button className="mt-3 gap-2" onClick={printVoucher}>
                       <Printer className="w-4 h-4" /> Print Expense Voucher
                     </Button>
@@ -326,13 +327,13 @@ export default function ExpenseDetail() {
           {/* ── Right: Approve Action ── */}
           <div>
             {isPending && !fullyApproved ? (
-              <Card className="border-amber-200">
-                <CardHeader className="pb-3 bg-amber-50 rounded-t-xl">
-                  <CardTitle className="text-base flex items-center gap-2 text-amber-800">
+              <Card className="border-warning-border">
+                <CardHeader className="pb-3 bg-warning-bg rounded-t-xl">
+                  <CardTitle className="text-base flex items-center gap-2 text-warning">
                     <ShieldCheck className="w-5 h-5" />
                     {APPROVAL_LEVELS[nextLevel - 1]} Required
                   </CardTitle>
-                  <p className="text-xs text-amber-600 mt-0.5">
+                  <p className="text-xs text-warning mt-0.5">
                     {2 - approvalCount} more approval{2 - approvalCount !== 1 ? 's' : ''} needed before the voucher is issued and payment is posted.
                   </p>
                 </CardHeader>
@@ -365,7 +366,7 @@ export default function ExpenseDetail() {
                         onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                     </div>
 
-                    <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 gap-2 h-11" disabled={submitting}>
+                    <Button type="submit" className="w-full bg-warning hover:bg-warning gap-2 h-11" disabled={submitting}>
                       {submitting
                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Approving...</>
                         : <><ShieldCheck className="w-4 h-4" /> Approve ({nextLevel}/2)</>
@@ -387,7 +388,7 @@ export default function ExpenseDetail() {
                       Voucher: <span className="font-mono font-semibold">{expense.voucher_number}</span>
                     </p>
                   </div>
-                  <Button className="gap-2 mt-2 bg-green-600 hover:bg-green-700" size="lg" onClick={handlePay} disabled={paying}>
+                  <Button className="gap-2 mt-2 bg-success hover:bg-success" size="lg" onClick={handlePay} disabled={paying}>
                     {paying
                       ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing Payment...</>
                       : <><CreditCard className="w-5 h-5" /> Pay Now</>}
@@ -396,14 +397,14 @@ export default function ExpenseDetail() {
                 </CardContent>
               </Card>
             ) : isPaid ? (
-              <Card className="border-green-200">
+              <Card className="border-success-border">
                 <CardContent className="pt-8 pb-8 flex flex-col items-center text-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                    <CheckCircle2 className="w-9 h-9 text-green-600" />
+                  <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center">
+                    <CheckCircle2 className="w-9 h-9 text-success" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-green-800">Payment Complete</h3>
-                    <p className="text-sm text-green-600 mt-1">{fmt(amount)} deducted from <strong>{expense.account_name}</strong></p>
+                    <h3 className="font-bold text-lg text-success">Payment Complete</h3>
+                    <p className="text-sm text-success mt-1">{fmt(amount)} deducted from <strong>{expense.account_name}</strong></p>
                     {expense.paid_at && <p className="text-xs text-muted-foreground mt-0.5">Paid on {new Date(expense.paid_at).toLocaleString()}</p>}
                     <p className="text-sm text-muted-foreground mt-0.5">
                       Voucher: <span className="font-mono font-semibold">{expense.voucher_number}</span>

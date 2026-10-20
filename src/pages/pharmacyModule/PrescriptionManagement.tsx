@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ClipboardList, Plus, Search, X, Pill, Loader2, Ban, RefreshCw, FileSpreadsheet, Printer,
 } from 'lucide-react';
@@ -20,6 +20,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { PrescriptionReceipt } from '@/components/receipts/PrescriptionReceipt';
 import { printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
+import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
 
@@ -33,14 +34,14 @@ const STATUS_FILTER_OPTIONS = [
 
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
-    pending: 'bg-sky-50 text-sky-700 border-sky-200',
-    partial: 'bg-amber-50 text-amber-700 border-amber-200',
-    partial_dispensed: 'bg-amber-50 text-amber-700 border-amber-200',
-    dispensed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
+    pending: 'bg-info-bg text-info border-info-border',
+    partial: 'bg-warning-bg text-warning border-warning-border',
+    partial_dispensed: 'bg-warning-bg text-warning border-warning-border',
+    dispensed: 'bg-success-bg text-success border-success-border',
+    cancelled: 'bg-muted text-muted-foreground border-border',
   };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
@@ -514,7 +515,7 @@ export default function PrescriptionManagement() {
       { header: 'Rx Number', key: 'prescription_number' },
       { header: 'Patient', key: 'patient_name' },
       { header: 'Doctor', key: 'doctor_name', transform: (v) => v ? `Dr. ${v}` : '' },
-      { header: 'Date', key: 'prescription_date', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
+      { header: 'Date', key: 'prescription_date', transform: (v) => v ? formatDate(v) : '' },
       { header: 'Dispensed', key: 'dispensed_count' },
       { header: 'Total Items', key: 'line_count' },
       { header: 'Status', key: 'status' },
@@ -574,7 +575,7 @@ export default function PrescriptionManagement() {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Billing Mode</label>
                   {patientActiveBill ? (
-                    <div className="mt-1 p-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800">
+                    <div className="mt-1 p-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info">
                       This patient has an open {patientActiveBill.scheme_id ? `scheme (${patientActiveBill.scheme_name})` : 'cash'} bill ({patientActiveBill.bill_number}) — new items are added to it under that same mode.
                     </div>
                   ) : (
@@ -598,7 +599,7 @@ export default function PrescriptionManagement() {
                         </button>
                       </div>
                       {patientSchemes.length === 0 && (
-                        <p className="text-[11px] text-muted-foreground mt-1">No active scheme membership — cash prices only.</p>
+                        <p className="text-xs text-muted-foreground mt-1">No active scheme membership — cash prices only.</p>
                       )}
                       {billingMode === 'scheme' && patientSchemes.length > 1 && (
                         <Combobox
@@ -611,7 +612,7 @@ export default function PrescriptionManagement() {
                         />
                       )}
                       {billingMode === 'scheme' && selectedSchemeId && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {loadingSchemeCatalog ? 'Loading scheme price list...' : `Only drugs priced under this scheme are shown below (${schemeProducts.length}).`}
                         </p>
                       )}
@@ -752,7 +753,7 @@ export default function PrescriptionManagement() {
                       prescriber's number, so a computed total is always traceable
                       back to dose x frequency x days. */}
                   {rxSuggestedQty != null && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
                       {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
                         <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
@@ -762,7 +763,7 @@ export default function PrescriptionManagement() {
                     </p>
                   )}
                   {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
                     </p>
                   )}
@@ -791,13 +792,13 @@ export default function PrescriptionManagement() {
                           {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                           {l.duration_days ? ` · ${l.duration_days}d` : ''}
                           {l.is_external ? (
-                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                            <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
                               buy outside
                             </span>
                           ) : l.selling_price > 0 ? (
                             <span className="text-muted-foreground"> · {(l.selling_price * l.quantity_prescribed).toLocaleString()} SSP</span>
                           ) : (
-                            <span className="text-amber-600 font-medium"> · no price set — will not be billed</span>
+                            <span className="text-warning font-medium"> · no price set — will not be billed</span>
                           )}
                         </span>
                         <button type="button" onClick={() => removeRxLine(i)} className="text-muted-foreground hover:text-foreground">
@@ -843,7 +844,7 @@ export default function PrescriptionManagement() {
               <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
                 <FileSpreadsheet className="w-4 h-4" /> Export CSV
               </Button>
-              <Button variant="outline" size="icon" onClick={fetchPrescriptions} disabled={loading}>
+              <Button variant="outline" size="icon" aria-label="Refresh" onClick={fetchPrescriptions} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -860,7 +861,7 @@ export default function PrescriptionManagement() {
                   { key: 'prescription_number', header: 'Rx No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
                   { key: 'patient_name', header: 'Patient', render: (v) => v || 'Unknown' },
                   { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
-                  { key: 'prescription_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleDateString()}</span> },
+                  { key: 'prescription_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
                   { key: '__items', header: 'Items', render: (_v, rx) => <span className="text-muted-foreground">{rx.dispensed_count}/{rx.line_count}</span> },
                   { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
                 ]}
@@ -879,7 +880,7 @@ export default function PrescriptionManagement() {
                 <h3 className="font-semibold text-lg">{selectedRx.prescription_number}</h3>
                 <p className="text-xs text-muted-foreground">{selectedRx.patient_name || 'Unknown patient'}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedRx(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedRx(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -897,7 +898,7 @@ export default function PrescriptionManagement() {
                     <span className="text-muted-foreground">Doctor</span>
                     <span className="text-right">{selectedRx.doctor_name ? `Dr. ${selectedRx.doctor_name}` : '—'}</span>
                     <span className="text-muted-foreground">Date</span>
-                    <span className="text-right">{new Date(selectedRx.prescription_date).toLocaleDateString()}</span>
+                    <span className="text-right">{formatDate(selectedRx.prescription_date)}</span>
                   </div>
 
                   {selectedRx.prescription_notes && (
@@ -930,7 +931,7 @@ export default function PrescriptionManagement() {
 
             <div className="p-4 border-t bg-muted/30 flex justify-between">
               {selectedRx.status === 'pending' ? (
-                <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={handleCancelPrescription} disabled={cancelling}>
+                <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleCancelPrescription} disabled={cancelling}>
                   {cancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Ban className="w-4 h-4 mr-2" />}
                   Cancel Prescription
                 </Button>

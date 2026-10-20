@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 // Groups a flat result-row list into one entry per order (= per patient request),
 // each holding its specimens, each holding its own result rows — so the worklist
@@ -59,18 +60,18 @@ const matchesGroupSearch = (g: any, term: string) => {
 };
 
 const getRemarkBadge = (value: string, refRange: string) => {
-  if (!value || !refRange) return <span className="text-green-600 font-bold text-[10px] bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+  if (!value || !refRange) return <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
   const parts = refRange.split('-').map((p: string) => p.trim());
   if (parts.length === 2) {
     const min = parseFloat(parts[0]);
     const max = parseFloat(parts[1]);
     const val = parseFloat(value);
     if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-      if (val < min) return <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-      if (val > max) return <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
+      if (val < min) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">LOW</span>;
+      if (val > max) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">HIGH</span>;
     }
   }
-  return <span className="text-green-600 font-bold text-[10px] bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+  return <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
 };
 
 // Local (not UTC) date string, so "today" matches the user's actual calendar day.
@@ -462,10 +463,10 @@ export default function LISManagerReview() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium truncate">{g.first_name} {g.last_name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-[11px] text-muted-foreground">{new Date(g.order_time).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(g.order_time).toLocaleString()}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">
@@ -486,10 +487,10 @@ export default function LISManagerReview() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium truncate">{g.first_name} {g.last_name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ml-2">{g.specimens.length} test{g.specimens.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">{g.participant_number}</div>
-                    <div className="text-[11px] text-muted-foreground">{new Date(g.order_time).toLocaleDateString()}</div>
+                    <div className="text-xs text-muted-foreground">{formatDate(g.order_time)}</div>
                   </button>
                 )) : (
                   <div className="p-8 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg">
@@ -576,7 +577,7 @@ export default function LISManagerReview() {
                         <div className="flex justify-end gap-3">
                           <Button
                             variant="outline"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            className="text-destructive hover:text-destructive hover:bg-destructive-bg border-destructive-border"
                             onClick={() => handleReview(selectedSpecimen.specimen_id, 'queried')}
                             disabled={!!reviewingAction}
                           >
@@ -584,7 +585,7 @@ export default function LISManagerReview() {
                             {reviewingAction === 'queried' ? 'Querying...' : 'Query / Reject'}
                           </Button>
                           <Button
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-success hover:bg-success text-white"
                             onClick={() => handleReview(selectedSpecimen.specimen_id, 'approved')}
                             disabled={!!reviewingAction}
                           >
@@ -599,9 +600,9 @@ export default function LISManagerReview() {
                         <div className="flex items-center gap-3 mb-4">
                           <span className="text-sm font-medium">Status:</span>
                           {selectedSpecimen.status === 'approved' ? (
-                            <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold uppercase">Approved</span>
+                            <span className="bg-success-bg text-success px-3 py-1 rounded-full text-xs font-bold uppercase">Approved</span>
                           ) : (
-                            <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold uppercase">Queried / Rejected</span>
+                            <span className="bg-destructive-bg text-destructive px-3 py-1 rounded-full text-xs font-bold uppercase">Queried / Rejected</span>
                           )}
                         </div>
                         {selectedSpecimen.manager_notes && (
@@ -658,18 +659,18 @@ export default function LISManagerReview() {
                   >
                     {activeTab === 'history' ? (
                       s.status === 'approved'
-                        ? <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        : <X className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                        ? <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
+                        : <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                     ) : (
                       <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{s.test_name}</div>
                       <div className="text-xs font-mono text-muted-foreground">{s.barcode}</div>
-                      <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                      <div className="text-xs text-muted-foreground flex items-center justify-between">
                         <span>{s.results.length} param{s.results.length > 1 ? 's' : ''}</span>
-                        {activeTab === 'history' && s.status === 'approved' && <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
-                        {activeTab === 'history' && s.status === 'queried' && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase font-bold">Queried</span>}
+                        {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-success-bg text-success px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
+                        {activeTab === 'history' && s.status === 'queried' && <span className="text-xs bg-destructive-bg text-destructive px-1.5 py-0.5 rounded uppercase font-bold">Queried</span>}
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />

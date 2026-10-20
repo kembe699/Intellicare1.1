@@ -13,10 +13,11 @@ import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { DepositReceipt } from '@/components/receipts/DepositReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -684,12 +685,12 @@ export default function PatientsBill() {
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      partial: 'bg-amber-50 text-amber-700 border-amber-200',
-      pending: 'bg-sky-50 text-sky-700 border-sky-200',
+      paid: 'bg-success-bg text-success border-success-border',
+      partial: 'bg-warning-bg text-warning border-warning-border',
+      pending: 'bg-info-bg text-info border-info-border',
     };
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
         {status || 'pending'}
       </span>
     );
@@ -703,8 +704,8 @@ export default function PatientsBill() {
 
         {/* Cashier shift banner */}
         {!checkingShift && !hasActiveShift && (
-          <div className="mt-4 p-3 rounded-lg border border-amber-200 bg-amber-50 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-amber-800">
+          <div className="mt-4 p-3 rounded-lg border border-warning-border bg-warning-bg flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-warning">
               <AlertTriangle className="w-4 h-4" />
               No active cashier shift — you can create bills, but payments require an open shift.
             </div>
@@ -754,7 +755,7 @@ export default function PatientsBill() {
                   </label>
                   <button
                     type="button"
-                    className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+                    className="text-xs text-primary hover:underline flex items-center gap-0.5"
                     onClick={() => {
                       const next = !showDepositHistory;
                       setShowDepositHistory(next);
@@ -767,15 +768,15 @@ export default function PatientsBill() {
 
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Deposited</div>
+                    <div className="text-xs text-muted-foreground">Deposited</div>
                     <div className="text-sm font-semibold">{(depositBalance?.totalDeposited ?? 0).toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Used</div>
+                    <div className="text-xs text-muted-foreground">Used</div>
                     <div className="text-sm font-semibold">{(depositBalance?.totalUsed ?? 0).toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-muted-foreground">Remaining</div>
+                    <div className="text-xs text-muted-foreground">Remaining</div>
                     <div className="text-sm font-bold text-primary">{(depositBalance?.balance ?? 0).toFixed(2)}</div>
                   </div>
                 </div>
@@ -798,17 +799,17 @@ export default function PatientsBill() {
                 {showDepositHistory && (
                   <div className="border-t pt-2 mt-1">
                     {loadingDepositHistory ? (
-                      <div className="text-[11px] text-muted-foreground text-center py-2">Loading...</div>
+                      <div className="text-xs text-muted-foreground text-center py-2">Loading...</div>
                     ) : depositHistory.length === 0 ? (
-                      <div className="text-[11px] text-muted-foreground text-center py-2">No deposit activity yet.</div>
+                      <div className="text-xs text-muted-foreground text-center py-2">No deposit activity yet.</div>
                     ) : (
                       <div className="max-h-36 overflow-auto space-y-1">
                         {depositHistory.map((tx: any) => (
-                          <div key={tx.id} className="flex justify-between items-center text-[11px]">
+                          <div key={tx.id} className="flex justify-between items-center text-xs">
                             <span className="capitalize text-muted-foreground">
-                              {tx.type.replace('_', ' ')} · {new Date(tx.created_at).toLocaleDateString()}
+                              {tx.type.replace('_', ' ')} · {formatDate(tx.created_at)}
                             </span>
-                            <span className={`font-medium ${tx.type === 'deposit' || tx.type === 'usage_reversal' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <span className={`font-medium ${tx.type === 'deposit' || tx.type === 'usage_reversal' ? 'text-success' : 'text-destructive'}`}>
                               {tx.type === 'deposit' || tx.type === 'usage_reversal' ? '+' : '-'}{parseFloat(tx.amount).toFixed(2)}
                             </span>
                           </div>
@@ -840,7 +841,7 @@ export default function PatientsBill() {
                 <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
                 <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchBills} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchBills} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
@@ -882,7 +883,7 @@ export default function PatientsBill() {
                         {parseFloat(v).toFixed(2)}
                         {parseFloat(v) < 0 && (
                           <span title={`Overpaid by ${Math.abs(parseFloat(v)).toFixed(2)} — paid amount exceeds the bill total. Review before refunding or adjusting.`}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
                           </span>
                         )}
                       </div>
@@ -920,7 +921,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Record Payment
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedBill(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedBill(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -943,7 +944,7 @@ export default function PatientsBill() {
                 return (
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Items</label>
-                    <p className="text-[11px] text-muted-foreground mb-1">Check items to pay for just those — the amount follows your selection. Leave unchecked to pay the full balance below.</p>
+                    <p className="text-xs text-muted-foreground mb-1">Check items to pay for just those — the amount follows your selection. Leave unchecked to pay the full balance below.</p>
                     <div className="border rounded-lg divide-y max-h-40 overflow-auto">
                       {payable.map(({ s, i }) => (
                         <label key={i} className="flex items-center gap-2 p-2 text-sm cursor-pointer hover:bg-muted/40">
@@ -954,20 +955,20 @@ export default function PatientsBill() {
                       ))}
                     </div>
                     {settledCount > 0 && (
-                      <p className="text-[11px] text-muted-foreground mt-1">{settledCount} other item{settledCount > 1 ? 's' : ''} on this bill {settledCount > 1 ? 'are' : 'is'} already paid, voided, or invoiced.</p>
+                      <p className="text-xs text-muted-foreground mt-1">{settledCount} other item{settledCount > 1 ? 's' : ''} on this bill {settledCount > 1 ? 'are' : 'is'} already paid, voided, or invoiced.</p>
                     )}
                   </div>
                 );
               })()}
 
               {!hasActiveShift && paymentForm.method !== 'credit' && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before recording this payment.
                 </div>
               )}
 
               {paymentForm.method === 'credit' && (
-                <div className="p-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info flex items-center gap-2">
                   <CreditCard className="w-3.5 h-3.5 flex-shrink-0" /> No money is collected now — this creates an invoice due later, payable from the Invoices page.
                 </div>
               )}
@@ -1052,7 +1053,7 @@ export default function PatientsBill() {
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[80vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Create New Bill</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowNewBillModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowNewBillModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1143,7 +1144,7 @@ export default function PatientsBill() {
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Start Cashier Shift</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1202,13 +1203,13 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-primary" /> Accept Deposit
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowAcceptDepositModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowAcceptDepositModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
             <div className="p-6 space-y-4">
               {!hasActiveShift && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before accepting a deposit.
                 </div>
               )}
@@ -1250,7 +1251,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Undo2 className="w-5 h-5 text-primary" /> Refund Deposit
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowRefundDepositModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowRefundDepositModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1260,7 +1261,7 @@ export default function PatientsBill() {
                 <span className="font-semibold">{(depositBalance?.balance ?? 0).toFixed(2)} {depositBalance?.currency || 'SSP'}</span>
               </div>
               {!hasActiveShift && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before refunding.
                 </div>
               )}
@@ -1305,7 +1306,7 @@ export default function PatientsBill() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Invoice Created
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setInvoiceData(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1320,7 +1321,7 @@ export default function PatientsBill() {
                 <span className="text-muted-foreground">Amount Due</span>
                 <span className="text-right font-bold">{parseFloat(invoiceData.balance_due).toFixed(2)}</span>
                 <span className="text-muted-foreground">Due Date</span>
-                <span className="text-right">{new Date(invoiceData.due_date).toLocaleDateString()}</span>
+                <span className="text-right">{formatDate(invoiceData.due_date)}</span>
               </div>
             </div>
             <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">

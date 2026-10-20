@@ -27,7 +27,7 @@ export function ReportLetterhead({ title, dateFrom, dateTo, generatedAt, asOf = 
 
   return (
     <div className={cn('rounded-md border border-border overflow-hidden bg-card mb-6', className)}>
-      <div className="bg-sky-100 dark:bg-sky-950/40 text-center py-2 border-b border-border">
+      <div className="bg-info-bg dark:bg-info/40 text-center py-2 border-b border-border">
         <h2 className="text-sm font-bold tracking-wide text-foreground">{title}</h2>
       </div>
       <div className="p-4 flex flex-col gap-3">

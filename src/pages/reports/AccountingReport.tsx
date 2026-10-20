@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { ReportLetterhead } from './ReportLetterhead';
 import { LoadingState } from '@/components/common';
@@ -310,7 +310,7 @@ export default function AccountingReport() {
       { key: 'branchName', header: 'Department (Branch)', sortable: true },
       { key: 'totalRevenue', header: 'Revenue', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
       { key: 'totalExpenses', header: 'Expenses', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
-      { key: 'netIncome', header: 'Net Income', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(v)}</span> },
+      { key: 'netIncome', header: 'Net Income', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(v)}</span> },
     ];
     csvColumns = [{ header: 'Department (Branch)', key: 'branchName' }, { header: 'Revenue', key: 'totalRevenue' }, { header: 'Expenses', key: 'totalExpenses' }, { header: 'Net Income', key: 'netIncome' }];
   } else if (option.mode === 'balance-sheet') {
@@ -334,8 +334,8 @@ export default function AccountingReport() {
         { key: 'accountName', header: 'Account', sortable: true },
         { key: 'description', header: 'Description' },
         { key: 'sourceModule', header: 'Source', sortable: true },
-        { key: 'cashIn', header: 'Cash In', align: 'right', sortable: true, render: v => <span className="font-mono text-emerald-700">{v ? fmtCurrency(v) : '—'}</span> },
-        { key: 'cashOut', header: 'Cash Out', align: 'right', sortable: true, render: v => <span className="font-mono text-red-600">{v ? fmtCurrency(v) : '—'}</span> },
+        { key: 'cashIn', header: 'Cash In', align: 'right', sortable: true, render: v => <span className="font-mono text-success">{v ? fmtCurrency(v) : '—'}</span> },
+        { key: 'cashOut', header: 'Cash Out', align: 'right', sortable: true, render: v => <span className="font-mono text-destructive">{v ? fmtCurrency(v) : '—'}</span> },
         { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
       ];
     } else {
@@ -343,9 +343,9 @@ export default function AccountingReport() {
       columns = [
         { key: 'sourceModule', header: 'Source', sortable: true },
         { key: 'transactionCount', header: 'Transactions', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCount(v)}</span> },
-        { key: 'cashIn', header: 'Cash In', align: 'right', sortable: true, render: v => <span className="font-mono text-emerald-700">{fmtCurrency(v)}</span> },
-        { key: 'cashOut', header: 'Cash Out', align: 'right', sortable: true, render: v => <span className="font-mono text-red-600">{fmtCurrency(v)}</span> },
-        { key: 'netChange', header: 'Net Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(v)}</span> },
+        { key: 'cashIn', header: 'Cash In', align: 'right', sortable: true, render: v => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
+        { key: 'cashOut', header: 'Cash Out', align: 'right', sortable: true, render: v => <span className="font-mono text-destructive">{fmtCurrency(v)}</span> },
+        { key: 'netChange', header: 'Net Change', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(v)}</span> },
       ];
     }
     csvColumns = columns.map(c => ({ header: String(c.header), key: String(c.key) }));
@@ -412,7 +412,7 @@ export default function AccountingReport() {
       { key: 'accountCode', header: 'Code', render: v => <span className="font-mono text-xs">{v}</span> },
       { key: 'accountName', header: 'Equity Account', sortable: true },
       { key: 'openingBalance', header: 'Opening Balance', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
-      { key: 'periodActivity', header: 'Period Activity', align: 'right', sortable: true, render: v => <span className={`font-mono ${v >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(v)}</span> },
+      { key: 'periodActivity', header: 'Period Activity', align: 'right', sortable: true, render: v => <span className={`font-mono ${v >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(v)}</span> },
       { key: 'closingBalance', header: 'Closing Balance', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
     ];
     csvColumns = columns.map(c => ({ header: String(c.header), key: String(c.key) }));
@@ -530,7 +530,7 @@ export default function AccountingReport() {
 
       {summary && hasLoaded && (option.mode === 'trial-balance' || option.mode === 'balance-sheet') && (
         <div className="mb-4 px-4 py-2.5 rounded-md border border-border bg-card text-sm flex items-center gap-4">
-          <span className={`font-semibold ${summary.is_balanced ? 'text-emerald-700' : 'text-red-700'}`}>
+          <span className={`font-semibold ${summary.is_balanced ? 'text-success' : 'text-destructive'}`}>
             {summary.is_balanced ? 'Balanced' : 'Not Balanced'}
           </span>
           {summary.total_debits != null && <span className="text-muted-foreground">Debits: <span className="font-mono text-foreground">{fmtCurrency(summary.total_debits)}</span></span>}
@@ -551,7 +551,7 @@ export default function AccountingReport() {
       )}
       {summary && hasLoaded && option.mode === 'equity-statement' && (
         <div className="mb-4 px-4 py-2.5 rounded-md border border-border bg-card text-sm">
-          <span className="text-muted-foreground">Net Income for Period: <span className={`font-mono font-medium ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(summary.netIncome)}</span></span>
+          <span className="text-muted-foreground">Net Income for Period: <span className={`font-mono font-medium ${summary.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(summary.netIncome)}</span></span>
         </div>
       )}
 
@@ -582,7 +582,7 @@ export default function AccountingReport() {
               huge empty gap between them. */}
           <div className="max-w-4xl bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none">
           {/* ── Revenue ── */}
-          <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
+          <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-border">
             <h3 className="text-sm font-bold tracking-wide">Revenue</h3>
           </div>
           <div className="px-4 py-3">
@@ -629,7 +629,7 @@ export default function AccountingReport() {
           </div>
 
           {/* ── Expenses ── */}
-          <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-t border-border">
+          <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-t border-border">
             <h3 className="text-sm font-bold tracking-wide">Expenses</h3>
           </div>
           <div className="px-4 py-3">
@@ -669,9 +669,9 @@ export default function AccountingReport() {
           </div>
 
           {/* ── Net Income ── */}
-          <div className={`px-4 py-3 border-t-2 ${incomeStatement.totals.netIncome >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+          <div className={`px-4 py-3 border-t-2 ${incomeStatement.totals.netIncome >= 0 ? 'bg-success-bg border-success-border' : 'bg-destructive-bg border-destructive-border'}`}>
             <div className="flex justify-end">
-              <div className={`min-w-[260px] flex justify-between gap-4 text-base font-bold ${incomeStatement.totals.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+              <div className={`min-w-[260px] flex justify-between gap-4 text-base font-bold ${incomeStatement.totals.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>
                 <span>Net Income {incomeStatement.totals.netIncome >= 0 ? '(Profit)' : '(Loss)'}:</span>
                 <span className="font-mono">{fmtCurrency(incomeStatement.totals.netIncome)}</span>
               </div>
@@ -707,12 +707,12 @@ export default function AccountingReport() {
                 </tbody>
               </table>
             </div>
-            <div className={`px-4 py-3 border-t-2 ${summary.netIncome >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`px-4 py-3 border-t-2 ${summary.netIncome >= 0 ? 'bg-success-bg border-success-border' : 'bg-destructive-bg border-destructive-border'}`}>
               <div className="flex justify-between">
-                <span className={`text-base font-bold ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                <span className={`text-base font-bold ${summary.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>
                   Net Income {summary.netIncome >= 0 ? '(Profit)' : '(Loss)'}:
                 </span>
-                <span className={`text-base font-bold font-mono ${summary.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(summary.netIncome)}</span>
+                <span className={`text-base font-bold font-mono ${summary.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(summary.netIncome)}</span>
               </div>
             </div>
           </div>
@@ -730,7 +730,7 @@ export default function AccountingReport() {
             </Button>
           </div>
           <div className="max-w-4xl bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none">
-            <div className="bg-sky-100 dark:bg-sky-950/40 px-4 py-1.5 border-b border-border">
+            <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-border">
               <h3 className="text-sm font-bold tracking-wide">By Department (Branch)</h3>
             </div>
             <div className="px-4 py-3">
@@ -740,11 +740,11 @@ export default function AccountingReport() {
                 <table className="w-full table-fixed text-sm border-collapse">
                   <colgroup><col /><col className="w-36" /><col className="w-36" /><col className="w-36" /></colgroup>
                   <thead>
-                    <tr className="border-b-2 border-foreground/70 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <th className="text-left font-semibold pb-1.5">Department</th>
-                      <th className="text-right font-semibold pb-1.5">Revenue</th>
-                      <th className="text-right font-semibold pb-1.5">Expenses</th>
-                      <th className="text-right font-semibold pb-1.5">Net Income</th>
+                    <tr className="border-b-2 border-foreground/70 text-xs uppercase tracking-wide text-muted-foreground">
+                      <th scope="col" className="text-left font-semibold pb-1.5">Department</th>
+                      <th scope="col" className="text-right font-semibold pb-1.5">Revenue</th>
+                      <th scope="col" className="text-right font-semibold pb-1.5">Expenses</th>
+                      <th scope="col" className="text-right font-semibold pb-1.5">Net Income</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -753,7 +753,7 @@ export default function AccountingReport() {
                         <td className="py-1.5 text-muted-foreground">{r.branchName}</td>
                         <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(r.totalRevenue)}</td>
                         <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(r.totalExpenses)}</td>
-                        <td className={`py-1.5 text-right font-mono font-medium whitespace-nowrap ${r.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(r.netIncome)}</td>
+                        <td className={`py-1.5 text-right font-mono font-medium whitespace-nowrap ${r.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(r.netIncome)}</td>
                       </tr>
                     ))}
                     <tr className="border-t-2 border-foreground/70 font-semibold">
@@ -770,7 +770,7 @@ export default function AccountingReport() {
         </>
       ) : (
         <AdvancedDataTable
-          headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+          headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
           data={numberedRows}
           keyExtractor={keyExtractor}
           columns={columnsWithNo}

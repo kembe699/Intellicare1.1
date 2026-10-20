@@ -8,12 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ArrowLeft, Loader2, TrendingUp, Trash2, Building2, MapPin, User, CalendarDays,
   Wallet, TrendingDown, Layers, UserCircle2,
 } from 'lucide-react';
 import { Asset, ChartAccount, NATURE_BADGE, NATURE_LABEL, fmt } from './fixedAssetsShared';
+import { formatDate } from '@/lib/format';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   active: 'success',
@@ -166,7 +167,7 @@ export default function FixedAssetDetail() {
             {asset.created_at && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Registered on</span>
-                <span>{new Date(asset.created_at).toLocaleDateString()}</span>
+                <span>{formatDate(asset.created_at)}</span>
               </div>
             )}
           </div>
@@ -187,18 +188,18 @@ export default function FixedAssetDetail() {
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Acquisition Cost</p>
                 <p className="text-lg font-bold font-mono leading-tight truncate">{fmt(asset.acquisition_cost_original ?? asset.acquisition_cost)} {asset.acquisition_currency || ''}</p>
-                {hasFxNote && <p className="text-[11px] text-muted-foreground mt-0.5">= {fmt(asset.acquisition_cost)} base (rate {Number(asset.acquisition_exchange_rate).toFixed(4)})</p>}
+                {hasFxNote && <p className="text-xs text-muted-foreground mt-0.5">= {fmt(asset.acquisition_cost)} base (rate {Number(asset.acquisition_exchange_rate).toFixed(4)})</p>}
               </div>
             </div>
             <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-amber-600" /></div>
+              <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-warning" /></div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Accumulated Depreciation</p>
                 <p className="text-lg font-bold font-mono leading-tight">{fmt(asset.accumulated_depreciation)}</p>
               </div>
             </div>
             <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
+              <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-success" /></div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Current Book Value</p>
                 <p className="text-lg font-bold font-mono leading-tight">{fmt(asset.current_value)}</p>
@@ -214,7 +215,7 @@ export default function FixedAssetDetail() {
                   <p className="text-sm text-muted-foreground text-center py-8">No depreciation has been posted for this asset yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b bg-muted/20"><th className="text-left py-2 px-4">Period</th><th className="text-right py-2 px-4">Amount</th><th className="text-right py-2 px-4">Book Value After</th></tr></thead>
+                    <thead><tr className="border-b bg-muted/20"><th scope="col" className="text-left py-2 px-4">Period</th><th scope="col" className="text-right py-2 px-4">Amount</th><th scope="col" className="text-right py-2 px-4">Book Value After</th></tr></thead>
                     <tbody>
                       {history.map((h: any) => (
                         <tr key={h.id} className="border-b border-border/50">

@@ -6,7 +6,7 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtCurrency, fmtCount, CsvColumn } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -130,7 +130,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Dispensing Events</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Dispensing Events</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.dispensingVolume.totalEvents)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{fmtCount(data?.dispensingVolume.totalQty)} units dispensed</p>
                 </div>
@@ -141,7 +141,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Patients Dispensed To</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Patients Dispensed To</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.dispensingVolume.distinctPatients)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">unique patients in period</p>
                 </div>
@@ -152,7 +152,7 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Dispensing Value</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Dispensing Value</p>
                   <p className="text-2xl font-bold mt-1">{fmtCurrency(data?.dispensingVolume.totalDispensingValue)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">drug price &times; qty at time dispensed</p>
                 </div>
@@ -163,8 +163,8 @@ export default function PharmacyReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Billed / Collected</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data?.cashSummary.totalCollected)}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Billed / Collected</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(data?.cashSummary.totalCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">of {fmtCurrency(data?.cashSummary.totalBilled)} billed via Patient Bills</p>
                 </div>
                 <DollarSign className="h-5 w-5 text-primary" />
@@ -180,7 +180,7 @@ export default function PharmacyReport() {
                 <h3 className="font-semibold text-sm">Fast Moving Items</h3>
               </div>
               <AdvancedDataTable<MovementItem>
-                headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+                headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
                 data={fastMoving}
                 keyExtractor={(row) => row.itemId}
                 emptyMessage="No items dispensed in this period."
@@ -197,13 +197,13 @@ export default function PharmacyReport() {
                 <h3 className="font-semibold text-sm">Slow Moving Items</h3>
               </div>
               <AdvancedDataTable<MovementItem>
-                headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+                headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
                 data={slowMoving}
                 keyExtractor={(row) => row.itemId}
                 emptyMessage="No active inventory items found."
                 columns={[
                   { key: 'itemName', header: 'Item', sortable: true },
-                  { key: 'qtyDispensed', header: 'Qty Dispensed', align: 'right', sortable: true, render: (v) => <span className={`font-mono font-medium ${v === 0 ? 'text-amber-600' : ''}`}>{fmtCount(v)}</span> },
+                  { key: 'qtyDispensed', header: 'Qty Dispensed', align: 'right', sortable: true, render: (v) => <span className={`font-mono font-medium ${v === 0 ? 'text-warning' : ''}`}>{fmtCount(v)}</span> },
                   { key: 'quantityOnHand', header: 'On Hand', align: 'right', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmtCount(v)}</span> },
                 ]}
               />
@@ -217,9 +217,9 @@ export default function PharmacyReport() {
               <p className="text-xs text-muted-foreground">{fmtCount(byDrug.length)} drug{byDrug.length === 1 ? '' : 's'} dispensed or billed in period</p>
             </div>
             <AdvancedDataTable<ByDrugRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total Collected</span>
@@ -239,7 +239,7 @@ export default function PharmacyReport() {
                 { key: 'qty', header: 'Qty Dispensed', align: 'right', sortable: true, render: (v) => (v == null ? '—' : fmtCount(v)) },
                 { key: 'dispensingValue', header: 'Dispensing Value', align: 'right', sortable: true, render: (v) => fmtCurrency(v) },
                 { key: 'totalBilled', header: 'Billed', align: 'right', sortable: true, render: (v) => fmtCurrency(v) },
-                { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="text-emerald-700">{fmtCurrency(v)}</span> },
+                { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="text-success">{fmtCurrency(v)}</span> },
               ]}
             />
           </div>
@@ -253,8 +253,8 @@ export default function PharmacyReport() {
               <div className="p-4 flex flex-wrap gap-3">
                 {statusBreakdown.map(s => (
                   <div key={s.status} className="flex items-center gap-2 bg-muted/40 rounded-md px-3 py-1.5">
-                    <span className="text-[13px] capitalize">{s.status}</span>
-                    <span className="text-[13px] font-mono font-semibold">{fmtCount(s.count)}</span>
+                    <span className="text-sm capitalize">{s.status}</span>
+                    <span className="text-sm font-mono font-semibold">{fmtCount(s.count)}</span>
                   </div>
                 ))}
               </div>

@@ -4,7 +4,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, Plus, Star, X, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -200,10 +200,10 @@ export function DiagnosisPicker({ orderId, readOnly, onNotesUpdated, className }
               )}
               <span className="text-sm flex-1 truncate">{d.description}</span>
               {d.is_primary ? (
-                <span title="Primary diagnosis"><Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" /></span>
+                <span title="Primary diagnosis"><Star className="w-3.5 h-3.5 text-warning fill-warning shrink-0" /></span>
               ) : !readOnly ? (
                 <button type="button" title="Make primary" onClick={() => setPrimary(d.id)} className="shrink-0">
-                  <Star className="w-3.5 h-3.5 text-muted-foreground hover:text-amber-500 shrink-0" />
+                  <Star className="w-3.5 h-3.5 text-muted-foreground hover:text-warning shrink-0" />
                 </button>
               ) : null}
               {!readOnly && (
@@ -304,7 +304,7 @@ export function DiagnosisPicker({ orderId, readOnly, onNotesUpdated, className }
                 )}
               </CommandList>
               {codeVersion && (
-                <div className="border-t px-3 py-1.5 text-[10px] text-muted-foreground text-center">
+                <div className="border-t px-3 py-1.5 text-xs text-muted-foreground text-center">
                   {codeVersion.source} {codeVersion.version}
                 </div>
               )}
@@ -322,7 +322,7 @@ function IcdResultRow({ r }: { r: Icd10Result }) {
       <span className="text-sm truncate">
         <span className="font-mono font-medium">{r.code}</span> · {r.description}
       </span>
-      {r.chapter && <span className="text-[11px] text-muted-foreground truncate">{r.chapter}</span>}
+      {r.chapter && <span className="text-xs text-muted-foreground truncate">{r.chapter}</span>}
     </div>
   );
 }

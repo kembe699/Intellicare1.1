@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -231,7 +231,7 @@ export default function LISLabQC() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+                    className="h-8 text-success hover:text-success hover:bg-success-bg border-success-border"
                     onClick={handleAcceptAll}
                     disabled={bulkAccepting}
                     title="Accept every specimen below at once — for peak-traffic batches"
@@ -259,12 +259,12 @@ export default function LISLabQC() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">In Transit</span>
+                    <span className="text-xs bg-warning-bg text-warning px-1.5 py-0.5 rounded font-medium whitespace-nowrap">In Transit</span>
                     <div className="flex items-center gap-1.5">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 px-2.5"
+                        className="h-7 text-xs text-success hover:text-success hover:bg-success-bg border-success-border px-2.5"
                         onClick={() => handleQC(s.id, 'accepted')}
                         disabled={qcProcessingId === s.id}
                       >
@@ -274,7 +274,7 @@ export default function LISLabQC() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 px-2.5"
+                        className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive-bg border-destructive-border px-2.5"
                         onClick={() => handleQC(s.id, 'rejected')}
                         disabled={qcProcessingId === s.id}
                       >
@@ -316,7 +316,7 @@ export default function LISLabQC() {
             
             <div className="flex-1 overflow-auto p-4 space-y-3 bg-card">
               {routingQueue.length > 0 ? routingQueue.map(s => (
-                <div key={s.id} className="bg-background border rounded-lg p-2.5 shadow-sm border-l-4 border-l-green-500 flex items-center justify-between gap-3">
+                <div key={s.id} className="bg-background border rounded-lg p-2.5 shadow-sm border-l-4 border-l-success-border flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium font-mono text-primary text-sm truncate">{s.barcode}</h4>
                     <p className="text-xs truncate text-muted-foreground">{s.test_name}</p>
@@ -414,9 +414,9 @@ export default function LISLabQC() {
                   key: 'status', header: 'QC Status', sortable: true,
                   render: (v) => (
                     <>
-                      {v === 'in_transit' && <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-medium">Pending QC</span>}
-                      {['accepted', 'routed', 'analyzed', 'approved'].includes(v) && <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v}</span>}
-                      {['rejected', 'recollection_required'].includes(v) && <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v.replace('_', ' ')}</span>}
+                      {v === 'in_transit' && <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium">Pending QC</span>}
+                      {['accepted', 'routed', 'analyzed', 'approved'].includes(v) && <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v}</span>}
+                      {['rejected', 'recollection_required'].includes(v) && <span className="bg-destructive-bg text-destructive px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v.replace('_', ' ')}</span>}
                     </>
                   ),
                 },

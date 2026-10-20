@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportLetterhead } from './ReportLetterhead';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { LoadingState } from '@/components/common';
 import { AdvancedDataTable, Column } from '@/components/common/DataTable/AdvancedDataTable';
@@ -182,7 +182,7 @@ export default function ClinicalReport() {
       { key: 'gender', header: 'Gender', sortable: true },
       { key: 'branchName', header: 'Branch', sortable: true, render: v => v || '—' },
       { key: 'visitDate', header: 'Registered', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
-      { key: 'source', header: 'Registry', render: v => <span className="text-[11px] uppercase text-muted-foreground">{v}</span> },
+      { key: 'source', header: 'Registry', render: v => <span className="text-xs uppercase text-muted-foreground">{v}</span> },
     ];
     csvColumns = [{ header: 'First Name', key: 'firstName' }, { header: 'Last Name', key: 'lastName' }, { header: 'Age', key: 'age' }, { header: 'Gender', key: 'gender' }, { header: 'Branch', key: 'branchName' }, { header: 'Registered', key: 'visitDate', transform: v => fmtDate(v) }];
   } else if (option.mode === 'workload') {
@@ -437,7 +437,7 @@ export default function ClinicalReport() {
         </div>
       ) : (
         <AdvancedDataTable
-          headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+          headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
           data={numberedRows}
           keyExtractor={keyExtractor}
           columns={columnsWithNo}

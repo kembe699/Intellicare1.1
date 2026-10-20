@@ -7,11 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { getStatusColor } from '@/lib/statusColors';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { ArrowRightLeft, Plus, Package, Check, X, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface TransferRequest {
   id: string;
@@ -138,7 +139,7 @@ export default function StockTransferRequests() {
               searchPlaceholder="Search..."
               pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
               toolbarExtra={
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={load} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={load} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               }
@@ -150,17 +151,17 @@ export default function StockTransferRequests() {
                 { key: 'requested_by_name', header: 'Requested By', render: (v) => v || '—' },
                 { key: 'item_count', header: 'Items', align: 'right' },
                 { key: 'status', header: 'Status', render: (v) => <Badge className={getStatusColor(v)}>{String(v).replace('_', ' ')}</Badge> },
-                { key: 'created_at', header: 'Date', sortable: true, render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                { key: 'created_at', header: 'Date', sortable: true, render: (v) => v ? formatDate(v) : '—' },
                 {
                   key: 'id', header: 'Actions', align: 'center',
                   render: (_v, row) => (
                     row.status === 'pending' ? (
                       <div className="flex items-center justify-center gap-1">
                         <Button size="sm" variant="ghost" disabled={processingId === row.id} onClick={(e) => { e.stopPropagation(); approve(row); }}>
-                          {processingId === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
+                          {processingId === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-success" />}
                         </Button>
                         <Button size="sm" variant="ghost" disabled={processingId === row.id} onClick={(e) => { e.stopPropagation(); reject(row); }}>
-                          <X className="w-3.5 h-3.5 text-red-600" />
+                          <X className="w-3.5 h-3.5 text-destructive" />
                         </Button>
                         {(String(row.requested_by) === String(user?.id) || user?.role === 'admin') && (
                           <Button size="sm" variant="ghost" disabled={processingId === row.id} onClick={(e) => { e.stopPropagation(); cancel(row); }}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/common';
 import { Users, Plus, RefreshCw, Search, Stethoscope, Phone, MapPin, Calendar, X, Check, CreditCard, Loader2, AlertTriangle, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { QueueReceipt } from '@/components/receipts/QueueReceipt';
@@ -86,9 +87,11 @@ export default function LISRegistration() {
   const [clinics, setClinics] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [regForm, setRegForm] = useState({
-    first_name: '', last_name: '', gender: 'Male', study_ref: '',
+    first_name: '', last_name: '', gender: '', study_ref: '',
     date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: ''
   });
+  const [genderError, setGenderError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
@@ -252,7 +255,7 @@ export default function LISRegistration() {
     setEditingParticipant(p);
     setRegForm({
       first_name: p.first_name || '', last_name: p.last_name || '',
-      gender: p.gender || 'Male', date_of_birth: dob, age: calculateAgeFromDob(dob),
+      gender: p.gender || '', date_of_birth: dob, age: calculateAgeFromDob(dob),
       phone: p.phone || '', residence: p.residence || '',
       study_ref: p.study_ref || '', scheme_id: schemeId, member_number: memberNumber,
       doctor_id: '', consultant_id: '', clinic_id: '', room_id: '',
@@ -261,7 +264,7 @@ export default function LISRegistration() {
 
   const cancelEdit = () => {
     setEditingParticipant(null);
-    setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
+    setRegForm({ first_name: '', last_name: '', gender: '', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
   };
 
   const handleUpdateParticipant = async () => {
@@ -340,9 +343,28 @@ export default function LISRegistration() {
     }
   };
 
+  const validateRegForm = (): boolean => {
+    let ok = true;
+    if (!regForm.gender) {
+      setGenderError("Choose the patient's gender.");
+      ok = false;
+    } else {
+      setGenderError('');
+    }
+    const phoneDigits = regForm.phone.replace(/[^\d]/g, '');
+    if (regForm.phone && phoneDigits.length < 9) {
+      setPhoneError('Enter a full phone number, e.g. +211 920 123 907.');
+      ok = false;
+    } else {
+      setPhoneError('');
+    }
+    return ok;
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (registering) return;
+    if (!validateRegForm()) return;
     if (editingParticipant) { await handleUpdateParticipant(); return; }
     setRegistering(true);
     try {
@@ -383,7 +405,7 @@ export default function LISRegistration() {
             clinicName: clinic?.name, doctorName, roomNumber: room?.room_number, date: new Date().toISOString(),
           });
         }
-        setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
+        setRegForm({ first_name: '', last_name: '', gender: '', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
         if (billingRedirectEnabled && billId) {
           navigate(`/patients-bill/${billId}`);
           return;
@@ -445,7 +467,7 @@ export default function LISRegistration() {
           });
         }
         setDuplicatePatient(null);
-        setRegForm({ first_name: '', last_name: '', gender: 'Male', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
+        setRegForm({ first_name: '', last_name: '', gender: '', study_ref: '', date_of_birth: '', age: '', phone: '', residence: '', doctor_id: '', consultant_id: '', clinic_id: '', room_id: '', scheme_id: '', member_number: '' });
         if (billingRedirectEnabled && billId) {
           navigate(`/patients-bill/${billId}`);
           return;
@@ -600,7 +622,7 @@ export default function LISRegistration() {
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-3 rounded-lg border p-3 bg-card">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Basic Information</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Basic Information</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground">First Name</label>
@@ -613,18 +635,27 @@ export default function LISRegistration() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground">Gender</label>
+                      <label className="text-xs font-medium text-muted-foreground">Gender<span className="text-destructive ml-0.5">*</span></label>
                       <Combobox
                         options={GENDER_OPTIONS}
                         value={regForm.gender}
-                        onChange={v => setRegForm({...regForm, gender: v})}
+                        onChange={v => { setRegForm({...regForm, gender: v}); setGenderError(''); }}
+                        placeholder="Select gender"
                         searchPlaceholder="Search..."
-                        className="mt-1 h-9"
+                        className={cn('mt-1 h-9', genderError && 'border-destructive border-2')}
                       />
+                      {genderError && <p className="text-xs text-destructive mt-1">{genderError}</p>}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Phone Number</label>
-                      <Input value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} placeholder="09XXXXXXXX" className="mt-1" />
+                      <Input
+                        value={regForm.phone}
+                        onChange={e => { setRegForm({...regForm, phone: e.target.value}); setPhoneError(''); }}
+                        placeholder="e.g. +211 920 123 907"
+                        aria-invalid={!!phoneError}
+                        className={cn('mt-1', phoneError && 'border-destructive border-2')}
+                      />
+                      {phoneError && <p className="text-xs text-destructive mt-1">{phoneError}</p>}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -662,7 +693,7 @@ export default function LISRegistration() {
                 </div>
 
                 <div className="space-y-3 rounded-lg border p-3 bg-card">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Insurance &amp; Queue</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Insurance &amp; Queue</p>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><CreditCard className="w-3 h-3"/> Scheme</label>
                     <Combobox
@@ -683,12 +714,12 @@ export default function LISRegistration() {
                         placeholder="This patient's ID card / membership number with the scheme"
                         className="mt-1"
                       />
-                      <p className="text-[11px] text-muted-foreground mt-1">Enrolls the patient in this scheme so consultation/services bill at its price instead of cash.</p>
+                      <p className="text-xs text-muted-foreground mt-1">Enrolls the patient in this scheme so consultation/services bill at its price instead of cash.</p>
                     </div>
                   )}
                   {(!editingParticipant || !editingParticipant.is_queued) && (
                     <div className="pt-3 border-t space-y-3">
-                      <p className="text-[11px] font-medium text-muted-foreground uppercase">
+                      <p className="text-xs font-medium text-muted-foreground uppercase">
                         {editingParticipant ? 'Queue this Patient (Optional)' : 'Queue on Registration (Optional)'}
                       </p>
                       <div>
@@ -795,7 +826,7 @@ export default function LISRegistration() {
                     Today
                   </Button>
                 )}
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => fetchParticipants()} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => fetchParticipants()} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
@@ -830,7 +861,7 @@ export default function LISRegistration() {
       <Dialog open={!!duplicatePatient} onOpenChange={(open) => { if (!open) setDuplicatePatient(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
+            <DialogTitle className="flex items-center gap-2 text-warning">
               <AlertTriangle className="w-5 h-5" />
               Patient Already Exists
             </DialogTitle>
@@ -842,21 +873,21 @@ export default function LISRegistration() {
                 Sorry, a patient with this phone number already exists. If this is the same person, just queue them instead of creating a duplicate record.
               </p>
               <div className="bg-muted/50 rounded-md p-3 space-y-1 border">
-                <p className="font-medium text-[15px] flex items-center gap-2">
+                <p className="font-medium text-base flex items-center gap-2">
                   <UserCheck className="w-4 h-4 text-primary" />
                   {duplicatePatient.first_name} {duplicatePatient.last_name}
                 </p>
-                <p className="text-[13px] text-muted-foreground">ID: {duplicatePatient.participant_number}</p>
-                <p className="text-[13px] text-muted-foreground flex items-center gap-1.5">
+                <p className="text-sm text-muted-foreground">ID: {duplicatePatient.participant_number}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5" /> {duplicatePatient.phone}
                 </p>
                 {duplicatePatient.residence && (
-                  <p className="text-[13px] text-muted-foreground flex items-center gap-1.5">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5" /> {duplicatePatient.residence}
                   </p>
                 )}
                 {duplicatePatient.is_queued ? (
-                  <p className="text-[13px] text-emerald-600 font-medium pt-1">Already queued today</p>
+                  <p className="text-sm text-success font-medium pt-1">Already queued today</p>
                 ) : null}
               </div>
             </div>

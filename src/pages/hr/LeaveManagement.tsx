@@ -9,10 +9,11 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { CalendarDays, Plus, Loader2, Check, Search, X } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface LeaveRequest {
   id: string; employee_id: string; first_name: string; last_name: string; employee_number: string;
@@ -192,7 +193,7 @@ export default function LeaveManagement() {
                   columns={[
                     { key: 'first_name', header: 'Employee', render: (_v, r) => <span className="font-medium">{r.first_name} {r.last_name}</span> },
                     { key: 'leave_type_name', header: 'Type' },
-                    { key: 'start_date', header: 'Period', render: (_v, r) => <span className="text-xs">{new Date(r.start_date).toLocaleDateString()} – {new Date(r.end_date).toLocaleDateString()}</span> },
+                    { key: 'start_date', header: 'Period', render: (_v, r) => <span className="text-xs">{formatDate(r.start_date)} – {formatDate(r.end_date)}</span> },
                     { key: 'days', header: 'Days', align: 'center' },
                     { key: 'reason', header: 'Reason', render: (v) => v || '—' },
                     { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },
@@ -250,9 +251,9 @@ export default function LeaveManagement() {
                       <div key={s.leave_type_id} className="border rounded-lg p-4 bg-muted/20">
                         <p className="text-sm font-semibold mb-2">{s.leave_type_name}</p>
                         <div className="grid grid-cols-3 gap-2 text-center">
-                          <div><p className="text-[11px] text-muted-foreground">Entitled</p><p className="font-mono font-bold">{s.entitled_days}</p></div>
-                          <div><p className="text-[11px] text-muted-foreground">Taken</p><p className="font-mono font-bold text-amber-700">{s.taken_days}</p></div>
-                          <div><p className="text-[11px] text-muted-foreground">Remaining</p><p className="font-mono font-bold text-emerald-700">{s.remaining_days}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Entitled</p><p className="font-mono font-bold">{s.entitled_days}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Taken</p><p className="font-mono font-bold text-warning">{s.taken_days}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Remaining</p><p className="font-mono font-bold text-success">{s.remaining_days}</p></div>
                         </div>
                       </div>
                     ))}
@@ -266,17 +267,17 @@ export default function LeaveManagement() {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30">
                           <tr className="text-left text-muted-foreground text-xs">
-                            <th className="px-3 py-2 font-medium">Type</th>
-                            <th className="px-3 py-2 font-medium">Period</th>
-                            <th className="px-3 py-2 font-medium text-center">Days</th>
-                            <th className="px-3 py-2 font-medium text-center">Status</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Type</th>
+                            <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-center">Days</th>
+                            <th scope="col" className="px-3 py-2 font-medium text-center">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {lookupData.history.map((h: any) => (
                             <tr key={h.id}>
                               <td className="px-3 py-2">{h.leave_type_name}</td>
-                              <td className="px-3 py-2 text-xs">{new Date(h.start_date).toLocaleDateString()} – {new Date(h.end_date).toLocaleDateString()}</td>
+                              <td className="px-3 py-2 text-xs">{formatDate(h.start_date)} – {formatDate(h.end_date)}</td>
                               <td className="px-3 py-2 text-center">{h.days}</td>
                               <td className="px-3 py-2 text-center"><StatusBadge status={h.status} label={h.status} map={STATUS_TONE} /></td>
                             </tr>

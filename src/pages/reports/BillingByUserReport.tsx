@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Loader2, DollarSign, Receipt, Users, Trophy, UserCircle } from 'lucide-react';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { ReportLetterhead } from './ReportLetterhead';
@@ -167,7 +167,7 @@ export default function BillingByUserReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Collected ({periodLabel})</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Collected ({periodLabel})</p>
                   <p className="text-2xl font-bold mt-1">{fmtCurrency(summary?.totalCollected)}</p>
                 </div>
                 <DollarSign className="h-5 w-5 text-primary" />
@@ -177,7 +177,7 @@ export default function BillingByUserReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Transactions</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Transactions</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(summary?.totalTransactions)}</p>
                 </div>
                 <Receipt className="h-5 w-5 text-primary" />
@@ -187,7 +187,7 @@ export default function BillingByUserReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Cashiers Active</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Cashiers Active</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(summary?.cashierCount)}</p>
                 </div>
                 <Users className="h-5 w-5 text-primary" />
@@ -197,7 +197,7 @@ export default function BillingByUserReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Top Cashier</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Top Cashier</p>
                   <p className="text-lg font-bold mt-1 truncate">{summary?.topCashierName || '—'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{fmtCurrency(summary?.topCashierAmount)}</p>
                 </div>
@@ -213,9 +213,9 @@ export default function BillingByUserReport() {
               <h3 className="text-sm font-semibold">Collections by Cashier</h3>
             </div>
             <AdvancedDataTable<CashierRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total Collected</span>
@@ -255,7 +255,7 @@ export default function BillingByUserReport() {
               ]}
             />
             {filteredCashiers.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-[13px] font-bold -mt-px">
+              <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-bold -mt-px">
                 <span>Grand Total</span>
                 <span className="flex gap-6">
                   <span>{fmtCount(summary?.totalTransactions)}</span>

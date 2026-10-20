@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
+import { useConfirm } from '@/hooks/useConfirm';
 import { MapPinned, Trash2, Loader2, Plus } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -28,6 +29,7 @@ interface Grant {
 // else's request ("can_fulfill") — see utils/locationAccess.js. An admin
 // always passes both checks regardless of what's granted here.
 const LocationAccess: React.FC = () => {
+  const confirm = useConfirm();
   const [users, setUsers] = useState<UserOption[]>([]);
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
@@ -104,7 +106,13 @@ const LocationAccess: React.FC = () => {
   };
 
   const revoke = async (grant: Grant) => {
-    if (!confirm(`Revoke ${grant.user_name}'s access to ${grant.location_name}?`)) return;
+    const ok = await confirm({
+      title: `Revoke ${grant.user_name}'s access?`,
+      description: `They'll no longer be able to request or fulfil stock transfers for ${grant.location_name}.`,
+      confirmLabel: 'Revoke access',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       const res = await authFetch(`/api/stock-transfers/location-access/${grant.id}`, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error('Failed to revoke');
@@ -194,7 +202,7 @@ const LocationAccess: React.FC = () => {
                 key: 'id', header: 'Actions', align: 'center',
                 render: (_v, row) => (
                   <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); revoke(row); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
                 ),
               },

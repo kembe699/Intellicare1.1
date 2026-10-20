@@ -67,7 +67,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                 row cut off the page's own name (e.g. "Purchas..." for
                 "Purchase Orders"). flex-wrap above lets actions drop to
                 their own row instead, so the title keeps its full width. */}
-            <h1 className="text-2xl font-bold text-foreground break-words">{title}</h1>
+            <h1 className="ic-text-title break-words">{title}</h1>
           </div>
           {subtitle && (
             <p className="text-muted-foreground mt-1">{subtitle}</p>

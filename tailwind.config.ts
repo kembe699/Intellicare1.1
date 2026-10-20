@@ -38,13 +38,18 @@ export default {
         'mobile-sm': '14px',
         'mobile-base': '16px',
         'mobile-lg': '18px',
+        // Pinned in real px, matching the Option B type scale's caption (12)
+        // and label (13) steps exactly — independent of the html root
+        // font-size, and the 12px one can never drop below the a11y floor.
+        xs: ["12px", { lineHeight: "16px" }],
+        sm: ["13px", { lineHeight: "18px" }],
       },
       fontFamily: {
-        sans: ["Inter", "Segoe UI", "Tahoma", "Arial", "system-ui", "sans-serif"],
+        sans: ["Inter Variable", "Inter", "Segoe UI", "Tahoma", "Arial", "system-ui", "sans-serif"],
       },
       backgroundImage: {
-        // Our own teal, not ERP's blue — primary (#1A7A75) into the darker sidebar teal (#2d6a75).
-        'hero-gradient': 'linear-gradient(135deg, hsl(177 65% 29%), hsl(189 44% 24%))',
+        // Our own teal, not ERP's blue — primary (#077A84) into the darker sidebar teal (#2d6a75).
+        'hero-gradient': 'linear-gradient(135deg, hsl(185 90% 27%), hsl(189 44% 24%))',
       },
       colors: {
         border: "hsl(var(--border))",
@@ -52,9 +57,14 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        heading: "hsl(var(--heading))",
+        label: "hsl(var(--label))",
+        "brand-teal": "hsl(var(--brand-teal))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
+          soft: "hsl(var(--primary-soft))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -63,11 +73,18 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          bg: "hsl(var(--destructive-bg))",
+          border: "hsl(var(--destructive-border))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
+        disabled: {
+          bg: "hsl(var(--disabled-bg))",
+        },
+        skeleton: "hsl(var(--skeleton))",
+        "table-header": "hsl(var(--table-header-bg))",
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
@@ -75,10 +92,26 @@ export default {
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          bg: "hsl(var(--success-bg))",
+          border: "hsl(var(--success-border))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          bg: "hsl(var(--warning-bg))",
+          border: "hsl(var(--warning-border))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+          bg: "hsl(var(--info-bg))",
+          border: "hsl(var(--info-border))",
+        },
+        neutral: {
+          DEFAULT: "hsl(var(--neutral))",
+          foreground: "hsl(var(--neutral-foreground))",
+          bg: "hsl(var(--neutral-bg))",
+          border: "hsl(var(--neutral-border))",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",

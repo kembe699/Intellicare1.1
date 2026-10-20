@@ -19,12 +19,13 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { AttachmentField } from '@/components/procurement/AttachmentField';
 import { AttachmentList } from '@/components/procurement/AttachmentList';
 import { uploadProcurementAttachments } from '@/api/procurementAttachments';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   ShoppingCart, Plus, Eye, Search, RefreshCw, Check, CheckCircle,
   Shield, Download, FileText, FileSpreadsheet, Trash2, X, Loader2
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 interface Supplier {
   id: number;
@@ -392,7 +393,7 @@ const PurchaseOrders: React.FC = () => {
     if (filteredOrders.length === 0) { toast.error('No orders to export'); return; }
     const csv = [
       ['PO Number', 'Supplier', 'Order Date', 'Status', 'Total Amount', 'Items', 'Notes'].join(','),
-      ...filteredOrders.map(o => [o.po_number, `"${getSupplierName(o.supplier_id)}"`, new Date(o.order_date).toLocaleDateString(), o.status, parseFloat(String(o.total_amount || '0')).toFixed(2), o.items?.length || 0, `"${o.notes || ''}"`].join(','))
+      ...filteredOrders.map(o => [o.po_number, `"${getSupplierName(o.supplier_id)}"`, formatDate(o.order_date), o.status, parseFloat(String(o.total_amount || '0')).toFixed(2), o.items?.length || 0, `"${o.notes || ''}"`].join(','))
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -421,8 +422,8 @@ const PurchaseOrders: React.FC = () => {
       console.error('Error loading PO details for PDF:', error);
     }
 
-    const orderDate = new Date(order.order_date).toLocaleDateString();
-    const validUntil = new Date(new Date(order.order_date).getTime() + 30*24*60*60*1000).toLocaleDateString();
+    const orderDate = formatDate(order.order_date);
+    const validUntil = formatDate(new Date(order.order_date).getTime() + 30*24*60*60*1000);
     const supplier = suppliers.find(s => s.id === order.supplier_id);
     const sn = order.supplier_name || supplier?.name || 'Unknown', sa = supplier?.address || '-', sp = supplier?.phone || '-', se = supplier?.email || '-', st = supplier?.town || '-';
 
@@ -630,7 +631,7 @@ const PurchaseOrders: React.FC = () => {
           title="Purchase Orders"
           actions={
             <div className="flex gap-2">
-              <Button onClick={fetchOrders} variant="outline" size="icon" disabled={loading}>
+              <Button onClick={fetchOrders} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button onClick={() => setFormData({ supplier_id: '', order_date: new Date().toISOString().split('T')[0], delivery_address: '', requested_delivery_date: '', payment_terms: 'Net30', po_currency: currency.code, notes: '' })}>
@@ -796,7 +797,7 @@ const PurchaseOrders: React.FC = () => {
                   ),
                 },
                 { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v, order) => <span className="text-sm">{v || getSupplierName(order.supplier_id)}</span> },
-                { key: 'order_date', header: 'Order Date', sortable: true, render: (v) => <span className="text-sm">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                { key: 'order_date', header: 'Order Date', sortable: true, render: (v) => <span className="text-sm">{v ? formatDate(v) : '—'}</span> },
                 { key: '__items', header: 'Items', align: 'center', render: (_v, order) => <span className="text-sm">{(order as any).item_count ?? order.items?.length ?? 0}</span> },
                 { key: 'total_amount', header: 'Amount', align: 'right', sortable: true, render: (v, order) => <span className="font-mono text-sm">{fmtAs(v, order.po_currency)}</span> },
                 {
@@ -808,7 +809,7 @@ const PurchaseOrders: React.FC = () => {
                   render: (_v, order) => (
                     <div className="flex items-center justify-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => viewOrder(order)}><Eye className="w-3.5 h-3.5" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => downloadPOReport(order)}><Download className="w-3.5 h-3.5 text-green-600" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => downloadPOReport(order)}><Download className="w-3.5 h-3.5 text-success" /></Button>
                       {order.status === 'draft' && (
                         <Button size="sm" variant="ghost" onClick={() => openAddItems(order)}><Plus className="w-3.5 h-3.5 text-primary" /></Button>
                       )}
@@ -819,7 +820,7 @@ const PurchaseOrders: React.FC = () => {
                       )}
                       {getNextStatus(order.status) && (
                         <Button size="sm" variant="ghost" onClick={() => updateOrderStatus(order.id, getNextStatus(order.status)!)} disabled={processingId === order.id}>
-                          {processingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : React.createElement(getStatusIcon(order.status), { className: 'w-3.5 h-3.5 text-emerald-600' })}
+                          {processingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : React.createElement(getStatusIcon(order.status), { className: 'w-3.5 h-3.5 text-success' })}
                         </Button>
                       )}
                     </div>
@@ -931,7 +932,7 @@ const PurchaseOrders: React.FC = () => {
                         render: (v, item) => (
                           <>
                             <p className="font-medium text-xs">{v}</p>
-                            <Badge variant="outline" className="text-[10px] capitalize">{item.type}</Badge>
+                            <Badge variant="outline" className="text-xs capitalize">{item.type}</Badge>
                           </>
                         ),
                       },
@@ -940,7 +941,7 @@ const PurchaseOrders: React.FC = () => {
                       { key: 'total_price', header: 'Total', align: 'right', render: (v) => <span className="font-mono text-xs font-semibold">{fmtAs(v, selectedOrder?.po_currency)}</span> },
                       {
                         key: '__remove', header: '', width: '2rem',
-                        render: (_v, item) => <Button size="sm" variant="ghost" onClick={() => removePendingItem(item.id)}><Trash2 className="w-3 h-3 text-red-400" /></Button>,
+                        render: (_v, item) => <Button size="sm" variant="ghost" onClick={() => removePendingItem(item.id)}><Trash2 className="w-3 h-3 text-destructive" /></Button>,
                       },
                     ]}
                   />
@@ -972,7 +973,7 @@ const PurchaseOrders: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-bold font-mono">{selectedOrder.po_number}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {selectedOrder.order_date ? new Date(selectedOrder.order_date).toLocaleDateString() : '—'}
+                      {selectedOrder.order_date ? formatDate(selectedOrder.order_date) : '—'}
                       {selectedOrder.pr_number && <span className="ml-2">• From {selectedOrder.pr_number}</span>}
                     </p>
                   </div>
@@ -983,7 +984,7 @@ const PurchaseOrders: React.FC = () => {
                   <div><span className="text-muted-foreground">Supplier:</span> <span className="font-medium">{selectedOrder.supplier_name || getSupplierName(selectedOrder.supplier_id)}</span></div>
                   <div><span className="text-muted-foreground">Payment Terms:</span> <span className="font-medium">{selectedOrder.payment_terms || '—'}</span></div>
                   <div><span className="text-muted-foreground">Currency:</span> <span className="font-medium">{selectedOrder.po_currency || currency.code}</span></div>
-                  <div><span className="text-muted-foreground">Delivery Date:</span> <span className="font-medium">{selectedOrder.requested_delivery_date ? new Date(selectedOrder.requested_delivery_date).toLocaleDateString() : '—'}</span></div>
+                  <div><span className="text-muted-foreground">Delivery Date:</span> <span className="font-medium">{selectedOrder.requested_delivery_date ? formatDate(selectedOrder.requested_delivery_date) : '—'}</span></div>
                   {selectedOrder.delivery_address && <div className="col-span-2"><span className="text-muted-foreground">Delivery Address:</span> <span className="font-medium">{selectedOrder.delivery_address}</span></div>}
                 </div>
 
@@ -1021,14 +1022,14 @@ const PurchaseOrders: React.FC = () => {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-xs text-muted-foreground">
                           <tr>
-                            <th className="px-2 py-2 text-left font-medium w-8">#</th>
-                            <th className="px-2 py-2 text-left font-medium">Item</th>
-                            <th className="px-2 py-2 text-left font-medium">Description</th>
-                            <th className="px-2 py-2 text-right font-medium w-24">Qty</th>
-                            <th className="px-2 py-2 text-left font-medium w-20">UOM</th>
-                            <th className="px-2 py-2 text-right font-medium w-32">Unit Price</th>
-                            <th className="px-2 py-2 text-right font-medium w-32">Total</th>
-                            <th className="px-2 py-2 w-10"></th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium w-8">#</th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium">Item</th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium">Description</th>
+                            <th scope="col" className="px-2 py-2 text-right font-medium w-24">Qty</th>
+                            <th scope="col" className="px-2 py-2 text-left font-medium w-20">UOM</th>
+                            <th scope="col" className="px-2 py-2 text-right font-medium w-32">Unit Price</th>
+                            <th scope="col" className="px-2 py-2 text-right font-medium w-32">Total</th>
+                            <th scope="col" className="px-2 py-2 w-10"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1136,24 +1137,24 @@ const PurchaseOrders: React.FC = () => {
                     <p className="text-xs font-semibold text-muted-foreground">Approval Trail</p>
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       {selectedOrder.check_signed_by && (
-                        <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                          <p className="font-medium text-amber-700 dark:text-amber-300">Checked</p>
+                        <div className="p-2 rounded bg-warning-bg dark:bg-warning/30 border border-warning-border dark:border-warning-border">
+                          <p className="font-medium text-warning dark:text-warning">Checked</p>
                           <p>{selectedOrder.check_signed_by}</p>
-                          {selectedOrder.check_signed_at && <p className="text-muted-foreground">{new Date(selectedOrder.check_signed_at).toLocaleDateString()}</p>}
+                          {selectedOrder.check_signed_at && <p className="text-muted-foreground">{formatDate(selectedOrder.check_signed_at)}</p>}
                         </div>
                       )}
                       {selectedOrder.approved_signed_by && (
                         <div className="p-2 rounded bg-primary/10 dark:bg-primary/20 border border-primary/30 dark:border-primary/40">
                           <p className="font-medium text-primary dark:text-primary/50">Approved</p>
                           <p>{selectedOrder.approved_signed_by}</p>
-                          {selectedOrder.approved_signed_at && <p className="text-muted-foreground">{new Date(selectedOrder.approved_signed_at).toLocaleDateString()}</p>}
+                          {selectedOrder.approved_signed_at && <p className="text-muted-foreground">{formatDate(selectedOrder.approved_signed_at)}</p>}
                         </div>
                       )}
                       {selectedOrder.authorized_signed_by && (
-                        <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                          <p className="font-medium text-emerald-700 dark:text-emerald-300">Authorized</p>
+                        <div className="p-2 rounded bg-success-bg dark:bg-success/30 border border-success-border dark:border-success-border">
+                          <p className="font-medium text-success dark:text-success">Authorized</p>
                           <p>{selectedOrder.authorized_signed_by}</p>
-                          {selectedOrder.authorized_signed_at && <p className="text-muted-foreground">{new Date(selectedOrder.authorized_signed_at).toLocaleDateString()}</p>}
+                          {selectedOrder.authorized_signed_at && <p className="text-muted-foreground">{formatDate(selectedOrder.authorized_signed_at)}</p>}
                         </div>
                       )}
                     </div>
@@ -1180,7 +1181,7 @@ const PurchaseOrders: React.FC = () => {
                     </Button>
                   )}
                   {getNextStatus(selectedOrder.status) && (
-                    <Button size="sm" className="ml-auto h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)} disabled={processingId === selectedOrder.id}>
+                    <Button size="sm" className="ml-auto h-8 px-4 text-xs bg-success hover:bg-success text-white" onClick={() => updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)} disabled={processingId === selectedOrder.id}>
                       {processingId === selectedOrder.id ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : React.createElement(getStatusIcon(selectedOrder.status), { className: 'w-3 h-3 mr-2' })}
                       {processingId === selectedOrder.id ? 'Processing...' : getStatusAction(selectedOrder.status)}
                     </Button>

@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Wallet, Plus, Trash2, Loader2, Check, X, Users2, Edit } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
@@ -319,11 +319,11 @@ export default function SalaryStructuresManagement() {
                   {allowances.length === 0 ? <p className="text-sm text-muted-foreground">None</p> : (
                     <div className="space-y-1.5">
                       {allowances.map(c => (
-                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-emerald-50/50">
+                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-success-bg/50">
                           <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-medium">{c.is_percentage ? `${c.amount}%` : formatAmount(c.amount, form.currency)}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                            <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </Button>
                           </div>
@@ -337,11 +337,11 @@ export default function SalaryStructuresManagement() {
                   {deductions.length === 0 ? <p className="text-sm text-muted-foreground">None</p> : (
                     <div className="space-y-1.5">
                       {deductions.map(c => (
-                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-amber-50/50">
+                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-warning-bg/50">
                           <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-medium">{c.is_percentage ? `${c.amount}%` : formatAmount(c.amount, form.currency)}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
+                            <Button size="icon" aria-label="Delete" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveComponent(c.id)} disabled={removingId === c.id}>
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </Button>
                           </div>
@@ -375,8 +375,8 @@ export default function SalaryStructuresManagement() {
                     <Button size="sm" variant="outline" className="h-7" onClick={() => openAssign(s)}>
                       <Users2 className="w-3.5 h-3.5 mr-1.5" /> Assign
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}><Edit className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(s)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                    <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}><Edit className="w-3.5 h-3.5" /></Button>
+                    <Button size="icon" aria-label="Delete" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(s)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                   </div>
                 ),
               },

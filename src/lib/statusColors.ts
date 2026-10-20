@@ -3,79 +3,89 @@
  * Single source of truth for all status colours across the app.
  */
 
-const STATUS_MAP: Record<string, string> = {
-  // ── Positive / complete ──────────────────────────────────────────────────
-  posted:     'bg-green-100 text-green-800',
-  paid:       'bg-green-100 text-green-800',
-  completed:  'bg-green-100 text-green-800',
-  authorized: 'bg-emerald-100 text-emerald-800',
-  active:     'bg-green-100 text-green-800',
-  open:       'bg-green-100 text-green-800',
-  success:    'bg-green-100 text-green-800',
-  sent:       'bg-green-100 text-green-800',
-  dispensed:  'bg-green-100 text-green-800',
-  discharged: 'bg-green-100 text-green-800',
-  normal:     'bg-green-100 text-green-800',
-  available:  'bg-green-100 text-green-800',
-  received:   'bg-green-100 text-green-800',
-  occupied:   'bg-red-100 text-red-800',
-  inspected:  'bg-primary/10 text-primary',
-  settled:    'bg-green-100 text-green-800',
-  applied:    'bg-green-100 text-green-800',
-  pass:       'bg-emerald-100 text-emerald-700',
-  fail:       'bg-red-100 text-red-800',
+const SUCCESS = 'bg-success-bg text-success';
+const WARNING = 'bg-warning-bg text-warning';
+const DANGER  = 'bg-destructive-bg text-destructive';
+const INFO    = 'bg-info-bg text-info';
+const NEUTRAL = 'bg-neutral-bg text-neutral';
 
-  // ── In-progress / info ───────────────────────────────────────────────────
-  admitted:   'bg-primary/10 text-primary',
-  partial:           'bg-primary/10 text-primary',
-  processing:        'bg-primary/10 text-primary',
-  in_progress:       'bg-primary/10 text-primary',
-  'in-progress':     'bg-primary/10 text-primary',
-  collected:         'bg-primary/10 text-primary',
-  submitted:         'bg-primary/10 text-primary',
-  approved:          'bg-primary/10 text-primary',
-  accepted:          'bg-emerald-100 text-emerald-800',
-  partially_paid:    'bg-primary/10 text-primary',
-  pending_inspection:'bg-orange-100 text-orange-700',
+const STATUS_MAP: Record<string, string> = {
+  // ── Positive / complete → success ───────────────────────────────────────
+  posted:     SUCCESS,
+  paid:       SUCCESS,
+  completed:  SUCCESS,
+  balanced:   SUCCESS,
+  authorized: SUCCESS,
+  active:     SUCCESS,
+  open:       SUCCESS,
+  success:    SUCCESS,
+  sent:       SUCCESS,
+  dispensed:  SUCCESS,
+  discharged: SUCCESS,
+  normal:     SUCCESS,
+  available:  SUCCESS,
+  received:   SUCCESS,
+  occupied:   DANGER,
+  inspected:  SUCCESS,
+  settled:    SUCCESS,
+  applied:    SUCCESS,
+  pass:       SUCCESS,
+  fail:       DANGER,
+
+  // ── In-progress → info ───────────────────────────────────────────────────
+  admitted:   INFO,
+  partial:           WARNING,
+  processing:        INFO,
+  in_progress:       INFO,
+  'in-progress':     INFO,
+  collected:         INFO,
+  submitted:         INFO,
+  approved:          INFO,
+  accepted:          SUCCESS,
+  partially_paid:    WARNING,
+  pending_inspection:WARNING,
 
   // ── Warning / pending ────────────────────────────────────────────────────
-  pending:          'bg-amber-100 text-amber-800',
-  pending_approval: 'bg-amber-100 text-amber-800',
-  check:            'bg-amber-100 text-amber-700',
-  overdue:          'bg-amber-100 text-amber-800',
-  low_stock:        'bg-amber-100 text-amber-800',
-  expiring_soon:    'bg-orange-100 text-orange-700',
-  expiring:         'bg-orange-100 text-orange-700',
-  low:              'bg-amber-100 text-amber-800',
-  urgent:           'bg-orange-100 text-orange-700',
-  stat:             'bg-orange-100 text-orange-700',
+  pending:          WARNING,
+  pending_approval: WARNING,
+  check:            WARNING,
+  due:              WARNING,
+  overdue:          DANGER,
+  low_stock:        WARNING,
+  expiring_soon:    WARNING,
+  expiring:         WARNING,
+  low:              WARNING,
+  urgent:           WARNING,
+  stat:             WARNING,
 
-  // ── Negative / stopped ───────────────────────────────────────────────────
-  unpaid:     'bg-red-100 text-red-800',
-  cancelled:  'bg-red-100 text-red-800',
-  rejected:   'bg-red-100 text-red-800',
-  failed:     'bg-red-100 text-red-800',
-  expired:    'bg-red-100 text-red-800',
-  out_of_stock:'bg-red-100 text-red-800',
-  void:       'bg-red-100 text-red-800',
-  inactive:   'bg-red-100 text-red-800',
-  returned:   'bg-red-100 text-red-800',
+  // ── Negative / stopped → danger ─────────────────────────────────────────
+  unpaid:     DANGER,
+  cancelled:  NEUTRAL,
+  rejected:   DANGER,
+  failed:     DANGER,
+  short:      DANGER,
+  expired:    DANGER,
+  out_of_stock:DANGER,
+  void:       DANGER,
+  inactive:   NEUTRAL,
+  returned:   DANGER,
 
   // ── Neutral / draft ──────────────────────────────────────────────────────
-  draft:    'bg-gray-100 text-gray-700',
-  unknown:  'bg-gray-100 text-gray-700',
-  'n/a':    'bg-gray-100 text-gray-700',
+  draft:    NEUTRAL,
+  unknown:  NEUTRAL,
+  'n/a':    NEUTRAL,
 
-  // ── Special ──────────────────────────────────────────────────────────────
-  over_stock: 'bg-purple-100 text-purple-800',
-  credit:     'bg-purple-100 text-purple-800',
+  // ── Special — no dedicated tone in the Option B palette; info reads
+  //    better than a 6th hue for these two. ───────────────────────────────
+  over_stock: INFO,
+  credit:     INFO,
 };
 
 /**
  * Returns Tailwind classes for a status value.
- * Falls back to neutral gray for unrecognised statuses.
+ * Falls back to neutral for unrecognised statuses.
  */
 export function getStatusColor(status: string | null | undefined): string {
-  if (!status) return 'bg-gray-100 text-gray-700';
-  return STATUS_MAP[status.toLowerCase()] ?? 'bg-gray-100 text-gray-700';
+  if (!status) return NEUTRAL;
+  return STATUS_MAP[status.toLowerCase()] ?? NEUTRAL;
 }

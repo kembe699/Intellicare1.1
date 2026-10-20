@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Stethoscope, Pill, Syringe, ClipboardList, FlaskConical, Radio, LogOut, Loader2, X, Check, AlertTriangle, Receipt, Clock, BedDouble, User2, FileDown } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -22,11 +22,12 @@ import { Combobox } from '@/components/ui/combobox';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import * as docTemplate from '@/utils/documentTemplate';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 function Field({ label, value, capitalize }: { label: string; value: React.ReactNode; capitalize?: boolean }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={`text-sm font-medium text-foreground ${capitalize ? 'capitalize' : ''}`}>{value}</p>
     </div>
   );
@@ -411,7 +412,7 @@ export default function PatientDetails() {
           : (parsedResults || '');
         return {
           cells: [
-            new Date(l.request_date).toLocaleDateString(),
+            formatDate(l.request_date),
             `${l.test_type}${l.urgent ? ' (Urgent)' : ''}`,
             l.sample_type || '-', l.status || '-',
             [resultText, l.result_notes].filter(Boolean).join('<br/>') || '-',
@@ -425,7 +426,7 @@ export default function PatientDetails() {
       [{ label: 'Date' }, { label: 'Imaging' }, { label: 'Body Part' }, { label: 'Status' }, { label: 'Findings / Impression' }],
       radRequests.map((r: any) => ({
         cells: [
-          new Date(r.request_date).toLocaleDateString(),
+          formatDate(r.request_date),
           `${r.imaging_type}${r.urgent ? ' (Urgent)' : ''}`,
           r.body_part || '-', r.status || '-',
           [r.findings ? `<strong>Findings:</strong> ${r.findings}` : '', r.impression ? `<strong>Impression:</strong> ${r.impression}` : ''].filter(Boolean).join('<br/>') || '-',
@@ -517,7 +518,7 @@ export default function PatientDetails() {
               </div>
               <div className="flex items-center gap-2.5">
                 <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Field label="Admitted" value={`${new Date(admission.admission_date).toLocaleDateString()} • ${days} day${days > 1 ? 's' : ''}`} />
+                <Field label="Admitted" value={`${formatDate(admission.admission_date)} • ${days} day${days > 1 ? 's' : ''}`} />
               </div>
               <div className="flex items-center gap-2.5">
                 <Receipt className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -527,7 +528,7 @@ export default function PatientDetails() {
 
             {admission.diagnosis && (
               <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Diagnosis</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Diagnosis</p>
                 <p className="text-sm font-medium text-foreground mt-0.5">{admission.diagnosis}</p>
               </div>
             )}
@@ -550,7 +551,7 @@ export default function PatientDetails() {
               <TabsTrigger key={t.value} value={t.value} className="gap-1.5 px-3 py-2">
                 <t.icon className="h-3.5 w-3.5" />
                 {t.label}
-                {!!t.count && <Badge variant="neutral" className="ml-0.5 px-1.5 py-0 text-[10px]">{t.count}</Badge>}
+                {!!t.count && <Badge variant="neutral" className="ml-0.5 px-1.5 py-0 text-xs">{t.count}</Badge>}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -624,7 +625,7 @@ export default function PatientDetails() {
                           searchPlaceholder="Search stores..."
                           emptyText="No matching stores"
                         />
-                        <p className="text-[11px] mt-1 text-muted-foreground">Pick a store (e.g. a ward's own stock) to see and prescribe from its stock specifically.</p>
+                        <p className="text-xs mt-1 text-muted-foreground">Pick a store (e.g. a ward's own stock) to see and prescribe from its stock specifically.</p>
                       </div>
                     )}
 
@@ -715,7 +716,7 @@ export default function PatientDetails() {
                         className="mt-1"
                       />
                       {rxSuggestedQty != null && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {rxForm.dose_amount} × {findFrequency(rxForm.frequency)?.perDay}/day × {rxForm.duration_days} days = <strong>{rxSuggestedQty}</strong>
                           {rxQtyTouched && String(rxSuggestedQty) !== rxForm.quantity && (
                             <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxForm({ ...rxForm, quantity: String(rxSuggestedQty) }); }}>
@@ -725,7 +726,7 @@ export default function PatientDetails() {
                         </p>
                       )}
                       {rxForm.frequency && !findFrequency(rxForm.frequency)?.perDay && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {rxForm.frequency === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
                         </p>
                       )}
@@ -776,13 +777,13 @@ export default function PatientDetails() {
                           <p className="font-medium text-sm text-foreground truncate">
                             {p.medication_name}
                             {p.is_external && (
-                              <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">buy outside</span>
+                              <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">buy outside</span>
                             )}
                           </p>
                           <p className="text-xs text-muted-foreground">{p.dosage} • {p.frequency} • {p.route?.toUpperCase()} {p.duration ? `• ${p.duration}` : ''}</p>
                         </div>
                         <Badge variant={statusVariant(p.status)} className="capitalize flex-shrink-0">{p.status}</Badge>
-                        <p className="text-xs text-muted-foreground flex-shrink-0">{new Date(p.prescription_date).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground flex-shrink-0">{formatDate(p.prescription_date)}</p>
                       </div>
                     ))}
                   </div>
@@ -878,7 +879,7 @@ export default function PatientDetails() {
                             <div className="space-y-2.5">
                               <div className="flex items-center justify-between">
                                 <p className="font-semibold text-sm text-foreground truncate">{p.medication_name}</p>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={() => setShowAdminForm(false)}><X className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" aria-label="Close" className="h-6 w-6 -mr-1" onClick={() => setShowAdminForm(false)}><X className="h-3.5 w-3.5" /></Button>
                               </div>
                               <Input placeholder="Dosage given" value={adminForm.dosage_given} onChange={e => setAdminForm({ ...adminForm, dosage_given: e.target.value })} />
                               <div className="grid grid-cols-2 gap-2">
@@ -918,7 +919,7 @@ export default function PatientDetails() {
                                   <Syringe className="h-3 w-3" />Administer
                                 </Button>
                               ) : (
-                                <span className="text-[10px] text-muted-foreground italic flex-shrink-0">Awaiting pharmacy dispensing</span>
+                                <span className="text-xs text-muted-foreground italic flex-shrink-0">Awaiting pharmacy dispensing</span>
                               )}
                             </div>
                           )}
@@ -985,11 +986,11 @@ export default function PatientDetails() {
                       <div key={l.id} className="p-4 flex items-center gap-3">
                         <FlaskConical className="h-4 w-4 text-primary shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{l.test_type} {!!l.urgent && <Badge variant="danger" className="text-[9px]">URGENT</Badge>}</div>
+                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{l.test_type} {!!l.urgent && <Badge variant="danger" className="text-xs">URGENT</Badge>}</div>
                           <p className="text-xs text-muted-foreground">Dr. {l.doctor_name} • {l.sample_type || 'N/A'}</p>
                         </div>
                         <Badge variant={l.status === 'completed' ? 'success' : 'outline'} className="capitalize flex-shrink-0">{l.status}</Badge>
-                        <p className="text-xs text-muted-foreground flex-shrink-0">{new Date(l.request_date).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground flex-shrink-0">{formatDate(l.request_date)}</p>
                       </div>
                     ))}
                   </div>
@@ -1033,11 +1034,11 @@ export default function PatientDetails() {
                       <div key={r.id} className="p-4 flex items-center gap-3">
                         <Radio className="h-4 w-4 text-primary shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{r.imaging_type} {r.body_part ? `- ${r.body_part}` : ''} {!!r.urgent && <Badge variant="danger" className="text-[9px]">URGENT</Badge>}</div>
+                          <div className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">{r.imaging_type} {r.body_part ? `- ${r.body_part}` : ''} {!!r.urgent && <Badge variant="danger" className="text-xs">URGENT</Badge>}</div>
                           <p className="text-xs text-muted-foreground">Dr. {r.doctor_name}</p>
                         </div>
                         <Badge variant={r.status === 'completed' ? 'success' : 'outline'} className="capitalize flex-shrink-0">{r.status}</Badge>
-                        <p className="text-xs text-muted-foreground flex-shrink-0">{new Date(r.request_date).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground flex-shrink-0">{formatDate(r.request_date)}</p>
                       </div>
                     ))}
                   </div>
@@ -1059,7 +1060,7 @@ export default function PatientDetails() {
           </DialogHeader>
           <div className="space-y-3">
             {parseFloat(admission.ward_daily_rate) > 0 && (
-              <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800">
+              <div className="text-xs bg-warning-bg border border-warning-border rounded-lg p-3 text-warning">
                 Discharging now will charge <span className="font-semibold">{fmt(days * parseFloat(admission.ward_daily_rate))}</span> for {days} day{days > 1 ? 's' : ''} in {admission.ward_name} ({fmt(admission.ward_daily_rate)}/day).
               </div>
             )}

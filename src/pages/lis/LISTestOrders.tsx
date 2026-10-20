@@ -9,7 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
@@ -21,6 +21,7 @@ import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTab
 import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
 import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo, GynaeFieldsReadOnly } from '@/components/clinical/GynaeFields';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -1133,7 +1134,7 @@ export default function LISTestOrders() {
       return `
       <div class="ic-section-title">Results: ${t.test_name}</div>
       <table class="ic-table">
-        <thead><tr><th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th></tr></thead>
+        <thead><tr><th scope="col" style="width:30%">Component</th><th scope="col" style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th scope="col" style="width:15%">Remark</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
     }).join('\n');
@@ -1236,7 +1237,7 @@ export default function LISTestOrders() {
       <div class="ic-section-title">Test: ${s.test_name} <span>Barcode: ${s.barcode}</span></div>
       <table class="ic-table">
         <thead><tr>
-          <th style="width:30%">Component</th><th style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th style="width:15%">Remark</th>
+          <th scope="col" style="width:30%">Component</th><th scope="col" style="width:15%">Value</th><th class="center" style="width:25%">Reference Range</th><th class="center" style="width:15%">Units</th><th scope="col" style="width:15%">Remark</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -2064,20 +2065,20 @@ export default function LISTestOrders() {
                   <div className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
                     {p.first_name} {p.last_name} • {p.gender}
                     {p.appointment_id && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 whitespace-nowrap" title={p.appointment_reason || 'Follow-up appointment'}>
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 whitespace-nowrap" title={p.appointment_reason || 'Follow-up appointment'}>
                         Follow-up
                       </span>
                     )}
                   </div>
                   {p.appointment_id && p.appointment_reason && (
-                    <div className="text-[11px] text-violet-700 mt-0.5 truncate">{p.appointment_reason}</div>
+                    <div className="text-xs text-violet-700 mt-0.5 truncate">{p.appointment_reason}</div>
                   )}
                   <div className="text-xs text-muted-foreground mt-1 flex justify-between items-center">
                     <span>{p.doctor_name ? `Dr. ${p.doctor_name}` : 'General Queue'}</span>
                     <Button 
                       size="sm" 
                       variant={p.status === 'called' ? 'secondary' : 'outline'} 
-                      className="h-6 text-[10px] px-2"
+                      className="h-6 text-xs px-2"
                       onClick={(e) => handleCallPatient(e, p.order_id)}
                       disabled={callingId === p.order_id}
                     >
@@ -2105,7 +2106,7 @@ export default function LISTestOrders() {
                 )}
               </h3>
               {middleStep === 1 && triagedByName && (
-                <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full whitespace-nowrap">
+                <span className="text-xs text-success bg-success-bg border border-success-border px-2 py-1 rounded-full whitespace-nowrap">
                   Triaged by {triagedByName}{triagedAt ? ` · ${new Date(triagedAt).toLocaleTimeString()}` : ''}
                 </span>
               )}
@@ -2327,7 +2328,7 @@ export default function LISTestOrders() {
                   <div className="mb-5 p-3 rounded-lg border bg-card">
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Billing Mode</p>
                     {patientActiveBill ? (
-                      <div className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-md px-2.5 py-1.5">
+                      <div className="text-xs text-info bg-info-bg border border-info-border rounded-md px-2.5 py-1.5">
                         This patient has an open {patientActiveBill.scheme_id ? `scheme (${patientActiveBill.scheme_name})` : 'cash'} bill ({patientActiveBill.bill_number}) — new items are added to it under that same mode.
                       </div>
                     ) : (
@@ -2355,7 +2356,7 @@ export default function LISTestOrders() {
                           </button>
                         </div>
                         {patientSchemes.length === 0 && (
-                          <p className="text-[11px] text-muted-foreground mt-1.5">No active scheme membership — cash prices only.</p>
+                          <p className="text-xs text-muted-foreground mt-1.5">No active scheme membership — cash prices only.</p>
                         )}
                         {billingMode === 'scheme' && patientSchemes.length > 1 && (
                           <Combobox
@@ -2368,7 +2369,7 @@ export default function LISTestOrders() {
                           />
                         )}
                         {billingMode === 'scheme' && selectedSchemeId && (
-                          <p className="text-[11px] text-muted-foreground mt-1.5">
+                          <p className="text-xs text-muted-foreground mt-1.5">
                             {loadingSchemeCatalog ? 'Loading scheme price list...' : `Only tests/services priced under this scheme are shown below (${Object.keys(schemePriceByName).length} priced items).`}
                           </p>
                         )}
@@ -2419,7 +2420,7 @@ export default function LISTestOrders() {
                                       <div className="flex items-center justify-between gap-2 min-w-0 flex-1">
                                         <span className="truncate">{test.test_name}</span>
                                         {isUnavailable ? (
-                                          <span className="text-xs text-red-500 font-medium shrink-0">Out of stock</span>
+                                          <span className="text-xs text-destructive font-medium shrink-0">Out of stock</span>
                                         ) : (
                                           <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
                                             {parseFloat(test.price || 0).toFixed(2)} {test.currency || 'SSP'}
@@ -2768,7 +2769,7 @@ export default function LISTestOrders() {
                         className="mt-1"
                       />
                       {rxSuggestedQty != null && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
                           {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
                             <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
@@ -2778,7 +2779,7 @@ export default function LISTestOrders() {
                         </p>
                       )}
                       {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
                         </p>
                       )}
@@ -2806,7 +2807,7 @@ export default function LISTestOrders() {
                               {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                               {l.duration_days ? ` · ${l.duration_days}d` : ''}
                               {l.is_external && (
-                                <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
                                   buy outside
                                 </span>
                               )}
@@ -2874,7 +2875,7 @@ export default function LISTestOrders() {
                     >
                       <div className="flex justify-between items-start">
                         <div className="font-medium">{order.first_name} {order.last_name}</div>
-                        <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold whitespace-nowrap">Approved</span>
+                        <span className="text-xs bg-success-bg text-success px-1.5 py-0.5 rounded uppercase font-bold whitespace-nowrap">Approved</span>
                       </div>
                       <div className="text-xs text-muted-foreground font-mono">
                         ID: {order.participant_number}
@@ -2883,7 +2884,7 @@ export default function LISTestOrders() {
                         <span className="font-semibold text-foreground">Tests:</span> {order.specimens.map((s: any) => s.test_name).join(', ')}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Approved: {new Date(order.updated_at).toLocaleDateString()}
+                        Approved: {formatDate(order.updated_at)}
                       </div>
                     </button>
                   ))
@@ -2954,7 +2955,7 @@ export default function LISTestOrders() {
                               {
                                 key: '__remarks', header: 'Remarks',
                                 render: (_v, r) => {
-                                  let remark = <span className="text-green-600 font-bold text-[10px] bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+                                  let remark = <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
                                   if (r.reference_range && r.value) {
                                     const parts = r.reference_range.split('-').map((p: string) => p.trim());
                                     if (parts.length === 2) {
@@ -2962,8 +2963,8 @@ export default function LISTestOrders() {
                                       const max = parseFloat(parts[1]);
                                       const val = parseFloat(r.value);
                                       if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-                                        if (val < min) remark = <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-                                        if (val > max) remark = <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
+                                        if (val < min) remark = <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">LOW</span>;
+                                        if (val > max) remark = <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">HIGH</span>;
                                       }
                                     }
                                   }
@@ -3020,7 +3021,7 @@ export default function LISTestOrders() {
                       </Button>
                     )}
                     {selectedSummary.status !== 'closed' && (
-                      <Button variant="outline" size="sm" onClick={handleCloseVisit} disabled={closingVisit} className="text-red-600 hover:text-red-700">
+                      <Button variant="outline" size="sm" onClick={handleCloseVisit} disabled={closingVisit} className="text-destructive hover:text-destructive">
                         {closingVisit ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
                         Close Visit
                       </Button>
@@ -3045,7 +3046,7 @@ export default function LISTestOrders() {
                       {selectedSummary.appointment_id && (
                         <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-violet-50 text-violet-700 border border-violet-200">
                           <CalendarClock className="w-3.5 h-3.5" />
-                          Follow-up appointment{selectedSummary.appointment_date ? ` (booked for ${new Date(selectedSummary.appointment_date).toLocaleDateString()})` : ''}
+                          Follow-up appointment{selectedSummary.appointment_date ? ` (booked for ${formatDate(selectedSummary.appointment_date)})` : ''}
                           {selectedSummary.appointment_reason ? ` — ${selectedSummary.appointment_reason}` : ''}
                         </div>
                       )}
@@ -3053,7 +3054,7 @@ export default function LISTestOrders() {
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">{new Date(selectedSummary.created_at).toLocaleString()}</p>
                       {selectedSummary.status === 'closed' && (
-                        <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Closed</span>
+                        <span className="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Closed</span>
                       )}
                     </div>
                   </div>
@@ -3063,15 +3064,15 @@ export default function LISTestOrders() {
                     <div className="lg:col-span-2 space-y-5">
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase font-semibold">Age / Gender</p>
+                          <p className="text-xs text-muted-foreground uppercase font-semibold">Age / Gender</p>
                           <p className="font-medium">{calculateAge(selectedSummary.date_of_birth) ?? '—'}{selectedSummary.gender ? ` · ${selectedSummary.gender}` : ''}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase font-semibold">Doctor</p>
+                          <p className="text-xs text-muted-foreground uppercase font-semibold">Doctor</p>
                           <p className="font-medium">{selectedSummary.doctor_name ? `Dr. ${selectedSummary.doctor_name}` : '—'}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase font-semibold">Room / Clinic</p>
+                          <p className="text-xs text-muted-foreground uppercase font-semibold">Room / Clinic</p>
                           <p className="font-medium">{selectedSummary.room_number || selectedSummary.clinic_name || '—'}</p>
                         </div>
                       </div>
@@ -3170,7 +3171,7 @@ export default function LISTestOrders() {
                             ['Allergies', selectedSummary.vitals?.allergies],
                           ].filter(([, value]) => value).map(([label, value]) => (
                             <div key={label as string} className="p-3 border rounded-lg bg-card">
-                              <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">{label}</p>
+                              <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">{label}</p>
                               <p>{value}</p>
                             </div>
                           ))}
@@ -3191,7 +3192,7 @@ export default function LISTestOrders() {
                             ['Fasting', selectedSummary.vitals?.fasting_status, ''],
                           ].map(([label, value, unit]) => (
                             <div key={label as string}>
-                              <p className="text-[10px] text-muted-foreground">{label}</p>
+                              <p className="text-xs text-muted-foreground">{label}</p>
                               <p className="font-medium">{value ? `${value}${unit}` : '—'}</p>
                             </div>
                           ))}
@@ -3239,8 +3240,8 @@ export default function LISTestOrders() {
                                   <div className="flex justify-between items-center px-3 py-2 bg-muted/30">
                                     <span className="font-medium text-sm">{t.test_name}</span>
                                     <span className={cn(
-                                      "text-[10px] font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
-                                      isReady ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-600"
+                                      "text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
+                                      isReady ? "bg-success-bg text-success" : "bg-muted text-muted-foreground"
                                     )}>
                                       {t.status.replace(/_/g, ' ')}
                                     </span>
@@ -3286,11 +3287,11 @@ export default function LISTestOrders() {
                                   {l.duration_days ? ` · ${l.duration_days}d` : ''}
                                 </span>
                                 {l.is_external ? (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning-bg text-warning whitespace-nowrap">
                                     Buy from outside pharmacy — not billed
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize bg-slate-100 text-slate-600 whitespace-nowrap">
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full capitalize bg-muted text-muted-foreground whitespace-nowrap">
                                     {l.line_status}
                                   </span>
                                 )}
@@ -3317,8 +3318,8 @@ export default function LISTestOrders() {
                                   </p>
                                 </div>
                                 <span className={cn(
-                                  "text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
-                                  np.status === 'completed' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                  "text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
+                                  np.status === 'completed' ? "bg-success-bg text-success" : "bg-warning-bg text-warning"
                                 )}>
                                   {np.status === 'completed' ? 'Completed' : 'Pending'}
                                 </span>
@@ -3342,16 +3343,16 @@ export default function LISTestOrders() {
                                   <span className="font-medium text-sm truncate">{r.exam_name}</span>
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className={cn(
-                                      "text-[10px] font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
-                                      r.status === 'completed' ? "bg-green-100 text-green-800"
-                                        : r.status === 'in_progress' ? "bg-blue-100 text-blue-800"
-                                        : "bg-amber-100 text-amber-800"
+                                      "text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
+                                      r.status === 'completed' ? "bg-success-bg text-success"
+                                        : r.status === 'in_progress' ? "bg-info-bg text-info"
+                                        : "bg-warning-bg text-warning"
                                     )}>
                                       {r.status.replace(/_/g, ' ')}
                                     </span>
                                     <button
                                       type="button"
-                                      className="text-[11px] font-medium text-primary hover:underline whitespace-nowrap"
+                                      className="text-xs font-medium text-primary hover:underline whitespace-nowrap"
                                       onClick={() => navigate(`/radiology/requests/${r.id}`)}
                                     >
                                       {r.status === 'completed' ? 'View / Print' : 'Open'}
@@ -3382,7 +3383,7 @@ export default function LISTestOrders() {
                     <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-0 lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto lg:pr-1">
                     {selectedSummary.status === 'closed' ? (
                       <div className="border border-dashed rounded-lg p-4 text-center text-sm text-muted-foreground bg-card">
-                        <CheckCircle2 className="w-5 h-5 mx-auto mb-2 text-slate-400" />
+                        <CheckCircle2 className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
                         This visit is closed and read-only. Start a new visit to add a diagnosis, prescribe medicine, or request another service.
                       </div>
                     ) : (
@@ -3519,7 +3520,7 @@ export default function LISTestOrders() {
                               prescriber's number, so a computed total is always
                               traceable back to dose x frequency x days. */}
                           {rxSuggestedQty != null && (
-                            <p className="text-[11px] text-muted-foreground mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
                               {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
                                 <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
@@ -3529,7 +3530,7 @@ export default function LISTestOrders() {
                             </p>
                           )}
                           {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                            <p className="text-[11px] text-muted-foreground mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
                             </p>
                           )}
@@ -3556,7 +3557,7 @@ export default function LISTestOrders() {
                                 {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                                 {l.duration_days ? ` · ${l.duration_days}d` : ''}
                                 {l.is_external && (
-                                  <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                  <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
                                     buy outside
                                   </span>
                                 )}
@@ -3596,7 +3597,7 @@ export default function LISTestOrders() {
                           <FlaskConical className="w-3.5 h-3.5" /> Request Another Service
                         </p>
                         <div className="border rounded-lg p-3 space-y-2.5 bg-card">
-                          <p className="text-[11px] text-muted-foreground">Order a follow-up/confirmatory test or service for this same visit — it's added to the collection queue (for lab tests) and billed right away.</p>
+                          <p className="text-xs text-muted-foreground">Order a follow-up/confirmatory test or service for this same visit — it's added to the collection queue (for lab tests) and billed right away.</p>
                           <Popover open={reqServicePopoverOpen} onOpenChange={setReqServicePopoverOpen}>
                             <PopoverTrigger asChild>
                               <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal h-auto min-h-9 py-2 text-left">
@@ -3625,7 +3626,7 @@ export default function LISTestOrders() {
                                           <div className="min-w-0 flex-1">
                                             <div className="truncate">{item.name}</div>
                                             <div className="text-xs text-muted-foreground">
-                                              {isUnavailable ? <span className="text-red-500 font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
+                                              {isUnavailable ? <span className="text-destructive font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
                                             </div>
                                           </div>
                                         </CommandItem>
@@ -3737,7 +3738,7 @@ export default function LISTestOrders() {
                                   {summary.participant_number}{age !== null ? ` · ${age}y` : ''}{summary.gender ? ` · ${summary.gender}` : ''}
                                 </p>
                               </div>
-                              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
                                 {patientSearch.trim()
                                   ? new Date(summary.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
                                   : new Date(summary.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -3747,9 +3748,9 @@ export default function LISTestOrders() {
                             {complaints.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {complaints.slice(0, 3).map(c => (
-                                  <span key={c} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{c}</span>
+                                  <span key={c} className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{c}</span>
                                 ))}
-                                {complaints.length > 3 && <span className="text-[10px] text-muted-foreground self-center">+{complaints.length - 3} more</span>}
+                                {complaints.length > 3 && <span className="text-xs text-muted-foreground self-center">+{complaints.length - 3} more</span>}
                               </div>
                             )}
 
@@ -3766,13 +3767,13 @@ export default function LISTestOrders() {
                               <span className="text-xs text-muted-foreground truncate">{summary.doctor_name ? `Dr. ${summary.doctor_name}` : 'No doctor assigned'}</span>
                               {summary.tests_total > 0 ? (
                                 <span className={cn(
-                                  "text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
-                                  readyAll ? "bg-green-100 text-green-800" : readySome ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+                                  "text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
+                                  readyAll ? "bg-success-bg text-success" : readySome ? "bg-warning-bg text-warning" : "bg-muted text-muted-foreground"
                                 )}>
                                   {summary.tests_ready}/{summary.tests_total} Ready
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">No tests ordered</span>
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">No tests ordered</span>
                               )}
                             </div>
                           </div>
@@ -3808,7 +3809,7 @@ export default function LISTestOrders() {
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">Diagnosis *</label>
               <Textarea placeholder="e.g. Acute appendicitis, requires surgical admission" value={admitDiagnosis} onChange={e => setAdmitDiagnosis(e.target.value)} rows={2} />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {activeMode === 'summary' && admitDiagnosis ? 'Pre-filled from the visit\'s saved diagnosis — edit if needed.' : 'Required — this diagnosis carries through to the admission record.'}
               </p>
             </div>
@@ -3922,7 +3923,7 @@ export default function LISTestOrders() {
             <DialogTitle className="flex items-center gap-2 text-lg"><Sparkles className="w-5 h-5 text-violet-600" /> Clinical Insights</DialogTitle>
             <DialogDescription>Read-only decision support — nothing here is saved to the patient record.</DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+          <div className="rounded-md border border-warning-border bg-warning-bg text-warning text-sm px-4 py-3">
             AI-generated suggestions for clinician consideration only. Not a diagnosis. Clinical judgement must prevail.
           </div>
 
@@ -3935,7 +3936,7 @@ export default function LISTestOrders() {
 
           {clinicalInsightsStatus === 'failed' && (
             <div className="space-y-3">
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 text-sm px-3 py-3 flex items-start gap-2">
+              <div className="rounded-md border border-destructive-border bg-destructive-bg text-destructive text-sm px-3 py-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{clinicalInsightsError || 'Something went wrong generating suggestions.'}</span>
               </div>
@@ -3952,14 +3953,14 @@ export default function LISTestOrders() {
             <div className="space-y-6">
               {(clinicalInsightsResponse.urgent_flags || []).length > 0 && (
                 <div className="space-y-2.5">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-red-700 flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5" /> Urgent Flags
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {clinicalInsightsResponse.urgent_flags.map((f: any, i: number) => (
-                      <div key={i} className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                        <p className="text-sm font-medium text-red-800">{f.finding}</p>
-                        <p className="text-sm text-red-700 mt-1 leading-relaxed">{f.reason}</p>
+                      <div key={i} className="rounded-lg border border-destructive-border bg-destructive-bg px-4 py-3">
+                        <p className="text-sm font-medium text-destructive">{f.finding}</p>
+                        <p className="text-sm text-destructive mt-1 leading-relaxed">{f.reason}</p>
                       </div>
                     ))}
                   </div>
@@ -3977,9 +3978,9 @@ export default function LISTestOrders() {
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold">{d.condition}</p>
                           <span className={cn(
-                            'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0',
-                            d.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
-                            d.confidence === 'moderate' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                            'text-xs font-bold px-2 py-0.5 rounded-full uppercase shrink-0',
+                            d.confidence === 'high' ? 'bg-success-bg text-success' :
+                            d.confidence === 'moderate' ? 'bg-warning-bg text-warning' : 'bg-muted text-muted-foreground'
                           )}>{d.confidence}</span>
                         </div>
                         {(d.supporting_findings || []).length > 0 && (

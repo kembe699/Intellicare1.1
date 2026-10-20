@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, TestTube, X, Database, Search, Download, Upload, FileText, Check, ChevronsUpDown, GripVertical, Cpu, Settings, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { LabTest, LabTestComponent } from '@/types';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 
@@ -931,7 +931,7 @@ const handleBulkDelete = async () => {
                               <Button
                                 type="button"
                                 variant="ghost"
-                                size="icon"
+                                size="icon" aria-label="Close"
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => removeComponent(index)}
                               >
@@ -1020,12 +1020,12 @@ const handleBulkDelete = async () => {
               key: '__actions', header: 'Actions', align: 'right',
               render: (_v, test) => (
                 <div className="flex justify-end gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(test)} disabled={deletingId === test.id} className="h-7 w-7">
+                  <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => openEditDialog(test)} disabled={deletingId === test.id} className="h-7 w-7">
                     <Edit className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon" aria-label="Delete"
                     onClick={() => handleDelete(test.id)}
                     disabled={deletingId === test.id}
                     className="h-7 w-7 text-destructive hover:text-destructive"

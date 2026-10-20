@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge, StatusBadgeTone } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { fmtCurrency, fmtCount, CsvColumn } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Billed)</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Billed)</p>
                   <p className="text-2xl font-bold mt-1 text-primary">{fmtCurrency(displayCash?.totalBilled)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">across matched lab line items</p>
                 </div>
@@ -161,8 +161,8 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Collected)</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(displayCash?.totalCollected)}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Collected)</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(displayCash?.totalCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {collection ? `${fmtCount(collection.exactItems)} exact · ${fmtCount(collection.estimatedItems)} estimated` : '—'}
                   </p>
@@ -174,7 +174,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Distinct Patients</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Distinct Patients</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.patientVolume.distinctPatients)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">had at least one lab test</p>
                 </div>
@@ -185,7 +185,7 @@ export default function LabReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Tests Performed</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Tests Performed</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(displayTestsPerformed)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">specimens registered in period</p>
                 </div>
@@ -202,9 +202,9 @@ export default function LabReport() {
                 <p className="text-xs text-muted-foreground">Volume performed and cash value per test</p>
               </div>
               <AdvancedDataTable<ByTestRow>
-                headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+                headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
                 footerRow={(colSpan) => (
-                  <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                  <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                     <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                       <div className="flex justify-between items-center">
                         <span>Total Collected</span>
@@ -237,25 +237,25 @@ export default function LabReport() {
                     render: (_v, t) => (
                       <>
                         {t.testName}
-                        {t.testCode && <span className="ml-1.5 text-[11px] font-mono text-muted-foreground">{t.testCode}</span>}
+                        {t.testCode && <span className="ml-1.5 text-xs font-mono text-muted-foreground">{t.testCode}</span>}
                         {t.volume == null && (
-                          <span className="ml-1.5 text-[11px] text-amber-600" title="Billed under this name but no matching LIS specimen was found in this period">not tracked in LIS</span>
+                          <span className="ml-1.5 text-xs text-warning" title="Billed under this name but no matching LIS specimen was found in this period">not tracked in LIS</span>
                         )}
                       </>
                     ),
                   },
                   { key: 'volume', header: 'Volume', align: 'right', sortable: true, render: (v) => <span className="font-mono">{v == null ? '—' : fmtCount(v)}</span> },
                   { key: 'totalBilled', header: 'Billed', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCurrency(v)}</span> },
-                  { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-emerald-700">{fmtCurrency(v)}</span> },
+                  { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
                 ]}
               />
               {filteredByTest.length > 0 && (
-                <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-[13px] font-semibold -mt-px">
+                <div className="flex items-center justify-between px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-semibold -mt-px">
                   <span>Total</span>
                   <span className="flex gap-8 font-mono">
                     <span>{fmtCount(filteredByTest.reduce((s, t) => s + (t.volume || 0), 0))}</span>
                     <span>{fmtCurrency(filteredByTest.reduce((s, t) => s + t.totalBilled, 0))}</span>
-                    <span className="text-emerald-700">{fmtCurrency(filteredByTest.reduce((s, t) => s + t.totalCollected, 0))}</span>
+                    <span className="text-success">{fmtCurrency(filteredByTest.reduce((s, t) => s + t.totalCollected, 0))}</span>
                   </span>
                 </div>
               )}
@@ -273,7 +273,7 @@ export default function LabReport() {
                 ) : statusBreakdown.map(s => (
                   <div key={s.status} className="flex items-center justify-between">
                     <StatusBadge status={s.status} map={SPECIMEN_STATUS_TONE_MAP} className="capitalize" />
-                    <span className="text-[13px] font-mono font-medium">{fmtCount(s.count)}</span>
+                    <span className="text-sm font-mono font-medium">{fmtCount(s.count)}</span>
                   </div>
                 ))}
               </div>

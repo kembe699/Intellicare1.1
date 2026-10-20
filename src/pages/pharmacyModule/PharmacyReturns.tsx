@@ -7,9 +7,10 @@ import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { RotateCcw, Search, X, Loader2, Check } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
 
@@ -146,7 +147,7 @@ export default function PharmacyReturns() {
                 {refundedToday > 0 && <> · today <strong className="text-foreground">{fmt(refundedToday)}</strong></>}
               </span>
               <span
-                className="text-[11px] text-muted-foreground"
+                className="text-xs text-muted-foreground"
                 title="Each refund posts a journal entry: pharmacy revenue is debited and cash at hand credited, so the income statement and cash balance both reflect the money returned."
               >
                 Refunds reduce pharmacy revenue and cash at hand in the accounts.
@@ -177,7 +178,7 @@ export default function PharmacyReturns() {
                 { key: 'quantity_returned', header: 'Qty', sortable: true },
                 { key: 'amount_refunded', header: 'Refund', sortable: true, render: (v) => <span className="font-medium">{fmt(parseFloat(v) || 0)}</span> },
                 { key: 'return_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
-                { key: 'return_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+                { key: 'return_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
                 { key: 'processed_by_name', header: 'Processed By', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
               ]}
             />
@@ -194,7 +195,7 @@ export default function PharmacyReturns() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <RotateCcw className="w-5 h-5 text-primary" /> Process Drug Return
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowModal(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -257,9 +258,9 @@ export default function PharmacyReturns() {
               </div>
 
               {selectedDispensing && parseInt(quantityReturned, 10) > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                <div className="bg-success-bg border border-success-border rounded-lg p-3 text-center">
                   <p className="text-xs text-muted-foreground">Estimated Refund</p>
-                  <p className="text-xl font-bold text-emerald-700">
+                  <p className="text-xl font-bold text-success">
                     {fmt((parseFloat(selectedDispensing.unit_price) || 0) * (parseInt(quantityReturned, 10) || 0))}
                   </p>
                 </div>

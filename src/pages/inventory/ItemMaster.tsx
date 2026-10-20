@@ -8,7 +8,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import {
   Package, Edit, Search, Eye, RefreshCw, Download, Upload, FileSpreadsheet,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface InventoryItem {
   id: string;
@@ -83,10 +84,10 @@ const UOM_OPTIONS = [
 ];
 
 const stockStatus = (item: InventoryItem) => {
-  if (item.quantity_on_hand === 0) return { label: 'Out of Stock', className: 'bg-red-50 text-red-700 border-red-200' };
-  if (item.minimum_stock_level > 0 && item.quantity_on_hand <= item.minimum_stock_level) return { label: 'Low Stock', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (item.quantity_on_hand === 0) return { label: 'Out of Stock', className: 'bg-destructive-bg text-destructive border-destructive-border' };
+  if (item.minimum_stock_level > 0 && item.quantity_on_hand <= item.minimum_stock_level) return { label: 'Low Stock', className: 'bg-warning-bg text-warning border-warning-border' };
   if (item.maximum_stock_level > 0 && item.quantity_on_hand >= item.maximum_stock_level) return { label: 'Over Stock', className: 'bg-purple-50 text-purple-700 border-purple-200' };
-  return { label: 'Normal', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  return { label: 'Normal', className: 'bg-success-bg text-success border-success-border' };
 };
 
 const generateItemCode = () => {
@@ -480,7 +481,7 @@ export default function ItemMaster() {
                     <div className="flex gap-1.5">
                       <Input readOnly disabled={!!editingItem} value={formData.item_code} className="h-10 text-sm font-mono bg-muted/40" />
                       {!editingItem && (
-                        <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" title="Regenerate code" onClick={() => setFormData({ ...formData, item_code: generateItemCode() })}>
+                        <Button type="button" variant="outline" size="icon" aria-label="Regenerate code" className="h-10 w-10 flex-shrink-0" title="Regenerate code" onClick={() => setFormData({ ...formData, item_code: generateItemCode() })}>
                           <RefreshCw className="w-4 h-4" />
                         </Button>
                       )}
@@ -497,7 +498,7 @@ export default function ItemMaster() {
                         placeholder="Scan, type, or generate..."
                         className="h-10 text-sm font-mono bg-white"
                       />
-                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
+                      <Button type="button" variant="outline" size="icon" aria-label="Generate barcode" className="h-10 w-10 flex-shrink-0" title="Generate barcode" onClick={() => setFormData({ ...formData, barcode: generateBarcode() })}>
                         <RefreshCw className="w-4 h-4" />
                       </Button>
                     </div>
@@ -519,7 +520,7 @@ export default function ItemMaster() {
                       onChange={e => setFormData({ ...formData, units_per_pack: parseInt(e.target.value, 10) || 1 })}
                       className="h-10 text-sm bg-white"
                     />
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       e.g. 10 tablets per {formData.unit_of_measure || 'Strip'} — leave at 1 if stocked individually
                     </p>
                   </div>
@@ -531,7 +532,7 @@ export default function ItemMaster() {
                       onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
                       className="h-10 text-sm bg-white"
                     />
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       What one dose is called on the prescription/receipt
                     </p>
                   </div>
@@ -586,7 +587,7 @@ export default function ItemMaster() {
                       </div>
                       <div>
                         <label className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-1.5"><Calendar className="w-3.5 h-3.5" /> Nearest Expiry</label>
-                        <div className="h-10 flex items-center px-3 rounded-lg border bg-muted/40 text-sm font-semibold">{editingItem.nearest_expiry ? new Date(editingItem.nearest_expiry).toLocaleDateString() : '—'}</div>
+                        <div className="h-10 flex items-center px-3 rounded-lg border bg-muted/40 text-sm font-semibold">{editingItem.nearest_expiry ? formatDate(editingItem.nearest_expiry) : '—'}</div>
                       </div>
                       {/* Stock quantity is no longer editable from here — it used to let a
                           quantity typed into this form silently create a batch receipt,
@@ -622,7 +623,7 @@ export default function ItemMaster() {
                           searchPlaceholder="Search locations..."
                           className="h-10 text-sm bg-white"
                         />
-                        {locations.length === 0 && <p className="text-[11px] text-muted-foreground mt-1">No locations set up yet — add one in Stock Locations.</p>}
+                        {locations.length === 0 && <p className="text-xs text-muted-foreground mt-1">No locations set up yet — add one in Stock Locations.</p>}
                       </div>
                     </>
                   )}
@@ -709,7 +710,7 @@ export default function ItemMaster() {
                   searchPlaceholder="Search..."
                   className="w-40 h-9"
                 />
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchItems} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchItems} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
                 <div className="flex items-center gap-2 mr-1">
@@ -782,15 +783,15 @@ export default function ItemMaster() {
                     key: '__status', header: 'Status',
                     render: (_v, item) => {
                       const status = stockStatus(item);
-                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${status.className}`}>{status.label}</span>;
+                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${status.className}`}>{status.label}</span>;
                     },
                   },
                   {
                     key: '__actions', header: 'Actions',
                     render: (_v, item) => (
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewItem(item); }}><Eye className="w-3.5 h-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(item); }}><Edit className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewItem(item); }}><Eye className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(item); }}><Edit className="w-3.5 h-3.5" /></Button>
                       </div>
                     ),
                   },
@@ -811,7 +812,7 @@ export default function ItemMaster() {
                 <h3 className="font-semibold text-lg font-mono">{selectedItem.item_code}</h3>
                 <p className="text-xs text-muted-foreground">{selectedItem.item_name}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedItem(null)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedItem(null)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -824,22 +825,22 @@ export default function ItemMaster() {
               ) : (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${stockStatus(selectedItem).className}`}>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${stockStatus(selectedItem).className}`}>
                       {stockStatus(selectedItem).label}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Category</p>
+                      <p className="text-xs text-muted-foreground uppercase font-semibold">Category</p>
                       <p className="font-medium capitalize">{selectedItem.item_category}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">UOM</p>
+                      <p className="text-xs text-muted-foreground uppercase font-semibold">UOM</p>
                       <p className="font-medium">{selectedItem.unit_of_measure}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Barcode</p>
+                      <p className="text-xs text-muted-foreground uppercase font-semibold">Barcode</p>
                       <p className="font-medium font-mono">{selectedItem.barcode || '—'}</p>
                     </div>
                   </div>
@@ -847,19 +848,19 @@ export default function ItemMaster() {
                   <div className="grid grid-cols-4 gap-3 text-sm border rounded-lg p-3 bg-muted/20">
                     <div className="text-center">
                       <p className="text-lg font-bold">{selectedItem.quantity_on_hand}</p>
-                      <p className="text-[10px] text-muted-foreground">On Hand</p>
+                      <p className="text-xs text-muted-foreground">On Hand</p>
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-bold">{selectedItem.reserved_quantity || 0}</p>
-                      <p className="text-[10px] text-muted-foreground">Reserved</p>
+                      <p className="text-xs text-muted-foreground">Reserved</p>
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-bold">{selectedItem.available_quantity ?? selectedItem.quantity_on_hand}</p>
-                      <p className="text-[10px] text-muted-foreground">Available</p>
+                      <p className="text-xs text-muted-foreground">Available</p>
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-bold font-mono">{formatCurrency((selectedItem.quantity_on_hand || 0) * (selectedItem.average_unit_cost || 0))}</p>
-                      <p className="text-[10px] text-muted-foreground">Stock Value</p>
+                      <p className="text-xs text-muted-foreground">Stock Value</p>
                     </div>
                   </div>
 
@@ -874,7 +875,7 @@ export default function ItemMaster() {
                             { key: 'batch_number', header: 'Batch #', render: (v) => <span className="font-mono text-xs">{v}</span> },
                             { key: 'quantity_received', header: 'Received', align: 'right' },
                             { key: '__available', header: 'Available', align: 'right', render: (_v, b) => b.quantity_received - b.quantity_used },
-                            { key: 'expiry_date', header: 'Expiry', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+                            { key: 'expiry_date', header: 'Expiry', render: (v) => v ? formatDate(v) : '—' },
                             { key: 'unit_cost', header: 'Unit Cost', align: 'right', render: (v) => <span className="font-mono">{formatCurrency(v)}</span> },
                           ]}
                         />
@@ -890,12 +891,12 @@ export default function ItemMaster() {
                           data={selectedItem.recent_transactions.slice(0, 10)}
                           keyExtractor={(tx) => tx.id}
                           columns={[
-                            { key: 'transaction_date', header: 'Date', render: (v) => <span className="text-xs">{v ? new Date(v).toLocaleDateString() : ''}</span> },
+                            { key: 'transaction_date', header: 'Date', render: (v) => <span className="text-xs">{v ? formatDate(v) : ''}</span> },
                             { key: 'transaction_type', header: 'Type', render: (v) => <span className="capitalize text-xs">{v}</span> },
                             {
                               key: 'quantity_change', header: 'Qty', align: 'right',
                               render: (v) => (
-                                <span className={`font-mono ${v > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                <span className={`font-mono ${v > 0 ? 'text-success' : 'text-destructive'}`}>
                                   {v > 0 ? '+' : ''}{v}
                                 </span>
                               ),
@@ -928,7 +929,7 @@ export default function ItemMaster() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Upload className="w-5 h-5 text-primary" /> Bulk Upload Items
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowBulkUpload(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowBulkUpload(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -998,7 +999,7 @@ export default function ItemMaster() {
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment
               </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowPriceAdjustment(false)}>
+              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowPriceAdjustment(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -1092,7 +1093,7 @@ export default function ItemMaster() {
               </div>
 
               {priceAdjForm.mode === 'percentage' && priceAdjForm.percentage && !isNaN(parseFloat(priceAdjForm.percentage)) && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: an item priced at 100.00 becomes{' '}
                   <strong>
                     {priceAdjForm.direction === 'increase'
@@ -1104,7 +1105,7 @@ export default function ItemMaster() {
               )}
 
               {priceAdjForm.mode === 'rate' && priceAdjForm.newRate && !isNaN(parseFloat(priceAdjForm.newRate)) && currentExchangeRate != null && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: an item priced at 100.00 becomes{' '}
                   <strong>{(100 * (parseFloat(priceAdjForm.newRate) / currentExchangeRate)).toFixed(2)}</strong>.
                   This applies immediately to {priceAdjForm.category ? `all "${priceAdjForm.category}" items` : 'ALL active items'} and cannot be undone automatically.

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { CalendarClock, Plus } from 'lucide-react';
 import { TheatreOperation, TheatreRoom, STATUS_BADGE, ROOM_STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE, patientName, formatDuration } from './theatreShared';
 

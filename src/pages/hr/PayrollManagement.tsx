@@ -8,9 +8,10 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Wallet, Plus, Loader2, Check } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { formatDate } from '@/lib/format';
 
 const STATUS_TONE: Record<string, StatusBadgeTone> = {
   draft: 'neutral',
@@ -120,7 +121,7 @@ export default function PayrollManagement() {
               { key: 'period_month', header: 'Period', render: (_v, r) => `${MONTHS[r.period_month - 1] || r.period_month} ${r.period_year}` },
               { key: 'employee_count', header: 'Employees', align: 'center' },
               { key: 'payment_account_name', header: 'Payment Account', render: (v) => v || '—' },
-              { key: 'run_date', header: 'Run Date', render: (v) => new Date(v).toLocaleDateString() },
+              { key: 'run_date', header: 'Run Date', render: (v) => formatDate(v) },
               {
                 key: 'status', header: 'Status',
                 render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} />,
@@ -162,7 +163,7 @@ export default function PayrollManagement() {
                 value={form.payment_account_id} onChange={v => setForm({ ...form, payment_account_id: v })}
                 placeholder="Select account..." searchPlaceholder="Search accounts..." className="mt-1"
               />
-              <p className="text-[11px] text-muted-foreground mt-1">Can also be set later, before approving this run.</p>
+              <p className="text-xs text-muted-foreground mt-1">Can also be set later, before approving this run.</p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}>Cancel</Button>

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { ArrowLeft, ArrowRightLeft, Plus, Trash2, Check, Loader2 } from 'lucide-react';
 
 interface StockLocation { id: string; location_name: string; location_type: string; department_name: string | null; }
@@ -137,7 +137,7 @@ export default function NewStockTransferRequest() {
               <div className="px-4">
                 <label className="text-xs font-medium text-muted-foreground">3. Items & quantities</label>
                 {!fromLocationId && (
-                  <p className="text-[11px] text-muted-foreground mt-1 mb-2">Pick a source store above to see what it has in stock.</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2">Pick a source store above to see what it has in stock.</p>
                 )}
                 <div className="space-y-2 mt-1">
                   {lines.map((line, idx) => (
@@ -160,8 +160,8 @@ export default function NewStockTransferRequest() {
                         className="w-28 h-9"
                         disabled={!fromLocationId}
                       />
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => removeLine(idx)} disabled={lines.length === 1}>
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      <Button type="button" variant="ghost" size="icon" aria-label="Delete" className="h-9 w-9" onClick={() => removeLine(idx)} disabled={lines.length === 1}>
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </div>
                   ))}

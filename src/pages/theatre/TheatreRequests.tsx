@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Scissors, Plus, X, CalendarPlus, Search, Loader2 } from 'lucide-react';
 import { TheatreRequest, PatientOption, ProcedureServiceOption, PRIORITY_BADGE, STATUS_BADGE, patientName } from './theatreShared';

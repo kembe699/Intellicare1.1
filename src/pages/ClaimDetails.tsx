@@ -20,8 +20,9 @@ import {
   DollarSign, CheckCircle, XCircle, Send, Edit, AlertTriangle,
   Calendar, User, Shield, History, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 export default function ClaimDetails() {
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -236,7 +237,7 @@ export default function ClaimDetails() {
                 <Download className="h-3.5 w-3.5" />Download
               </Button>
               {canCancel && (
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={cancelling} className="gap-1.5 text-red-600 hover:text-red-700">
+                <Button variant="outline" size="sm" onClick={handleCancel} disabled={cancelling} className="gap-1.5 text-destructive hover:text-destructive">
                   {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
                   {cancelling ? 'Cancelling...' : 'Cancel Claim'}
                 </Button>
@@ -297,7 +298,7 @@ export default function ClaimDetails() {
                   )}
                   {claim.status === 'submitted' && (
                     <>
-                      <Button size="sm" onClick={() => openStatusModal('accepted')} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                      <Button size="sm" onClick={() => openStatusModal('accepted')} className="gap-1.5 bg-success hover:bg-success">
                         <CheckCircle className="h-3.5 w-3.5" /> Accept
                       </Button>
                       <Button size="sm" variant="destructive" onClick={() => openStatusModal('rejected')} className="gap-1.5">
@@ -306,7 +307,7 @@ export default function ClaimDetails() {
                     </>
                   )}
                   {claim.status === 'accepted' && (
-                    <Button size="sm" onClick={() => openStatusModal('paid')} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                    <Button size="sm" onClick={() => openStatusModal('paid')} className="gap-1.5 bg-success hover:bg-success">
                       <DollarSign className="h-3.5 w-3.5" /> Record Payment
                     </Button>
                   )}
@@ -335,26 +336,26 @@ export default function ClaimDetails() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Created Date</p>
-                  <p className="font-semibold mt-0.5">{new Date(claim.created_at).toLocaleDateString()}</p>
+                  <p className="font-semibold mt-0.5">{formatDate(claim.created_at)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Submitted Date</p>
-                  <p className="font-semibold mt-0.5">{claim.submitted_at ? new Date(claim.submitted_at).toLocaleDateString() : '—'}</p>
+                  <p className="font-semibold mt-0.5">{claim.submitted_at ? formatDate(claim.submitted_at) : '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Date Range</p>
                   <p className="font-semibold mt-0.5">
-                    {claim.date_from ? new Date(claim.date_from).toLocaleDateString() : '—'} to{' '}
-                    {claim.date_to ? new Date(claim.date_to).toLocaleDateString() : '—'}
+                    {claim.date_from ? formatDate(claim.date_from) : '—'} to{' '}
+                    {claim.date_to ? formatDate(claim.date_to) : '—'}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Paid Amount</p>
-                  <p className="font-semibold mt-0.5 text-green-700">{claimCurrency} {parseFloat(claim.paid_amount || 0).toFixed(2)}</p>
+                  <p className="font-semibold mt-0.5 text-success">{claimCurrency} {parseFloat(claim.paid_amount || 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Paid Date</p>
-                  <p className="font-semibold mt-0.5">{claim.paid_at ? new Date(claim.paid_at).toLocaleDateString() : '—'}</p>
+                  <p className="font-semibold mt-0.5">{claim.paid_at ? formatDate(claim.paid_at) : '—'}</p>
                 </div>
               </div>
               {claim.notes && (
@@ -364,9 +365,9 @@ export default function ClaimDetails() {
                 </div>
               )}
               {claim.rejected_reason && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-xs text-red-600 uppercase mb-1 font-medium">Rejection Reason</p>
-                  <p className="text-sm text-red-800">{claim.rejected_reason}</p>
+                <div className="mt-3 p-3 bg-destructive-bg border border-destructive-border rounded-lg">
+                  <p className="text-xs text-destructive uppercase mb-1 font-medium">Rejection Reason</p>
+                  <p className="text-sm text-destructive">{claim.rejected_reason}</p>
                 </div>
               )}
             </CardContent>
@@ -424,13 +425,13 @@ export default function ClaimDetails() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">#</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice #</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Patient</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Date</th>
-                      <th className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Due Date</th>
-                      <th className="text-right py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Amount</th>
-                      <th className="text-center py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Status</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">#</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice #</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Patient</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Date</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Due Date</th>
+                      <th scope="col" className="text-right py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Amount</th>
+                      <th scope="col" className="text-center py-2 px-3 font-medium text-xs uppercase text-muted-foreground">Invoice Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -450,8 +451,8 @@ export default function ClaimDetails() {
                             </td>
                             <td className="py-2 px-3 font-mono text-xs font-semibold text-primary">{inv.invoice_number}</td>
                             <td className="py-2 px-3">{inv.patient_name || '—'}</td>
-                            <td className="py-2 px-3 text-xs">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString() : '—'}</td>
-                            <td className="py-2 px-3 text-xs">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</td>
+                            <td className="py-2 px-3 text-xs">{inv.invoice_date ? formatDate(inv.invoice_date) : '—'}</td>
+                            <td className="py-2 px-3 text-xs">{inv.due_date ? formatDate(inv.due_date) : '—'}</td>
                             <td className="py-2 px-3 text-right font-bold">{inv.invoice_currency || claimCurrency} {parseFloat(inv.amount || 0).toFixed(2)}</td>
                             <td className="py-2 px-3 text-center">
                               <Badge variant="outline" className="text-xs capitalize">{inv.invoice_status || 'in claim'}</Badge>
@@ -562,7 +563,7 @@ export default function ClaimDetails() {
                 placeholder="Add notes about this status change..." rows={2} className="mt-1" />
             </div>
             {statusAction === 'paid' && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+              <div className="p-3 bg-success-bg border border-success-border rounded-lg text-sm text-success">
                 <p className="font-medium">This will mark all {invoices.length} invoices as paid.</p>
               </div>
             )}
@@ -570,7 +571,7 @@ export default function ClaimDetails() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowStatusModal(false)}>Cancel</Button>
             <Button onClick={handleUpdateStatus} disabled={updating || (statusAction === 'rejected' && !rejectedReason)}
-              className={statusAction === 'rejected' ? 'bg-red-600 hover:bg-red-700' : ''}>
+              className={statusAction === 'rejected' ? 'bg-destructive hover:bg-destructive' : ''}>
               {updating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Updating...</> : 'Confirm'}
             </Button>
           </DialogFooter>

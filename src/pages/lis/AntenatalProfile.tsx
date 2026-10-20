@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import * as docTemplate from '@/utils/documentTemplate';
+import { formatDate } from '@/lib/format';
 
 interface AntenatalVisit {
   id: string;
@@ -249,7 +250,7 @@ export default function AntenatalProfile() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">LMP / EDD</p>
-                <p className="font-semibold">{profile.lmp ? new Date(profile.lmp).toLocaleDateString() : '-'} / {profile.edd ? new Date(profile.edd).toLocaleDateString() : '-'}</p>
+                <p className="font-semibold">{profile.lmp ? formatDate(profile.lmp) : '-'} / {profile.edd ? formatDate(profile.edd) : '-'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Gravida / Para</p>
@@ -258,7 +259,7 @@ export default function AntenatalProfile() {
             </div>
 
             {profile.risk_notes && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+              <div className="bg-warning-bg border border-warning-border rounded-lg p-4 text-sm text-warning">
                 <strong>Risk Notes:</strong> {profile.risk_notes}
               </div>
             )}
@@ -274,23 +275,23 @@ export default function AntenatalProfile() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/20 text-xs text-muted-foreground uppercase">
                       <tr>
-                        <th className="text-left px-3 py-2">Date</th>
-                        <th className="text-left px-3 py-2">GA (wks)</th>
-                        <th className="text-left px-3 py-2">BP</th>
-                        <th className="text-left px-3 py-2">Weight</th>
-                        <th className="text-left px-3 py-2">Fundal Ht</th>
-                        <th className="text-left px-3 py-2">FHR</th>
-                        <th className="text-left px-3 py-2">Presentation</th>
-                        <th className="text-left px-3 py-2">Urine (P/G)</th>
-                        <th className="text-left px-3 py-2">Hb</th>
-                        <th className="text-left px-3 py-2">Next Appt.</th>
-                        <th className="text-left px-3 py-2">By</th>
+                        <th scope="col" className="text-left px-3 py-2">Date</th>
+                        <th scope="col" className="text-left px-3 py-2">GA (wks)</th>
+                        <th scope="col" className="text-left px-3 py-2">BP</th>
+                        <th scope="col" className="text-left px-3 py-2">Weight</th>
+                        <th scope="col" className="text-left px-3 py-2">Fundal Ht</th>
+                        <th scope="col" className="text-left px-3 py-2">FHR</th>
+                        <th scope="col" className="text-left px-3 py-2">Presentation</th>
+                        <th scope="col" className="text-left px-3 py-2">Urine (P/G)</th>
+                        <th scope="col" className="text-left px-3 py-2">Hb</th>
+                        <th scope="col" className="text-left px-3 py-2">Next Appt.</th>
+                        <th scope="col" className="text-left px-3 py-2">By</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {profile.visits.map(v => (
                         <tr key={v.id}>
-                          <td className="px-3 py-2 whitespace-nowrap">{new Date(v.visit_date).toLocaleDateString()}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.visit_date)}</td>
                           <td className="px-3 py-2">{v.gestational_age_weeks || '-'}</td>
                           <td className="px-3 py-2">{v.blood_pressure || '-'}</td>
                           <td className="px-3 py-2">{v.weight || '-'}</td>
@@ -299,7 +300,7 @@ export default function AntenatalProfile() {
                           <td className="px-3 py-2">{v.fetal_presentation || '-'}</td>
                           <td className="px-3 py-2">{v.urine_protein || '-'} / {v.urine_glucose || '-'}</td>
                           <td className="px-3 py-2">{v.hb_level || '-'}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{v.next_appointment ? new Date(v.next_appointment).toLocaleDateString() : '-'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{v.next_appointment ? formatDate(v.next_appointment) : '-'}</td>
                           <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{v.recorded_by_name || '-'}</td>
                         </tr>
                       ))}

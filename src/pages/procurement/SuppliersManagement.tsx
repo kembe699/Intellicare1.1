@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Building2, Edit, Search, Star, RefreshCw, CheckCircle, Ban, Eye, Truck, Loader2, X, Check, FileSpreadsheet } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -276,7 +276,7 @@ const SuppliersManagement: React.FC = () => {
           icon={<Truck />}
           title="Supplier Management"
           actions={
-            <Button onClick={fetchSuppliers} variant="outline" size="icon" disabled={loading}>
+            <Button onClick={fetchSuppliers} variant="outline" size="icon" aria-label="Refresh" disabled={loading}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           }
@@ -449,7 +449,7 @@ const SuppliersManagement: React.FC = () => {
                     key: 'name', header: 'Supplier', sortable: true,
                     render: (v, s) => (
                       <div className="flex items-center gap-2">
-                        {!!s.is_preferred && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />}
+                        {!!s.is_preferred && <Star className="w-3.5 h-3.5 text-warning fill-warning" />}
                         <p className="font-medium">{v}</p>
                       </div>
                     ),
@@ -480,10 +480,10 @@ const SuppliersManagement: React.FC = () => {
                     key: '__actions', header: 'Actions', align: 'center',
                     render: (_v, s) => (
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewSupplier(s); }}><Eye className="w-3.5 h-3.5" /></Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Edit className="w-3.5 h-3.5" /></Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toggleHold(s); }} disabled={holdingId === s.id}>
-                          {holdingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (s.on_hold ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Ban className="w-3.5 h-3.5 text-amber-600" />)}
+                        <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewSupplier(s); }}><Eye className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Edit className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toggleHold(s); }} disabled={holdingId === s.id}>
+                          {holdingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (s.on_hold ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
                         </Button>
                       </div>
                     ),

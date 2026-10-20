@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -60,46 +58,78 @@
 
 @layer base {
   :root {
-    /* Page & card backgrounds */
-    --background: 210 40% 98%;    /* #F8FAFC slate-50 */
-    --foreground: 222 47% 11%;    /* #0F172A deep navy */
+    /* Page & card backgrounds — unchanged by the Option B token pass */
+    --background: 210 40% 98%;    /* #F8FAFC — page ground, kept as-is */
+    --foreground: 195 27% 15%;    /* #1B2A2F body text */
 
     --card: 0 0% 100%;            /* #FFFFFF white cards */
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 195 27% 15%; /* #1B2A2F body text */
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 195 27% 15%;
 
-    /* Brand primary: #1A7A75 = hsl(177, 65%, 29%) */
-    --primary: 177 65% 29%;
+    /* Heading ink — page/card/section titles. Replaces navy everywhere. */
+    --heading: 189 50% 16%;       /* #14363C */
+
+    /* Brand teal (logo/accents) vs. primary (buttons/links/focus) are two
+       different tokens now — the brand mark is a touch brighter than what
+       reads well as body-sized button/link text. */
+    --brand-teal: 184 88% 34%;    /* #0A96A1 */
+    --primary: 185 90% 27%;       /* #077A84 */
+    --primary-hover: 185 90% 23%; /* #06656D */
     --primary-foreground: 0 0% 100%;
+    --primary-soft: 184 44% 92%;  /* #E3F3F4 — selected chip / info badge bg */
 
-    --secondary: 210 40% 96%;     /* #F1F5F9 slate-100 */
-    --secondary-foreground: 215 25% 27%; /* #334155 slate-700 */
+    --secondary: 180 17% 95%;     /* #F1F5F5 */
+    --secondary-foreground: 194 20% 25%; /* #34484E label text */
 
-    --muted: 210 40% 96%;         /* slate-100 */
-    --muted-foreground: 215 16% 47%; /* #64748B slate-500 */
+    --label: 194 20% 25%;         /* #34484E */
+    --muted: 195 13% 94%;         /* #EEF1F2 row divider, used as muted bg */
+    --muted-foreground: 194 14% 36%; /* #50646A — passes 4.5:1 on white */
 
-    --accent: 177 65% 29%;        /* same as primary */
+    --accent: 185 90% 27%;        /* same as primary */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;     /* #DC2626 red-600 */
+    /* "Danger" in the spec — kept as the existing `destructive` token name
+       since buttons/variants across the app already key off it. */
+    --destructive: 4 76% 40%;        /* #B42318 */
     --destructive-foreground: 0 0% 100%;
+    --destructive-bg: 5 85% 95%;     /* #FDE8E6 */
+    --destructive-border: 6 69% 86%; /* #F4C7C2 */
 
-    --success: 142 71% 45%;       /* green-500 */
+    --success: 146 62% 30%;       /* #1D7A46 */
     --success-foreground: 0 0% 100%;
+    --success-bg: 148 41% 93%;    /* #E5F4EC */
+    --success-border: 146 46% 77%; /* #A9DFC0 */
 
-    --warning: 38 92% 50%;        /* amber-500 */
-    --warning-foreground: 0 0% 10%;
+    --warning: 36 100% 27%;       /* #8A5300 */
+    --warning-foreground: 0 0% 100%;
+    --warning-bg: 38 89% 93%;     /* #FDF1DC */
+    --warning-border: 39 77% 78%; /* #F2D49B */
+
+    --info: 185 90% 23%;          /* #06656D */
+    --info-foreground: 0 0% 100%;
+    --info-bg: 184 44% 92%;       /* #E3F3F4 */
+    --info-border: 183 38% 82%;   /* #BFE0E2 */
+
+    --neutral: 194 14% 36%;       /* #50646A */
+    --neutral-foreground: 0 0% 100%;
+    --neutral-bg: 195 13% 94%;    /* #EEF1F2 */
+    --neutral-border: 185 17% 85%; /* same family as --border */
 
     /* Borders & inputs */
-    --border: 214 32% 91%;        /* #E2E8F0 slate-200 */
-    --input: 214 32% 91%;         /* slate-200 — visible input borders */
-    --ring: 177 65% 29%;          /* teal focus ring */
+    --border: 185 17% 85%;        /* #D3DFE0 */
+    --input: 187 16% 78%;         /* #BFCFD1 — visible input borders */
+    --ring: 185 90% 27%;          /* primary focus ring */
+
+    --disabled-bg: 180 17% 95%;   /* #F1F5F5 */
+    --skeleton: 187 19% 91%;      /* #E3EBEC */
+    --table-header-bg: 180 20% 97%; /* #F6F9F9 */
 
     /* Border radius base — 8px (buttons, inputs, badges) */
     --radius: 0.5rem;
 
+    /* Sidebar gradient — unchanged by the Option B token pass */
     --sidebar-background: 189 44% 32%;  /* #2d6a75 */
     --sidebar-foreground: 0 0% 100%;
     --sidebar-primary: 0 0% 100%;
@@ -109,11 +139,11 @@
     --sidebar-border: 189 43% 42%;
     --sidebar-ring: 189 43% 42%;
 
-    --clinic-teal: 177 65% 29%;
-    --clinic-teal-light: 174 62% 94%;
-    --clinic-amber: 38 92% 50%;
-    --clinic-red: 0 72% 51%;
-    --clinic-green: 142 71% 45%;
+    --clinic-teal: 185 90% 27%;
+    --clinic-teal-light: 184 44% 92%;
+    --clinic-amber: 36 100% 27%;
+    --clinic-red: 4 76% 40%;
+    --clinic-green: 146 62% 30%;
   }
 
   .dark {
@@ -126,24 +156,56 @@
     --popover: 222 47% 10%;
     --popover-foreground: 210 40% 96%;
 
-    --primary: 177 65% 29%;
+    --heading: 0 0% 100%;
+
+    --brand-teal: 184 70% 50%;
+    --primary: 185 70% 40%;
+    --primary-hover: 185 70% 46%;
     --primary-foreground: 0 0% 100%;
+    --primary-soft: 185 40% 18%;
 
     --secondary: 222 39% 17%;
     --secondary-foreground: 210 40% 86%;
+    --label: 210 40% 86%;
 
     --muted: 222 39% 14%;
     --muted-foreground: 215 16% 55%;
 
-    --accent: 177 65% 29%;
+    --accent: 185 70% 40%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 45%;
+    --destructive: 4 70% 50%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-bg: 4 40% 18%;
+    --destructive-border: 4 40% 30%;
+
+    --success: 146 50% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-bg: 146 30% 16%;
+    --success-border: 146 30% 30%;
+
+    --warning: 38 80% 50%;
+    --warning-foreground: 0 0% 10%;
+    --warning-bg: 38 40% 16%;
+    --warning-border: 38 40% 30%;
+
+    --info: 185 70% 46%;
+    --info-foreground: 0 0% 100%;
+    --info-bg: 185 30% 16%;
+    --info-border: 185 30% 30%;
+
+    --neutral: 215 16% 65%;
+    --neutral-foreground: 0 0% 10%;
+    --neutral-bg: 222 39% 17%;
+    --neutral-border: 222 39% 24%;
+
+    --disabled-bg: 222 39% 14%;
+    --skeleton: 222 39% 18%;
+    --table-header-bg: 222 39% 13%;
 
     --border: 222 39% 17%;
     --input: 222 39% 20%;
-    --ring: 177 65% 29%;
+    --ring: 185 70% 40%;
   }
 }
 
@@ -153,12 +215,12 @@
   }
 
   html {
-    font-size: 13px;
+    font-size: 15px;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   }
 }
 
@@ -184,6 +246,16 @@
     color: hsl(var(--accent-foreground));
   }
 
+  /* ── Type scale — fixed px, independent of the html root font-size, so
+     it hits the spec'd sizes exactly (1rem-based classes only land close).
+     Page title 24/700, section/card title 18/600, body 15/400,
+     label 13/600, caption 12/400 — nothing smaller than caption. ── */
+  .ic-text-title   { font-size: 24px; line-height: 32px; font-weight: 700; color: hsl(var(--heading)); }
+  .ic-text-section { font-size: 18px; line-height: 26px; font-weight: 600; color: hsl(var(--heading)); }
+  .ic-text-body    { font-size: 15px; line-height: 22px; font-weight: 400; }
+  .ic-text-label   { font-size: 13px; line-height: 18px; font-weight: 600; color: hsl(var(--label)); }
+  .ic-text-caption { font-size: 12px; line-height: 16px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+
   /* ── Stat / info card ── */
   .ic-stat-card {
     @apply bg-card rounded-lg border border-border px-4 py-3 shadow-sm transition-colors hover:shadow-md;
@@ -196,19 +268,18 @@
 
   /* ── Primary action button (teal) ── */
   .ic-btn-primary {
-    @apply inline-flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white rounded-lg bg-primary hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply inline-flex items-center gap-1.5 h-11 px-4 text-base font-semibold text-white rounded-lg bg-primary hover:bg-primary-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
 
   /* ── Standard table ── */
   .ic-table {
-    @apply w-full text-[13px] border-collapse;
+    @apply w-full text-sm border-collapse;
   }
   .ic-table thead tr {
-    @apply border-b border-border;
-    background-color: rgba(46, 196, 182, 0.06);
+    @apply border-b border-border bg-table-header;
   }
   .ic-table thead th {
-    @apply px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap;
+    @apply px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap;
   }
   .ic-table thead th.center {
     @apply text-center;
@@ -217,7 +288,7 @@
     @apply border-b border-border transition-colors hover:bg-muted/40 cursor-pointer;
   }
   .ic-table tbody td {
-    @apply px-3 py-2.5 text-[13px] text-foreground;
+    @apply px-3 py-2.5 text-sm text-foreground;
   }
   .ic-table tbody td.muted {
     @apply text-muted-foreground;
@@ -228,11 +299,14 @@
     @apply bg-primary/10 rounded-xl border border-primary/15 shadow-sm overflow-hidden;
   }
   .ic-card-header {
-    @apply flex items-center justify-between px-5 py-3 border-b border-border;
-    background-color: rgba(46, 196, 182, 0.04);
+    @apply flex items-center justify-between px-5 py-3 border-b border-border bg-primary/[0.04];
   }
   .ic-card-title {
-    @apply flex items-center gap-2 text-sm font-semibold text-foreground;
+    @apply flex items-center gap-2;
+    font-size: 18px;
+    line-height: 26px;
+    font-weight: 600;
+    color: hsl(var(--heading));
   }
   .ic-card-body {
     @apply px-5 py-4;
@@ -240,35 +314,44 @@
 
   /* ── Form field wrapper ── */
   .ic-form-field {
-    @apply flex flex-col gap-1;
+    @apply flex flex-col gap-1.5;
   }
   .ic-form-label {
-    @apply text-[11px] font-semibold text-muted-foreground;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 600;
+    color: hsl(var(--label));
   }
   .ic-form-input {
-    @apply h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground
+    @apply h-11 w-full rounded-lg border border-input bg-card px-3 text-base text-foreground placeholder:text-muted-foreground
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0
-           disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
+           disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-muted-foreground disabled:opacity-100
+           aria-[invalid=true]:border-2 aria-[invalid=true]:border-destructive transition-colors;
   }
   .ic-form-error {
-    @apply text-[11px] text-destructive mt-0.5;
+    @apply text-destructive mt-0.5;
+    font-size: 13px;
+    line-height: 18px;
   }
   .ic-select {
-    @apply h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground
+    @apply h-11 w-full rounded-lg border border-input bg-card px-3 text-base text-foreground
            focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0
-           disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
+           disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-muted-foreground disabled:opacity-100 transition-colors;
   }
 
-  /* ── Semantic status badges ── */
+  /* ── Semantic status badges — pill with a coloured dot, one of the five
+     tones only (success/warning/danger/info/neutral). ── */
   .ic-badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold border;
+    font-size: 13px;
+    line-height: 18px;
   }
-  .ic-badge-success  { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
-  .ic-badge-warning  { @apply bg-amber-50 text-amber-700 border-amber-200; }
-  .ic-badge-danger   { @apply bg-red-50 text-red-700 border-red-200; }
-  .ic-badge-neutral  { @apply bg-slate-100 text-slate-600 border-slate-200; }
+  .ic-badge-success  { @apply bg-success-bg text-success border-success-border; }
+  .ic-badge-warning  { @apply bg-warning-bg text-warning border-warning-border; }
+  .ic-badge-danger   { @apply bg-destructive-bg text-destructive border-destructive-border; }
+  .ic-badge-neutral  { @apply bg-neutral-bg text-neutral border-neutral-border; }
   .ic-badge-primary  { @apply bg-primary/10 text-primary border-primary/20; }
-  .ic-badge-info     { @apply bg-sky-50 text-sky-700 border-sky-200; }
+  .ic-badge-info     { @apply bg-info-bg text-info border-info-border; }
 
   /* ── Legacy class aliases (keep for backward compat) ── */
   .stat-card     { @apply ic-stat-card; }

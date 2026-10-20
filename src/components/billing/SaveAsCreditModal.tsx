@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatDate } from '@/lib/format';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import {
@@ -14,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
 import { Loader2, FileText, Calendar, User, Receipt, Shield } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 
 interface SaveAsCreditModalProps {
@@ -151,7 +152,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
                 <div>
                   <p className="text-xs text-muted-foreground">Insurance / Scheme</p>
                   <p className="font-semibold text-sm text-primary">{bill.schemeName || bill.scheme_name || schemeInfo?.scheme_name}</p>
-                  {schemeInfo?.is_insurance && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Insurance</span>}
+                  {schemeInfo?.is_insurance && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Insurance</span>}
                 </div>
               </div>
             )}
@@ -194,7 +195,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
               searchPlaceholder="Search..."
             />
             <p className="text-xs text-muted-foreground">
-              Due date: <span className="font-semibold">{dueDate.toLocaleDateString()}</span>
+              Due date: <span className="font-semibold">{formatDate(dueDate)}</span>
             </p>
           </div>
 
@@ -224,7 +225,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
                 </label>
                 <p className="text-xs text-muted-foreground mt-1">
                   Invoice of <span className="font-semibold">{currency} {totalAmount.toFixed(2)}</span> is due
-                  on <span className="font-semibold">{dueDate.toLocaleDateString()}</span>.
+                  on <span className="font-semibold">{formatDate(dueDate)}</span>.
                   This will be recorded as an outstanding receivable.
                 </p>
               </div>
@@ -232,7 +233,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
           <Button variant="outline" className="h-8 text-xs" onClick={onClose} disabled={saving}>
             Cancel
           </Button>

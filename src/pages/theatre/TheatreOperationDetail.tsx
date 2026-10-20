@@ -11,7 +11,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import {
   ArrowLeft, Loader2, Scissors, Play, Square, XCircle, User, MapPin,
@@ -22,6 +22,7 @@ import {
   TheatreOperation, PHASE_LABEL, STATUS_BADGE, OUTCOME_LABEL, OUTCOME_BADGE,
   patientName, formatDuration, StockLocation, StockItemOption, ROLE_LABEL,
 } from './theatreShared';
+import { formatDate } from '@/lib/format';
 
 type TeamRole = 'surgeon' | 'anesthetist' | 'scrub_nurse';
 const TEAM_ROLES: TeamRole[] = ['surgeon', 'anesthetist', 'scrub_nurse'];
@@ -426,7 +427,7 @@ export default function TheatreOperationDetail() {
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {patientVisits.slice(0, 5).map((v: any, i: number) => (
                     <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0 space-y-1.5">
-                      <p className="font-medium">{v.created_at ? new Date(v.created_at).toLocaleDateString() : ''}</p>
+                      <p className="font-medium">{v.created_at ? formatDate(v.created_at) : ''}</p>
                       {v.vitals && <p className="text-muted-foreground">Vitals: {Object.entries(v.vitals).filter(([, val]) => val).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</p>}
                       {v.tests?.map((t: any) => {
                         const results = labResultsBySpecimen[t.id];
@@ -434,7 +435,7 @@ export default function TheatreOperationDetail() {
                           <div key={t.id} className="pl-2 border-l-2 border-border/70">
                             <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
                             {t.status === 'approved' && Array.isArray(results) && results.length > 0 && (
-                              <table className="w-full text-[11px] mt-1">
+                              <table className="w-full text-xs mt-1">
                                 <tbody>
                                   {results.map((r: any) => (
                                     <tr key={r.id} className={r.flag ? 'text-destructive' : ''}>
@@ -514,7 +515,7 @@ export default function TheatreOperationDetail() {
                     onClick={() => toggleChecklistItem(item.id, !item.is_checked)}
                     className="w-full flex items-start gap-2.5 text-left px-2 py-1.5 rounded-md hover:bg-muted/40 transition-colors disabled:cursor-default"
                   >
-                    {item.is_checked ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />}
+                    {item.is_checked ? <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />}
                     <span className={`text-sm ${item.is_checked ? 'line-through text-muted-foreground' : ''}`}>{item.item_text}</span>
                   </button>
                 ))}
@@ -550,7 +551,7 @@ export default function TheatreOperationDetail() {
                   <p className="text-sm text-muted-foreground text-center py-4">No vitals recorded for this phase yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">BP</th><th className="text-left py-1.5">Pulse</th><th className="text-left py-1.5">Temp</th><th className="text-left py-1.5">RR</th><th className="text-left py-1.5">SpO2</th></tr></thead>
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="text-left py-1.5">Time</th><th scope="col" className="text-left py-1.5">BP</th><th scope="col" className="text-left py-1.5">Pulse</th><th scope="col" className="text-left py-1.5">Temp</th><th scope="col" className="text-left py-1.5">RR</th><th scope="col" className="text-left py-1.5">SpO2</th></tr></thead>
                     <tbody>
                       {vitalsForPhase.map((v) => (
                         <tr key={v.id} className="border-b border-border/50">
@@ -622,7 +623,7 @@ export default function TheatreOperationDetail() {
                   <p className="text-sm text-muted-foreground text-center py-4">Nothing recorded as used yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1.5">Time</th><th className="text-left py-1.5">Item</th><th className="text-right py-1.5">Qty</th><th className="text-left py-1.5">From</th></tr></thead>
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="text-left py-1.5">Time</th><th scope="col" className="text-left py-1.5">Item</th><th scope="col" className="text-right py-1.5">Qty</th><th scope="col" className="text-left py-1.5">From</th></tr></thead>
                     <tbody>
                       {operation.items.map((it) => (
                         <tr key={it.id} className="border-b border-border/50">

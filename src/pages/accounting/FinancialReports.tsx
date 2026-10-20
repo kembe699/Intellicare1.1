@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Calculator, TrendingUp, TrendingDown, PieChart, RefreshCw, CheckCircle2,
   XCircle, Building2, CreditCard, Landmark, FileText, Download
@@ -14,6 +14,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { apiFetch, formatCurrency, getAccountTypeColor, TrialBalance, TrialBalanceAccount } from '@/utils/accountingApi';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { formatDate } from '@/lib/format';
 
 interface IncomeStatement {
   revenue: { items: any[]; total: number };
@@ -131,7 +132,7 @@ const FinancialReports: React.FC = () => {
     },
     {
       id: 'income-statement' as const, title: 'Income Statement', desc: 'Revenue, expenses & net income',
-      icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950',
+      icon: TrendingUp, color: 'text-success', bg: 'bg-success-bg dark:bg-success',
       action: loadIncomeStatement
     },
     {
@@ -213,11 +214,11 @@ const FinancialReports: React.FC = () => {
                   <CardTitle className="flex items-center gap-2">
                     <Calculator className="w-5 h-5" /> Trial Balance
                   </CardTitle>
-                  <CardDescription>As of {new Date().toLocaleDateString()}</CardDescription>
+                  <CardDescription>As of {formatDate(new Date())}</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   {trialBalance.is_balanced
-                    ? <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                    ? <Badge className="bg-success-bg text-success dark:bg-success dark:text-success">
                         <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Balanced
                       </Badge>
                     : <Badge variant="destructive">
@@ -232,11 +233,11 @@ const FinancialReports: React.FC = () => {
                 <table className="w-full">
                   <thead className="border-b bg-muted/30">
                     <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-4 py-3 font-medium">Code</th>
-                      <th className="px-4 py-3 font-medium">Account Name</th>
-                      <th className="px-4 py-3 font-medium">Type</th>
-                      <th className="px-4 py-3 font-medium text-right">Debit ({BASE_CURRENCY})</th>
-                      <th className="px-4 py-3 font-medium text-right">Credit ({BASE_CURRENCY})</th>
+                      <th scope="col" className="px-4 py-3 font-medium">Code</th>
+                      <th scope="col" className="px-4 py-3 font-medium">Account Name</th>
+                      <th scope="col" className="px-4 py-3 font-medium">Type</th>
+                      <th scope="col" className="px-4 py-3 font-medium text-right">Debit ({BASE_CURRENCY})</th>
+                      <th scope="col" className="px-4 py-3 font-medium text-right">Credit ({BASE_CURRENCY})</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -279,7 +280,7 @@ const FinancialReports: React.FC = () => {
                     <TrendingUp className="w-5 h-5" /> Income Statement (P&L)
                   </CardTitle>
                   <CardDescription>
-                    Period: {new Date(startDate).toLocaleDateString()} &mdash; {new Date(endDate).toLocaleDateString()}
+                    Period: {formatDate(startDate)} &mdash; {formatDate(endDate)}
                   </CardDescription>
                   {/* This statement stays on an accrual footing so it agrees with
                       the trial balance and balance sheet beside it — a balance
@@ -293,8 +294,8 @@ const FinancialReports: React.FC = () => {
                   </p>
                 </div>
                 <Badge className={incomeStatement.net_income >= 0
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
-                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}>
+                  ? 'bg-success-bg text-success dark:bg-success dark:text-success'
+                  : 'bg-destructive-bg text-destructive dark:bg-destructive dark:text-destructive'}>
                   Net {incomeStatement.net_income >= 0 ? 'Profit' : 'Loss'}: {formatCurrency(Math.abs(incomeStatement.net_income))}
                 </Badge>
               </div>
@@ -303,8 +304,8 @@ const FinancialReports: React.FC = () => {
               {/* Revenue Section */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950">
-                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  <div className="p-1.5 rounded-md bg-success-bg dark:bg-success">
+                    <TrendingUp className="w-4 h-4 text-success" />
                   </div>
                   <h3 className="font-semibold text-sm uppercase tracking-wider">Revenue</h3>
                 </div>
@@ -321,7 +322,7 @@ const FinancialReports: React.FC = () => {
                         <tr><td colSpan={3} className="px-4 py-3 text-center text-muted-foreground">No revenue recorded</td></tr>
                       )}
                     </tbody>
-                    <tfoot className="border-t-2 bg-emerald-50/50 dark:bg-emerald-950/30">
+                    <tfoot className="border-t-2 bg-success-bg/50 dark:bg-success/30">
                       <tr className="font-bold">
                         <td colSpan={2} className="px-4 py-2.5">Total Revenue</td>
                         <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(incomeStatement.revenue.total)}</td>
@@ -334,8 +335,8 @@ const FinancialReports: React.FC = () => {
               {/* Expenses Section */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 rounded-md bg-red-50 dark:bg-red-950">
-                    <TrendingDown className="w-4 h-4 text-red-600" />
+                  <div className="p-1.5 rounded-md bg-destructive-bg dark:bg-destructive">
+                    <TrendingDown className="w-4 h-4 text-destructive" />
                   </div>
                   <h3 className="font-semibold text-sm uppercase tracking-wider">Expenses</h3>
                 </div>
@@ -352,7 +353,7 @@ const FinancialReports: React.FC = () => {
                         <tr><td colSpan={3} className="px-4 py-3 text-center text-muted-foreground">No expenses recorded</td></tr>
                       )}
                     </tbody>
-                    <tfoot className="border-t-2 bg-red-50/50 dark:bg-red-950/30">
+                    <tfoot className="border-t-2 bg-destructive-bg/50 dark:bg-destructive/30">
                       <tr className="font-bold">
                         <td colSpan={2} className="px-4 py-2.5">Total Expenses</td>
                         <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(incomeStatement.expenses.total)}</td>
@@ -364,11 +365,11 @@ const FinancialReports: React.FC = () => {
 
               {/* Net Income */}
               <div className={`p-4 rounded-lg border-2 ${incomeStatement.net_income >= 0
-                ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30'
-                : 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/30'}`}>
+                ? 'border-success-border bg-success-bg/50 dark:border-success-border dark:bg-success/30'
+                : 'border-destructive-border bg-destructive-bg/50 dark:border-destructive-border dark:bg-destructive/30'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-bold">Net {incomeStatement.net_income >= 0 ? 'Income' : 'Loss'}</span>
-                  <span className={`text-2xl font-bold font-mono ${incomeStatement.net_income >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
+                  <span className={`text-2xl font-bold font-mono ${incomeStatement.net_income >= 0 ? 'text-success dark:text-success' : 'text-destructive dark:text-destructive'}`}>
                     {formatCurrency(Math.abs(incomeStatement.net_income))}
                   </span>
                 </div>
@@ -400,7 +401,7 @@ const FinancialReports: React.FC = () => {
                       <tr key={i} className="hover:bg-muted/20">
                         <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground w-20">{acc.account_code}</td>
                         <td className="px-4 py-2.5">{acc.account_name}</td>
-                        <td className={`px-4 py-2.5 text-right font-mono font-medium ${acc[field] < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                        <td className={`px-4 py-2.5 text-right font-mono font-medium ${acc[field] < 0 ? 'text-destructive dark:text-destructive' : ''}`}>
                           {acc[field] !== 0 ? formatCurrency(acc[field]) : '\u2014'}
                         </td>
                       </tr>
@@ -427,11 +428,11 @@ const FinancialReports: React.FC = () => {
                     <CardTitle className="flex items-center gap-2">
                       <PieChart className="w-5 h-5" /> Balance Sheet
                     </CardTitle>
-                    <CardDescription>As of {new Date().toLocaleDateString()}</CardDescription>
+                    <CardDescription>As of {formatDate(new Date())}</CardDescription>
                   </div>
                   <Badge className={isBalanced
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
-                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}>
+                    ? 'bg-success-bg text-success dark:bg-success dark:text-success'
+                    : 'bg-destructive-bg text-destructive dark:bg-destructive dark:text-destructive'}>
                     {isBalanced
                       ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Balanced</>
                       : <><XCircle className="w-3.5 h-3.5 mr-1" /> Unbalanced</>}
@@ -443,8 +444,8 @@ const FinancialReports: React.FC = () => {
                   iconColor="text-primary" iconBg="bg-primary/10 dark:bg-primary/20"
                   accounts={balanceSheet.assets} field="debit_balance" total={totalAssets} />
 
-                <SectionTable title="Liabilities" icon={<CreditCard className="w-4 h-4 text-red-600" />}
-                  iconColor="text-red-600" iconBg="bg-red-50 dark:bg-red-950"
+                <SectionTable title="Liabilities" icon={<CreditCard className="w-4 h-4 text-destructive" />}
+                  iconColor="text-destructive" iconBg="bg-destructive-bg dark:bg-destructive"
                   accounts={balanceSheet.liabilities} field="credit_balance" total={totalLiabilities} />
 
                 <SectionTable title="Equity" icon={<Landmark className="w-4 h-4 text-purple-600" />}

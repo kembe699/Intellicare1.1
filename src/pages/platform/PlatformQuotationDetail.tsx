@@ -17,10 +17,11 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, CheckCircle2, Clock, Copy, CreditCard, Download, FileText, Loader2, Receipt, Save, Send, ServerCog, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { buildQuotationHTML } from '@/utils/quotationTemplate';
 import { openPrintWindow, downloadDocumentAsPdf } from '@/utils/documentTemplate';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { formatDate } from '@/lib/format';
 
 interface QuotationDetail {
   id: number;
@@ -66,7 +67,7 @@ const STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'success' | 'warning'>
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-sm font-medium text-foreground">{value}</p>
     </div>
   );
@@ -321,8 +322,8 @@ const PlatformQuotationDetail: React.FC = () => {
         <Card>
           <CardContent className="p-5 space-y-5">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Field label="Issue Date" value={new Date(quotation.issue_date).toLocaleDateString()} />
-              <Field label="Valid Until" value={new Date(quotation.valid_until).toLocaleDateString()} />
+              <Field label="Issue Date" value={formatDate(quotation.issue_date)} />
+              <Field label="Valid Until" value={formatDate(quotation.valid_until)} />
               <Field label="Deployment" value={quotation.deployment_model === 'cloud' ? 'Cloud (SaaS)' : 'On-Premise'} />
               <Field label="Training" value={`${quotation.training_hours} hours`} />
             </div>
@@ -333,7 +334,7 @@ const PlatformQuotationDetail: React.FC = () => {
             </div>
             {quotation.scope_notes && (
               <div className="pt-4 border-t border-border">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Scope Notes</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Scope Notes</p>
                 <p className="text-sm text-foreground mt-0.5">{quotation.scope_notes}</p>
               </div>
             )}
@@ -394,7 +395,7 @@ const PlatformQuotationDetail: React.FC = () => {
         <Card>
           <CardContent className="p-5 space-y-5">
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Customer</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Customer</p>
               <p className="font-semibold text-foreground">{quotation.customer.name}</p>
               {quotation.customer.contact_person && <p className="text-sm text-muted-foreground">{quotation.customer.contact_person}</p>}
               {quotation.customer.email && <p className="text-sm text-muted-foreground">{quotation.customer.email}</p>}
@@ -402,7 +403,7 @@ const PlatformQuotationDetail: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-border space-y-2">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Status</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Status</p>
               {quotation.status === 'draft' && (
                 <Button variant="outline" className="w-full gap-1.5" onClick={() => changeStatus('sent')}>
                   <Send className="w-3.5 h-3.5" /> Mark as Sent
@@ -432,7 +433,7 @@ const PlatformQuotationDetail: React.FC = () => {
 
             {quotation.status === 'accepted' && (
               <div className="pt-4 border-t border-border space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Instance</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Instance</p>
                 {quotation.customer.status === 'converted' && quotation.customer.client_id ? (
                   <Link to={`/platform-admin/clients/${quotation.customer.client_id}`}>
                     <Button variant="outline" className="w-full gap-1.5">
@@ -449,7 +450,7 @@ const PlatformQuotationDetail: React.FC = () => {
 
             {quotation.status === 'accepted' && (
               <div className="pt-4 border-t border-border space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Invoice</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Invoice</p>
                 {quotation.invoice ? (
                   <Link to={`/platform-admin/invoices/${quotation.invoice.id}`}>
                     <Button variant="outline" className="w-full gap-1.5">
@@ -476,7 +477,7 @@ const PlatformQuotationDetail: React.FC = () => {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Instance created
+                  <CheckCircle2 className="w-5 h-5 text-success" /> Instance created
                 </DialogTitle>
               </DialogHeader>
               <div className="px-5 py-4 space-y-3 text-sm">
@@ -491,7 +492,7 @@ const PlatformQuotationDetail: React.FC = () => {
                 {instanceResult.invoice && (
                   <p className="text-muted-foreground">
                     First invoice created: <span className="text-primary font-semibold">${Number(instanceResult.invoice.amount).toFixed(2)}</span>{' '}
-                    ({instanceResult.invoice.billing_period}), due by {new Date(instanceResult.invoice.period_end).toLocaleDateString()}.
+                    ({instanceResult.invoice.billing_period}), due by {formatDate(instanceResult.invoice.period_end)}.
                   </p>
                 )}
               </div>

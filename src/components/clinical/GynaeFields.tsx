@@ -167,20 +167,20 @@ export function GynaeFieldsReadOnly({ value }: { value: GynaeInfo }) {
       <div className="grid grid-cols-2 gap-2 text-sm">
         {rows.map(([label, val]) => (
           <div key={label}>
-            <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
+            <p className="text-xs text-muted-foreground uppercase">{label}</p>
             <p>{val}</p>
           </div>
         ))}
       </div>
       {value.antenatal_enabled && value.antenatal && Object.values(value.antenatal).some((v) => v) && (
         <div className="pt-2 border-t border-pink-200/70">
-          <p className="text-[10px] text-muted-foreground uppercase mb-1">Antenatal</p>
+          <p className="text-xs text-muted-foreground uppercase mb-1">Antenatal</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            {value.antenatal.gestational_age_weeks && <div><p className="text-[10px] text-muted-foreground">Gestational Age</p><p>{value.antenatal.gestational_age_weeks} weeks</p></div>}
-            {value.antenatal.fundal_height_cm && <div><p className="text-[10px] text-muted-foreground">Fundal Height</p><p>{value.antenatal.fundal_height_cm} cm</p></div>}
-            {value.antenatal.fetal_heart_rate && <div><p className="text-[10px] text-muted-foreground">Fetal Heart Rate</p><p>{value.antenatal.fetal_heart_rate} bpm</p></div>}
-            {value.antenatal.fetal_presentation && <div><p className="text-[10px] text-muted-foreground">Presentation</p><p>{value.antenatal.fetal_presentation}</p></div>}
-            {value.antenatal.notes && <div className="col-span-2"><p className="text-[10px] text-muted-foreground">Notes</p><p>{value.antenatal.notes}</p></div>}
+            {value.antenatal.gestational_age_weeks && <div><p className="text-xs text-muted-foreground">Gestational Age</p><p>{value.antenatal.gestational_age_weeks} weeks</p></div>}
+            {value.antenatal.fundal_height_cm && <div><p className="text-xs text-muted-foreground">Fundal Height</p><p>{value.antenatal.fundal_height_cm} cm</p></div>}
+            {value.antenatal.fetal_heart_rate && <div><p className="text-xs text-muted-foreground">Fetal Heart Rate</p><p>{value.antenatal.fetal_heart_rate} bpm</p></div>}
+            {value.antenatal.fetal_presentation && <div><p className="text-xs text-muted-foreground">Presentation</p><p>{value.antenatal.fetal_presentation}</p></div>}
+            {value.antenatal.notes && <div className="col-span-2"><p className="text-xs text-muted-foreground">Notes</p><p>{value.antenatal.notes}</p></div>}
           </div>
         </div>
       )}

@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import {
   Building2, Plus, Search, Edit2, Trash2, Save, X, Loader2,
   Phone, Mail, MapPin, Clock, Globe, Shield, Users, CheckCircle,
@@ -803,12 +803,12 @@ const FacilitySetup: React.FC = () => {
                     key: '__actions', header: 'Actions', align: 'right',
                     render: (_v, branch) => (
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditBranch(branch)} title="Edit branch">
+                        <Button variant="ghost" size="icon" aria-label="Edit branch" className="h-7 w-7" onClick={() => handleEditBranch(branch)} title="Edit branch">
                           <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="icon" aria-label="Delete branch"
                           className="h-7 w-7 text-destructive hover:text-destructive"
                           onClick={async () => {
                             if (branch.id && await confirm({ description: `Delete branch "${branch.name}"? This cannot be undone.`, destructive: true })) {
@@ -834,7 +834,7 @@ const FacilitySetup: React.FC = () => {
                     <p className="text-xs text-muted-foreground">Total Branches</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-green-600">{branches.filter(b => b.is_active).length}</p>
+                    <p className="text-2xl font-bold text-success">{branches.filter(b => b.is_active).length}</p>
                     <p className="text-xs text-muted-foreground">Active</p>
                   </div>
                   <div className="text-center">

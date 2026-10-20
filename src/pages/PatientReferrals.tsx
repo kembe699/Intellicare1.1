@@ -9,7 +9,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { fetchPatientDirectory, type DirectoryPerson } from '@/lib/patientDirectory';
 import { AdvancedDataTable, type Column } from '@/components/common/DataTable/AdvancedDataTable';
 
@@ -158,11 +158,11 @@ export default function PatientReferrals() {
                 key: '__action', header: 'Action',
                 render: (_v, r) => (
                   canRespond(r) ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase whitespace-nowrap">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning-bg text-warning uppercase whitespace-nowrap">
                       Needs your response
                     </span>
                   ) : r.status === 'accepted' && !r.queued_order_id && (isAdmin || Number(r.to_branch_id) === myBranchId) ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 uppercase whitespace-nowrap">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-info-bg text-info uppercase whitespace-nowrap">
                       Ready to queue
                     </span>
                   ) : (

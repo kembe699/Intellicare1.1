@@ -12,7 +12,7 @@ import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { exportCSV } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { Users, Search, Eye, Edit, Ban, CheckCircle, Loader2, X, Check, FileSpreadsheet, Stethoscope, Percent } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
@@ -489,13 +489,13 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, e) => (
                     <div className="flex items-center justify-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
                       {employmentType === 'consultant' && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" aria-label="Set fee %" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
                       )}
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
-                        {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Ban className="w-3.5 h-3.5 text-amber-600" />)}
+                      <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
+                        {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
                       </Button>
                     </div>
                   ),

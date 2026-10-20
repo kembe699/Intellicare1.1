@@ -289,7 +289,7 @@ export default function LISQueue() {
                 {
                   key: 'created_at', header: 'Wait Time', align: 'right',
                   render: (v) => (
-                    <div className="inline-flex items-center gap-1.5 font-mono text-sm text-amber-600 font-medium">
+                    <div className="inline-flex items-center gap-1.5 font-mono text-sm text-warning font-medium">
                       <Clock className="w-3.5 h-3.5 opacity-70" />
                       {formatWaitTime(v)}
                     </div>

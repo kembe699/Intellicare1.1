@@ -13,10 +13,11 @@ interface FilterPillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export const FilterPill: React.FC<FilterPillProps> = ({ label, active, className, ...props }) => (
   <button
     type="button"
+    aria-pressed={!!active}
     className={cn(
-      'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+      'inline-flex h-10 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors',
       active
-        ? 'border-primary bg-accent/10 text-primary'
+        ? 'border-primary bg-primary-soft text-primary'
         : 'border-border bg-card text-muted-foreground hover:text-foreground',
       className,
     )}

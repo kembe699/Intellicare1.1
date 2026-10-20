@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, Eye, BedDouble, FileSpreadsheet, Calendar, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -129,7 +129,7 @@ export default function AdmittedPatients() {
               <span className="text-xs text-muted-foreground">to</span>
               <Input type="date" className="h-9 w-[150px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
               {(dateFrom || dateTo) && (
-                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => { setDateFrom(''); setDateTo(''); }} title="Clear date filter">
+                <Button type="button" variant="outline" size="icon" aria-label="Clear date filter" className="h-9 w-9" onClick={() => { setDateFrom(''); setDateTo(''); }} title="Clear date filter">
                   <X className="w-3.5 h-3.5" />
                 </Button>
               )}
@@ -154,7 +154,7 @@ export default function AdmittedPatients() {
                 { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 {
                   key: 'admission_type', header: 'Type', sortable: true,
-                  render: (v) => <Badge className={`text-[10px] capitalize ${v === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>{v}</Badge>,
+                  render: (v) => <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : 'bg-primary/10 text-primary'}`}>{v}</Badge>,
                 },
                 { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
                 { key: 'diagnosis', header: 'Diagnosis', render: (v) => <span className="text-muted-foreground truncate max-w-[220px] block">{v || '—'}</span> },

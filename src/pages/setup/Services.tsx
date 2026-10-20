@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { Plus, Trash2, Edit, Wrench, X, Search, Download, Upload, FileText, Settings, Loader2, Percent, FlaskConical, Scan } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
@@ -974,12 +974,12 @@ const Services: React.FC = () => {
                   key: '__actions', header: 'Actions', align: 'right',
                   render: (_v, service) => (
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(service)} disabled={deletingId === service.id} className="h-7 w-7">
+                      <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => handleEdit(service)} disabled={deletingId === service.id} className="h-7 w-7">
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Delete"
                         onClick={() => handleDelete(service.id)}
                         disabled={deletingId === service.id}
                         className="h-7 w-7 text-destructive hover:text-destructive"
@@ -997,18 +997,14 @@ const Services: React.FC = () => {
       </div>
 
       {/* Bulk Price Adjustment Modal */}
-      {showPriceAdjustment && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment
-              </h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowPriceAdjustment(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="p-6 space-y-4">
+      <Dialog open={showPriceAdjustment} onOpenChange={setShowPriceAdjustment}>
+        <DialogContent className="p-0 max-w-md flex flex-col">
+          <div className="flex justify-between items-center p-4 pr-12 border-b bg-muted/30">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment
+            </h3>
+          </div>
+          <div className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">
                 Raise or lower the price on every matching service in one step, instead of editing services one at a time.
               </p>
@@ -1098,7 +1094,7 @@ const Services: React.FC = () => {
               </div>
 
               {priceAdjForm.mode === 'percentage' && priceAdjForm.percentage && !isNaN(parseFloat(priceAdjForm.percentage)) && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: a service priced at 100.00 becomes{' '}
                   <strong>
                     {priceAdjForm.direction === 'increase'
@@ -1110,26 +1106,25 @@ const Services: React.FC = () => {
               )}
 
               {priceAdjForm.mode === 'rate' && priceAdjForm.newRate && !isNaN(parseFloat(priceAdjForm.newRate)) && currentExchangeRate != null && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: a service priced at 100.00 becomes{' '}
                   <strong>{(100 * (parseFloat(priceAdjForm.newRate) / currentExchangeRate)).toFixed(2)}</strong>.
                   This applies immediately to {priceAdjForm.category ? `all "${priceAdjForm.category}" services` : 'ALL active services'} and cannot be undone automatically.
                 </div>
               )}
             </div>
-            <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowPriceAdjustment(false)} disabled={applyingPriceAdj}>Cancel</Button>
-              <Button
-                onClick={handleApplyPriceAdjustment}
-                disabled={applyingPriceAdj || (priceAdjForm.mode === 'percentage' ? !priceAdjForm.percentage : !priceAdjForm.newRate)}
-              >
-                {applyingPriceAdj ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Percent className="w-4 h-4 mr-2" />}
-                {applyingPriceAdj ? 'Applying...' : 'Apply Adjustment'}
-              </Button>
-            </div>
+          <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowPriceAdjustment(false)} disabled={applyingPriceAdj}>Cancel</Button>
+            <Button
+              onClick={handleApplyPriceAdjustment}
+              disabled={applyingPriceAdj || (priceAdjForm.mode === 'percentage' ? !priceAdjForm.percentage : !priceAdjForm.newRate)}
+            >
+              {applyingPriceAdj ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Percent className="w-4 h-4 mr-2" />}
+              {applyingPriceAdj ? 'Applying...' : 'Apply Adjustment'}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };

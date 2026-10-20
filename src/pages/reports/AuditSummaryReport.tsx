@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye, X } from 'lucide-react';
+import { Activity, Users, Trophy, Zap, Calendar, RefreshCw, Download, Printer, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportSubPageShell } from './ReportSubPageShell';
 import { authFetch } from '@/api/apiClient';
@@ -8,10 +8,11 @@ import { ReportLetterhead } from './ReportLetterhead';
 import { StatusBadge, StatusBadgeTone, LoadingState } from '@/components/common';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { fmtCount, fmtDate, CsvColumn, getDatePresets, exportCSV, triggerPrint } from '@/utils/reportUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 
 // Same letterhead + "nothing loads until View is clicked" shape as the rest
 // of the Reports Center (Clinical/Inventory/Procurement/Accounting Reports).
@@ -341,7 +342,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Total Actions Logged</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Actions Logged</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.totals.totalActions)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">matching the filters above</p>
                 </div>
@@ -352,7 +353,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Active Staff Count</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Active Staff Count</p>
                   <p className="text-2xl font-bold mt-1">{fmtCount(data?.totals.activeStaffCount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">distinct users with activity</p>
                 </div>
@@ -363,7 +364,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Most Active User</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Most Active User</p>
                   <p className="text-2xl font-bold mt-1 truncate">{data?.totals.mostActiveUser?.userName ?? '—'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {data?.totals.mostActiveUser ? `${fmtCount(data.totals.mostActiveUser.actionCount)} actions` : 'no activity in period'}
@@ -376,7 +377,7 @@ export default function AuditSummaryReport() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Most Common Action</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Most Common Action</p>
                   <p className="text-2xl font-bold mt-1 truncate">{data?.totals.mostCommonAction ? humanizeAction(data.totals.mostCommonAction.action) : '—'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {data?.totals.mostCommonAction ? `${fmtCount(data.totals.mostCommonAction.actionCount)} occurrences` : 'no activity in period'}
@@ -404,7 +405,7 @@ export default function AuditSummaryReport() {
               <p className="text-xs text-muted-foreground">{fmtCount(byUser.length)} staff member{byUser.length === 1 ? '' : 's'} with logged activity {fmtDate(dateFrom)} — {fmtDate(dateTo)} &middot; click a row to filter the activity log below</p>
             </div>
             <AdvancedDataTable<ByUserRow & { no: number }>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={numberedByUser}
               keyExtractor={(row) => String(row.userId ?? row.userName)}
               searchable
@@ -456,7 +457,7 @@ export default function AuditSummaryReport() {
               </p>
             </div>
             <AdvancedDataTable<ActivityRow & { no: number }>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={numberedActivity}
               keyExtractor={(row) => row.id}
               searchable
@@ -500,17 +501,15 @@ export default function AuditSummaryReport() {
     </ReportSubPageShell>
 
     {/* ── Action detail modal — before/after values for a void, cancel, update, etc. ── */}
-    {detailRow && (
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetailRow(null)}>
-        <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+    <Dialog open={!!detailRow} onOpenChange={(open) => { if (!open) setDetailRow(null); }}>
+      <DialogContent className="p-0 max-w-2xl max-h-[85vh] flex flex-col">
+        {detailRow && (
+        <>
+          <div className="flex justify-between items-center p-4 pr-12 border-b bg-muted/30">
             <div>
               <h3 className="font-semibold text-sm">{humanizeAction(detailRow.action)}</h3>
               <p className="text-xs text-muted-foreground">{detailRow.userName} · {fmtDateTime(detailRow.createdAt)}</p>
             </div>
-            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1 hover:bg-muted transition-colors" onClick={() => setDetailRow(null)} aria-label="Close">
-              <X className="w-4 h-4" />
-            </button>
           </div>
           <div className="p-4 space-y-4 overflow-auto">
             {detailRow.description && (
@@ -523,10 +522,10 @@ export default function AuditSummaryReport() {
               <div className="border rounded-md overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-sky-100 dark:bg-sky-950/40 border-b border-border text-left">
-                      <th className="px-2.5 py-2 font-semibold text-foreground">Field</th>
-                      <th className="px-2.5 py-2 font-semibold text-red-700">Before</th>
-                      <th className="px-2.5 py-2 font-semibold text-emerald-700">After</th>
+                    <tr className="bg-info-bg dark:bg-info/40 border-b border-border text-left">
+                      <th scope="col" className="px-2.5 py-2 font-semibold text-foreground">Field</th>
+                      <th scope="col" className="px-2.5 py-2 font-semibold text-destructive">Before</th>
+                      <th scope="col" className="px-2.5 py-2 font-semibold text-success">After</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -538,10 +537,10 @@ export default function AuditSummaryReport() {
                       const newV = detailRow.newValues?.[key];
                       const changed = JSON.stringify(oldV ?? null) !== JSON.stringify(newV ?? null);
                       return (
-                        <tr key={key} className={cn('border-b border-border/60 last:border-0', changed && 'bg-amber-50 dark:bg-amber-950/20')}>
+                        <tr key={key} className={cn('border-b border-border/60 last:border-0', changed && 'bg-warning-bg dark:bg-warning/20')}>
                           <td className="px-2.5 py-1.5 align-top font-medium text-foreground whitespace-nowrap">{humanizeAction(key)}</td>
-                          <td className="px-2.5 py-1.5 align-top text-red-700 break-words max-w-[160px]">{formatDiffValue(oldV)}</td>
-                          <td className="px-2.5 py-1.5 align-top text-emerald-700 break-words max-w-[160px]">{formatDiffValue(newV)}</td>
+                          <td className="px-2.5 py-1.5 align-top text-destructive break-words max-w-[160px]">{formatDiffValue(oldV)}</td>
+                          <td className="px-2.5 py-1.5 align-top text-success break-words max-w-[160px]">{formatDiffValue(newV)}</td>
                         </tr>
                       );
                     })}
@@ -552,9 +551,10 @@ export default function AuditSummaryReport() {
               <p className="text-xs text-muted-foreground italic">No before/after values recorded for this action.</p>
             )}
           </div>
-        </div>
-      </div>
-    )}
+        </>
+        )}
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

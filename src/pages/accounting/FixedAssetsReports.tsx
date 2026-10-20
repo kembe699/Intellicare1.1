@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
-import { toast } from 'sonner';
+import { toast } from '@/lib/notify';
 import { FileBarChart, Wallet, Download } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import { NATURE_BADGE, NATURE_LABEL, fmt } from './fixedAssetsShared';
@@ -86,7 +86,7 @@ export default function FixedAssetsReports() {
         <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center gap-2"><Wallet className="h-4 w-4" /><h4 className="font-semibold text-sm">Net Book Value by Category</h4></div>
         <CardContent className="p-0">
           <table className="w-full text-sm border-collapse">
-            <thead><tr className="border-b bg-muted/30"><th className="text-left py-2.5 px-4">Category</th><th className="text-left py-2.5 px-4">Nature</th><th className="text-right py-2.5 px-4">Assets</th><th className="text-right py-2.5 px-4">Cost</th><th className="text-right py-2.5 px-4">Accum. Depreciation</th><th className="text-right py-2.5 px-4">Book Value</th></tr></thead>
+            <thead><tr className="border-b bg-muted/30"><th scope="col" className="text-left py-2.5 px-4">Category</th><th scope="col" className="text-left py-2.5 px-4">Nature</th><th scope="col" className="text-right py-2.5 px-4">Assets</th><th scope="col" className="text-right py-2.5 px-4">Cost</th><th scope="col" className="text-right py-2.5 px-4">Accum. Depreciation</th><th scope="col" className="text-right py-2.5 px-4">Book Value</th></tr></thead>
             <tbody>
               {(nbv?.byCategory || []).map((row: any) => (
                 <tr key={row.category_name} className="border-b border-border/50">
@@ -117,7 +117,7 @@ export default function FixedAssetsReports() {
         <CardContent className="p-5 grid grid-cols-3 sm:grid-cols-6 gap-4">
           {Object.entries(scheduleByPeriod).map(([period, amount]) => (
             <div key={period}>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{period}</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{period}</p>
               <p className="text-lg font-semibold">{fmt(amount)}</p>
             </div>
           ))}
