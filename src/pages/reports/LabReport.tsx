@@ -162,7 +162,7 @@ export default function LabReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Lab Revenue (Collected)</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(displayCash?.totalCollected)}</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(displayCash?.totalCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {collection ? `${fmtCount(collection.exactItems)} exact · ${fmtCount(collection.estimatedItems)} estimated` : '—'}
                   </p>
@@ -202,9 +202,9 @@ export default function LabReport() {
                 <p className="text-xs text-muted-foreground">Volume performed and cash value per test</p>
               </div>
               <AdvancedDataTable<ByTestRow>
-                headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+                headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
                 footerRow={(colSpan) => (
-                  <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                  <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                     <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                       <div className="flex justify-between items-center">
                         <span>Total Collected</span>
@@ -239,14 +239,14 @@ export default function LabReport() {
                         {t.testName}
                         {t.testCode && <span className="ml-1.5 text-xs font-mono text-muted-foreground">{t.testCode}</span>}
                         {t.volume == null && (
-                          <span className="ml-1.5 text-xs text-amber-600" title="Billed under this name but no matching LIS specimen was found in this period">not tracked in LIS</span>
+                          <span className="ml-1.5 text-xs text-warning" title="Billed under this name but no matching LIS specimen was found in this period">not tracked in LIS</span>
                         )}
                       </>
                     ),
                   },
                   { key: 'volume', header: 'Volume', align: 'right', sortable: true, render: (v) => <span className="font-mono">{v == null ? '—' : fmtCount(v)}</span> },
                   { key: 'totalBilled', header: 'Billed', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCurrency(v)}</span> },
-                  { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-emerald-700">{fmtCurrency(v)}</span> },
+                  { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
                 ]}
               />
               {filteredByTest.length > 0 && (
@@ -255,7 +255,7 @@ export default function LabReport() {
                   <span className="flex gap-8 font-mono">
                     <span>{fmtCount(filteredByTest.reduce((s, t) => s + (t.volume || 0), 0))}</span>
                     <span>{fmtCurrency(filteredByTest.reduce((s, t) => s + t.totalBilled, 0))}</span>
-                    <span className="text-emerald-700">{fmtCurrency(filteredByTest.reduce((s, t) => s + t.totalCollected, 0))}</span>
+                    <span className="text-success">{fmtCurrency(filteredByTest.reduce((s, t) => s + t.totalCollected, 0))}</span>
                   </span>
                 </div>
               )}

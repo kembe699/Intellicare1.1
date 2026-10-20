@@ -29,9 +29,9 @@ export const ResponsiveButton: React.FC<ResponsiveButtonProps> = ({
 
   // Variant classes
   const variantClasses = {
-    primary: 'bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500 active:bg-teal-800',
+    primary: 'bg-primary text-white hover:bg-primary-hover focus:ring-ring active:bg-primary-hover',
     secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-400 active:bg-gray-400',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 active:bg-red-800',
+    danger: 'bg-destructive text-white hover:bg-destructive focus:ring-destructive-border active:bg-destructive',
     ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-300 active:bg-gray-200',
   };
 

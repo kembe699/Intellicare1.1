@@ -255,7 +255,7 @@ export default function CreateClaimModal({ onClose, onSuccess }: CreateClaimModa
             {loadingSchemes ? (
               <div className="flex items-center gap-2 text-sm text-gray-400 py-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading schemes...</div>
             ) : schemes.length === 0 ? (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700 flex gap-2">
+              <div className="p-3 bg-warning-bg border border-warning-border rounded-lg text-sm text-warning flex gap-2">
                 <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span>No insurance schemes found. Create an insurance scheme in Scheme Management first.</span>
               </div>
@@ -324,11 +324,11 @@ export default function CreateClaimModal({ onClose, onSuccess }: CreateClaimModa
             ) : loadingInvoices ? (
               <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
             ) : unpaidInvoices.length === 0 ? (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex gap-3">
-                <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="p-4 bg-warning-bg border border-warning-border rounded-lg flex gap-3">
+                <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-yellow-800">No unpaid invoices for this scheme</p>
-                  <p className="text-xs text-yellow-600 mt-0.5">No unpaid invoices for this scheme in the selected date range. Try a wider range or different scheme.</p>
+                  <p className="text-sm font-medium text-warning">No unpaid invoices for this scheme</p>
+                  <p className="text-xs text-warning mt-0.5">No unpaid invoices for this scheme in the selected date range. Try a wider range or different scheme.</p>
                 </div>
               </div>
             ) : (
@@ -337,8 +337,8 @@ export default function CreateClaimModal({ onClose, onSuccess }: CreateClaimModa
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-gray-500">{selectedInvoiceIds.size} of {unpaidInvoices.length} selected</span>
                     <div className="flex items-center gap-1">
-                      <DollarSign className="h-3.5 w-3.5 text-green-600" />
-                      <span className="font-bold text-green-700 text-sm">{schemeCurrency} {totalAmount.toFixed(2)}</span>
+                      <DollarSign className="h-3.5 w-3.5 text-success" />
+                      <span className="font-bold text-success text-sm">{schemeCurrency} {totalAmount.toFixed(2)}</span>
                     </div>
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-1">

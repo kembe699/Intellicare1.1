@@ -410,15 +410,15 @@ export default function LISCollection() {
                         ) : unpaidCount > 0 ? (
                           <span className="text-xs font-medium text-orange-600 shrink-0">Unpaid</span>
                         ) : pendingCount > 0 ? (
-                          <span className="text-xs font-medium text-green-600 shrink-0">Ready to collect</span>
+                          <span className="text-xs font-medium text-success shrink-0">Ready to collect</span>
                         ) : (
-                          <span className="text-xs font-medium text-blue-600 shrink-0">Awaiting dispatch</span>
+                          <span className="text-xs font-medium text-info shrink-0">Awaiting dispatch</span>
                         )}
                         {g.insuranceBalance > 0 && (
-                          <span className="text-xs font-medium text-sky-600 shrink-0">Insurance</span>
+                          <span className="text-xs font-medium text-info shrink-0">Insurance</span>
                         )}
                         {g.hasRecollection && (
-                          <span className="text-xs font-medium text-red-600 shrink-0">Recollection</span>
+                          <span className="text-xs font-medium text-destructive shrink-0">Recollection</span>
                         )}
                       </button>
                     );
@@ -440,7 +440,7 @@ export default function LISCollection() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <div className="text-lg font-semibold">{selectedGroup.first_name} {selectedGroup.last_name}</div>
                       {selectedGroup.insuranceBalance > 0 && (
-                        <span className="bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full text-xs font-medium">Insurance</span>
+                        <span className="bg-info-bg text-info px-2 py-0.5 rounded-full text-xs font-medium">Insurance</span>
                       )}
                     </div>
                     <div className="text-sm font-mono text-muted-foreground">{selectedGroup.participant_number}</div>
@@ -455,9 +455,9 @@ export default function LISCollection() {
                           key: '__status', header: '', width: '2rem',
                           render: (_v, s) => (
                             s.status === 'collected' ? (
-                              <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              <CheckCircle2 className="w-4 h-4 text-success" />
                             ) : s.status === 'recollection_required' ? (
-                              <AlertCircle className="w-4 h-4 text-red-600" />
+                              <AlertCircle className="w-4 h-4 text-destructive" />
                             ) : (
                               <Circle className="w-4 h-4 text-muted-foreground/50" />
                             )
@@ -514,7 +514,7 @@ export default function LISCollection() {
 
                   <div className="p-4 border-t bg-muted/30 space-y-2">
                     {unpaidPendingInSelected.length > 0 && (
-                      <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                      <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         {unpaidPendingInSelected.length} test{unpaidPendingInSelected.length > 1 ? 's' : ''} still unpaid — collect payment to unlock {unpaidPendingInSelected.length > 1 ? 'them' : 'it'}. {payablePendingInSelected.length > 0 ? 'The rest are ready to collect below.' : ''}
                       </div>

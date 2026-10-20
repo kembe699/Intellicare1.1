@@ -34,14 +34,14 @@ const STATUS_FILTER_OPTIONS = [
 
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
-    pending: 'bg-sky-50 text-sky-700 border-sky-200',
-    partial: 'bg-amber-50 text-amber-700 border-amber-200',
-    partial_dispensed: 'bg-amber-50 text-amber-700 border-amber-200',
-    dispensed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
+    pending: 'bg-info-bg text-info border-info-border',
+    partial: 'bg-warning-bg text-warning border-warning-border',
+    partial_dispensed: 'bg-warning-bg text-warning border-warning-border',
+    dispensed: 'bg-success-bg text-success border-success-border',
+    cancelled: 'bg-muted text-muted-foreground border-border',
   };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
@@ -575,7 +575,7 @@ export default function PrescriptionManagement() {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Billing Mode</label>
                   {patientActiveBill ? (
-                    <div className="mt-1 p-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800">
+                    <div className="mt-1 p-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info">
                       This patient has an open {patientActiveBill.scheme_id ? `scheme (${patientActiveBill.scheme_name})` : 'cash'} bill ({patientActiveBill.bill_number}) — new items are added to it under that same mode.
                     </div>
                   ) : (
@@ -792,13 +792,13 @@ export default function PrescriptionManagement() {
                           {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                           {l.duration_days ? ` · ${l.duration_days}d` : ''}
                           {l.is_external ? (
-                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                            <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
                               buy outside
                             </span>
                           ) : l.selling_price > 0 ? (
                             <span className="text-muted-foreground"> · {(l.selling_price * l.quantity_prescribed).toLocaleString()} SSP</span>
                           ) : (
-                            <span className="text-amber-600 font-medium"> · no price set — will not be billed</span>
+                            <span className="text-warning font-medium"> · no price set — will not be billed</span>
                           )}
                         </span>
                         <button type="button" onClick={() => removeRxLine(i)} className="text-muted-foreground hover:text-foreground">
@@ -931,7 +931,7 @@ export default function PrescriptionManagement() {
 
             <div className="p-4 border-t bg-muted/30 flex justify-between">
               {selectedRx.status === 'pending' ? (
-                <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={handleCancelPrescription} disabled={cancelling}>
+                <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleCancelPrescription} disabled={cancelling}>
                   {cancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Ban className="w-4 h-4 mr-2" />}
                   Cancel Prescription
                 </Button>

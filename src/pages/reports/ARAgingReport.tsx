@@ -176,7 +176,7 @@ export default function ARAgingReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Current (0-30d)</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(summary.buckets.current.amount)}</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(summary.buckets.current.amount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{fmtCount(summary.buckets.current.count)} bills</p>
                 </div>
                 <Clock className="h-5 w-5 text-primary" />
@@ -186,7 +186,7 @@ export default function ARAgingReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">31-90 Days</p>
-                  <p className="text-2xl font-bold mt-1 text-amber-700">
+                  <p className="text-2xl font-bold mt-1 text-warning">
                     {fmtCurrency(summary.buckets.d31_60.amount + summary.buckets.d61_90.amount)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -200,7 +200,7 @@ export default function ARAgingReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">90+ Days (Critical)</p>
-                  <p className="text-2xl font-bold mt-1 text-red-700">{fmtCurrency(d90.amount)}</p>
+                  <p className="text-2xl font-bold mt-1 text-destructive">{fmtCurrency(d90.amount)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">across {fmtCount(d90.count)} bill{d90.count === 1 ? '' : 's'}</p>
                 </div>
                 <AlertOctagon className="h-5 w-5 text-primary" />
@@ -215,7 +215,7 @@ export default function ARAgingReport() {
               <p className="text-xs text-muted-foreground mt-0.5">As of {fmtDate(data?.asOf)}</p>
             </div>
             <AdvancedDataTable<AgingSummaryRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={agingSummary}
               keyExtractor={(row) => row.bucket}
               columns={[
@@ -245,7 +245,7 @@ export default function ARAgingReport() {
               </p>
             </div>
             <AdvancedDataTable<AgingBillRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={filteredItems}
               keyExtractor={(item) => item.id}
               emptyMessage="No outstanding bills found."

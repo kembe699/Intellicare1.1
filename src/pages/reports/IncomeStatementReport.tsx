@@ -195,7 +195,7 @@ export default function IncomeStatementReport() {
       </div>
 
       {data?.dailyRangeTruncated && (
-        <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <div className="mb-4 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning">
           This range is longer than 92 days — the daily view only covers the first 92 days. Narrow the date range to see the rest day by day.
         </div>
       )}
@@ -229,8 +229,8 @@ export default function IncomeStatementReport() {
                     <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(d.totalRevenue)}</td>
                     <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(d.totalCostOfGoodsSold)}</td>
                     <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(d.totalOperatingExpenses)}</td>
-                    <td className={`px-4 py-2 text-right font-mono tabular-nums ${d.totalMiscellaneous > 0 ? 'text-amber-700 font-semibold' : ''}`}>{fmtCurrency(d.totalMiscellaneous)}</td>
-                    <td className={`px-4 py-2 text-right font-mono font-semibold tabular-nums ${d.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtCurrency(d.netIncome)}</td>
+                    <td className={`px-4 py-2 text-right font-mono tabular-nums ${d.totalMiscellaneous > 0 ? 'text-warning font-semibold' : ''}`}>{fmtCurrency(d.totalMiscellaneous)}</td>
+                    <td className={`px-4 py-2 text-right font-mono font-semibold tabular-nums ${d.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(d.netIncome)}</td>
                   </tr>
                 ))
               )}
@@ -243,7 +243,7 @@ export default function IncomeStatementReport() {
                   <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(sections?.costOfGoodsSold.total ?? 0)}</td>
                   <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(sections?.operatingExpenses.total ?? 0)}</td>
                   <td className="px-4 py-2 text-right font-mono tabular-nums">{fmtCurrency(sections?.miscellaneous.total ?? 0)}</td>
-                  <td className={`px-4 py-2 text-right font-mono tabular-nums ${netPositive ? 'text-green-600' : 'text-red-600'}`}>{fmtCurrency(netIncome)}</td>
+                  <td className={`px-4 py-2 text-right font-mono tabular-nums ${netPositive ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(netIncome)}</td>
                 </tr>
               </tfoot>
             )}
@@ -344,8 +344,8 @@ export default function IncomeStatementReport() {
 
               {/* ── Miscellaneous — called out on its own so a large balance here
                   can never hide inside a flat "Expenses" list unnoticed ── */}
-              <tr className="bg-amber-50">
-                <td colSpan={2} className="px-4 py-2 font-semibold text-sm uppercase tracking-wide text-amber-800">
+              <tr className="bg-warning-bg">
+                <td colSpan={2} className="px-4 py-2 font-semibold text-sm uppercase tracking-wide text-warning">
                   Miscellaneous
                 </td>
               </tr>
@@ -355,7 +355,7 @@ export default function IncomeStatementReport() {
                 </tr>
               ) : (
                 sections!.miscellaneous.lines.map(e => (
-                  <tr key={e.account_id} className="border-b border-border/60 last:border-0 bg-amber-50/40">
+                  <tr key={e.account_id} className="border-b border-border/60 last:border-0 bg-warning-bg/40">
                     <td className="px-4 py-2">
                       <span className="text-muted-foreground font-mono text-xs mr-2">{e.account_code}</span>
                       {e.account_name}
@@ -364,9 +364,9 @@ export default function IncomeStatementReport() {
                   </tr>
                 ))
               )}
-              <tr className="border-t border-amber-300">
-                <td className="px-4 py-2 font-medium text-amber-800">Total Miscellaneous</td>
-                <td className="px-4 py-2 text-right font-mono font-medium tabular-nums text-amber-800">{fmtCurrency(sections?.miscellaneous.total ?? 0)}</td>
+              <tr className="border-t border-warning-border">
+                <td className="px-4 py-2 font-medium text-warning">Total Miscellaneous</td>
+                <td className="px-4 py-2 text-right font-mono font-medium tabular-nums text-warning">{fmtCurrency(sections?.miscellaneous.total ?? 0)}</td>
               </tr>
 
               {/* ── Spacer ── */}
@@ -378,18 +378,18 @@ export default function IncomeStatementReport() {
               </tr>
 
               {/* ── Net Income ── */}
-              <tr className={`border-t-4 ${netPositive ? 'border-green-600/40' : 'border-red-600/40'}`}>
+              <tr className={`border-t-4 ${netPositive ? 'border-success-border/40' : 'border-destructive-border/40'}`}>
                 <td className="px-4 py-3 font-bold text-base flex items-center gap-2">
                   {netPositive ? (
-                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    <TrendingUp className="h-4 w-4 text-success" />
                   ) : (
-                    <TrendingDown className="h-4 w-4 text-red-600" />
+                    <TrendingDown className="h-4 w-4 text-destructive" />
                   )}
                   Net Income
                 </td>
                 <td
                   className={`px-4 py-3 text-right font-mono font-bold text-base tabular-nums ${
-                    netPositive ? 'text-green-600' : 'text-red-600'
+                    netPositive ? 'text-success' : 'text-destructive'
                   }`}
                 >
                   {fmtCurrency(netIncome)}

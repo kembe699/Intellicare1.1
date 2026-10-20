@@ -19,10 +19,10 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate } from '@/lib/format';
 
 const STATUS_CLASS: Record<string, string> = {
-  in_progress: 'bg-sky-50 text-sky-700 border-sky-200', completed: 'bg-amber-50 text-amber-700 border-amber-200',
-  reconciled: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  pending: 'bg-slate-100 text-slate-600 border-slate-200', approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  rejected: 'bg-red-50 text-red-700 border-red-200',
+  in_progress: 'bg-info-bg text-info border-info-border', completed: 'bg-warning-bg text-warning border-warning-border',
+  reconciled: 'bg-success-bg text-success border-success-border',
+  pending: 'bg-muted text-muted-foreground border-border', approved: 'bg-success-bg text-success border-success-border',
+  rejected: 'bg-destructive-bg text-destructive border-destructive-border',
 };
 
 const defaultCountForm = () => ({ count_type: 'full_count', location_id: '' });
@@ -370,7 +370,7 @@ export default function PhysicalCounts() {
                   { key: 'variance_count', header: 'Variances', sortable: true, render: (v) => v || 0 },
                   {
                     key: 'status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
+                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
                   },
                   {
                     key: '__actions', header: 'Actions',
@@ -399,13 +399,13 @@ export default function PhysicalCounts() {
                   { key: 'physical_count', header: 'Physical', sortable: true },
                   {
                     key: 'variance', header: 'Variance', sortable: true,
-                    render: (v) => <span className={`font-mono ${v > 0 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
+                    render: (v) => <span className={`font-mono ${v > 0 ? 'text-success' : v < 0 ? 'text-destructive' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
                   },
                   { key: 'variance_value', header: 'Value', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
                   { key: 'variance_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
                   {
                     key: 'approval_status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v}</span>,
+                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v}</span>,
                   },
                   {
                     key: '__actions', header: 'Actions',
@@ -413,13 +413,13 @@ export default function PhysicalCounts() {
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
                           {processingAdj?.id === adj.id && processingAdj.action === 'approve'
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                            : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-success" />
+                            : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                         </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
                           {processingAdj?.id === adj.id && processingAdj.action === 'reject'
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
-                            : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-destructive" />
+                            : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                         </Button>
                       </div>
                     ) : null,
@@ -445,13 +445,13 @@ export default function PhysicalCounts() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedCount(null)}><X className="w-4 h-4" /></Button>
             </div>
             <div className="p-6 flex-1 overflow-auto space-y-4">
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[selectedCount.status] || 'bg-muted text-muted-foreground border-border'}`}>{selectedCount.status?.replace(/_/g, ' ')}</span>
               <div className="border rounded-lg overflow-hidden">
                 <AdvancedDataTable<any>
                   data={selectedCount.lines || []}
                   keyExtractor={(line) => line.id}
                   emptyMessage="No items counted yet."
-                  rowClassName={(line) => line.variance !== 0 ? 'bg-red-50/50' : ''}
+                  rowClassName={(line) => line.variance !== 0 ? 'bg-destructive-bg/50' : ''}
                   columns={[
                     {
                       key: 'item_name', header: 'Item',
@@ -466,7 +466,7 @@ export default function PhysicalCounts() {
                     { key: 'counted_quantity', header: 'Counted', align: 'right' },
                     {
                       key: 'variance', header: 'Variance', align: 'right',
-                      render: (v) => <span className={`font-mono ${v > 0 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
+                      render: (v) => <span className={`font-mono ${v > 0 ? 'text-success' : v < 0 ? 'text-destructive' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
                     },
                   ]}
                 />

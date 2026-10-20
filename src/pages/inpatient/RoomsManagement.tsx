@@ -472,7 +472,7 @@ export default function RoomsManagement() {
           <DialogFooter className="sm:justify-between">
             <Button
               variant="outline"
-              className="border-red-200 text-red-700 hover:bg-red-50"
+              className="border-destructive-border text-destructive hover:bg-destructive-bg"
               onClick={async () => {
                 if (deleteRoomMutation.isPending) return;
                 if (selectedRoom) { if (await confirm({ description: 'Delete this room?', destructive: true })) deleteRoomMutation.mutate(selectedRoom.id); }

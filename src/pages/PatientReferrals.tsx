@@ -158,11 +158,11 @@ export default function PatientReferrals() {
                 key: '__action', header: 'Action',
                 render: (_v, r) => (
                   canRespond(r) ? (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase whitespace-nowrap">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning-bg text-warning uppercase whitespace-nowrap">
                       Needs your response
                     </span>
                   ) : r.status === 'accepted' && !r.queued_order_id && (isAdmin || Number(r.to_branch_id) === myBranchId) ? (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 uppercase whitespace-nowrap">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-info-bg text-info uppercase whitespace-nowrap">
                       Ready to queue
                     </span>
                   ) : (

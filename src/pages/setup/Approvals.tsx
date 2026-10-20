@@ -255,7 +255,7 @@ const Approvals: React.FC = () => {
                           </span>
                         </label>
                         {MULTI_LEVEL_APPROVAL_TYPES.has(t.key) && (
-                          <label className="flex items-center gap-1.5 mt-1.5 ml-6 text-xs text-amber-700 cursor-pointer">
+                          <label className="flex items-center gap-1.5 mt-1.5 ml-6 text-xs text-warning cursor-pointer">
                             <input
                               type="checkbox"
                               className="rounded"

@@ -154,7 +154,7 @@ export default function AdmittedPatients() {
                 { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
                 {
                   key: 'admission_type', header: 'Type', sortable: true,
-                  render: (v) => <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>{v}</Badge>,
+                  render: (v) => <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : 'bg-primary/10 text-primary'}`}>{v}</Badge>,
                 },
                 { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
                 { key: 'diagnosis', header: 'Diagnosis', render: (v) => <span className="text-muted-foreground truncate max-w-[220px] block">{v || '—'}</span> },

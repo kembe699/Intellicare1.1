@@ -390,7 +390,7 @@ export default function PayrollRunDetail() {
               </div>
             </div>
             {!run.payment_account_id && run.status === 'draft' && (
-              <p className="text-xs text-amber-700">A payment account must be set before this run can be approved.</p>
+              <p className="text-xs text-warning">A payment account must be set before this run can be approved.</p>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -399,8 +399,8 @@ export default function PayrollRunDetail() {
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">{t.currency}</p>
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div><p className="text-xs text-muted-foreground">Gross</p><p className="font-mono font-bold">{docTemplate.formatCurrency(t.gross, t.currency)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Deductions</p><p className="font-mono font-bold text-amber-700">{docTemplate.formatCurrency(t.deductions, t.currency)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Net</p><p className="font-mono font-bold text-emerald-700">{docTemplate.formatCurrency(t.net, t.currency)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Deductions</p><p className="font-mono font-bold text-warning">{docTemplate.formatCurrency(t.deductions, t.currency)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Net</p><p className="font-mono font-bold text-success">{docTemplate.formatCurrency(t.net, t.currency)}</p></div>
                   </div>
                 </div>
               ))}
@@ -435,8 +435,8 @@ export default function PayrollRunDetail() {
                 { key: 'employee_name', header: 'Employee', render: (v) => v },
                 { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
                 { key: 'gross_pay', header: 'Gross', align: 'right', render: (v, l) => <span className="font-mono">{docTemplate.formatCurrency(v, l.currency)}</span> },
-                { key: 'deductions_total', header: 'Deductions', align: 'right', render: (v, l) => <span className="font-mono text-amber-700">{docTemplate.formatCurrency(v, l.currency)}</span> },
-                { key: 'net_pay', header: 'Net Pay', align: 'right', render: (v, l) => <span className="font-mono font-bold text-emerald-700">{docTemplate.formatCurrency(v, l.currency)}</span> },
+                { key: 'deductions_total', header: 'Deductions', align: 'right', render: (v, l) => <span className="font-mono text-warning">{docTemplate.formatCurrency(v, l.currency)}</span> },
+                { key: 'net_pay', header: 'Net Pay', align: 'right', render: (v, l) => <span className="font-mono font-bold text-success">{docTemplate.formatCurrency(v, l.currency)}</span> },
                 {
                   key: 'status', header: 'Paid', align: 'center',
                   render: (v) => <StatusBadge status={v || 'unpaid'} label={v === 'paid' ? 'Paid' : 'Unpaid'} map={{ paid: 'success', unpaid: 'warning' }} />,

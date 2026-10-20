@@ -979,10 +979,10 @@ const PurchaseRequisitions: React.FC = () => {
                         {pr.status === 'submitted' && (
                           <>
                             <Button size="sm" variant="ghost" onClick={() => approvePR(pr.id)} disabled={processing?.id === pr.id}>
-                              {processing?.id === pr.id && processing.action === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                              {processing?.id === pr.id && processing.action === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => rejectPR(pr.id)} disabled={processing?.id === pr.id}>
-                              {processing?.id === pr.id && processing.action === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                              {processing?.id === pr.id && processing.action === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
@@ -1020,7 +1020,7 @@ const PurchaseRequisitions: React.FC = () => {
                   <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline" className="capitalize text-xs ml-1">{selectedPR.requisition_type}</Badge></div>
                   <div><span className="text-muted-foreground">Required By:</span> <span className="font-medium">{selectedPR.delivery_date_required ? formatDate(selectedPR.delivery_date_required) : '—'}</span></div>
                   {selectedPR.approver_name && <div><span className="text-muted-foreground">Approved By:</span> <span className="font-medium">{selectedPR.approver_name}</span></div>}
-                  {selectedPR.rejection_reason && <div className="col-span-2"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-red-600">{selectedPR.rejection_reason}</span></div>}
+                  {selectedPR.rejection_reason && <div className="col-span-2"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-destructive">{selectedPR.rejection_reason}</span></div>}
                 </div>
 
                 {selectedPR.notes && (
@@ -1071,7 +1071,7 @@ const PurchaseRequisitions: React.FC = () => {
                   )}
                   {selectedPR.status === 'submitted' && (
                     <>
-                      <Button size="sm" onClick={() => approvePR(selectedPR.id)} className="h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={processing?.id === selectedPR.id}>
+                      <Button size="sm" onClick={() => approvePR(selectedPR.id)} className="h-8 px-4 text-xs bg-success hover:bg-success text-white" disabled={processing?.id === selectedPR.id}>
                         {processing?.id === selectedPR.id && processing.action === 'approve' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedPR.id && processing.action === 'approve' ? 'Approving...' : 'Approve'}
                       </Button>

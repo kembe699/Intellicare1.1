@@ -114,7 +114,7 @@ const PlatformDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">This Month</p>
-                <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data.revenueThisMonth)}</p>
+                <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(data.revenueThisMonth)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">revenue collected</p>
               </div>
               <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -125,7 +125,7 @@ const PlatformDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Outstanding</p>
-                <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(data.outstandingAmount)}</p>
+                <p className="text-2xl font-bold mt-1 text-warning">{fmtCurrency(data.outstandingAmount)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{data.outstandingCount} unpaid invoice{data.outstandingCount === 1 ? '' : 's'}</p>
               </div>
               <AlertTriangle className="h-5 w-5 text-primary" />

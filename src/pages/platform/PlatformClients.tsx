@@ -263,7 +263,7 @@ const PlatformClients: React.FC = () => {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Client created
+                  <CheckCircle2 className="w-5 h-5 text-success" /> Client created
                 </DialogTitle>
               </DialogHeader>
               <div className="px-5 py-4 space-y-3 text-sm">

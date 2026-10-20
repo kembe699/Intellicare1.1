@@ -675,7 +675,7 @@ const GoodsReceiptNotes: React.FC = () => {
                     key: '__actions', header: 'Actions', align: 'center',
                     render: (_v, grn) => (
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-emerald-600" /></Button>
+                        <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-success" /></Button>
                         <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
                         {grn.status === 'pending_inspection' && (
                           <>
@@ -683,20 +683,20 @@ const GoodsReceiptNotes: React.FC = () => {
                               {processing?.id === grn.id && processing.action === 'inspect' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5 text-primary" />}
                             </Button>
                             <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
                             <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
                         {grn.status === 'inspected' && (
                           <>
                             <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                             </Button>
                             <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                             </Button>
                           </>
                         )}
@@ -753,8 +753,8 @@ const GoodsReceiptNotes: React.FC = () => {
                 </div>
 
                 {selectedGRN.inspection_notes && (
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950 text-sm border border-amber-200 dark:border-amber-800">
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">Inspection Notes</p>
+                  <div className="p-3 rounded-lg bg-warning-bg dark:bg-warning text-sm border border-warning-border dark:border-warning-border">
+                    <p className="text-xs font-medium text-warning dark:text-warning mb-1">Inspection Notes</p>
                     {selectedGRN.inspection_notes}
                   </div>
                 )}
@@ -769,7 +769,7 @@ const GoodsReceiptNotes: React.FC = () => {
                     {
                       key: 'quantity_received', header: 'Received', align: 'center',
                       render: (v, line) => (
-                        <span className={`font-medium ${v < line.quantity_expected ? 'text-amber-600' : 'text-emerald-600'}`}>{v}</span>
+                        <span className={`font-medium ${v < line.quantity_expected ? 'text-warning' : 'text-success'}`}>{v}</span>
                       ),
                     },
                     { key: 'item_condition', header: 'Condition', render: (v) => <span className="capitalize">{v}</span> },
@@ -793,7 +793,7 @@ const GoodsReceiptNotes: React.FC = () => {
                         {processing?.id === selectedGRN.id && processing.action === 'inspect' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <ClipboardCheck className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedGRN.id && processing.action === 'inspect' ? 'Marking Inspected...' : 'Mark Inspected'}
                       </Button>
-                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={processing?.id === selectedGRN.id}>
+                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-success hover:bg-success text-white" disabled={processing?.id === selectedGRN.id}>
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? 'Accepting...' : 'Accept'}
                       </Button>
@@ -805,7 +805,7 @@ const GoodsReceiptNotes: React.FC = () => {
                   )}
                   {selectedGRN.status === 'inspected' && (
                     <>
-                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={processing?.id === selectedGRN.id}>
+                      <Button size="sm" onClick={() => acceptGRN(selectedGRN.id)} className="h-8 px-4 text-xs bg-success hover:bg-success text-white" disabled={processing?.id === selectedGRN.id}>
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-2" />}
                         {processing?.id === selectedGRN.id && processing.action === 'accept' ? 'Accepting...' : 'Accept'}
                       </Button>

@@ -809,7 +809,7 @@ const PurchaseOrders: React.FC = () => {
                   render: (_v, order) => (
                     <div className="flex items-center justify-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => viewOrder(order)}><Eye className="w-3.5 h-3.5" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => downloadPOReport(order)}><Download className="w-3.5 h-3.5 text-green-600" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => downloadPOReport(order)}><Download className="w-3.5 h-3.5 text-success" /></Button>
                       {order.status === 'draft' && (
                         <Button size="sm" variant="ghost" onClick={() => openAddItems(order)}><Plus className="w-3.5 h-3.5 text-primary" /></Button>
                       )}
@@ -820,7 +820,7 @@ const PurchaseOrders: React.FC = () => {
                       )}
                       {getNextStatus(order.status) && (
                         <Button size="sm" variant="ghost" onClick={() => updateOrderStatus(order.id, getNextStatus(order.status)!)} disabled={processingId === order.id}>
-                          {processingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : React.createElement(getStatusIcon(order.status), { className: 'w-3.5 h-3.5 text-emerald-600' })}
+                          {processingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : React.createElement(getStatusIcon(order.status), { className: 'w-3.5 h-3.5 text-success' })}
                         </Button>
                       )}
                     </div>
@@ -941,7 +941,7 @@ const PurchaseOrders: React.FC = () => {
                       { key: 'total_price', header: 'Total', align: 'right', render: (v) => <span className="font-mono text-xs font-semibold">{fmtAs(v, selectedOrder?.po_currency)}</span> },
                       {
                         key: '__remove', header: '', width: '2rem',
-                        render: (_v, item) => <Button size="sm" variant="ghost" onClick={() => removePendingItem(item.id)}><Trash2 className="w-3 h-3 text-red-400" /></Button>,
+                        render: (_v, item) => <Button size="sm" variant="ghost" onClick={() => removePendingItem(item.id)}><Trash2 className="w-3 h-3 text-destructive" /></Button>,
                       },
                     ]}
                   />
@@ -1137,8 +1137,8 @@ const PurchaseOrders: React.FC = () => {
                     <p className="text-xs font-semibold text-muted-foreground">Approval Trail</p>
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       {selectedOrder.check_signed_by && (
-                        <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                          <p className="font-medium text-amber-700 dark:text-amber-300">Checked</p>
+                        <div className="p-2 rounded bg-warning-bg dark:bg-warning/30 border border-warning-border dark:border-warning-border">
+                          <p className="font-medium text-warning dark:text-warning">Checked</p>
                           <p>{selectedOrder.check_signed_by}</p>
                           {selectedOrder.check_signed_at && <p className="text-muted-foreground">{formatDate(selectedOrder.check_signed_at)}</p>}
                         </div>
@@ -1151,8 +1151,8 @@ const PurchaseOrders: React.FC = () => {
                         </div>
                       )}
                       {selectedOrder.authorized_signed_by && (
-                        <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                          <p className="font-medium text-emerald-700 dark:text-emerald-300">Authorized</p>
+                        <div className="p-2 rounded bg-success-bg dark:bg-success/30 border border-success-border dark:border-success-border">
+                          <p className="font-medium text-success dark:text-success">Authorized</p>
                           <p>{selectedOrder.authorized_signed_by}</p>
                           {selectedOrder.authorized_signed_at && <p className="text-muted-foreground">{formatDate(selectedOrder.authorized_signed_at)}</p>}
                         </div>
@@ -1181,7 +1181,7 @@ const PurchaseOrders: React.FC = () => {
                     </Button>
                   )}
                   {getNextStatus(selectedOrder.status) && (
-                    <Button size="sm" className="ml-auto h-8 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)} disabled={processingId === selectedOrder.id}>
+                    <Button size="sm" className="ml-auto h-8 px-4 text-xs bg-success hover:bg-success text-white" onClick={() => updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)} disabled={processingId === selectedOrder.id}>
                       {processingId === selectedOrder.id ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : React.createElement(getStatusIcon(selectedOrder.status), { className: 'w-3 h-3 mr-2' })}
                       {processingId === selectedOrder.id ? 'Processing...' : getStatusAction(selectedOrder.status)}
                     </Button>

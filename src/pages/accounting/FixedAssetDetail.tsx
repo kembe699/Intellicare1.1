@@ -192,14 +192,14 @@ export default function FixedAssetDetail() {
               </div>
             </div>
             <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-amber-600" /></div>
+              <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-warning" /></div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Accumulated Depreciation</p>
                 <p className="text-lg font-bold font-mono leading-tight">{fmt(asset.accumulated_depreciation)}</p>
               </div>
             </div>
             <div className="bg-card rounded-lg border shadow-sm p-4 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
+              <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-success" /></div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Current Book Value</p>
                 <p className="text-lg font-bold font-mono leading-tight">{fmt(asset.current_value)}</p>

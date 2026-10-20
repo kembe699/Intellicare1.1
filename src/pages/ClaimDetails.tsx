@@ -237,7 +237,7 @@ export default function ClaimDetails() {
                 <Download className="h-3.5 w-3.5" />Download
               </Button>
               {canCancel && (
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={cancelling} className="gap-1.5 text-red-600 hover:text-red-700">
+                <Button variant="outline" size="sm" onClick={handleCancel} disabled={cancelling} className="gap-1.5 text-destructive hover:text-destructive">
                   {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
                   {cancelling ? 'Cancelling...' : 'Cancel Claim'}
                 </Button>
@@ -298,7 +298,7 @@ export default function ClaimDetails() {
                   )}
                   {claim.status === 'submitted' && (
                     <>
-                      <Button size="sm" onClick={() => openStatusModal('accepted')} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                      <Button size="sm" onClick={() => openStatusModal('accepted')} className="gap-1.5 bg-success hover:bg-success">
                         <CheckCircle className="h-3.5 w-3.5" /> Accept
                       </Button>
                       <Button size="sm" variant="destructive" onClick={() => openStatusModal('rejected')} className="gap-1.5">
@@ -307,7 +307,7 @@ export default function ClaimDetails() {
                     </>
                   )}
                   {claim.status === 'accepted' && (
-                    <Button size="sm" onClick={() => openStatusModal('paid')} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                    <Button size="sm" onClick={() => openStatusModal('paid')} className="gap-1.5 bg-success hover:bg-success">
                       <DollarSign className="h-3.5 w-3.5" /> Record Payment
                     </Button>
                   )}
@@ -351,7 +351,7 @@ export default function ClaimDetails() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Paid Amount</p>
-                  <p className="font-semibold mt-0.5 text-green-700">{claimCurrency} {parseFloat(claim.paid_amount || 0).toFixed(2)}</p>
+                  <p className="font-semibold mt-0.5 text-success">{claimCurrency} {parseFloat(claim.paid_amount || 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Paid Date</p>
@@ -365,9 +365,9 @@ export default function ClaimDetails() {
                 </div>
               )}
               {claim.rejected_reason && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-xs text-red-600 uppercase mb-1 font-medium">Rejection Reason</p>
-                  <p className="text-sm text-red-800">{claim.rejected_reason}</p>
+                <div className="mt-3 p-3 bg-destructive-bg border border-destructive-border rounded-lg">
+                  <p className="text-xs text-destructive uppercase mb-1 font-medium">Rejection Reason</p>
+                  <p className="text-sm text-destructive">{claim.rejected_reason}</p>
                 </div>
               )}
             </CardContent>
@@ -563,7 +563,7 @@ export default function ClaimDetails() {
                 placeholder="Add notes about this status change..." rows={2} className="mt-1" />
             </div>
             {statusAction === 'paid' && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+              <div className="p-3 bg-success-bg border border-success-border rounded-lg text-sm text-success">
                 <p className="font-medium">This will mark all {invoices.length} invoices as paid.</p>
               </div>
             )}
@@ -571,7 +571,7 @@ export default function ClaimDetails() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowStatusModal(false)}>Cancel</Button>
             <Button onClick={handleUpdateStatus} disabled={updating || (statusAction === 'rejected' && !rejectedReason)}
-              className={statusAction === 'rejected' ? 'bg-red-600 hover:bg-red-700' : ''}>
+              className={statusAction === 'rejected' ? 'bg-destructive hover:bg-destructive' : ''}>
               {updating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Updating...</> : 'Confirm'}
             </Button>
           </DialogFooter>

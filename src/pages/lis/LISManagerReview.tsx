@@ -60,18 +60,18 @@ const matchesGroupSearch = (g: any, term: string) => {
 };
 
 const getRemarkBadge = (value: string, refRange: string) => {
-  if (!value || !refRange) return <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+  if (!value || !refRange) return <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
   const parts = refRange.split('-').map((p: string) => p.trim());
   if (parts.length === 2) {
     const min = parseFloat(parts[0]);
     const max = parseFloat(parts[1]);
     const val = parseFloat(value);
     if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-      if (val < min) return <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-      if (val > max) return <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
+      if (val < min) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">LOW</span>;
+      if (val > max) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">HIGH</span>;
     }
   }
-  return <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+  return <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
 };
 
 // Local (not UTC) date string, so "today" matches the user's actual calendar day.
@@ -577,7 +577,7 @@ export default function LISManagerReview() {
                         <div className="flex justify-end gap-3">
                           <Button
                             variant="outline"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            className="text-destructive hover:text-destructive hover:bg-destructive-bg border-destructive-border"
                             onClick={() => handleReview(selectedSpecimen.specimen_id, 'queried')}
                             disabled={!!reviewingAction}
                           >
@@ -585,7 +585,7 @@ export default function LISManagerReview() {
                             {reviewingAction === 'queried' ? 'Querying...' : 'Query / Reject'}
                           </Button>
                           <Button
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-success hover:bg-success text-white"
                             onClick={() => handleReview(selectedSpecimen.specimen_id, 'approved')}
                             disabled={!!reviewingAction}
                           >
@@ -600,9 +600,9 @@ export default function LISManagerReview() {
                         <div className="flex items-center gap-3 mb-4">
                           <span className="text-sm font-medium">Status:</span>
                           {selectedSpecimen.status === 'approved' ? (
-                            <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold uppercase">Approved</span>
+                            <span className="bg-success-bg text-success px-3 py-1 rounded-full text-xs font-bold uppercase">Approved</span>
                           ) : (
-                            <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold uppercase">Queried / Rejected</span>
+                            <span className="bg-destructive-bg text-destructive px-3 py-1 rounded-full text-xs font-bold uppercase">Queried / Rejected</span>
                           )}
                         </div>
                         {selectedSpecimen.manager_notes && (
@@ -659,8 +659,8 @@ export default function LISManagerReview() {
                   >
                     {activeTab === 'history' ? (
                       s.status === 'approved'
-                        ? <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        : <X className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                        ? <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
+                        : <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                     ) : (
                       <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                     )}
@@ -669,8 +669,8 @@ export default function LISManagerReview() {
                       <div className="text-xs font-mono text-muted-foreground">{s.barcode}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-between">
                         <span>{s.results.length} param{s.results.length > 1 ? 's' : ''}</span>
-                        {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
-                        {activeTab === 'history' && s.status === 'queried' && <span className="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase font-bold">Queried</span>}
+                        {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-success-bg text-success px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
+                        {activeTab === 'history' && s.status === 'queried' && <span className="text-xs bg-destructive-bg text-destructive px-1.5 py-0.5 rounded uppercase font-bold">Queried</span>}
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />

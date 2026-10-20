@@ -405,7 +405,7 @@ export default function AuditSummaryReport() {
               <p className="text-xs text-muted-foreground">{fmtCount(byUser.length)} staff member{byUser.length === 1 ? '' : 's'} with logged activity {fmtDate(dateFrom)} — {fmtDate(dateTo)} &middot; click a row to filter the activity log below</p>
             </div>
             <AdvancedDataTable<ByUserRow & { no: number }>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={numberedByUser}
               keyExtractor={(row) => String(row.userId ?? row.userName)}
               searchable
@@ -457,7 +457,7 @@ export default function AuditSummaryReport() {
               </p>
             </div>
             <AdvancedDataTable<ActivityRow & { no: number }>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={numberedActivity}
               keyExtractor={(row) => row.id}
               searchable
@@ -522,10 +522,10 @@ export default function AuditSummaryReport() {
               <div className="border rounded-md overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-sky-100 dark:bg-sky-950/40 border-b border-border text-left">
+                    <tr className="bg-info-bg dark:bg-info/40 border-b border-border text-left">
                       <th className="px-2.5 py-2 font-semibold text-foreground">Field</th>
-                      <th className="px-2.5 py-2 font-semibold text-red-700">Before</th>
-                      <th className="px-2.5 py-2 font-semibold text-emerald-700">After</th>
+                      <th className="px-2.5 py-2 font-semibold text-destructive">Before</th>
+                      <th className="px-2.5 py-2 font-semibold text-success">After</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -537,10 +537,10 @@ export default function AuditSummaryReport() {
                       const newV = detailRow.newValues?.[key];
                       const changed = JSON.stringify(oldV ?? null) !== JSON.stringify(newV ?? null);
                       return (
-                        <tr key={key} className={cn('border-b border-border/60 last:border-0', changed && 'bg-amber-50 dark:bg-amber-950/20')}>
+                        <tr key={key} className={cn('border-b border-border/60 last:border-0', changed && 'bg-warning-bg dark:bg-warning/20')}>
                           <td className="px-2.5 py-1.5 align-top font-medium text-foreground whitespace-nowrap">{humanizeAction(key)}</td>
-                          <td className="px-2.5 py-1.5 align-top text-red-700 break-words max-w-[160px]">{formatDiffValue(oldV)}</td>
-                          <td className="px-2.5 py-1.5 align-top text-emerald-700 break-words max-w-[160px]">{formatDiffValue(newV)}</td>
+                          <td className="px-2.5 py-1.5 align-top text-destructive break-words max-w-[160px]">{formatDiffValue(oldV)}</td>
+                          <td className="px-2.5 py-1.5 align-top text-success break-words max-w-[160px]">{formatDiffValue(newV)}</td>
                         </tr>
                       );
                     })}

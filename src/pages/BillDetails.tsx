@@ -102,9 +102,9 @@ const isPayableLine = (s: ServiceLine) => !s.paid && !s.isVoided && !isUnbilledI
 
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
-    paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    partial: 'bg-amber-50 text-amber-700 border-amber-200',
-    pending: 'bg-sky-50 text-sky-700 border-sky-200',
+    paid: 'bg-success-bg text-success border-success-border',
+    partial: 'bg-warning-bg text-warning border-warning-border',
+    pending: 'bg-info-bg text-info border-info-border',
     // Set once a credit invoice is raised against the bill (see /api/invoices) — "active"
     // on its own reads as meaningless, when what it actually means is "invoiced, awaiting
     // payment on the invoice, not on this bill directly".
@@ -112,7 +112,7 @@ const statusBadge = (status: string) => {
   };
   const label = status === 'active' ? 'Invoiced' : (status || 'pending');
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
       {label}
     </span>
   );
@@ -833,7 +833,7 @@ export default function BillDetails() {
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
           <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <h3 className="font-semibold text-lg flex items-center gap-2 text-red-600">
+              <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Void Line Item
               </h3>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setVoidPromptIndex(null); setVoidReason(''); }}>
@@ -858,7 +858,7 @@ export default function BillDetails() {
               <Button variant="outline" onClick={() => { setVoidPromptIndex(null); setVoidReason(''); }}>Cancel</Button>
               <Button
                 variant="outline"
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive"
                 onClick={handleVoidItem}
                 disabled={voidingIndex !== null || !voidReason.trim()}
               >
@@ -913,11 +913,11 @@ export default function BillDetails() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Paid</p>
-              <p className="text-lg font-bold text-emerald-600">{bill.bill_currency || 'SSP'} {amt(bill.paid_amount).toFixed(2)}</p>
+              <p className="text-lg font-bold text-success">{bill.bill_currency || 'SSP'} {amt(bill.paid_amount).toFixed(2)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Balance</p>
-              <p className={`text-lg font-bold ${amt(bill.balance_amount) <= 0 ? 'text-emerald-600' : payableBalance > 0 ? 'text-red-600' : 'text-indigo-600'}`}>{bill.bill_currency || 'SSP'} {amt(bill.balance_amount).toFixed(2)}</p>
+              <p className={`text-lg font-bold ${amt(bill.balance_amount) <= 0 ? 'text-success' : payableBalance > 0 ? 'text-destructive' : 'text-indigo-600'}`}>{bill.bill_currency || 'SSP'} {amt(bill.balance_amount).toFixed(2)}</p>
               {amt(bill.balance_amount) > 0 && payableBalance <= 0 && (
                 <p className="text-xs text-indigo-600 mt-0.5">awaiting invoice payment</p>
               )}
@@ -926,7 +926,7 @@ export default function BillDetails() {
         </div>
 
         {bill.scheme_name && (
-          <div className="mt-4 p-3 rounded-lg border border-sky-200 bg-sky-50 flex items-center gap-2 text-sm text-sky-800">
+          <div className="mt-4 p-3 rounded-lg border border-info-border bg-info-bg flex items-center gap-2 text-sm text-info">
             <Shield className="w-4 h-4" /> Billed under scheme: <span className="font-medium">{bill.scheme_name}</span>
           </div>
         )}
@@ -938,7 +938,7 @@ export default function BillDetails() {
         )}
 
         {otherOutstanding.length > 0 && (
-          <div className="mt-4 p-3 rounded-lg border border-amber-200 bg-amber-50 flex items-center gap-2 text-sm text-amber-800">
+          <div className="mt-4 p-3 rounded-lg border border-warning-border bg-warning-bg flex items-center gap-2 text-sm text-warning">
             <AlertTriangle className="w-4 h-4" />
             This patient has {otherOutstanding.length} other outstanding bill{otherOutstanding.length > 1 ? 's' : ''}.
           </div>
@@ -950,7 +950,7 @@ export default function BillDetails() {
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <h3 className="font-medium mb-4 text-lg border-b pb-2">Add Service / Product</h3>
             {patientSchemes.length > 0 && itemType === 'service' && (
-              <p className="text-xs text-sky-700 mb-2">
+              <p className="text-xs text-info mb-2">
                 Only services priced under this patient's insurance ({patientSchemes[0].scheme_name}) are shown.
               </p>
             )}
@@ -1070,12 +1070,12 @@ export default function BillDetails() {
                               <Input value={selectedRaw?.unit_of_measure || ''} readOnly disabled className="mt-1 bg-muted/40" />
                             </div>
                             <div>
-                              <label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-red-700' : 'text-muted-foreground')}>Qty Left</label>
+                              <label className={cn('text-xs font-medium whitespace-nowrap', outOfStock ? 'text-destructive' : 'text-muted-foreground')}>Qty Left</label>
                               <Input
                                 value={selectedRaw?.quantity_on_hand ?? ''}
                                 readOnly
                                 disabled
-                                className={cn('mt-1', outOfStock ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-muted/40')}
+                                className={cn('mt-1', outOfStock ? 'bg-destructive-bg border-destructive-border text-destructive font-semibold' : 'bg-muted/40')}
                               />
                             </div>
                           </>
@@ -1127,7 +1127,7 @@ export default function BillDetails() {
                   </div>
 
                   {itemType === 'service' && patientSchemes.length > 0 && options.length === 0 && !itemSearchQuery && (
-                    <p className="text-xs text-red-700">No services have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
+                    <p className="text-xs text-destructive">No services have an insurance price configured for this scheme yet — add one in Scheme Management first.</p>
                   )}
                   {selectedRaw && discountNum > 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -1137,7 +1137,7 @@ export default function BillDetails() {
                   )}
 
                   {selectedRaw && (outOfStock || notEnoughStock) && (
-                    <p className="text-xs text-red-700 flex items-center gap-1.5">
+                    <p className="text-xs text-destructive flex items-center gap-1.5">
                       <PackageX className="w-3.5 h-3.5 shrink-0" />
                       {outOfStock
                         ? `${selectedRaw.item_name || selectedRaw.name || 'This product'} is out of stock — receive stock before billing it.`
@@ -1170,15 +1170,15 @@ export default function BillDetails() {
               const schemeCurrency = insuranceLines[0].schemeCurrency;
               const schemeTotal = insuranceLines.reduce((sum, s) => sum + (s.schemePrice || 0) * s.quantity, 0);
               return (
-                <div className="bg-card rounded-lg border border-sky-200 shadow-sm p-4">
-                  <h3 className="font-medium mb-2 text-lg border-b pb-2 flex items-center gap-2 text-sky-700"><Shield className="w-4 h-4" /> Insurance Claim</h3>
+                <div className="bg-card rounded-lg border border-info-border shadow-sm p-4">
+                  <h3 className="font-medium mb-2 text-lg border-b pb-2 flex items-center gap-2 text-info"><Shield className="w-4 h-4" /> Insurance Claim</h3>
                   <p className="text-xs text-muted-foreground mb-3">These items are billed at 0 in {bill.bill_currency || 'SSP'} — they're claimed from the insurer separately, in their own currency.</p>
                   <div className="flex justify-between items-center text-sm mb-3">
                     <span className="text-muted-foreground">Scheme Total</span>
-                    <span className="font-bold text-sky-700">{schemeCurrency} {schemeTotal.toFixed(2)}</span>
+                    <span className="font-bold text-info">{schemeCurrency} {schemeTotal.toFixed(2)}</span>
                   </div>
                   <Button
-                    className="w-full border-sky-300 text-sky-700 hover:bg-sky-100" variant="outline"
+                    className="w-full border-info-border text-info hover:bg-info-bg" variant="outline"
                     onClick={handleCreateInsuranceInvoice}
                     disabled={creatingInsuranceInvoice || insuranceInvoiced || patientSchemes.length === 0}
                   >
@@ -1192,7 +1192,7 @@ export default function BillDetails() {
             <div className="bg-card rounded-lg border shadow-sm p-4">
               <h3 className="font-medium mb-4 text-lg border-b pb-2">Record Payment</h3>
               {!hasActiveShift && (
-                <div className="mb-3 p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="mb-3 p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before recording payments.
                 </div>
               )}
@@ -1204,7 +1204,7 @@ export default function BillDetails() {
               )}
               <div className="space-y-3">
                 {paymentForm.method === 'credit' && (
-                  <div className="p-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800 flex items-center gap-2">
+                  <div className="p-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info flex items-center gap-2">
                     <CreditCard className="w-3.5 h-3.5 flex-shrink-0" /> No money is collected now — this creates an invoice due later, payable from the Invoices page.
                   </div>
                 )}
@@ -1223,7 +1223,7 @@ export default function BillDetails() {
                     className="mt-1"
                   />
                   {paymentForm.method === 'deposit' && depositBalance && amt(paymentForm.amount) < payableBalance - 0.01 && (
-                    <p className="text-xs text-amber-700 mt-1">
+                    <p className="text-xs text-warning mt-1">
                       Deposit covers {amt(paymentForm.amount).toFixed(2)} of {payableBalance.toFixed(2)} — the remaining {(payableBalance - amt(paymentForm.amount)).toFixed(2)} will need another payment.
                     </p>
                   )}
@@ -1315,7 +1315,7 @@ export default function BillDetails() {
             exportable
             exportFileName={`bill-${bill.bill_number}-items`}
             pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
-            rowClassName={(s) => s.isVoided ? 'bg-red-50/50 text-red-700/70 line-through' : (s.paid ? 'bg-emerald-50/40' : '')}
+            rowClassName={(s) => s.isVoided ? 'bg-destructive-bg/50 text-destructive/70 line-through' : (s.paid ? 'bg-success-bg/40' : '')}
             toolbarExtra={
               selectableIndexes.length > 0 ? (
                 <Button type="button" variant="outline" size="sm" onClick={toggleSelectAll} className="h-9">
@@ -1347,13 +1347,13 @@ export default function BillDetails() {
               {
                 key: 'unitPrice', header: 'Unit Price', align: 'right',
                 render: (_v, s) => isUnbilledInsuranceLine(s)
-                  ? <span className="font-mono text-sky-700">{s.schemeCurrency} {amt(s.schemePrice).toFixed(2)}</span>
+                  ? <span className="font-mono text-info">{s.schemeCurrency} {amt(s.schemePrice).toFixed(2)}</span>
                   : <span className="font-mono">{s.currency || bill.bill_currency || 'SSP'} {amt(s.unitPrice).toFixed(2)}</span>,
               },
               {
                 key: 'totalPrice', header: 'Amount', align: 'right',
                 render: (_v, s) => isUnbilledInsuranceLine(s)
-                  ? <span className="font-mono font-semibold text-sky-700">{s.schemeCurrency} {(amt(s.schemePrice) * s.quantity).toFixed(2)}</span>
+                  ? <span className="font-mono font-semibold text-info">{s.schemeCurrency} {(amt(s.schemePrice) * s.quantity).toFixed(2)}</span>
                   : <span className="font-mono font-semibold">{s.currency || bill.bill_currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>,
               },
               { key: 'discountLabel', header: 'Discount', align: 'center', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
@@ -1364,15 +1364,15 @@ export default function BillDetails() {
               {
                 key: '__status', header: 'Status', align: 'center',
                 render: (_v, s) => isUnbilledInsuranceLine(s) ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-sky-50 text-sky-700 border-sky-200" title={`Not billed in ${bill?.bill_currency || 'SSP'} — claimed from the insurer separately, from the Dispensing screen`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-info-bg text-info border-info-border" title={`Not billed in ${bill?.bill_currency || 'SSP'} — claimed from the insurer separately, from the Dispensing screen`}>
                     <Shield className="w-3 h-3" /> Insurance
                   </span>
                 ) : s.isVoided ? (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-red-50 text-red-700 border-red-200">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-destructive-bg text-destructive border-destructive-border">
                     Voided
                   </span>
                 ) : s.paid ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-success-bg text-success border-success-border">
                     <Check className="w-3 h-3" /> Paid
                   </span>
                 ) : s.invoiced ? (
@@ -1380,7 +1380,7 @@ export default function BillDetails() {
                     <FileText className="w-3 h-3" /> Invoiced
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border bg-warning-bg text-warning border-warning-border">
                     Unpaid
                   </span>
                 ),

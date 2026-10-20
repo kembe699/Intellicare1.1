@@ -35,11 +35,11 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
     const typeColors: Record<string, string> = {
       insurance: 'bg-primary/10 text-primary border-primary/30',
       corporate: 'bg-purple-100 text-purple-800 border-purple-200',
-      govt: 'bg-green-100 text-green-800 border-green-200',
+      govt: 'bg-success-bg text-success border-success-border',
       individual: 'bg-gray-100 text-gray-800 border-gray-200',
       ngo: 'bg-orange-100 text-orange-800 border-orange-200',
-      military: 'bg-red-100 text-red-800 border-red-200',
-      vip: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      military: 'bg-destructive-bg text-destructive border-destructive-border',
+      vip: 'bg-warning-bg text-warning border-warning-border',
     };
     
     return (
@@ -51,7 +51,7 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
   };
 
   return (
-    <Card className="border-l-4 border-l-blue-500">
+    <Card className="border-l-4 border-l-info-border">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -87,7 +87,7 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
             {scheme.remaining_limit !== undefined && (
               <div>
                 <p className="text-muted-foreground mb-1">Remaining Limit</p>
-                <p className={`font-semibold ${scheme.remaining_limit < 1000 ? 'text-red-600' : 'text-green-600'}`}>
+                <p className={`font-semibold ${scheme.remaining_limit < 1000 ? 'text-destructive' : 'text-success'}`}>
                   {currency.code} {scheme.remaining_limit.toLocaleString()}
                 </p>
               </div>
@@ -96,12 +96,12 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
 
           {/* Pre-Authorization */}
           {preAuthNumber && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="p-3 bg-success-bg border border-success-border rounded-lg">
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
+                <CheckCircle className="w-4 h-4 text-success" />
                 <div>
-                  <p className="text-sm font-medium text-green-900">Pre-Authorization Approved</p>
-                  <p className="text-xs text-green-700 font-mono mt-1">Auth #: {preAuthNumber}</p>
+                  <p className="text-sm font-medium text-success">Pre-Authorization Approved</p>
+                  <p className="text-xs text-success font-mono mt-1">Auth #: {preAuthNumber}</p>
                 </div>
               </div>
             </div>
@@ -132,12 +132,12 @@ export const SchemeInfoCard: React.FC<SchemeInfoCardProps> = ({
 
           {/* Warnings */}
           {scheme.remaining_limit !== undefined && scheme.remaining_limit < billAmount && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-3 bg-destructive-bg border border-destructive-border rounded-lg">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
+                <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-red-900">Coverage Limit Exceeded</p>
-                  <p className="text-xs text-red-700 mt-1">
+                  <p className="text-sm font-medium text-destructive">Coverage Limit Exceeded</p>
+                  <p className="text-xs text-destructive mt-1">
                     Bill amount exceeds remaining coverage limit. Patient will pay the excess amount.
                   </p>
                 </div>

@@ -237,9 +237,9 @@ export default function CancelledTransactionsReport() {
               </p>
             </div>
             <AdvancedDataTable<CancelledReceiptRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total</span>
@@ -298,9 +298,9 @@ export default function CancelledTransactionsReport() {
               </div>
             </div>
             <AdvancedDataTable<VoidedLineItemRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               footerRow={(colSpan) => (
-                <tr className="border-t-2 border-foreground/30 bg-sky-50 dark:bg-sky-950/20 font-semibold">
+                <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
                     <div className="flex justify-between items-center">
                       <span>Total</span>

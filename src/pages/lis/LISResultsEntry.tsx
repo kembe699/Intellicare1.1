@@ -251,9 +251,9 @@ export default function LISResultsEntry() {
       const val = parseFloat(value);
       
       if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-        if (val < min) return <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-        if (val > max) return <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
-        return <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+        if (val < min) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">LOW</span>;
+        if (val > max) return <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">HIGH</span>;
+        return <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
       }
     }
     
@@ -621,7 +621,7 @@ export default function LISResultsEntry() {
                     </Button>
                   )}
                   {selectedSpecimen?.status === 'approved' && (
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full uppercase font-bold flex items-center gap-1">
+                    <span className="text-xs bg-success-bg text-success px-2 py-1 rounded-full uppercase font-bold flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Approved — Read Only
                     </span>
                   )}
@@ -795,7 +795,7 @@ export default function LISResultsEntry() {
                       )}
                     >
                       {isDone ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                       ) : (
                         <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                       )}
@@ -804,9 +804,9 @@ export default function LISResultsEntry() {
                         <div className="text-xs font-mono text-muted-foreground">{s.barcode}</div>
                         <div className="text-xs text-muted-foreground flex items-center justify-between">
                           <span>{s.department || 'Lab'}</span>
-                          {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
-                          {activeTab === 'history' && s.status === 'analyzed' && <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase font-bold">Analyzed</span>}
-                          {activeTab === 'history' && s.status === 'pending_manager_review' && <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase font-bold">Review</span>}
+                          {activeTab === 'history' && s.status === 'approved' && <span className="text-xs bg-success-bg text-success px-1.5 py-0.5 rounded uppercase font-bold">Approved</span>}
+                          {activeTab === 'history' && s.status === 'analyzed' && <span className="text-xs bg-info-bg text-info px-1.5 py-0.5 rounded uppercase font-bold">Analyzed</span>}
+                          {activeTab === 'history' && s.status === 'pending_manager_review' && <span className="text-xs bg-warning-bg text-warning px-1.5 py-0.5 rounded uppercase font-bold">Review</span>}
                         </div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />

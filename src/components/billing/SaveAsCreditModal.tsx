@@ -233,7 +233,7 @@ export default function SaveAsCreditModal({ bill, schemeInfo, onClose, onSuccess
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
           <Button variant="outline" className="h-8 text-xs" onClick={onClose} disabled={saving}>
             Cancel
           </Button>

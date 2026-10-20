@@ -97,10 +97,10 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary/5 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header Card - Logo */}
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 mb-4">
+        <div className="bg-white rounded-2xl shadow-2xl border border-border p-8 mb-4">
           <div className="flex items-center justify-center">
             <img
               src="/hjd.png"
@@ -129,24 +129,24 @@ const Login: React.FC = () => {
         >
           <div className="overflow-hidden">
         <div
-          className={`bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 transition-transform duration-700 ease-out motion-reduce:transition-none ${
+          className={`bg-white rounded-2xl shadow-2xl border border-border p-8 transition-transform duration-700 ease-out motion-reduce:transition-none ${
             isFormExpanded ? 'translate-y-0' : '-translate-y-2'
           }`}
         >
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-6">
+            <div className="bg-destructive-bg border-l-4 border-destructive-border rounded-lg p-4 mb-6">
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-red-600 text-xs font-bold">!</span>
+                <div className="w-5 h-5 rounded-full bg-destructive-bg flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-destructive text-xs font-bold">!</span>
                 </div>
-                <p className="text-sm text-red-800 font-medium">{error}</p>
+                <p className="text-sm text-destructive font-medium">{error}</p>
               </div>
             </div>
           )}
 
           <form onSubmit={handleSignIn} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="code" className="text-sm font-semibold text-slate-700">
+                <Label htmlFor="code" className="text-sm font-semibold text-foreground">
                   Instance Code
                 </Label>
                 <Input
@@ -158,7 +158,7 @@ const Login: React.FC = () => {
                   required
                   autoCapitalize="none"
                   autoCorrect="off"
-                  className="h-12 pl-4 pr-4 text-base border-slate-300 rounded-lg transition-all"
+                  className="h-12 pl-4 pr-4 text-base border-border rounded-lg transition-all"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = '#3D8A97';
                     e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
@@ -171,7 +171,7 @@ const Login: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
+                <Label htmlFor="email" className="text-sm font-semibold text-foreground">
                   Email Address
                 </Label>
                 <Input
@@ -181,7 +181,7 @@ const Login: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@hospital.com"
                   required
-                  className="h-12 pl-4 pr-4 text-base border-slate-300 rounded-lg transition-all"
+                  className="h-12 pl-4 pr-4 text-base border-border rounded-lg transition-all"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = '#3D8A97';
                     e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61, 138, 151, 0.2)';
@@ -195,7 +195,7 @@ const Login: React.FC = () => {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                  <Label htmlFor="password" className="text-sm font-semibold text-foreground">
                     Password
                   </Label>
                   <button

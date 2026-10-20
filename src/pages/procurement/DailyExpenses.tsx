@@ -916,10 +916,10 @@ const DailyExpenses: React.FC = () => {
                   loading={loadingExp}
                   emptyMessage="No expenses found"
                   onRowClick={(exp) => navigate(`/procurement/daily-expenses/${exp.id}`)}
-                  rowClassName={(exp) => exp.status === 'pending_approval' ? 'bg-amber-50/40' : ''}
+                  rowClassName={(exp) => exp.status === 'pending_approval' ? 'bg-warning-bg/40' : ''}
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
-                    { key: 'voucher_number', header: 'Voucher', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || <span className="text-amber-500 italic">pending</span>}</span> },
+                    { key: 'voucher_number', header: 'Voucher', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || <span className="text-warning italic">pending</span>}</span> },
                     { key: 'expense_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap">{formatDate(v)}</span> },
                     { key: 'description', header: 'Description', render: (v) => <span className="font-medium max-w-[200px] truncate block">{v}</span> },
                     { key: 'category', header: 'Category', render: (v) => <Badge variant="outline" className="text-xs">{v || '-'}</Badge> },
@@ -930,10 +930,10 @@ const DailyExpenses: React.FC = () => {
                       key: 'status', header: 'Status',
                       render: (v, exp) => {
                         const approvalCount = (expApprovals[exp.id] || []).length;
-                        if (v === 'pending_approval') return <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Pending {approvalCount}/2</Badge>;
+                        if (v === 'pending_approval') return <Badge className="text-xs bg-warning-bg text-warning border-warning-border hover:bg-warning-bg">Pending {approvalCount}/2</Badge>;
                         if (v === 'approved') return <Badge className="text-xs bg-primary/10 text-primary border-primary/40 hover:bg-primary/10">Approved</Badge>;
                         if (v === 'rejected') return <Badge className="text-xs bg-destructive/10 text-destructive border-destructive/40 hover:bg-destructive/10">Rejected</Badge>;
-                        return <Badge className="text-xs bg-green-100 text-green-800 border-green-300 hover:bg-green-100">Paid</Badge>;
+                        return <Badge className="text-xs bg-success-bg text-success border-success-border hover:bg-success-bg">Paid</Badge>;
                       },
                     },
                     {
@@ -963,7 +963,7 @@ const DailyExpenses: React.FC = () => {
                             )}
                             {isPending && (
                               <>
-                                <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-amber-300 text-amber-700 hover:bg-amber-50" disabled={busy} onClick={(e) => { e.stopPropagation(); openExpApprove(exp); }}>
+                                <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-warning-border text-warning hover:bg-warning-bg" disabled={busy} onClick={(e) => { e.stopPropagation(); openExpApprove(exp); }}>
                                   <ShieldCheck className="w-3 h-3 mr-1" />Approve
                                 </Button>
                                 <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-destructive/40 text-destructive hover:bg-destructive/5" disabled={busy} onClick={(e) => { e.stopPropagation(); setRejectExpense(exp); setRejectReason(''); }}>
@@ -1033,11 +1033,11 @@ const DailyExpenses: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Paid</p>
-                            <p className="font-mono font-bold text-xl leading-tight text-emerald-700">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-success">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Outstanding</p>
-                            <p className="font-mono font-bold text-xl leading-tight text-amber-700">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-warning">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
                           </div>
                         </div>
                       </div>
@@ -1094,12 +1094,12 @@ const DailyExpenses: React.FC = () => {
                               const a = approvals.find(ap => ap.approval_level === level);
                               return (
                                 <div key={level} title={a ? `${a.approved_by}${a.approved_by_title ? ' · ' + a.approved_by_title : ''}` : `Level ${level} pending`}
-                                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${a ? 'bg-green-500 border-green-500 text-white' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${a ? 'bg-success border-success-border text-white' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
                                   {a ? '✓' : level}
                                 </div>
                               );
                             })}
-                            <span className={`ml-1 text-xs font-medium ${fullyApproved ? 'text-green-600' : 'text-muted-foreground'}`}>{approvalCount}/3</span>
+                            <span className={`ml-1 text-xs font-medium ${fullyApproved ? 'text-success' : 'text-muted-foreground'}`}>{approvalCount}/3</span>
                           </div>
                         );
                       },
@@ -1176,11 +1176,11 @@ const DailyExpenses: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Paid</p>
-                            <p className="font-mono font-bold text-xl leading-tight text-emerald-700">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-success">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Outstanding</p>
-                            <p className="font-mono font-bold text-xl leading-tight text-amber-700">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-warning">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
                           </div>
                         </div>
                       </div>
@@ -1200,7 +1200,7 @@ const DailyExpenses: React.FC = () => {
                     { key: 'total_consultation_revenue', header: 'Revenue Collected', align: 'right', render: (v, b) => <span className="font-mono text-sm">{b.currency} {parseFloat(String(v || 0)).toFixed(2)}</span> },
                     { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => <span className="text-sm">{v}%</span> },
                     { key: 'bill_amount', header: 'Bill Amount', align: 'right', sortable: true, render: (v, b) => <span className="font-mono font-bold text-sm">{b.currency} {parseFloat(String(v || 0)).toFixed(2)}</span> },
-                    { key: 'status', header: 'Status', render: (v) => <Badge variant={v === 'paid' ? 'outline' : 'secondary'} className={`text-xs capitalize ${v === 'paid' ? 'text-emerald-700 border-emerald-300' : ''}`}>{v}</Badge> },
+                    { key: 'status', header: 'Status', render: (v) => <Badge variant={v === 'paid' ? 'outline' : 'secondary'} className={`text-xs capitalize ${v === 'paid' ? 'text-success border-success-border' : ''}`}>{v}</Badge> },
                     {
                       key: '__actions', header: 'Actions',
                       render: (_v, b) => (
@@ -1384,14 +1384,14 @@ const DailyExpenses: React.FC = () => {
                       const a = approvals.find(ap => ap.approval_level === level);
                       const isNext = level === nextLevel;
                       return (
-                        <div key={level} className={`flex items-center gap-2 text-sm rounded px-2 py-1 ${isNext ? 'bg-amber-50 border border-amber-200' : ''}`}>
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 ${a ? 'bg-green-500 border-green-500 text-white' : isNext ? 'bg-amber-100 border-amber-400 text-amber-700' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
+                        <div key={level} className={`flex items-center gap-2 text-sm rounded px-2 py-1 ${isNext ? 'bg-warning-bg border border-warning-border' : ''}`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 ${a ? 'bg-success border-success-border text-white' : isNext ? 'bg-warning-bg border-warning-border text-warning' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
                             {a ? '✓' : level}
                           </div>
                           <div className="flex-1 min-w-0">
                             <span className="font-medium text-xs">{APPROVAL_LEVELS[level - 1]}</span>
-                            {a && <span className="text-xs text-green-700 ml-2">— {a.approved_by}</span>}
-                            {isNext && !a && <span className="text-xs text-amber-600 ml-2">← Your approval</span>}
+                            {a && <span className="text-xs text-success ml-2">— {a.approved_by}</span>}
+                            {isNext && !a && <span className="text-xs text-warning ml-2">← Your approval</span>}
                           </div>
                         </div>
                       );
@@ -1409,7 +1409,7 @@ const DailyExpenses: React.FC = () => {
 
                   {nextLevel <= 2 ? (
                     <>
-                      <div className="text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 flex items-center gap-2">
+                      <div className="text-sm font-medium text-warning bg-warning-bg border border-warning-border rounded px-3 py-2 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 shrink-0" />
                         Submitting: <strong>{APPROVAL_LEVELS[nextLevel - 1]}</strong>
                       </div>
@@ -1430,7 +1430,7 @@ const DailyExpenses: React.FC = () => {
                       </div>
 
                       <div className="flex gap-2 pt-1">
-                        <Button size="sm" type="submit" className="h-8 px-4 text-xs bg-amber-600 hover:bg-amber-700 text-white" disabled={submittingExpApproval}>
+                        <Button size="sm" type="submit" className="h-8 px-4 text-xs bg-warning hover:bg-warning text-white" disabled={submittingExpApproval}>
                           {submittingExpApproval ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Approving...</> : <><ShieldCheck className="w-3 h-3 mr-2" />Approve ({nextLevel}/2)</>}
                         </Button>
                         <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => setShowExpApproveModal(false)}>Cancel</Button>
@@ -1438,7 +1438,7 @@ const DailyExpenses: React.FC = () => {
                     </>
                   ) : (
                     <div className="text-center py-4">
-                      <p className="text-green-600 font-semibold">✓ Both approvals complete</p>
+                      <p className="text-success font-semibold">✓ Both approvals complete</p>
                       <p className="text-sm text-muted-foreground mt-1">Voucher has been generated. You can now print it.</p>
                       <Button className="mt-3" onClick={() => { setShowExpApproveModal(false); fetchExpenses(); }}>Done</Button>
                     </div>
@@ -1469,12 +1469,12 @@ const DailyExpenses: React.FC = () => {
                       const isNext = level === nextLevel;
                       return (
                         <div key={level} className={`flex items-center gap-2 text-sm rounded px-2 py-1 ${isNext ? 'bg-primary/10 border border-primary/30' : ''}`}>
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 ${a ? 'bg-green-500 border-green-500 text-white' : isNext ? 'bg-primary/10 border-primary/60 text-primary' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 ${a ? 'bg-success border-success-border text-white' : isNext ? 'bg-primary/10 border-primary/60 text-primary' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
                             {a ? '✓' : level}
                           </div>
                           <div className="flex-1 min-w-0">
                             <span className="font-medium text-xs">{PO_APPROVAL_LEVELS[level - 1]}</span>
-                            {a && <span className="text-xs text-green-700 ml-2">— {a.approved_by}{a.approved_by_title ? ` (${a.approved_by_title})` : ''}</span>}
+                            {a && <span className="text-xs text-success ml-2">— {a.approved_by}{a.approved_by_title ? ` (${a.approved_by_title})` : ''}</span>}
                             {isNext && !a && <span className="text-xs text-primary ml-2">← Your approval</span>}
                           </div>
                         </div>
@@ -1520,7 +1520,7 @@ const DailyExpenses: React.FC = () => {
                     </>
                   ) : (
                     <div className="text-center py-4">
-                      <p className="text-green-600 font-semibold">✓ All 3 approvals complete</p>
+                      <p className="text-success font-semibold">✓ All 3 approvals complete</p>
                       <p className="text-sm text-muted-foreground mt-1">This bill is ready for payment.</p>
                       <Button className="mt-3" onClick={() => { setShowApproveModal(false); openPayBill(approveBill); }}>Proceed to Payment</Button>
                     </div>
@@ -1625,11 +1625,11 @@ const DailyExpenses: React.FC = () => {
                 {(() => {
                   const approvals = billApprovals[selectedBill.id] || [];
                   return approvals.length > 0 ? (
-                    <div className="rounded-md border p-3 bg-green-50 space-y-1">
-                      <p className="text-xs font-semibold text-green-800 mb-1">✓ Approved By</p>
+                    <div className="rounded-md border p-3 bg-success-bg space-y-1">
+                      <p className="text-xs font-semibold text-success mb-1">✓ Approved By</p>
                       {approvals.map(a => (
                         <div key={a.id} className="flex items-center gap-2 text-xs">
-                          <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center font-bold shrink-0">{a.approval_level}</span>
+                          <span className="w-5 h-5 rounded-full bg-success text-white flex items-center justify-center font-bold shrink-0">{a.approval_level}</span>
                           <span className="font-medium">{a.approved_by}</span>
                           {a.approved_by_title && <span className="text-muted-foreground">· {a.approved_by_title}</span>}
                           <span className="text-muted-foreground ml-auto">{formatDate(a.approved_at)}</span>
@@ -1654,7 +1654,7 @@ const DailyExpenses: React.FC = () => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Previously Paid</span>
-                        <span className="font-mono text-green-600">{cur} {paid.toFixed(2)}{basePaid != null && <span className="text-muted-foreground text-xs"> (≈ {fmt(basePaid)})</span>}</span>
+                        <span className="font-mono text-success">{cur} {paid.toFixed(2)}{basePaid != null && <span className="text-muted-foreground text-xs"> (≈ {fmt(basePaid)})</span>}</span>
                       </div>
                       <div className="flex justify-between border-t pt-1 mt-1">
                         <span className="font-medium">Balance Due</span>

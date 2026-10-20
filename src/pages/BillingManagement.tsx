@@ -322,9 +322,9 @@ const BillingManagement: React.FC = () => {
             <DialogHeader><DialogTitle>Bad Debt Write-off</DialogTitle>
               <DialogDescription>This will write off the remaining balance as bad debt and create a GL entry.</DialogDescription></DialogHeader>
             <div className="px-5 py-4 space-y-4">
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
-                <p className="text-sm text-red-800">This action is permanent and will zero out the bill balance. A bad debt expense GL entry will be created.</p>
+              <div className="p-3 bg-destructive-bg border border-destructive-border rounded-lg flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
+                <p className="text-sm text-destructive">This action is permanent and will zero out the bill balance. A bad debt expense GL entry will be created.</p>
               </div>
               <div><Label>Reason for Write-off</Label>
                 <Textarea value={writeOffReason} onChange={e => setWriteOffReason(e.target.value)} placeholder="Explain why this debt is being written off..." /></div>
@@ -384,8 +384,8 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
             const rows = bracketsGrouped[bk];
             const label = bk === 'current' ? 'Current' : bk === '1_30' ? '1-30 Days' :
               bk === '31_60' ? '31-60 Days' : bk === '61_90' ? '61-90 Days' : '90+ Days';
-            const color = bk === '90_plus' ? 'text-red-600' : bk === '61_90' ? 'text-orange-600' :
-              bk === '31_60' ? 'text-yellow-600' : 'text-foreground';
+            const color = bk === '90_plus' ? 'text-destructive' : bk === '61_90' ? 'text-orange-600' :
+              bk === '31_60' ? 'text-warning' : 'text-foreground';
             const billCount = rows.reduce((sum, r) => sum + (parseInt(r.bill_count, 10) || 0), 0);
             return (
               <div className="bg-card rounded-xl border shadow-sm overflow-hidden" key={bk}>
@@ -421,8 +421,8 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
               { key: 'patient_name', header: 'Patient', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
               { key: 'bill_count', header: 'Bills', align: 'right' },
               { key: 'total_billed', header: 'Total Billed', align: 'right', render: (v, r) => formatCurrency(parseFloat(v), r.bill_currency) },
-              { key: 'total_paid', header: 'Paid', align: 'right', render: (v, r) => <span className="text-green-600">{formatCurrency(parseFloat(v), r.bill_currency)}</span> },
-              { key: 'total_outstanding', header: 'Outstanding', align: 'right', sortable: true, render: (v, r) => <span className="font-bold text-red-600">{formatCurrency(parseFloat(v), r.bill_currency)}</span> },
+              { key: 'total_paid', header: 'Paid', align: 'right', render: (v, r) => <span className="text-success">{formatCurrency(parseFloat(v), r.bill_currency)}</span> },
+              { key: 'total_outstanding', header: 'Outstanding', align: 'right', sortable: true, render: (v, r) => <span className="font-bold text-destructive">{formatCurrency(parseFloat(v), r.bill_currency)}</span> },
               {
                 key: 'max_days_overdue', header: 'Max Overdue', align: 'right',
                 render: (v) => v > 0 ? <Badge variant="destructive">{v}d</Badge> : <Badge variant="secondary">Current</Badge>,
@@ -449,7 +449,7 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
             columns={[
               { key: 'bill_number', header: 'Bill #', render: (v) => <span className="font-mono text-primary text-xs">{v}</span> },
               { key: 'patient_name', header: 'Patient', sortable: true },
-              { key: 'balance_amount', header: 'Balance', align: 'right', sortable: true, render: (v, bill) => <span className="font-bold text-red-600">{formatCurrency(parseFloat(v), bill.bill_currency || 'SSP')}</span> },
+              { key: 'balance_amount', header: 'Balance', align: 'right', sortable: true, render: (v, bill) => <span className="font-bold text-destructive">{formatCurrency(parseFloat(v), bill.bill_currency || 'SSP')}</span> },
               {
                 key: 'days_overdue', header: 'Days Overdue', align: 'right', sortable: true,
                 render: (v) => <Badge variant={v > 90 ? 'destructive' : 'secondary'}>{v}d</Badge>,
@@ -553,7 +553,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-4">
             <div className="text-xs text-muted-foreground uppercase font-medium">Pending Amount</div>
-            <div className="text-2xl font-bold text-yellow-600 mt-1">
+            <div className="text-2xl font-bold text-warning mt-1">
               {formatByCurrency('pending_amount')}
             </div>
             <div className="text-xs text-muted-foreground">{stats.pending_count || 0} claims</div>
@@ -571,7 +571,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
           <div className="px-5 pt-4 pb-4">
             <div className="text-xs text-muted-foreground uppercase font-medium">Paid</div>
-            <div className="text-2xl font-bold text-green-600 mt-1">
+            <div className="text-2xl font-bold text-success mt-1">
               {formatByCurrency('paid_amount')}
             </div>
             <div className="text-xs text-muted-foreground">{stats.paid_count || 0} claims</div>
@@ -671,12 +671,12 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
                       )}
                       {claim.status === 'submitted' && (
                         <>
-                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-green-700" disabled={updatingClaimId === claim.id}
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-success" disabled={updatingClaimId === claim.id}
                             onClick={() => handleUpdateStatus(claim.id, 'accepted')}>
                             {updatingClaimId === claim.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                             {updatingClaimId === claim.id ? 'Accepting...' : 'Accept'}
                           </Button>
-                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-red-700" disabled={updatingClaimId === claim.id}
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-destructive" disabled={updatingClaimId === claim.id}
                             onClick={() => handleUpdateStatus(claim.id, 'rejected')}>
                             {updatingClaimId === claim.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                             {updatingClaimId === claim.id ? 'Rejecting...' : 'Reject'}
@@ -684,7 +684,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
                         </>
                       )}
                       {claim.status === 'accepted' && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-green-700" disabled={updatingClaimId === claim.id}
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-success" disabled={updatingClaimId === claim.id}
                           onClick={() => handleUpdateStatus(claim.id, 'paid')}>
                           {updatingClaimId === claim.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                           {updatingClaimId === claim.id ? 'Marking Paid...' : 'Mark Paid'}
@@ -728,7 +728,7 @@ function ReportsTab({ revenueSummary, revenueByCategory, collections, cashPositi
           <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
             <div className="px-5 pt-4 pb-4">
               <div className="text-xs text-muted-foreground uppercase">Cash Received Today</div>
-              <div className="text-2xl font-bold text-green-600 mt-1">{fmt(parseFloat(cashPosition.cash_received || 0))}</div>
+              <div className="text-2xl font-bold text-success mt-1">{fmt(parseFloat(cashPosition.cash_received || 0))}</div>
             </div>
           </div>
           <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -785,9 +785,9 @@ function ReportsTab({ revenueSummary, revenueByCategory, collections, cashPositi
                   <div className="text-xs text-muted-foreground">{m.payment_count} payments</div>
                 </div>
               ))}
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                <div className="text-xs text-green-700">Total Collected</div>
-                <div className="text-lg font-bold text-green-700 mt-1">{fmt(parseFloat(collections.totals?.total_collected || 0))}</div>
+              <div className="p-3 bg-success-bg border border-success-border rounded-lg">
+                <div className="text-xs text-success">Total Collected</div>
+                <div className="text-lg font-bold text-success mt-1">{fmt(parseFloat(collections.totals?.total_collected || 0))}</div>
               </div>
             </div>
           </div>
@@ -806,8 +806,8 @@ function ReportsTab({ revenueSummary, revenueByCategory, collections, cashPositi
                 { key: 'period', header: 'Period', render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'bill_count', header: 'Bills', align: 'right' },
                 { key: 'total_billed', header: 'Billed', align: 'right', render: (v) => fmt(parseFloat(v)) },
-                { key: 'total_collected', header: 'Collected', align: 'right', render: (v) => <span className="text-green-600">{fmt(parseFloat(v))}</span> },
-                { key: 'total_outstanding', header: 'Outstanding', align: 'right', render: (v) => <span className="text-red-600">{fmt(parseFloat(v))}</span> },
+                { key: 'total_collected', header: 'Collected', align: 'right', render: (v) => <span className="text-success">{fmt(parseFloat(v))}</span> },
+                { key: 'total_outstanding', header: 'Outstanding', align: 'right', render: (v) => <span className="text-destructive">{fmt(parseFloat(v))}</span> },
                 { key: 'total_discounts', header: 'Discounts', align: 'right', render: (v) => fmt(parseFloat(v || 0)) },
                 { key: 'total_insurance', header: 'Insurance', align: 'right', render: (v) => fmt(parseFloat(v || 0)) },
               ]}

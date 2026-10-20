@@ -40,9 +40,9 @@ interface AntenatalRow {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    active: 'bg-emerald-100 text-emerald-700',
-    delivered: 'bg-blue-100 text-blue-700',
-    closed: 'bg-slate-100 text-slate-600',
+    active: 'bg-success-bg text-success',
+    delivered: 'bg-info-bg text-info',
+    closed: 'bg-muted text-muted-foreground',
   };
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.closed}`}>{status}</span>;
 }

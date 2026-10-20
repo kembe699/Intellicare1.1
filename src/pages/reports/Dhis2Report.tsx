@@ -101,7 +101,7 @@ function EditableCell({ computedValue, overrideValue, onChange, readOnly, align 
   };
 
   if (readOnly) {
-    return <span className={cn('tabular-nums', isOverridden && 'font-semibold text-amber-700')}>{displayValue}</span>;
+    return <span className={cn('tabular-nums', isOverridden && 'font-semibold text-warning')}>{displayValue}</span>;
   }
 
   if (editing) {
@@ -125,7 +125,7 @@ function EditableCell({ computedValue, overrideValue, onChange, readOnly, align 
       title={isOverridden ? `Computed: ${computedValue} (click to edit)` : 'Click to override'}
       className={cn(
         'tabular-nums px-1.5 py-0.5 rounded hover:bg-muted min-w-[28px]',
-        isOverridden && 'bg-amber-50 text-amber-800 font-semibold border border-amber-200',
+        isOverridden && 'bg-warning-bg text-warning font-semibold border border-warning-border',
       )}
     >
       {displayValue}
@@ -421,7 +421,7 @@ export default function Dhis2Report() {
               </div>
               <div className="ml-auto flex items-center gap-2">
                 {savedReport && (
-                  <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full uppercase', isFinal ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
+                  <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full uppercase', isFinal ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning')}>
                     {isFinal ? 'Final' : 'Draft'}
                   </span>
                 )}
@@ -439,7 +439,7 @@ export default function Dhis2Report() {
                   </Button>
                 )}
                 {canFinalize && savedReport && !isFinal && (
-                  <Button size="sm" variant="outline" className="gap-1.5 text-green-700 border-green-300" onClick={handleFinalize}>
+                  <Button size="sm" variant="outline" className="gap-1.5 text-success border-success-border" onClick={handleFinalize}>
                     <Lock className="h-3.5 w-3.5" /> Finalize
                   </Button>
                 )}
@@ -621,7 +621,7 @@ export default function Dhis2Report() {
                             <td className="py-1.5">
                               {row.label}
                               {c.unmapped && <span className="ml-1.5 text-xs text-muted-foreground italic">(not mapped — see Settings)</span>}
-                              {c.estimated && !c.unmapped && <span className="ml-1.5 text-xs text-amber-700 italic" title="No prior month's closing balance on file — opening estimated from current stock.">(opening estimated)</span>}
+                              {c.estimated && !c.unmapped && <span className="ml-1.5 text-xs text-warning italic" title="No prior month's closing balance on file — opening estimated from current stock.">(opening estimated)</span>}
                             </td>
                             {['opening', 'received', 'used', 'closing', 'daysOutOfStock'].map((col) => (
                               <td key={col} className="text-right py-1.5">

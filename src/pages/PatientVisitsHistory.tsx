@@ -107,9 +107,9 @@ export default function PatientVisitsHistory() {
   const doctors = data?.doctors || [];
 
   const statusColors: Record<string, string> = {
-    completed: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    cancelled: 'bg-red-100 text-red-800',
+    completed: 'bg-success-bg text-success',
+    pending: 'bg-warning-bg text-warning',
+    cancelled: 'bg-destructive-bg text-destructive',
     scheduled: 'bg-primary/10 text-primary',
   };
 

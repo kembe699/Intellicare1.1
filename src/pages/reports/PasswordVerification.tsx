@@ -104,9 +104,9 @@ export default function PasswordVerification() {
           <Card className="border border-border/50 shadow-2xl bg-white/95 backdrop-blur overflow-hidden">
             <CardContent className="p-6">
               {isLocked && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-red-600">
+                <div className="mb-4 p-3 bg-destructive-bg border border-destructive-border rounded-lg flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-destructive">
                     <p className="font-semibold">Account Locked</p>
                     <p>Too many failed attempts.</p>
                   </div>

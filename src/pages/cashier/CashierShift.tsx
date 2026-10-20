@@ -614,7 +614,7 @@ const CashierShift: React.FC = () => {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Total Amount</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-2xl font-bold text-success">
                     SSP {shiftReceipts.reduce((sum, r) => sum + signedReceiptAmount(r), 0).toFixed(2)}
                   </div>
                 </CardContent>
@@ -721,10 +721,10 @@ const CashierShift: React.FC = () => {
                                   </td>
                                   <td className="p-2.5">
                                     {receipt.patient_name}
-                                    {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700">Deposit</span>}
-                                    {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Deposit Refund</span>}
+                                    {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-info-bg text-info">Deposit</span>}
+                                    {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-destructive-bg text-destructive">Deposit Refund</span>}
                                   </td>
-                                  <td className={cn('p-2.5', receipt.receipt_type === 'deposit_refund' && 'text-red-600 font-medium')}>
+                                  <td className={cn('p-2.5', receipt.receipt_type === 'deposit_refund' && 'text-destructive font-medium')}>
                                     {receipt.receipt_type === 'deposit_refund' ? '-' : ''}SSP {parseFloat(String(receipt.payment_amount || '0')).toFixed(2)}
                                   </td>
                                   <td className="p-2.5 capitalize">{receipt.payment_method.replace('_', ' ')}</td>
@@ -825,7 +825,7 @@ const CashierShift: React.FC = () => {
                     if (variance === null) return '-';
                     return (
                       <span className={`text-xs font-semibold ${
-                        Math.abs(variance) < 0.01 ? 'text-emerald-600' : variance > 0 ? 'text-sky-600' : 'text-red-600'
+                        Math.abs(variance) < 0.01 ? 'text-success' : variance > 0 ? 'text-info' : 'text-destructive'
                       }`}>
                         {Math.abs(variance) < 0.01 ? 'Balanced' : `${variance > 0 ? '+' : ''}${variance.toFixed(2)}`}
                       </span>
@@ -903,8 +903,8 @@ const CashierShift: React.FC = () => {
               </div>
               {closingBalance !== '' && (
                 <div className={`p-3 rounded-lg text-sm font-semibold flex justify-between ${
-                  Math.abs(closingVariance) < 0.01 ? 'bg-emerald-50 text-emerald-700' :
-                  closingVariance > 0 ? 'bg-sky-50 text-sky-700' : 'bg-red-50 text-red-700'
+                  Math.abs(closingVariance) < 0.01 ? 'bg-success-bg text-success' :
+                  closingVariance > 0 ? 'bg-info-bg text-info' : 'bg-destructive-bg text-destructive'
                 }`}>
                   <span>{Math.abs(closingVariance) < 0.01 ? 'Balanced' : closingVariance > 0 ? 'Over' : 'Short'}</span>
                   <span>SSP {closingVariance.toFixed(2)}</span>
@@ -948,7 +948,7 @@ const CashierShift: React.FC = () => {
                   required
                 />
                 {parseFloat(transferAmount || '0') > availableCashAtHand + 0.01 && (
-                  <p className="text-xs text-red-600 mt-1">Exceeds the SSP {availableCashAtHand.toFixed(2)} available in Cash at Hand.</p>
+                  <p className="text-xs text-destructive mt-1">Exceeds the SSP {availableCashAtHand.toFixed(2)} available in Cash at Hand.</p>
                 )}
               </div>
               <div>
@@ -1029,7 +1029,7 @@ const CashierShift: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Total Amount</div>
-                    <div className="font-semibold text-green-600">{fmt(parseFloat(String(selectedShift.total_amount || '0')))}</div>
+                    <div className="font-semibold text-success">{fmt(parseFloat(String(selectedShift.total_amount || '0')))}</div>
                   </div>
                   {selectedShift.expected_cash != null && (
                     <div>
@@ -1041,8 +1041,8 @@ const CashierShift: React.FC = () => {
                     <div>
                       <div className="text-sm text-muted-foreground">Cash Variance</div>
                       <div className={`font-semibold ${
-                        Math.abs(parseFloat(String(selectedShift.cash_variance))) < 0.01 ? 'text-emerald-600' :
-                        parseFloat(String(selectedShift.cash_variance)) > 0 ? 'text-sky-600' : 'text-red-600'
+                        Math.abs(parseFloat(String(selectedShift.cash_variance))) < 0.01 ? 'text-success' :
+                        parseFloat(String(selectedShift.cash_variance)) > 0 ? 'text-info' : 'text-destructive'
                       }`}>
                         {Math.abs(parseFloat(String(selectedShift.cash_variance))) < 0.01 ? 'Balanced' :
                           `${parseFloat(String(selectedShift.cash_variance)) > 0 ? 'Over' : 'Short'} ${fmt(Math.abs(parseFloat(String(selectedShift.cash_variance))))}`}
@@ -1059,20 +1059,20 @@ const CashierShift: React.FC = () => {
                   <>
                     {/* Reconciliation summary — what finance actually needs at a glance */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-lg border bg-emerald-50 border-emerald-200">
-                        <div className="text-xs text-emerald-700">Collected</div>
-                        <div className="text-lg font-bold text-emerald-700">{fmt(shiftReport.totals.collectedTotal)}</div>
-                        <div className="text-xs text-emerald-700/80">{shiftReport.activeReceipts.length} receipt{shiftReport.activeReceipts.length !== 1 ? 's' : ''}</div>
+                      <div className="p-3 rounded-lg border bg-success-bg border-success-border">
+                        <div className="text-xs text-success">Collected</div>
+                        <div className="text-lg font-bold text-success">{fmt(shiftReport.totals.collectedTotal)}</div>
+                        <div className="text-xs text-success/80">{shiftReport.activeReceipts.length} receipt{shiftReport.activeReceipts.length !== 1 ? 's' : ''}</div>
                       </div>
-                      <div className="p-3 rounded-lg border bg-red-50 border-red-200">
-                        <div className="text-xs text-red-700 flex items-center gap-1"><Ban className="w-3 h-3" /> Voided</div>
-                        <div className="text-lg font-bold text-red-700">{fmt(shiftReport.totals.voidedTotal)}</div>
-                        <div className="text-xs text-red-700/80">{shiftReport.voidedReceipts.length} receipt{shiftReport.voidedReceipts.length !== 1 ? 's' : ''}</div>
+                      <div className="p-3 rounded-lg border bg-destructive-bg border-destructive-border">
+                        <div className="text-xs text-destructive flex items-center gap-1"><Ban className="w-3 h-3" /> Voided</div>
+                        <div className="text-lg font-bold text-destructive">{fmt(shiftReport.totals.voidedTotal)}</div>
+                        <div className="text-xs text-destructive/80">{shiftReport.voidedReceipts.length} receipt{shiftReport.voidedReceipts.length !== 1 ? 's' : ''}</div>
                       </div>
-                      <div className="p-3 rounded-lg border bg-amber-50 border-amber-200">
-                        <div className="text-xs text-amber-700 flex items-center gap-1"><Undo2 className="w-3 h-3" /> Refunded</div>
-                        <div className="text-lg font-bold text-amber-700">{fmt(shiftReport.totals.refundedTotal)}</div>
-                        <div className="text-xs text-amber-700/80">{shiftReport.refundedReceipts.length} receipt{shiftReport.refundedReceipts.length !== 1 ? 's' : ''}</div>
+                      <div className="p-3 rounded-lg border bg-warning-bg border-warning-border">
+                        <div className="text-xs text-warning flex items-center gap-1"><Undo2 className="w-3 h-3" /> Refunded</div>
+                        <div className="text-lg font-bold text-warning">{fmt(shiftReport.totals.refundedTotal)}</div>
+                        <div className="text-xs text-warning/80">{shiftReport.refundedReceipts.length} receipt{shiftReport.refundedReceipts.length !== 1 ? 's' : ''}</div>
                       </div>
                       <div className="p-3 rounded-lg border bg-indigo-50 border-indigo-200">
                         <div className="text-xs text-indigo-700 flex items-center gap-1"><FileText className="w-3 h-3" /> Invoiced</div>
@@ -1122,10 +1122,10 @@ const CashierShift: React.FC = () => {
                                         </td>
                                         <td className="p-2">
                                           {receipt.patient_name}
-                                          {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700">Deposit</span>}
-                                          {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Deposit Refund</span>}
+                                          {receipt.receipt_type === 'deposit' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-info-bg text-info">Deposit</span>}
+                                          {receipt.receipt_type === 'deposit_refund' && <span className="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-destructive-bg text-destructive">Deposit Refund</span>}
                                         </td>
-                                        <td className={cn('p-2', receipt.receipt_type === 'deposit_refund' && 'text-red-600 font-medium')}>
+                                        <td className={cn('p-2', receipt.receipt_type === 'deposit_refund' && 'text-destructive font-medium')}>
                                           {receipt.receipt_type === 'deposit_refund' ? '-' : ''}SSP {parseFloat(String(receipt.payment_amount || '0')).toFixed(2)}
                                         </td>
                                         <td className="p-2 capitalize">{receipt.payment_method.replace('_', ' ')}</td>
@@ -1144,7 +1144,7 @@ const CashierShift: React.FC = () => {
 
                     {(shiftReport.voidedReceipts.length > 0 || shiftReport.refundedReceipts.length > 0) && (
                       <div>
-                        <h3 className="font-semibold mb-2 flex items-center gap-2 text-red-700"><Ban className="w-4 h-4" /> Voided / Refunded</h3>
+                        <h3 className="font-semibold mb-2 flex items-center gap-2 text-destructive"><Ban className="w-4 h-4" /> Voided / Refunded</h3>
                         <AdvancedDataTable<any>
                           data={[...shiftReport.voidedReceipts.map(r => ({ ...r, kind: 'Voided' })), ...shiftReport.refundedReceipts.map(r => ({ ...r, kind: 'Refunded' }))]
                             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())}
@@ -1152,10 +1152,10 @@ const CashierShift: React.FC = () => {
                           columns={[
                             { key: 'receipt_number', header: 'Receipt #' },
                             { key: 'patient_name', header: 'Patient' },
-                            { key: 'payment_amount', header: 'Amount', render: (v) => <span className="font-semibold text-red-700">SSP {Math.abs(parseFloat(String(v || '0'))).toFixed(2)}</span> },
+                            { key: 'payment_amount', header: 'Amount', render: (v) => <span className="font-semibold text-destructive">SSP {Math.abs(parseFloat(String(v || '0'))).toFixed(2)}</span> },
                             {
                               key: 'kind', header: 'Type',
-                              render: (v) => <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${v === 'Voided' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{v}</span>,
+                              render: (v) => <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${v === 'Voided' ? 'bg-destructive-bg text-destructive' : 'bg-warning-bg text-warning'}`}>{v}</span>,
                             },
                             { key: 'notes', header: 'Reason', render: (v) => <span className="text-muted-foreground">{v || '-'}</span> },
                             { key: 'created_at', header: 'Time', render: (v) => new Date(v).toLocaleTimeString() },

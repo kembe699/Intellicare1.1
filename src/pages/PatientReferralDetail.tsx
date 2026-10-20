@@ -377,14 +377,14 @@ export default function PatientReferralDetail() {
                             <tr key={i}>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.test || '—'}</td>
                               <td className="px-3 py-2 font-medium">{l.analyte}</td>
-                              <td className={`px-3 py-2 font-mono font-semibold ${remark.tone === 'high' ? 'text-red-600' : remark.tone === 'low' ? 'text-primary' : ''}`}>{l.value || '—'}</td>
+                              <td className={`px-3 py-2 font-mono font-semibold ${remark.tone === 'high' ? 'text-destructive' : remark.tone === 'low' ? 'text-primary' : ''}`}>{l.value || '—'}</td>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.reference_range || '—'}</td>
                               <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{l.unit || '—'}</td>
                               <td className="px-3 py-2">
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase ${
-                                  remark.tone === 'high' ? 'bg-red-100 text-red-700' :
-                                  remark.tone === 'low' ? 'bg-sky-100 text-sky-700' :
-                                  remark.tone === 'normal' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                  remark.tone === 'high' ? 'bg-destructive-bg text-destructive' :
+                                  remark.tone === 'low' ? 'bg-info-bg text-info' :
+                                  remark.tone === 'normal' ? 'bg-success-bg text-success' : 'bg-muted text-muted-foreground'
                                 }`}>{remark.label}</span>
                               </td>
                             </tr>
@@ -423,7 +423,7 @@ export default function PatientReferralDetail() {
                     <UserPlus className="w-3.5 h-3.5" /> Queue Patient
                   </h4>
                   {detail.referral.queued_order_id ? (
-                    <div className="p-3 border rounded-lg bg-emerald-50 border-emerald-200 text-sm text-emerald-800 flex items-center gap-2">
+                    <div className="p-3 border rounded-lg bg-success-bg border-success-border text-sm text-success flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4" /> Patient has been queued at {detail.referral.to_branch_name}.
                     </div>
                   ) : (

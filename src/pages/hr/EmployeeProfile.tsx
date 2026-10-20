@@ -372,13 +372,13 @@ export default function EmployeeProfile() {
                           <tbody className="divide-y">
                             {consultTrace.consultations.map((c: any, i: number) => (
                               <tr key={i}>
-                                <td className="px-3 py-2">{formatDate(c.visit_date)}{c.shared && <span className="ml-1.5 text-xs text-amber-600" title="Split with another provider seen the same day">split</span>}</td>
+                                <td className="px-3 py-2">{formatDate(c.visit_date)}{c.shared && <span className="ml-1.5 text-xs text-warning" title="Split with another provider seen the same day">split</span>}</td>
                                 <td className="px-3 py-2 text-right font-mono">{c.currency} {c.billed_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-right font-mono font-medium">{c.currency} {c.collected_amount.toFixed(2)}</td>
                                 <td className="px-3 py-2 text-center">
                                   {c.already_billed
                                     ? <span className="text-xs text-muted-foreground">already billed</span>
-                                    : <span className="text-xs text-emerald-700">billable</span>}
+                                    : <span className="text-xs text-success">billable</span>}
                                 </td>
                               </tr>
                             ))}
@@ -409,7 +409,7 @@ export default function EmployeeProfile() {
                                 {creatingBill ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Receipt className="w-4 h-4 mr-2" />}
                                 Create Bill
                               </Button>
-                              {!employee.consultation_fee_percentage && <p className="text-xs text-amber-600">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
+                              {!employee.consultation_fee_percentage && <p className="text-xs text-warning">Set this consultant's fee % from the Consultants list before creating a bill.</p>}
                             </>
                           )}
                         </div>
@@ -458,7 +458,7 @@ export default function EmployeeProfile() {
                 </div>
                 <div className="bg-card rounded-lg border shadow-sm p-4">
                   <p className="text-xs text-muted-foreground mb-1">Net Pay</p>
-                  <p className="text-xl font-bold font-mono text-emerald-700">{formatInCurrency(netPay, employee.salary_currency)}</p>
+                  <p className="text-xl font-bold font-mono text-success">{formatInCurrency(netPay, employee.salary_currency)}</p>
                 </div>
               </div>
 
@@ -557,7 +557,7 @@ export default function EmployeeProfile() {
                     ) : (
                       <div className="space-y-1.5">
                         {allowances.map((c: any) => (
-                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-emerald-50/50">
+                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-success-bg/50">
                             <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-medium">{c.is_percentage ? formatInCurrency(employee.basic_salary * c.amount / 100, employee.salary_currency) : formatInCurrency(c.amount, employee.salary_currency)}</span>
@@ -577,7 +577,7 @@ export default function EmployeeProfile() {
                     ) : (
                       <div className="space-y-1.5">
                         {deductions.map((c: any) => (
-                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-amber-50/50">
+                          <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-warning-bg/50">
                             <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-medium">{c.is_percentage ? formatInCurrency(employee.basic_salary * c.amount / 100, employee.salary_currency) : formatInCurrency(c.amount, employee.salary_currency)}</span>

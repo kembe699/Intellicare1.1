@@ -495,7 +495,7 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
                         <Button size="icon" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
                       )}
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
-                        {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Ban className="w-3.5 h-3.5 text-amber-600" />)}
+                        {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
                       </Button>
                     </div>
                   ),

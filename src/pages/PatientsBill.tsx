@@ -685,12 +685,12 @@ export default function PatientsBill() {
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
-      paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      partial: 'bg-amber-50 text-amber-700 border-amber-200',
-      pending: 'bg-sky-50 text-sky-700 border-sky-200',
+      paid: 'bg-success-bg text-success border-success-border',
+      partial: 'bg-warning-bg text-warning border-warning-border',
+      pending: 'bg-info-bg text-info border-info-border',
     };
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
         {status || 'pending'}
       </span>
     );
@@ -704,8 +704,8 @@ export default function PatientsBill() {
 
         {/* Cashier shift banner */}
         {!checkingShift && !hasActiveShift && (
-          <div className="mt-4 p-3 rounded-lg border border-amber-200 bg-amber-50 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-amber-800">
+          <div className="mt-4 p-3 rounded-lg border border-warning-border bg-warning-bg flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-warning">
               <AlertTriangle className="w-4 h-4" />
               No active cashier shift — you can create bills, but payments require an open shift.
             </div>
@@ -809,7 +809,7 @@ export default function PatientsBill() {
                             <span className="capitalize text-muted-foreground">
                               {tx.type.replace('_', ' ')} · {formatDate(tx.created_at)}
                             </span>
-                            <span className={`font-medium ${tx.type === 'deposit' || tx.type === 'usage_reversal' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <span className={`font-medium ${tx.type === 'deposit' || tx.type === 'usage_reversal' ? 'text-success' : 'text-destructive'}`}>
                               {tx.type === 'deposit' || tx.type === 'usage_reversal' ? '+' : '-'}{parseFloat(tx.amount).toFixed(2)}
                             </span>
                           </div>
@@ -883,7 +883,7 @@ export default function PatientsBill() {
                         {parseFloat(v).toFixed(2)}
                         {parseFloat(v) < 0 && (
                           <span title={`Overpaid by ${Math.abs(parseFloat(v)).toFixed(2)} — paid amount exceeds the bill total. Review before refunding or adjusting.`}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
                           </span>
                         )}
                       </div>
@@ -962,13 +962,13 @@ export default function PatientsBill() {
               })()}
 
               {!hasActiveShift && paymentForm.method !== 'credit' && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before recording this payment.
                 </div>
               )}
 
               {paymentForm.method === 'credit' && (
-                <div className="p-2.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-info-border bg-info-bg text-xs text-info flex items-center gap-2">
                   <CreditCard className="w-3.5 h-3.5 flex-shrink-0" /> No money is collected now — this creates an invoice due later, payable from the Invoices page.
                 </div>
               )}
@@ -1209,7 +1209,7 @@ export default function PatientsBill() {
             </div>
             <div className="p-6 space-y-4">
               {!hasActiveShift && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before accepting a deposit.
                 </div>
               )}
@@ -1261,7 +1261,7 @@ export default function PatientsBill() {
                 <span className="font-semibold">{(depositBalance?.balance ?? 0).toFixed(2)} {depositBalance?.currency || 'SSP'}</span>
               </div>
               {!hasActiveShift && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-center gap-2">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> No active cashier shift — start one before refunding.
                 </div>
               )}

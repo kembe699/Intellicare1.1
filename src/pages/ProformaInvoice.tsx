@@ -684,7 +684,7 @@ export default function ProformaInvoicePage() {
 
               {savedProforma ? (
                 <div className="p-4 space-y-3">
-                  <div className="p-3 rounded-lg border border-green-200 bg-green-50 text-sm text-green-800 flex items-start gap-2">
+                  <div className="p-3 rounded-lg border border-success-border bg-success-bg text-sm text-success flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                       <div className="font-semibold">{savedProforma.proforma_number} saved</div>
@@ -796,9 +796,9 @@ export default function ProformaInvoicePage() {
                   {
                     key: 'status', header: 'Status',
                     render: (v) => v === 'converted' ? (
-                      <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><CheckCircle2 className="w-3 h-3" /> Converted</span>
+                      <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><CheckCircle2 className="w-3 h-3" /> Converted</span>
                     ) : (
-                      <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><Clock className="w-3 h-3" /> Draft</span>
+                      <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><Clock className="w-3 h-3" /> Draft</span>
                     ),
                   },
                   {

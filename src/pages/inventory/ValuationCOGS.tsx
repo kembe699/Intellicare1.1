@@ -122,12 +122,12 @@ export default function ValuationCOGS() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-card rounded-lg border shadow-sm p-4 border-emerald-200">
+              <div className="bg-card rounded-lg border shadow-sm p-4 border-success-border">
                 <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                  <DollarSign className="w-4 h-4 text-success" />
                   <p className="text-xs text-muted-foreground">Total Inventory Value</p>
                 </div>
-                <p className="text-2xl font-bold text-emerald-600">{fmt(valuation?.total_inventory_value || 0)}</p>
+                <p className="text-2xl font-bold text-success">{fmt(valuation?.total_inventory_value || 0)}</p>
               </div>
               <div className="bg-card rounded-lg border shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-1">
@@ -155,7 +155,7 @@ export default function ValuationCOGS() {
                       <p className="text-xs text-muted-foreground">{data.count} items · {data.quantity} units</p>
                       <p className="text-sm font-mono font-medium mt-1">{fmt(data.value)}</p>
                       <div className="mt-1.5 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, (data.value / (valuation?.total_inventory_value || 1)) * 100)}%` }} />
+                        <div className="h-full bg-success rounded-full" style={{ width: `${Math.min(100, (data.value / (valuation?.total_inventory_value || 1)) * 100)}%` }} />
                       </div>
                     </div>
                   ))}
@@ -211,12 +211,12 @@ export default function ValuationCOGS() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-card rounded-lg border shadow-sm p-4 border-red-200">
+              <div className="bg-card rounded-lg border shadow-sm p-4 border-destructive-border">
                 <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-red-600" />
+                  <TrendingUp className="w-4 h-4 text-destructive" />
                   <p className="text-xs text-muted-foreground">Total COGS</p>
                 </div>
-                <p className="text-2xl font-bold text-red-600">{fmt(cogsData?.total_cogs || 0)}</p>
+                <p className="text-2xl font-bold text-destructive">{fmt(cogsData?.total_cogs || 0)}</p>
               </div>
               <div className="bg-card rounded-lg border shadow-sm p-4">
                 <p className="text-xs text-muted-foreground mb-1">Items with Usage</p>
@@ -243,7 +243,7 @@ export default function ValuationCOGS() {
                     { key: 'item_code', header: 'Code', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
                     { key: 'item_name', header: 'Item', sortable: true },
                     { key: 'quantity_used', header: 'Qty Used', sortable: true, render: (v) => v || 0 },
-                    { key: 'quantity_wasted', header: 'Qty Wasted', sortable: true, render: (v) => <span className="text-red-600">{v || 0}</span> },
+                    { key: 'quantity_wasted', header: 'Qty Wasted', sortable: true, render: (v) => <span className="text-destructive">{v || 0}</span> },
                     { key: '__total_cost', header: 'Total Cost', render: (_v, item) => <span className="font-mono font-medium">{fmt(item.total_cost_base ?? item.total_cost)}</span> },
                     {
                       key: '__pct', header: '% of COGS',
@@ -256,7 +256,7 @@ export default function ValuationCOGS() {
                     <span>Total:</span>
                     <span className="font-mono">
                       {cogsData.items.reduce((s: number, i: any) => s + (parseInt(i.quantity_used) || 0), 0)} used ·{' '}
-                      <span className="text-red-600">{cogsData.items.reduce((s: number, i: any) => s + (parseInt(i.quantity_wasted) || 0), 0)} wasted</span> ·{' '}
+                      <span className="text-destructive">{cogsData.items.reduce((s: number, i: any) => s + (parseInt(i.quantity_wasted) || 0), 0)} wasted</span> ·{' '}
                       {fmt(cogsData.total_cogs)}
                     </span>
                   </div>

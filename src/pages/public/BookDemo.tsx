@@ -157,9 +157,9 @@ const MobileLogo: React.FC = () => (
 // centered card with the branding rail on the left and content on the right,
 // so desktop gets an actual designed layout instead of a narrow mobile column.
 const PageShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="min-h-screen bg-white lg:bg-slate-50">
+  <div className="min-h-screen bg-white lg:bg-muted">
     <div className="lg:min-h-screen lg:flex lg:items-center lg:justify-center lg:p-8">
-      <div className="w-full lg:max-w-7xl lg:flex lg:bg-white lg:rounded-[28px] lg:shadow-[0_24px_70px_-20px_rgba(21,55,101,0.18)] lg:border lg:border-slate-100 lg:overflow-hidden">
+      <div className="w-full lg:max-w-7xl lg:flex lg:bg-white lg:rounded-[28px] lg:shadow-[0_24px_70px_-20px_rgba(21,55,101,0.18)] lg:border lg:border-border lg:overflow-hidden">
         <BrandPanel />
         <div className="flex-1 flex flex-col min-h-screen lg:min-h-[640px] lg:px-12 lg:py-12">
           {children}
@@ -340,17 +340,17 @@ const BookDemo: React.FC = () => {
               <CheckCircle2 className="w-9 h-9" style={{ color: TEAL }} />
             </div>
             <h1 className="text-2xl lg:text-[28px] font-bold tracking-tight" style={{ color: NAVY }}>Your demo is booked!</h1>
-            <p className="text-slate-600">We&rsquo;ve sent a confirmation to <strong>{form.email}</strong>.</p>
-            <div className="rounded-xl border border-slate-200 p-5 text-left space-y-2.5 bg-slate-50">
-              <div className="flex justify-between text-sm"><span className="text-slate-500">Facility</span><span className="font-semibold" style={{ color: NAVY }}>{result.facility_name}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-slate-500">Date</span><span className="font-semibold" style={{ color: NAVY }}>{selectedDate}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-slate-500">Time</span><span className="font-semibold" style={{ color: NAVY }}>{selectedSlot?.start}–{selectedSlot?.end} ({timezone}, UTC+2)</span></div>
-              <div className="flex justify-between text-sm"><span className="text-slate-500">Demo type</span><span className="font-semibold" style={{ color: NAVY }}>{result.demo_type}</span></div>
+            <p className="text-muted-foreground">We&rsquo;ve sent a confirmation to <strong>{form.email}</strong>.</p>
+            <div className="rounded-xl border border-border p-5 text-left space-y-2.5 bg-muted">
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Facility</span><span className="font-semibold" style={{ color: NAVY }}>{result.facility_name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Date</span><span className="font-semibold" style={{ color: NAVY }}>{selectedDate}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Time</span><span className="font-semibold" style={{ color: NAVY }}>{selectedSlot?.start}–{selectedSlot?.end} ({timezone}, UTC+2)</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Demo type</span><span className="font-semibold" style={{ color: NAVY }}>{result.demo_type}</span></div>
             </div>
             <Button onClick={handleAddToCalendar} className="w-full h-12 text-base font-semibold" style={{ backgroundColor: TEAL }}>
               <Download className="w-4 h-4 mr-2" /> Add to calendar
             </Button>
-            <p className="text-xs text-slate-400">Need to make a change? Email support@nilehc.tech</p>
+            <p className="text-xs text-muted-foreground">Need to make a change? Email support@nilehc.tech</p>
           </div>
         </div>
       </PageShell>
@@ -363,7 +363,7 @@ const BookDemo: React.FC = () => {
       <div className="flex-1 px-4 pb-28 lg:pb-0 lg:px-0">
         <div className="max-w-3xl lg:max-w-none mx-auto lg:mx-0">
           <h1 className="text-center lg:text-left text-2xl sm:text-3xl lg:text-[28px] font-bold tracking-tight mb-1" style={{ color: NAVY }}>Book a Demo</h1>
-          <p className="text-center lg:text-left text-slate-500 mb-6 text-sm sm:text-base">See IntelliCare HMIS in action for your facility</p>
+          <p className="text-center lg:text-left text-muted-foreground mb-6 text-sm sm:text-base">See IntelliCare HMIS in action for your facility</p>
           <StepDots step={step} />
 
           {step === 1 && (
@@ -374,7 +374,7 @@ const BookDemo: React.FC = () => {
                     aria-label="Previous month"
                     onClick={() => changeMonth(-1)}
                     disabled={isCurrentMonth}
-                    className="w-11 h-11 flex items-center justify-center rounded-full disabled:opacity-30 hover:bg-slate-100"
+                    className="w-11 h-11 flex items-center justify-center rounded-full disabled:opacity-30 hover:bg-muted"
                   >
                     <ChevronLeft className="w-5 h-5" style={{ color: NAVY }} />
                   </button>
@@ -382,19 +382,19 @@ const BookDemo: React.FC = () => {
                   <button
                     aria-label="Next month"
                     onClick={() => changeMonth(1)}
-                    className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-slate-100"
+                    className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-muted"
                   >
                     <ChevronRight className="w-5 h-5" style={{ color: NAVY }} />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-7 text-center text-xs font-medium text-slate-400 mb-1">
+                <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground mb-1">
                   {DAY_HEADERS.map((d, i) => <div key={i} className="py-1">{d}</div>)}
                 </div>
 
                 {monthLoading ? (
                   <div className="h-56 flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <div className="grid grid-cols-7 gap-1.5 lg:gap-2.5">
@@ -404,11 +404,11 @@ const BookDemo: React.FC = () => {
                       const isSelected = selectedDate === cell.date;
                       const base = 'aspect-square min-h-[44px] lg:min-h-[52px] w-full rounded-lg text-sm lg:text-base font-medium flex items-center justify-center transition-colors';
                       if (status === 'closed') {
-                        return <div key={idx} className={`${base} text-slate-300 cursor-not-allowed`}>{cell.day}</div>;
+                        return <div key={idx} className={`${base} text-muted-foreground cursor-not-allowed`}>{cell.day}</div>;
                       }
                       if (status === 'full') {
                         return (
-                          <div key={idx} className={`${base} text-slate-400 bg-slate-50 cursor-not-allowed`} title="Fully booked">
+                          <div key={idx} className={`${base} text-muted-foreground bg-muted cursor-not-allowed`} title="Fully booked">
                             {cell.day}
                           </div>
                         );
@@ -428,7 +428,7 @@ const BookDemo: React.FC = () => {
                     })}
                   </div>
                 )}
-                <p className="text-xs text-slate-400 mt-4 flex items-center gap-1.5 justify-center lg:justify-start">
+                <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5 justify-center lg:justify-start">
                   <Clock className="w-3.5 h-3.5" /> All times shown in {timezone} (UTC+2)
                 </p>
               </div>
@@ -437,17 +437,17 @@ const BookDemo: React.FC = () => {
                 <h2 className="text-sm font-semibold mb-2" style={{ color: NAVY }}>
                   {selectedDate ? `Available times` : 'Pick a date to see times'}
                 </h2>
-                {selectedDate && <p className="text-xs text-slate-400 mb-3">{selectedDate}</p>}
+                {selectedDate && <p className="text-xs text-muted-foreground mb-3">{selectedDate}</p>}
                 {!selectedDate ? (
-                  <div className="h-32 lg:min-h-[380px] flex flex-col items-center justify-center gap-2 text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl">
+                  <div className="h-32 lg:min-h-[380px] flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
                     <CalendarIcon className="w-6 h-6" /> No date selected
                   </div>
                 ) : daySlotsLoading ? (
-                  <div className="h-32 lg:min-h-[380px] flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+                  <div className="h-32 lg:min-h-[380px] flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
                 ) : dayError ? (
-                  <div className="text-sm text-red-600 p-3 rounded-lg bg-red-50">{dayError}</div>
+                  <div className="text-sm text-destructive p-3 rounded-lg bg-destructive-bg">{dayError}</div>
                 ) : !daySlots || daySlots.length === 0 ? (
-                  <div className="lg:min-h-[380px] flex items-center justify-center text-sm text-slate-500 p-4 rounded-lg bg-slate-50 text-center">No free times on this day</div>
+                  <div className="lg:min-h-[380px] flex items-center justify-center text-sm text-muted-foreground p-4 rounded-lg bg-muted text-center">No free times on this day</div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-1 lg:grid-cols-3 gap-2 lg:gap-3 max-h-[340px] lg:max-h-[380px] overflow-y-auto pr-1">
                     {daySlots.map((slot) => (
@@ -552,17 +552,17 @@ const BookDemo: React.FC = () => {
 
           {step === 3 && selectedDate && selectedSlot && (
             <div className="max-w-md lg:max-w-xl mx-auto lg:mx-0 space-y-4">
-              <div className="rounded-xl border border-slate-200 p-5 lg:p-6 space-y-3 bg-slate-50">
+              <div className="rounded-xl border border-border p-5 lg:p-6 space-y-3 bg-muted">
                 <div className="flex items-center gap-2 mb-1" style={{ color: NAVY }}>
                   <Building2 className="w-4 h-4" /><span className="font-semibold">{form.facility_name}</span>
                 </div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Date</span><span className="font-medium" style={{ color: NAVY }}>{selectedDate}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Time</span><span className="font-medium" style={{ color: NAVY }}>{selectedSlot.start}–{selectedSlot.end} ({timezone}, UTC+2)</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Demo type</span><span className="font-medium" style={{ color: NAVY }}>{form.demo_type}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Contact</span><span className="font-medium" style={{ color: NAVY }}>{form.full_name}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Email</span><span className="font-medium" style={{ color: NAVY }}>{form.email}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Date</span><span className="font-medium" style={{ color: NAVY }}>{selectedDate}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Time</span><span className="font-medium" style={{ color: NAVY }}>{selectedSlot.start}–{selectedSlot.end} ({timezone}, UTC+2)</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Demo type</span><span className="font-medium" style={{ color: NAVY }}>{form.demo_type}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Contact</span><span className="font-medium" style={{ color: NAVY }}>{form.full_name}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Email</span><span className="font-medium" style={{ color: NAVY }}>{form.email}</span></div>
               </div>
-              <p className="text-xs text-slate-400 text-center lg:text-left">By confirming, you&rsquo;ll receive a confirmation email with these details.</p>
+              <p className="text-xs text-muted-foreground text-center lg:text-left">By confirming, you&rsquo;ll receive a confirmation email with these details.</p>
             </div>
           )}
         </div>
@@ -571,7 +571,7 @@ const BookDemo: React.FC = () => {
       {/* Sticky bottom action bar on mobile — keeps the primary action
           reachable with one thumb on a small phone. From `lg` it becomes a
           normal inline, right-aligned action row inside the card. */}
-      <div className="fixed inset-x-0 bottom-0 bg-white border-t border-slate-100 p-4 flex gap-3 lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:pt-10 lg:justify-end">
+      <div className="fixed inset-x-0 bottom-0 bg-white border-t border-border p-4 flex gap-3 lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:pt-10 lg:justify-end">
         {step > 1 && (
           <Button variant="outline" className="h-12 flex-1 lg:flex-none lg:w-32" onClick={() => setStep((s) => (s - 1) as Step)}>
             <ArrowLeft className="w-4 h-4 mr-1.5" /> Back

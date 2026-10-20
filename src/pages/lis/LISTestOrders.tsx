@@ -2106,7 +2106,7 @@ export default function LISTestOrders() {
                 )}
               </h3>
               {middleStep === 1 && triagedByName && (
-                <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full whitespace-nowrap">
+                <span className="text-xs text-success bg-success-bg border border-success-border px-2 py-1 rounded-full whitespace-nowrap">
                   Triaged by {triagedByName}{triagedAt ? ` · ${new Date(triagedAt).toLocaleTimeString()}` : ''}
                 </span>
               )}
@@ -2328,7 +2328,7 @@ export default function LISTestOrders() {
                   <div className="mb-5 p-3 rounded-lg border bg-card">
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Billing Mode</p>
                     {patientActiveBill ? (
-                      <div className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-md px-2.5 py-1.5">
+                      <div className="text-xs text-info bg-info-bg border border-info-border rounded-md px-2.5 py-1.5">
                         This patient has an open {patientActiveBill.scheme_id ? `scheme (${patientActiveBill.scheme_name})` : 'cash'} bill ({patientActiveBill.bill_number}) — new items are added to it under that same mode.
                       </div>
                     ) : (
@@ -2420,7 +2420,7 @@ export default function LISTestOrders() {
                                       <div className="flex items-center justify-between gap-2 min-w-0 flex-1">
                                         <span className="truncate">{test.test_name}</span>
                                         {isUnavailable ? (
-                                          <span className="text-xs text-red-500 font-medium shrink-0">Out of stock</span>
+                                          <span className="text-xs text-destructive font-medium shrink-0">Out of stock</span>
                                         ) : (
                                           <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
                                             {parseFloat(test.price || 0).toFixed(2)} {test.currency || 'SSP'}
@@ -2807,7 +2807,7 @@ export default function LISTestOrders() {
                               {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                               {l.duration_days ? ` · ${l.duration_days}d` : ''}
                               {l.is_external && (
-                                <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                                <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
                                   buy outside
                                 </span>
                               )}
@@ -2875,7 +2875,7 @@ export default function LISTestOrders() {
                     >
                       <div className="flex justify-between items-start">
                         <div className="font-medium">{order.first_name} {order.last_name}</div>
-                        <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded uppercase font-bold whitespace-nowrap">Approved</span>
+                        <span className="text-xs bg-success-bg text-success px-1.5 py-0.5 rounded uppercase font-bold whitespace-nowrap">Approved</span>
                       </div>
                       <div className="text-xs text-muted-foreground font-mono">
                         ID: {order.participant_number}
@@ -2955,7 +2955,7 @@ export default function LISTestOrders() {
                               {
                                 key: '__remarks', header: 'Remarks',
                                 render: (_v, r) => {
-                                  let remark = <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100">NORMAL</span>;
+                                  let remark = <span className="text-success font-bold text-xs bg-success-bg px-2 py-0.5 rounded border border-success-border">NORMAL</span>;
                                   if (r.reference_range && r.value) {
                                     const parts = r.reference_range.split('-').map((p: string) => p.trim());
                                     if (parts.length === 2) {
@@ -2963,8 +2963,8 @@ export default function LISTestOrders() {
                                       const max = parseFloat(parts[1]);
                                       const val = parseFloat(r.value);
                                       if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-                                        if (val < min) remark = <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">LOW</span>;
-                                        if (val > max) remark = <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-100">HIGH</span>;
+                                        if (val < min) remark = <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">LOW</span>;
+                                        if (val > max) remark = <span className="text-destructive font-bold text-xs bg-destructive-bg px-2 py-0.5 rounded border border-destructive-border">HIGH</span>;
                                       }
                                     }
                                   }
@@ -3021,7 +3021,7 @@ export default function LISTestOrders() {
                       </Button>
                     )}
                     {selectedSummary.status !== 'closed' && (
-                      <Button variant="outline" size="sm" onClick={handleCloseVisit} disabled={closingVisit} className="text-red-600 hover:text-red-700">
+                      <Button variant="outline" size="sm" onClick={handleCloseVisit} disabled={closingVisit} className="text-destructive hover:text-destructive">
                         {closingVisit ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
                         Close Visit
                       </Button>
@@ -3054,7 +3054,7 @@ export default function LISTestOrders() {
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">{new Date(selectedSummary.created_at).toLocaleString()}</p>
                       {selectedSummary.status === 'closed' && (
-                        <span className="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Closed</span>
+                        <span className="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Closed</span>
                       )}
                     </div>
                   </div>
@@ -3241,7 +3241,7 @@ export default function LISTestOrders() {
                                     <span className="font-medium text-sm">{t.test_name}</span>
                                     <span className={cn(
                                       "text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
-                                      isReady ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-600"
+                                      isReady ? "bg-success-bg text-success" : "bg-muted text-muted-foreground"
                                     )}>
                                       {t.status.replace(/_/g, ' ')}
                                     </span>
@@ -3287,11 +3287,11 @@ export default function LISTestOrders() {
                                   {l.duration_days ? ` · ${l.duration_days}d` : ''}
                                 </span>
                                 {l.is_external ? (
-                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning-bg text-warning whitespace-nowrap">
                                     Buy from outside pharmacy — not billed
                                   </span>
                                 ) : (
-                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full capitalize bg-slate-100 text-slate-600 whitespace-nowrap">
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full capitalize bg-muted text-muted-foreground whitespace-nowrap">
                                     {l.line_status}
                                   </span>
                                 )}
@@ -3319,7 +3319,7 @@ export default function LISTestOrders() {
                                 </div>
                                 <span className={cn(
                                   "text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
-                                  np.status === 'completed' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                  np.status === 'completed' ? "bg-success-bg text-success" : "bg-warning-bg text-warning"
                                 )}>
                                   {np.status === 'completed' ? 'Completed' : 'Pending'}
                                 </span>
@@ -3344,9 +3344,9 @@ export default function LISTestOrders() {
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className={cn(
                                       "text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
-                                      r.status === 'completed' ? "bg-green-100 text-green-800"
-                                        : r.status === 'in_progress' ? "bg-blue-100 text-blue-800"
-                                        : "bg-amber-100 text-amber-800"
+                                      r.status === 'completed' ? "bg-success-bg text-success"
+                                        : r.status === 'in_progress' ? "bg-info-bg text-info"
+                                        : "bg-warning-bg text-warning"
                                     )}>
                                       {r.status.replace(/_/g, ' ')}
                                     </span>
@@ -3383,7 +3383,7 @@ export default function LISTestOrders() {
                     <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-0 lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto lg:pr-1">
                     {selectedSummary.status === 'closed' ? (
                       <div className="border border-dashed rounded-lg p-4 text-center text-sm text-muted-foreground bg-card">
-                        <CheckCircle2 className="w-5 h-5 mx-auto mb-2 text-slate-400" />
+                        <CheckCircle2 className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
                         This visit is closed and read-only. Start a new visit to add a diagnosis, prescribe medicine, or request another service.
                       </div>
                     ) : (
@@ -3557,7 +3557,7 @@ export default function LISTestOrders() {
                                 {l.dose_strength ? ` · ${l.dose_strength}` : ''}{l.frequency ? ` · ${l.frequency}` : ''}
                                 {l.duration_days ? ` · ${l.duration_days}d` : ''}
                                 {l.is_external && (
-                                  <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                                  <span className="ml-1.5 rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
                                     buy outside
                                   </span>
                                 )}
@@ -3626,7 +3626,7 @@ export default function LISTestOrders() {
                                           <div className="min-w-0 flex-1">
                                             <div className="truncate">{item.name}</div>
                                             <div className="text-xs text-muted-foreground">
-                                              {isUnavailable ? <span className="text-red-500 font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
+                                              {isUnavailable ? <span className="text-destructive font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
                                             </div>
                                           </div>
                                         </CommandItem>
@@ -3768,7 +3768,7 @@ export default function LISTestOrders() {
                               {summary.tests_total > 0 ? (
                                 <span className={cn(
                                   "text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap",
-                                  readyAll ? "bg-green-100 text-green-800" : readySome ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+                                  readyAll ? "bg-success-bg text-success" : readySome ? "bg-warning-bg text-warning" : "bg-muted text-muted-foreground"
                                 )}>
                                   {summary.tests_ready}/{summary.tests_total} Ready
                                 </span>
@@ -3923,7 +3923,7 @@ export default function LISTestOrders() {
             <DialogTitle className="flex items-center gap-2 text-lg"><Sparkles className="w-5 h-5 text-violet-600" /> Clinical Insights</DialogTitle>
             <DialogDescription>Read-only decision support — nothing here is saved to the patient record.</DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+          <div className="rounded-md border border-warning-border bg-warning-bg text-warning text-sm px-4 py-3">
             AI-generated suggestions for clinician consideration only. Not a diagnosis. Clinical judgement must prevail.
           </div>
 
@@ -3936,7 +3936,7 @@ export default function LISTestOrders() {
 
           {clinicalInsightsStatus === 'failed' && (
             <div className="space-y-3">
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 text-sm px-3 py-3 flex items-start gap-2">
+              <div className="rounded-md border border-destructive-border bg-destructive-bg text-destructive text-sm px-3 py-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{clinicalInsightsError || 'Something went wrong generating suggestions.'}</span>
               </div>
@@ -3953,14 +3953,14 @@ export default function LISTestOrders() {
             <div className="space-y-6">
               {(clinicalInsightsResponse.urgent_flags || []).length > 0 && (
                 <div className="space-y-2.5">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-red-700 flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5" /> Urgent Flags
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {clinicalInsightsResponse.urgent_flags.map((f: any, i: number) => (
-                      <div key={i} className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                        <p className="text-sm font-medium text-red-800">{f.finding}</p>
-                        <p className="text-sm text-red-700 mt-1 leading-relaxed">{f.reason}</p>
+                      <div key={i} className="rounded-lg border border-destructive-border bg-destructive-bg px-4 py-3">
+                        <p className="text-sm font-medium text-destructive">{f.finding}</p>
+                        <p className="text-sm text-destructive mt-1 leading-relaxed">{f.reason}</p>
                       </div>
                     ))}
                   </div>
@@ -3979,8 +3979,8 @@ export default function LISTestOrders() {
                           <p className="text-sm font-semibold">{d.condition}</p>
                           <span className={cn(
                             'text-xs font-bold px-2 py-0.5 rounded-full uppercase shrink-0',
-                            d.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
-                            d.confidence === 'moderate' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                            d.confidence === 'high' ? 'bg-success-bg text-success' :
+                            d.confidence === 'moderate' ? 'bg-warning-bg text-warning' : 'bg-muted text-muted-foreground'
                           )}>{d.confidence}</span>
                         </div>
                         {(d.supporting_findings || []).length > 0 && (

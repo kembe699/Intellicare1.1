@@ -41,7 +41,7 @@ const supplierStatus = (s: any) => {
 const renderStars = (rating: number) => {
   const stars = [];
   for (let i = 1; i <= 5; i++) {
-    stars.push(<Star key={i} className={`w-4 h-4 ${i <= rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />);
+    stars.push(<Star key={i} className={`w-4 h-4 ${i <= rating ? 'text-warning fill-warning' : 'text-gray-300'}`} />);
   }
   return <div className="flex gap-0.5">{stars}</div>;
 };
@@ -310,23 +310,23 @@ export default function SupplierProfile() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 min-w-0">
-                    <p className="text-xs text-amber-800">Outstanding</p>
+                  <div className="p-4 rounded-lg bg-warning-bg border border-warning-border min-w-0">
+                    <p className="text-xs text-warning">Outstanding</p>
                     {billByCurrency.length === 0 ? (
-                      <p className="text-xl font-bold font-mono text-amber-900">{formatInCurrency(0, supplier.currency)}</p>
+                      <p className="text-xl font-bold font-mono text-warning">{formatInCurrency(0, supplier.currency)}</p>
                     ) : (
                       billByCurrency.map(c => (
-                        <p key={c.currency} className="text-xl font-bold font-mono text-amber-900 leading-tight">{formatInCurrency(c.total_outstanding, c.currency)}</p>
+                        <p key={c.currency} className="text-xl font-bold font-mono text-warning leading-tight">{formatInCurrency(c.total_outstanding, c.currency)}</p>
                       ))
                     )}
                   </div>
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 min-w-0">
-                    <p className="text-xs text-emerald-800">Paid</p>
+                  <div className="p-4 rounded-lg bg-success-bg border border-success-border min-w-0">
+                    <p className="text-xs text-success">Paid</p>
                     {billByCurrency.length === 0 ? (
-                      <p className="text-xl font-bold font-mono text-emerald-900">{formatInCurrency(0, supplier.currency)}</p>
+                      <p className="text-xl font-bold font-mono text-success">{formatInCurrency(0, supplier.currency)}</p>
                     ) : (
                       billByCurrency.map(c => (
-                        <p key={c.currency} className="text-xl font-bold font-mono text-emerald-900 leading-tight">{formatInCurrency(c.total_paid, c.currency)}</p>
+                        <p key={c.currency} className="text-xl font-bold font-mono text-success leading-tight">{formatInCurrency(c.total_paid, c.currency)}</p>
                       ))
                     )}
                   </div>
@@ -393,7 +393,7 @@ export default function SupplierProfile() {
                             <td className="px-4 py-2.5"><StatusBadge status={b.status} label={b.status} map={PO_STATUS_TONE} /></td>
                             <td className="px-4 py-2.5 text-right font-mono">{formatInCurrency(b.total_amount, b.po_currency)}</td>
                             <td className="px-4 py-2.5 text-right font-mono">{formatInCurrency(b.paid_amount, b.po_currency)}</td>
-                            <td className={cn("px-4 py-2.5 text-right font-mono font-semibold", parseFloat(b.balance_due) > 0 ? "text-amber-700" : "text-emerald-700")}>
+                            <td className={cn("px-4 py-2.5 text-right font-mono font-semibold", parseFloat(b.balance_due) > 0 ? "text-warning" : "text-success")}>
                               {formatInCurrency(b.balance_due, b.po_currency)}
                             </td>
                           </tr>

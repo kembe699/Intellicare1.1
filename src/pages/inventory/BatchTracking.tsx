@@ -37,16 +37,16 @@ interface Batch {
 }
 
 const expiryBadge = (daysToExpiry: number | null, isExpired: boolean) => {
-  if (isExpired || (daysToExpiry !== null && daysToExpiry < 0)) return { label: 'Expired', className: 'bg-red-50 text-red-700 border-red-200' };
-  if (daysToExpiry !== null && daysToExpiry <= 7) return { label: `${daysToExpiry}d left`, className: 'bg-red-50 text-red-700 border-red-200' };
-  if (daysToExpiry !== null && daysToExpiry <= 30) return { label: `${daysToExpiry}d left`, className: 'bg-amber-50 text-amber-700 border-amber-200' };
-  if (daysToExpiry !== null && daysToExpiry <= 90) return { label: `${daysToExpiry}d left`, className: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
-  return { label: 'OK', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (isExpired || (daysToExpiry !== null && daysToExpiry < 0)) return { label: 'Expired', className: 'bg-destructive-bg text-destructive border-destructive-border' };
+  if (daysToExpiry !== null && daysToExpiry <= 7) return { label: `${daysToExpiry}d left`, className: 'bg-destructive-bg text-destructive border-destructive-border' };
+  if (daysToExpiry !== null && daysToExpiry <= 30) return { label: `${daysToExpiry}d left`, className: 'bg-warning-bg text-warning border-warning-border' };
+  if (daysToExpiry !== null && daysToExpiry <= 90) return { label: `${daysToExpiry}d left`, className: 'bg-warning-bg text-warning border-warning-border' };
+  return { label: 'OK', className: 'bg-success-bg text-success border-success-border' };
 };
 
 const STATUS_CLASS: Record<string, string> = {
-  active: 'bg-emerald-50 text-emerald-700 border-emerald-200', partial_use: 'bg-sky-50 text-sky-700 border-sky-200',
-  exhausted: 'bg-slate-100 text-slate-600 border-slate-200', expired: 'bg-red-50 text-red-700 border-red-200',
+  active: 'bg-success-bg text-success border-success-border', partial_use: 'bg-info-bg text-info border-info-border',
+  exhausted: 'bg-muted text-muted-foreground border-border', expired: 'bg-destructive-bg text-destructive border-destructive-border',
   damaged: 'bg-orange-50 text-orange-700 border-orange-200', returned: 'bg-purple-50 text-purple-700 border-purple-200',
 };
 
@@ -253,15 +253,15 @@ export default function BatchTracking() {
         <PageHeader title="Batch & Expiry Tracking" icon={<Clock />} className="mb-3" />
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 mt-4">
+          <div className="flex items-center justify-between rounded-lg border border-destructive-border bg-destructive-bg px-4 py-3 mt-4">
             <div className="flex items-center gap-3 flex-wrap">
-              <CheckSquare className="w-5 h-5 text-red-600" />
-              <span className="text-sm font-semibold text-red-800">{selectedIds.size} batch{selectedIds.size > 1 ? 'es' : ''} selected</span>
-              <span className="text-sm text-red-600">— <span className="font-bold">{totalQtyToRetire}</span> units will be removed from stock</span>
+              <CheckSquare className="w-5 h-5 text-destructive" />
+              <span className="text-sm font-semibold text-destructive">{selectedIds.size} batch{selectedIds.size > 1 ? 'es' : ''} selected</span>
+              <span className="text-sm text-destructive">— <span className="font-bold">{totalQtyToRetire}</span> units will be removed from stock</span>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>Clear</Button>
-              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 border-red-300" onClick={() => setShowRetireModal(true)}>
+              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive border-destructive-border" onClick={() => setShowRetireModal(true)}>
                 <Trash2 className="w-4 h-4 mr-1.5" /> Retire Selected
               </Button>
             </div>
@@ -379,7 +379,7 @@ export default function BatchTracking() {
               <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
                 <Download className="w-4 h-4 mr-2" /> Export
               </Button>
-              <Button variant="outline" size="sm" className="h-9 text-red-600 border-red-300 hover:bg-red-50" onClick={selectAllExpired}>
+              <Button variant="outline" size="sm" className="h-9 text-destructive border-destructive-border hover:bg-destructive-bg" onClick={selectAllExpired}>
                 <AlertTriangle className="w-4 h-4 mr-2" /> Select Expired
               </Button>
             </div>
@@ -391,7 +391,7 @@ export default function BatchTracking() {
               keyExtractor={(batch) => batch.id}
               loading={loading}
               emptyMessage="No batches found."
-              rowClassName={(batch) => selectedIds.has(batch.id) ? 'bg-red-50/60' : ''}
+              rowClassName={(batch) => selectedIds.has(batch.id) ? 'bg-destructive-bg/60' : ''}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
                 {
@@ -433,7 +433,7 @@ export default function BatchTracking() {
                 },
                 {
                   key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{v?.replace(/_/g, ' ')}</span>,
+                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
                 },
                 {
                   key: '__actions', header: 'Actions',
@@ -508,7 +508,7 @@ export default function BatchTracking() {
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <h3 className="font-semibold text-lg flex items-center gap-2 text-red-700">
+              <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Trash2 className="w-5 h-5" /> Retire Batches
               </h3>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowRetireModal(false)}>
@@ -517,18 +517,18 @@ export default function BatchTracking() {
             </div>
             <div className="p-6 flex-1 overflow-auto space-y-4">
               <p className="text-sm text-muted-foreground">This removes the remaining quantities from total stock and marks the batches as retired.</p>
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-1.5 max-h-48 overflow-y-auto">
+              <div className="rounded-lg border border-destructive-border bg-destructive-bg p-3 space-y-1.5 max-h-48 overflow-y-auto">
                 {selectedBatches.map(b => (
                   <div key={b.id} className="flex items-center justify-between text-sm">
                     <span className="font-mono font-medium">{b.batch_number}</span>
                     <span className="text-muted-foreground text-xs">{b.item_name}</span>
-                    <span className="font-semibold text-red-700">−{b.quantity_available} {b.unit_of_measure}</span>
+                    <span className="font-semibold text-destructive">−{b.quantity_available} {b.unit_of_measure}</span>
                   </div>
                 ))}
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-sm">
                 <span className="font-medium">Total units removed from stock:</span>
-                <span className="text-lg font-bold text-red-700">{totalQtyToRetire}</span>
+                <span className="text-lg font-bold text-destructive">{totalQtyToRetire}</span>
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Reason</label>
@@ -537,7 +537,7 @@ export default function BatchTracking() {
             </div>
             <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowRetireModal(false)}>Cancel</Button>
-              <Button variant="outline" className="text-red-600 hover:text-red-700 border-red-300" onClick={handleRetire} disabled={retiring}>
+              <Button variant="outline" className="text-destructive hover:text-destructive border-destructive-border" onClick={handleRetire} disabled={retiring}>
                 {retiring ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
                 {retiring ? 'Retiring...' : `Retire ${selectedIds.size} Batch${selectedIds.size > 1 ? 'es' : ''}`}
               </Button>

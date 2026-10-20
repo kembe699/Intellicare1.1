@@ -36,14 +36,14 @@ interface Transaction {
 }
 
 const TX_TYPES = [
-  { value: 'receipt', label: 'Receipt', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { value: 'dispense', label: 'Dispense', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { value: 'receipt', label: 'Receipt', className: 'bg-success-bg text-success border-success-border' },
+  { value: 'dispense', label: 'Dispense', className: 'bg-info-bg text-info border-info-border' },
   { value: 'usage', label: 'Usage', className: 'bg-purple-50 text-purple-700 border-purple-200' },
-  { value: 'adjustment', label: 'Adjustment', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { value: 'adjustment', label: 'Adjustment', className: 'bg-warning-bg text-warning border-warning-border' },
   { value: 'transfer', label: 'Transfer', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  { value: 'waste', label: 'Waste', className: 'bg-red-50 text-red-700 border-red-200' },
-  { value: 'damage', label: 'Damage', className: 'bg-red-50 text-red-700 border-red-200' },
-  { value: 'return_to_supplier', label: 'Return', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+  { value: 'waste', label: 'Waste', className: 'bg-destructive-bg text-destructive border-destructive-border' },
+  { value: 'damage', label: 'Damage', className: 'bg-destructive-bg text-destructive border-destructive-border' },
+  { value: 'return_to_supplier', label: 'Return', className: 'bg-muted text-muted-foreground border-border' },
 ];
 const TX_TYPE_MAP = Object.fromEntries(TX_TYPES.map(t => [t.value, t]));
 // Types that remove stock from a location (as opposed to `receipt`, which adds stock to one).
@@ -352,14 +352,14 @@ export default function StockTransactions() {
                   {
                     key: 'transaction_type', header: 'Type', sortable: true,
                     render: (v) => {
-                      const typeInfo = TX_TYPE_MAP[v] || { label: v, className: 'bg-slate-100 text-slate-600 border-slate-200' };
+                      const typeInfo = TX_TYPE_MAP[v] || { label: v, className: 'bg-muted text-muted-foreground border-border' };
                       return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${typeInfo.className}`}>{typeInfo.label}</span>;
                     },
                   },
                   {
                     key: 'quantity_change', header: 'Qty', sortable: true,
                     render: (v) => (
-                      <span className={`flex items-center gap-1 font-mono ${v > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <span className={`flex items-center gap-1 font-mono ${v > 0 ? 'text-success' : 'text-destructive'}`}>
                         {v > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                         {v > 0 ? '+' : ''}{v}
                       </span>

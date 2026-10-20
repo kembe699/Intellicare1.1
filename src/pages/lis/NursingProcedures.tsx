@@ -56,7 +56,7 @@ interface OrderItem { key: string; service_id: string; service_name: string; pri
 function StatusPill({ status }: { status: string }) {
   const done = status === 'completed';
   return (
-    <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+    <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${done ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
       {done ? 'Completed' : 'Pending'}
     </span>
   );

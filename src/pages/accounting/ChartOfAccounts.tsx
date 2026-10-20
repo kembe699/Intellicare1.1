@@ -29,10 +29,10 @@ const ACTIVE_TONE_MAP: Record<string, StatusBadgeTone> = {
 
 const ACCOUNT_TYPES = [
   { value: 'asset', label: 'Asset', icon: Building2, color: 'text-primary', bg: 'bg-primary/10 dark:bg-primary/20' },
-  { value: 'liability', label: 'Liability', icon: CreditCard, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950' },
+  { value: 'liability', label: 'Liability', icon: CreditCard, color: 'text-destructive', bg: 'bg-destructive-bg dark:bg-destructive' },
   { value: 'equity', label: 'Equity', icon: Landmark, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950' },
-  { value: 'revenue', label: 'Revenue', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950' },
-  { value: 'expense', label: 'Expense', icon: TrendingDown, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950' },
+  { value: 'revenue', label: 'Revenue', icon: TrendingUp, color: 'text-success', bg: 'bg-success-bg dark:bg-success' },
+  { value: 'expense', label: 'Expense', icon: TrendingDown, color: 'text-warning', bg: 'bg-warning-bg dark:bg-warning' },
 ];
 
 const emptyForm = {

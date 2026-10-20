@@ -225,9 +225,9 @@ const Profile: React.FC = () => {
 
   const getRoleBadgeColor = (role: UserRole) => {
     const colors = {
-      admin: 'bg-red-100 text-red-800',
+      admin: 'bg-destructive-bg text-destructive',
       doctor: 'bg-primary/10 text-primary',
-      reception: 'bg-green-100 text-green-800',
+      reception: 'bg-success-bg text-success',
       lab: 'bg-purple-100 text-purple-800',
       pharmacy: 'bg-orange-100 text-orange-800',
       reports: 'bg-muted text-foreground'
@@ -340,12 +340,12 @@ const Profile: React.FC = () => {
                 </div>
               </div>
               
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="p-4 bg-success-bg rounded-lg border border-success-border">
                 <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-green-600" />
-                  <p className="text-sm font-medium text-green-800">Account Status</p>
+                  <Shield className="w-4 h-4 text-success" />
+                  <p className="text-sm font-medium text-success">Account Status</p>
                 </div>
-                <p className="text-sm text-green-700 mt-1">Your account is active and secure</p>
+                <p className="text-sm text-success mt-1">Your account is active and secure</p>
               </div>
             </div>
           </div>

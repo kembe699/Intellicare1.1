@@ -319,7 +319,7 @@ export default function SalaryStructuresManagement() {
                   {allowances.length === 0 ? <p className="text-sm text-muted-foreground">None</p> : (
                     <div className="space-y-1.5">
                       {allowances.map(c => (
-                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-emerald-50/50">
+                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-success-bg/50">
                           <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-medium">{c.is_percentage ? `${c.amount}%` : formatAmount(c.amount, form.currency)}</span>
@@ -337,7 +337,7 @@ export default function SalaryStructuresManagement() {
                   {deductions.length === 0 ? <p className="text-sm text-muted-foreground">None</p> : (
                     <div className="space-y-1.5">
                       {deductions.map(c => (
-                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-amber-50/50">
+                        <div key={c.id} className="flex items-center justify-between text-sm p-2 rounded border bg-warning-bg/50">
                           <span>{c.name}{c.is_percentage ? ` (${c.amount}%)` : ''}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-medium">{c.is_percentage ? `${c.amount}%` : formatAmount(c.amount, form.currency)}</span>

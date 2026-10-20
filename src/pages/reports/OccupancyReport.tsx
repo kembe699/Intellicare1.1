@@ -191,7 +191,7 @@ export default function OccupancyReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Occupied Beds</p>
-                  <p className="text-2xl font-bold mt-1 text-red-700">{fmtCount(summary.occupied_beds)}</p>
+                  <p className="text-2xl font-bold mt-1 text-destructive">{fmtCount(summary.occupied_beds)}</p>
                 </div>
                 <UserCheck className="h-5 w-5 text-primary" />
               </div>
@@ -200,7 +200,7 @@ export default function OccupancyReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Available Beds</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCount(summary.available_beds)}</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCount(summary.available_beds)}</p>
                 </div>
                 <CheckCircle2 className="h-5 w-5 text-primary" />
               </div>
@@ -219,7 +219,7 @@ export default function OccupancyReport() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Other / Maintenance</p>
-                    <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCount(summary.maintenance_beds)}</p>
+                    <p className="text-2xl font-bold mt-1 text-warning">{fmtCount(summary.maintenance_beds)}</p>
                   </div>
                   <Wrench className="h-5 w-5 text-primary" />
                 </div>
@@ -234,7 +234,7 @@ export default function OccupancyReport() {
               <p className="text-xs text-muted-foreground mt-0.5">Current bed state, grouped by ward</p>
             </div>
             <AdvancedDataTable<WardRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={byWard}
               keyExtractor={(w) => w.ward_id}
               searchable
@@ -246,8 +246,8 @@ export default function OccupancyReport() {
                   render: (_v, w) => <>{w.ward_name}<span className="text-xs text-muted-foreground ml-1">({w.ward_code})</span></>,
                 },
                 { key: 'total_beds', header: 'Total Beds', align: 'right', sortable: true, render: (v) => <span className="text-muted-foreground">{fmtCount(v)}</span> },
-                { key: 'occupied_beds', header: 'Occupied', align: 'right', sortable: true, render: (v) => <span className="text-red-700">{fmtCount(v)}</span> },
-                { key: 'available_beds', header: 'Available', align: 'right', sortable: true, render: (v) => <span className="text-emerald-700">{fmtCount(v)}</span> },
+                { key: 'occupied_beds', header: 'Occupied', align: 'right', sortable: true, render: (v) => <span className="text-destructive">{fmtCount(v)}</span> },
+                { key: 'available_beds', header: 'Available', align: 'right', sortable: true, render: (v) => <span className="text-success">{fmtCount(v)}</span> },
                 {
                   key: 'occupancy_rate', header: 'Occupancy', align: 'right', sortable: true,
                   render: (v) => (
@@ -271,7 +271,7 @@ export default function OccupancyReport() {
               <p className="text-xs text-muted-foreground mt-0.5">Showing {filteredBeds.length} of {beds.length} beds</p>
             </div>
             <AdvancedDataTable<BedRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={filteredBeds}
               keyExtractor={(b) => b.id}
               emptyMessage="No beds match your filters."
@@ -352,7 +352,7 @@ export default function OccupancyReport() {
             </div>
 
             <AdvancedDataTable<DailyRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={trend.daily}
               keyExtractor={(d) => d.day}
               emptyMessage="No admissions in this period."

@@ -659,7 +659,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                           <Pill className="w-4 h-4" />
                           <span className="font-medium leading-none">Pharmacy</span>
                           {pendingRxCount > 0 && (
-                            <span className="ml-auto mr-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
+                            <span className="ml-auto mr-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-white">
                               {pendingRxCount}
                             </span>
                           )}
@@ -679,7 +679,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                               >
                                 <Icon className="w-4 h-4" /><span>{item.label}</span>
                                 {item.href === '/pharmacy-prescriptions' && pendingRxCount > 0 && (
-                                  <span className="ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">{pendingRxCount}</span>
+                                  <span className="ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-xs font-bold text-white">{pendingRxCount}</span>
                                 )}
                               </Link>
                             );

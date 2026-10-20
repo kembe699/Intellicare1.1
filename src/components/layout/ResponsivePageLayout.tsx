@@ -25,7 +25,7 @@ export const ResponsivePageLayout: React.FC<ResponsivePageLayoutProps> = ({
               <React.Fragment key={index}>
                 {index > 0 && <span className="text-gray-400">/</span>}
                 {item.href ? (
-                  <a href={item.href} className="text-teal-600 hover:text-teal-700">
+                  <a href={item.href} className="text-primary hover:text-primary-hover">
                     {item.label}
                   </a>
                 ) : (

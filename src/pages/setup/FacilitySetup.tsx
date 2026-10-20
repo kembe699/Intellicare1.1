@@ -834,7 +834,7 @@ const FacilitySetup: React.FC = () => {
                     <p className="text-xs text-muted-foreground">Total Branches</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-green-600">{branches.filter(b => b.is_active).length}</p>
+                    <p className="text-2xl font-bold text-success">{branches.filter(b => b.is_active).length}</p>
                     <p className="text-xs text-muted-foreground">Active</p>
                   </div>
                   <div className="text-center">

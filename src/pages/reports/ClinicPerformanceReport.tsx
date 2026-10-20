@@ -55,11 +55,11 @@ const toLocalDateStr = (d: Date) => {
 const CATEGORY_BAR_COLOR: Record<string, string> = {
   Consultation: 'bg-blue-500',
   Diagnostic: 'bg-violet-500',
-  Test: 'bg-amber-500',
+  Test: 'bg-warning',
   Other: 'bg-cyan-500',
   Uncategorized: 'bg-muted-foreground/40',
 };
-const barColorFor = (category: string) => CATEGORY_BAR_COLOR[category] || 'bg-emerald-500';
+const barColorFor = (category: string) => CATEGORY_BAR_COLOR[category] || 'bg-success';
 
 // ── Component ────────────────────────────────────────────────────────────
 
@@ -133,7 +133,7 @@ export default function ClinicPerformanceReport() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total Revenue (Collected)</p>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtCurrency(data?.summary.totalRevenueCollected)}</p>
+                  <p className="text-2xl font-bold mt-1 text-success">{fmtCurrency(data?.summary.totalRevenueCollected)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">of {fmtCurrency(data?.summary.totalRevenueBilled)} billed</p>
                 </div>
                 <Wallet className="h-5 w-5 text-primary" />
@@ -185,7 +185,7 @@ export default function ClinicPerformanceReport() {
           {/* ── Disclosure banners ── */}
           <div className="space-y-2">
             {categorization && categorization.unmatchedItems > 0 && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <div className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning">
                 <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                 <span>
                   {fmtCount(categorization.unmatchedItems)} of {fmtCount(categorization.matchedItems + categorization.unmatchedItems)} billed line items
@@ -203,14 +203,14 @@ export default function ClinicPerformanceReport() {
               <p className="text-xs text-muted-foreground">Visit volume and revenue collected per clinic for the selected period</p>
             </div>
             <AdvancedDataTable<ClinicRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={byClinic}
               keyExtractor={(c) => c.clinicId}
               emptyMessage="No clinics found."
               columns={[
                 { key: 'name', header: 'Clinic', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'visitCount', header: 'Visits', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCount(v)}</span> },
-                { key: 'revenueCollected', header: 'Revenue Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-emerald-700">{fmtCurrency(v)}</span> },
+                { key: 'revenueCollected', header: 'Revenue Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
               ]}
             />
           </div>
@@ -222,7 +222,7 @@ export default function ClinicPerformanceReport() {
               <p className="text-xs text-muted-foreground">Volume and revenue per service category — which service lines are generating money</p>
             </div>
             <AdvancedDataTable<CategoryRow>
-              headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
               data={byCategory}
               keyExtractor={(c) => c.category}
               emptyMessage="No billed services found for the selected period."
@@ -233,7 +233,7 @@ export default function ClinicPerformanceReport() {
                     <>
                       {v}
                       {c.category === 'Uncategorized' && (
-                        <span className="ml-1.5 text-xs text-amber-600" title="Billed line items with no exact name match in the services catalog">not matched to catalog</span>
+                        <span className="ml-1.5 text-xs text-warning" title="Billed line items with no exact name match in the services catalog">not matched to catalog</span>
                       )}
                     </>
                   ),
@@ -251,7 +251,7 @@ export default function ClinicPerformanceReport() {
                 },
                 { key: 'volume', header: 'Volume', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCount(v)}</span> },
                 { key: 'totalBilled', header: 'Billed', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCurrency(v)}</span> },
-                { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-emerald-700">{fmtCurrency(v)}</span> },
+                { key: 'totalCollected', header: 'Collected', align: 'right', sortable: true, render: (v) => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
                 { key: 'cashBilled', header: 'Cash Billed', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCurrency(v)}</span> },
                 { key: 'insuranceBilled', header: 'Insurance/Credit Billed', align: 'right', sortable: true, render: (v) => <span className="font-mono">{fmtCurrency(v)}</span> },
               ]}
@@ -262,7 +262,7 @@ export default function ClinicPerformanceReport() {
                 <span className="flex gap-8 font-mono">
                   <span>{fmtCount(byCategory.reduce((s, c) => s + c.volume, 0))}</span>
                   <span>{fmtCurrency(byCategory.reduce((s, c) => s + c.totalBilled, 0))}</span>
-                  <span className="text-emerald-700">{fmtCurrency(byCategory.reduce((s, c) => s + c.totalCollected, 0))}</span>
+                  <span className="text-success">{fmtCurrency(byCategory.reduce((s, c) => s + c.totalCollected, 0))}</span>
                 </span>
               </div>
             )}

@@ -32,7 +32,7 @@ const PlatformLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary/5 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-6">
           <img src="/hjd.png" alt="IntelliCare Logo" className="h-16 w-auto object-contain mb-2" />
@@ -42,9 +42,9 @@ const PlatformLogin: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8">
+        <div className="bg-white rounded-2xl shadow-2xl border border-border p-8">
           {error && (
-            <div className="mb-5 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="mb-5 flex items-center gap-2 text-sm text-destructive bg-destructive-bg border border-destructive-border rounded-lg px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
@@ -52,25 +52,25 @@ const PlatformLogin: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold text-slate-700">Email</Label>
+              <Label htmlFor="email" className="text-sm font-semibold text-foreground">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12 text-base border-slate-300 rounded-lg"
+                className="h-12 text-base border-border rounded-lg"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-semibold text-slate-700">Password</Label>
+              <Label htmlFor="password" className="text-sm font-semibold text-foreground">Password</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-12 text-base border-slate-300 rounded-lg"
+                className="h-12 text-base border-border rounded-lg"
               />
             </div>
             <Button

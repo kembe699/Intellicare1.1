@@ -372,7 +372,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Awaiting approval</p>
-                        <p className={`mt-0.5 text-lg font-semibold ${labData.totals.awaitingApproval > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                        <p className={`mt-0.5 text-lg font-semibold ${labData.totals.awaitingApproval > 0 ? 'text-warning' : 'text-foreground'}`}>
                           {labData.totals.awaitingApproval}
                         </p>
                       </div>
@@ -390,7 +390,7 @@ const Dashboard: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 border-t border-border pt-3 mt-4 text-xs text-muted-foreground">
-                      <span className={`h-1.5 w-1.5 rounded-full ${labData.totals.outstanding > 0 ? 'bg-amber-500' : 'bg-success'}`} />
+                      <span className={`h-1.5 w-1.5 rounded-full ${labData.totals.outstanding > 0 ? 'bg-warning' : 'bg-success'}`} />
                       {labData.totals.outstanding > 0
                         ? `${labData.totals.outstanding} request${labData.totals.outstanding === 1 ? '' : 's'} still open`
                         : 'Queue clear'}
@@ -435,7 +435,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Not moving</p>
-                        <p className={`mt-0.5 text-lg font-semibold ${stockMovement.totals.neverMoved > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                        <p className={`mt-0.5 text-lg font-semibold ${stockMovement.totals.neverMoved > 0 ? 'text-warning' : 'text-foreground'}`}>
                           {stockMovement.totals.neverMoved}
                         </p>
                       </div>
@@ -542,10 +542,10 @@ const Dashboard: React.FC = () => {
                       // list, so it is coloured rather than left as raw text.
                       render: (v) => {
                         const label = String(v || '').replace(/_/g, ' ');
-                        const tone = v === 'approved' ? 'bg-emerald-100 text-emerald-800'
-                          : v === 'analyzed' ? 'bg-amber-100 text-amber-800'
-                          : v === 'pending_collection' ? 'bg-rose-100 text-rose-800'
-                          : 'bg-sky-100 text-sky-800';
+                        const tone = v === 'approved' ? 'bg-success-bg text-success'
+                          : v === 'analyzed' ? 'bg-warning-bg text-warning'
+                          : v === 'pending_collection' ? 'bg-destructive-bg text-destructive'
+                          : 'bg-info-bg text-info';
                         return <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>{label}</span>;
                       } },
                     { key: 'requestedAt', header: 'Requested', sortable: true, render: (v) => (v ? new Date(v).toLocaleString() : '—') },

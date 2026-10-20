@@ -110,7 +110,7 @@ export default function Triage() {
       render: (v) => {
         const triaged = hasVitals(v);
         return (
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${triaged ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${triaged ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
             {triaged ? 'Triaged' : 'Not Triaged'}
           </span>
         );

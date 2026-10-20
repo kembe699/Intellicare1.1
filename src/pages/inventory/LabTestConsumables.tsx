@@ -267,7 +267,7 @@ export default function LabTestConsumables() {
                   render: (v) => {
                     const n = Number(v || 0);
                     return (
-                      <span className={`font-semibold inline-flex items-center gap-1 ${n <= 0 ? 'text-red-600' : n < 10 ? 'text-amber-600' : 'text-foreground'}`}>
+                      <span className={`font-semibold inline-flex items-center gap-1 ${n <= 0 ? 'text-destructive' : n < 10 ? 'text-warning' : 'text-foreground'}`}>
                         {n <= 0 && <AlertTriangle className="w-3.5 h-3.5" />} {n.toLocaleString()}
                       </span>
                     );
@@ -292,7 +292,7 @@ export default function LabTestConsumables() {
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}>
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </div>
                   ),

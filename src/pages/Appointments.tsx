@@ -44,9 +44,9 @@ const STATUS_OPTIONS = [
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    scheduled: 'bg-amber-100 text-amber-700',
-    queued: 'bg-emerald-100 text-emerald-700',
-    cancelled: 'bg-slate-100 text-slate-500',
+    scheduled: 'bg-warning-bg text-warning',
+    queued: 'bg-success-bg text-success',
+    cancelled: 'bg-muted text-muted-foreground',
   };
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${map[status] || map.cancelled}`}>{status}</span>;
 }

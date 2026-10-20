@@ -158,10 +158,10 @@ export default function StockTransferRequests() {
                     row.status === 'pending' ? (
                       <div className="flex items-center justify-center gap-1">
                         <Button size="sm" variant="ghost" disabled={processingId === row.id} onClick={(e) => { e.stopPropagation(); approve(row); }}>
-                          {processingId === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
+                          {processingId === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-success" />}
                         </Button>
                         <Button size="sm" variant="ghost" disabled={processingId === row.id} onClick={(e) => { e.stopPropagation(); reject(row); }}>
-                          <X className="w-3.5 h-3.5 text-red-600" />
+                          <X className="w-3.5 h-3.5 text-destructive" />
                         </Button>
                         {(String(row.requested_by) === String(user?.id) || user?.role === 'admin') && (
                           <Button size="sm" variant="ghost" disabled={processingId === row.id} onClick={(e) => { e.stopPropagation(); cancel(row); }}>

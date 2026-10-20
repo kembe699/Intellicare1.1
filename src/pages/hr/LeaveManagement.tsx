@@ -252,8 +252,8 @@ export default function LeaveManagement() {
                         <p className="text-sm font-semibold mb-2">{s.leave_type_name}</p>
                         <div className="grid grid-cols-3 gap-2 text-center">
                           <div><p className="text-xs text-muted-foreground">Entitled</p><p className="font-mono font-bold">{s.entitled_days}</p></div>
-                          <div><p className="text-xs text-muted-foreground">Taken</p><p className="font-mono font-bold text-amber-700">{s.taken_days}</p></div>
-                          <div><p className="text-xs text-muted-foreground">Remaining</p><p className="font-mono font-bold text-emerald-700">{s.remaining_days}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Taken</p><p className="font-mono font-bold text-warning">{s.taken_days}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Remaining</p><p className="font-mono font-bold text-success">{s.remaining_days}</p></div>
                         </div>
                       </div>
                     ))}

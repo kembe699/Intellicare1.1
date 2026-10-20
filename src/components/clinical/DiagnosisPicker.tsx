@@ -200,10 +200,10 @@ export function DiagnosisPicker({ orderId, readOnly, onNotesUpdated, className }
               )}
               <span className="text-sm flex-1 truncate">{d.description}</span>
               {d.is_primary ? (
-                <span title="Primary diagnosis"><Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" /></span>
+                <span title="Primary diagnosis"><Star className="w-3.5 h-3.5 text-warning fill-warning shrink-0" /></span>
               ) : !readOnly ? (
                 <button type="button" title="Make primary" onClick={() => setPrimary(d.id)} className="shrink-0">
-                  <Star className="w-3.5 h-3.5 text-muted-foreground hover:text-amber-500 shrink-0" />
+                  <Star className="w-3.5 h-3.5 text-muted-foreground hover:text-warning shrink-0" />
                 </button>
               ) : null}
               {!readOnly && (

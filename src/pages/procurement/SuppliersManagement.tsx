@@ -449,7 +449,7 @@ const SuppliersManagement: React.FC = () => {
                     key: 'name', header: 'Supplier', sortable: true,
                     render: (v, s) => (
                       <div className="flex items-center gap-2">
-                        {!!s.is_preferred && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />}
+                        {!!s.is_preferred && <Star className="w-3.5 h-3.5 text-warning fill-warning" />}
                         <p className="font-medium">{v}</p>
                       </div>
                     ),
@@ -483,7 +483,7 @@ const SuppliersManagement: React.FC = () => {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewSupplier(s); }}><Eye className="w-3.5 h-3.5" /></Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Edit className="w-3.5 h-3.5" /></Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toggleHold(s); }} disabled={holdingId === s.id}>
-                          {holdingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (s.on_hold ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Ban className="w-3.5 h-3.5 text-amber-600" />)}
+                          {holdingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (s.on_hold ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
                         </Button>
                       </div>
                     ),

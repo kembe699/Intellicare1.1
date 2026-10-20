@@ -145,13 +145,13 @@ const Receivables: React.FC = () => {
               data={filteredReceivables}
               keyExtractor={(item) => item.id}
               emptyMessage={receivables.length === 0 ? 'No receivables found. Receivables are created from patient billing.' : 'No records match your filter criteria.'}
-              rowClassName={(item) => getItemStatus(item) === 'overdue' ? 'bg-red-50/30 dark:bg-red-950/10' : ''}
+              rowClassName={(item) => getItemStatus(item) === 'overdue' ? 'bg-destructive-bg/30 dark:bg-destructive/10' : ''}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
               columns={[
                 { key: 'invoice_number', header: 'Invoice #', sortable: true, render: (v) => <span className="font-mono font-medium">{v}</span> },
                 { key: 'patient_name', header: 'Patient', render: (v, item) => <p className="font-medium">{v || item.patient_id}</p> },
                 { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: (v) => <span className="font-mono">{formatCurrency(v)}</span> },
-                { key: 'paid_amount', header: 'Paid', align: 'right', sortable: true, render: (v) => <span className="font-mono text-emerald-600">{formatCurrency(v)}</span> },
+                { key: 'paid_amount', header: 'Paid', align: 'right', sortable: true, render: (v) => <span className="font-mono text-success">{formatCurrency(v)}</span> },
                 { key: 'balance', header: 'Balance', align: 'right', sortable: true, render: (v) => <span className="font-mono font-medium">{formatCurrency(v)}</span> },
                 {
                   key: '__progress', header: 'Payment Progress', width: '9rem',
@@ -160,7 +160,7 @@ const Receivables: React.FC = () => {
                     return (
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                          <div className={`h-2 rounded-full transition-all ${paidPct >= 100 ? 'bg-emerald-500' : paidPct > 0 ? 'bg-primary/100' : 'bg-muted'}`}
+                          <div className={`h-2 rounded-full transition-all ${paidPct >= 100 ? 'bg-success' : paidPct > 0 ? 'bg-primary/100' : 'bg-muted'}`}
                             style={{ width: `${Math.min(paidPct, 100)}%` }} />
                         </div>
                         <span className="text-xs text-muted-foreground w-9 text-right">{paidPct.toFixed(0)}%</span>
@@ -177,7 +177,7 @@ const Receivables: React.FC = () => {
                       <div>
                         <p>{formatDate(v)}</p>
                         {isOverdue && daysOver > 0 && (
-                          <p className="text-xs text-red-600 font-medium">{daysOver} days overdue</p>
+                          <p className="text-xs text-destructive font-medium">{daysOver} days overdue</p>
                         )}
                       </div>
                     );
@@ -191,7 +191,7 @@ const Receivables: React.FC = () => {
                 <span>TOTALS</span>
                 <span className="font-mono flex gap-6">
                   <span>{formatCurrency(filteredReceivables.reduce((s, r) => s + r.amount, 0))}</span>
-                  <span className="text-emerald-600">{formatCurrency(filteredReceivables.reduce((s, r) => s + r.paid_amount, 0))}</span>
+                  <span className="text-success">{formatCurrency(filteredReceivables.reduce((s, r) => s + r.paid_amount, 0))}</span>
                   <span>{formatCurrency(filteredReceivables.reduce((s, r) => s + r.balance, 0))}</span>
                 </span>
               </div>

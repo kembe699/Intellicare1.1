@@ -73,7 +73,7 @@ export const ResponsiveForm: React.FC<ResponsiveFormProps> = ({
                 className="block text-sm sm:text-base font-medium text-gray-700 mb-2"
               >
                 {field.label}
-                {field.required && <span className="text-red-500">*</span>}
+                {field.required && <span className="text-destructive">*</span>}
               </label>
 
               {/* Input - Responsive */}
@@ -85,7 +85,7 @@ export const ResponsiveForm: React.FC<ResponsiveFormProps> = ({
                   value={formData[field.name] || ''}
                   onChange={handleChange}
                   required={field.required}
-                  className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:outline-none transition min-h-touch"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent focus:outline-none transition min-h-touch"
                   rows={4}
                 />
               ) : field.type === 'select' ? (
@@ -95,7 +95,7 @@ export const ResponsiveForm: React.FC<ResponsiveFormProps> = ({
                   onChange={(value) => handleSelectChange(field.name, value)}
                   placeholder={`Select ${field.label}`}
                   searchPlaceholder={`Search ${field.label}...`}
-                  className="w-full px-3 py-2 sm:px-4 sm:py-3 h-auto text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:outline-none transition bg-white min-h-touch"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 h-auto text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent focus:outline-none transition bg-white min-h-touch"
                 />
               ) : (
                 <input
@@ -106,13 +106,13 @@ export const ResponsiveForm: React.FC<ResponsiveFormProps> = ({
                   value={formData[field.name] || ''}
                   onChange={handleChange}
                   required={field.required}
-                  className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:outline-none transition min-h-touch"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent focus:outline-none transition min-h-touch"
                 />
               )}
 
               {/* Error Message - Responsive */}
               {errors[field.name] && (
-                <p className="text-red-500 text-xs sm:text-sm mt-1">
+                <p className="text-destructive text-xs sm:text-sm mt-1">
                   {errors[field.name]}
                 </p>
               )}
@@ -124,7 +124,7 @@ export const ResponsiveForm: React.FC<ResponsiveFormProps> = ({
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 sm:pt-6">
           <button
             type="submit"
-            className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 active:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 transition text-sm sm:text-base min-h-touch"
+            className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary-hover active:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-ring transition text-sm sm:text-base min-h-touch"
           >
             {submitButtonText}
           </button>

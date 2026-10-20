@@ -39,11 +39,11 @@ interface Invoice {
 }
 
 const STATUS_MAP: Record<string, { className: string; icon: React.ReactNode }> = {
-  unpaid: { className: 'bg-red-50 text-red-700 border-red-200', icon: <Clock className="w-3 h-3" /> },
-  partial: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: <AlertTriangle className="w-3 h-3" /> },
-  paid: { className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
+  unpaid: { className: 'bg-destructive-bg text-destructive border-destructive-border', icon: <Clock className="w-3 h-3" /> },
+  partial: { className: 'bg-warning-bg text-warning border-warning-border', icon: <AlertTriangle className="w-3 h-3" /> },
+  paid: { className: 'bg-success-bg text-success border-success-border', icon: <CheckCircle2 className="w-3 h-3" /> },
   overdue: { className: 'bg-orange-50 text-orange-700 border-orange-200', icon: <AlertTriangle className="w-3 h-3" /> },
-  cancelled: { className: 'bg-slate-100 text-slate-600 border-slate-200', icon: <XCircle className="w-3 h-3" /> },
+  cancelled: { className: 'bg-muted text-muted-foreground border-border', icon: <XCircle className="w-3 h-3" /> },
 };
 
 const statusBadge = (status: string) => {
@@ -212,7 +212,7 @@ export default function Invoices() {
                       const overdue = inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled';
                       return (
                         <>
-                          <span className={overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{formatDate(v)}</span>
+                          <span className={overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}>{formatDate(v)}</span>
                           {overdue && <span className="text-xs text-orange-600 ml-1">({inv.days_overdue}d)</span>}
                         </>
                       );
@@ -222,7 +222,7 @@ export default function Invoices() {
                   {
                     key: 'balance_due', header: 'Balance', sortable: true,
                     render: (v, inv) => (
-                      <span className={`font-medium ${parseFloat(String(v)) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <span className={`font-medium ${parseFloat(String(v)) > 0 ? 'text-destructive' : 'text-success'}`}>
                         {inv.currency || currency.code} {parseFloat(String(v)).toFixed(2)}
                       </span>
                     ),
@@ -267,11 +267,11 @@ export default function Invoices() {
                           </div>
                           <div className="bg-muted/30 rounded-lg p-2.5 text-center">
                             <p className="text-xs text-muted-foreground">Paid</p>
-                            <p className="font-bold text-emerald-600">{cur} {parseFloat(inv.amount_paid).toFixed(2)}</p>
+                            <p className="font-bold text-success">{cur} {parseFloat(inv.amount_paid).toFixed(2)}</p>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-2.5 text-center">
                             <p className="text-xs text-muted-foreground">Balance</p>
-                            <p className={`font-bold ${parseFloat(inv.balance_due) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{cur} {parseFloat(inv.balance_due).toFixed(2)}</p>
+                            <p className={`font-bold ${parseFloat(inv.balance_due) > 0 ? 'text-destructive' : 'text-success'}`}>{cur} {parseFloat(inv.balance_due).toFixed(2)}</p>
                           </div>
                         </div>
 
@@ -316,7 +316,7 @@ export default function Invoices() {
                               keyExtractor={(p, i) => p.id || i}
                               columns={[
                                 { key: 'payment_date', header: 'Date', render: (v) => formatDate(v) },
-                                { key: 'amount', header: 'Amount', align: 'right', render: (v) => <span className="font-mono font-semibold text-emerald-600">{cur} {parseFloat(v).toFixed(2)}</span> },
+                                { key: 'amount', header: 'Amount', align: 'right', render: (v) => <span className="font-mono font-semibold text-success">{cur} {parseFloat(v).toFixed(2)}</span> },
                                 { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize">{(v || '').replace('_', ' ')}</span> },
                               ]}
                             />
@@ -342,7 +342,7 @@ export default function Invoices() {
               </div>
               {selectedInvoice.status !== 'paid' && selectedInvoice.status !== 'cancelled' && (
                 <div className="flex gap-2">
-                  <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleCancel(selectedInvoice)} disabled={cancellingInvoice || markingPaid}>
+                  <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleCancel(selectedInvoice)} disabled={cancellingInvoice || markingPaid}>
                     {cancellingInvoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
                   </Button>
                   <Button variant="outline" onClick={() => handleMarkPaid(selectedInvoice)} disabled={markingPaid || cancellingInvoice}>

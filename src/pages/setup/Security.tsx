@@ -829,7 +829,7 @@ const Security: React.FC = () => {
                         size="icon"
                         onClick={() => handleToggleUserStatus(u.id, u.isActive)}
                         disabled={togglingUserId === u.id}
-                        className={`h-7 w-7 ${u.isActive ? 'text-destructive hover:text-destructive' : 'text-emerald-600 hover:text-emerald-600'}`}
+                        className={`h-7 w-7 ${u.isActive ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
                         title={u.isActive ? 'Disable user' : 'Enable user'}
                       >
                         {togglingUserId === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : u.isActive ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -1253,10 +1253,10 @@ const Security: React.FC = () => {
               </div>
             </div>
             {newCredentials?.emailDelivered === true && (
-              <p className="text-xs text-emerald-600">It was also emailed to {newCredentials?.email}.</p>
+              <p className="text-xs text-success">It was also emailed to {newCredentials?.email}.</p>
             )}
             {newCredentials?.emailDelivered === false && (
-              <p className="text-xs text-amber-600">The email could not be sent — please share this password with them directly.</p>
+              <p className="text-xs text-warning">The email could not be sent — please share this password with them directly.</p>
             )}
             <p className="text-xs text-muted-foreground">
               It cannot be shown again. If it is lost, reset the account instead.

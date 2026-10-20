@@ -164,9 +164,9 @@ export default function NursingProcedureDetail() {
             <div className="lg:col-span-2 space-y-6">
               {canFulfill && pending.length > 0 && (
                 <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-                  <div className="px-5 py-3.5 border-b border-border bg-amber-50 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-700" />
-                    <h4 className="font-semibold text-sm text-amber-900">Pending Orders ({pending.length})</h4>
+                  <div className="px-5 py-3.5 border-b border-border bg-warning-bg flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-warning" />
+                    <h4 className="font-semibold text-sm text-warning">Pending Orders ({pending.length})</h4>
                   </div>
                   <div className="divide-y">
                     {pending.map(row => {
@@ -224,7 +224,7 @@ export default function NursingProcedureDetail() {
                           {row.status === 'completed' ? `By ${row.nurse_name || 'Unknown'}` : `Ordered by ${row.ordered_by_name || 'Unknown'}`} · {new Date(row.performed_at).toLocaleString()}
                         </p>
                       </div>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${row.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${row.status === 'completed' ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
                         {row.status === 'completed' ? 'Completed' : 'Pending'}
                       </span>
                     </div>

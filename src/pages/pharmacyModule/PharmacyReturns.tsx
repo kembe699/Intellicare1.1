@@ -258,9 +258,9 @@ export default function PharmacyReturns() {
               </div>
 
               {selectedDispensing && parseInt(quantityReturned, 10) > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                <div className="bg-success-bg border border-success-border rounded-lg p-3 text-center">
                   <p className="text-xs text-muted-foreground">Estimated Refund</p>
-                  <p className="text-xl font-bold text-emerald-700">
+                  <p className="text-xl font-bold text-success">
                     {fmt((parseFloat(selectedDispensing.unit_price) || 0) * (parseInt(quantityReturned, 10) || 0))}
                   </p>
                 </div>

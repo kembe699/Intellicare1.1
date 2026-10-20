@@ -84,10 +84,10 @@ const UOM_OPTIONS = [
 ];
 
 const stockStatus = (item: InventoryItem) => {
-  if (item.quantity_on_hand === 0) return { label: 'Out of Stock', className: 'bg-red-50 text-red-700 border-red-200' };
-  if (item.minimum_stock_level > 0 && item.quantity_on_hand <= item.minimum_stock_level) return { label: 'Low Stock', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (item.quantity_on_hand === 0) return { label: 'Out of Stock', className: 'bg-destructive-bg text-destructive border-destructive-border' };
+  if (item.minimum_stock_level > 0 && item.quantity_on_hand <= item.minimum_stock_level) return { label: 'Low Stock', className: 'bg-warning-bg text-warning border-warning-border' };
   if (item.maximum_stock_level > 0 && item.quantity_on_hand >= item.maximum_stock_level) return { label: 'Over Stock', className: 'bg-purple-50 text-purple-700 border-purple-200' };
-  return { label: 'Normal', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  return { label: 'Normal', className: 'bg-success-bg text-success border-success-border' };
 };
 
 const generateItemCode = () => {
@@ -896,7 +896,7 @@ export default function ItemMaster() {
                             {
                               key: 'quantity_change', header: 'Qty', align: 'right',
                               render: (v) => (
-                                <span className={`font-mono ${v > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                <span className={`font-mono ${v > 0 ? 'text-success' : 'text-destructive'}`}>
                                   {v > 0 ? '+' : ''}{v}
                                 </span>
                               ),
@@ -1093,7 +1093,7 @@ export default function ItemMaster() {
               </div>
 
               {priceAdjForm.mode === 'percentage' && priceAdjForm.percentage && !isNaN(parseFloat(priceAdjForm.percentage)) && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: an item priced at 100.00 becomes{' '}
                   <strong>
                     {priceAdjForm.direction === 'increase'
@@ -1105,7 +1105,7 @@ export default function ItemMaster() {
               )}
 
               {priceAdjForm.mode === 'rate' && priceAdjForm.newRate && !isNaN(parseFloat(priceAdjForm.newRate)) && currentExchangeRate != null && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: an item priced at 100.00 becomes{' '}
                   <strong>{(100 * (parseFloat(priceAdjForm.newRate) / currentExchangeRate)).toFixed(2)}</strong>.
                   This applies immediately to {priceAdjForm.category ? `all "${priceAdjForm.category}" items` : 'ALL active items'} and cannot be undone automatically.

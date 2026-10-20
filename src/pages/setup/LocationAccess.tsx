@@ -202,7 +202,7 @@ const LocationAccess: React.FC = () => {
                 key: 'id', header: 'Actions', align: 'center',
                 render: (_v, row) => (
                   <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); revoke(row); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
                 ),
               },

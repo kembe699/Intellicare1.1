@@ -861,7 +861,7 @@ export default function LISRegistration() {
       <Dialog open={!!duplicatePatient} onOpenChange={(open) => { if (!open) setDuplicatePatient(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
+            <DialogTitle className="flex items-center gap-2 text-warning">
               <AlertTriangle className="w-5 h-5" />
               Patient Already Exists
             </DialogTitle>
@@ -887,7 +887,7 @@ export default function LISRegistration() {
                   </p>
                 )}
                 {duplicatePatient.is_queued ? (
-                  <p className="text-sm text-emerald-600 font-medium pt-1">Already queued today</p>
+                  <p className="text-sm text-success font-medium pt-1">Already queued today</p>
                 ) : null}
               </div>
             </div>

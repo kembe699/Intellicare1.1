@@ -481,7 +481,7 @@ const ProcurementReports: React.FC = () => {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    <DollarSign className="w-4 h-4 text-success" />
                     <span className="text-xs text-muted-foreground">Total Spend</span>
                   </div>
                   {byCurrency.length === 0 ? (
@@ -522,7 +522,7 @@ const ProcurementReports: React.FC = () => {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp className="w-4 h-4 text-amber-500" />
+                    <TrendingUp className="w-4 h-4 text-warning" />
                     <span className="text-xs text-muted-foreground">Avg Order Value</span>
                   </div>
                   {byCurrency.length > 0 ? (
@@ -644,7 +644,7 @@ const ProcurementReports: React.FC = () => {
                         key: '__visual', header: 'Visual', width: '200px',
                         render: (_v, row) => (
                           <div className="w-full bg-muted rounded-full h-2">
-                            <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${maxCount > 0 ? (row.order_count / maxCount) * 100 : 0}%` }} />
+                            <div className="bg-success h-2 rounded-full" style={{ width: `${maxCount > 0 ? (row.order_count / maxCount) * 100 : 0}%` }} />
                           </div>
                         ),
                       },
@@ -668,8 +668,8 @@ const ProcurementReports: React.FC = () => {
               columns={[
                 { key: 'supplier_name', header: 'Supplier', render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'total_orders', header: 'Total Orders', align: 'center' },
-                { key: 'on_time', header: 'On Time', align: 'center', render: (v) => <Badge className="bg-emerald-100 text-emerald-700 text-xs">{v || 0}</Badge> },
-                { key: 'late', header: 'Late', align: 'center', render: (v) => <Badge className="bg-red-100 text-red-700 text-xs">{v || 0}</Badge> },
+                { key: 'on_time', header: 'On Time', align: 'center', render: (v) => <Badge className="bg-success-bg text-success text-xs">{v || 0}</Badge> },
+                { key: 'late', header: 'Late', align: 'center', render: (v) => <Badge className="bg-destructive-bg text-destructive text-xs">{v || 0}</Badge> },
                 { key: 'pending', header: 'Pending', align: 'center', render: (v) => <Badge className="bg-muted text-muted-foreground text-xs">{v || 0}</Badge> },
                 { key: 'avg_delivery_days', header: 'Avg Days', align: 'center', render: (v) => <span className="font-mono">{v ? parseFloat(v).toFixed(1) : '—'}</span> },
                 {
@@ -680,7 +680,7 @@ const ProcurementReports: React.FC = () => {
                     return (
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-16 bg-muted rounded-full h-2">
-                          <div className={`h-2 rounded-full ${onTimePct >= 80 ? 'bg-emerald-500' : onTimePct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                          <div className={`h-2 rounded-full ${onTimePct >= 80 ? 'bg-success' : onTimePct >= 50 ? 'bg-warning' : 'bg-destructive'}`}
                             style={{ width: `${onTimePct}%` }} />
                         </div>
                         <span className="text-xs font-medium">{onTimePct.toFixed(0)}%</span>
@@ -910,8 +910,8 @@ const ProcurementReports: React.FC = () => {
                       <p className="text-sm font-bold mb-2">{cur}</p>
                       <div className="grid grid-cols-3 gap-3">
                         <div><p className="text-xs text-muted-foreground mb-0.5">Total Billed</p><p className="font-mono font-bold text-lg">{fmtAmt(t.billed)}</p></div>
-                        <div><p className="text-xs text-muted-foreground mb-0.5">Paid</p><p className="font-mono font-bold text-lg text-emerald-700">{fmtAmt(t.paid)}</p></div>
-                        <div><p className="text-xs text-muted-foreground mb-0.5">Outstanding</p><p className="font-mono font-bold text-lg text-amber-700">{fmtAmt(t.outstanding)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Paid</p><p className="font-mono font-bold text-lg text-success">{fmtAmt(t.paid)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-0.5">Outstanding</p><p className="font-mono font-bold text-lg text-warning">{fmtAmt(t.outstanding)}</p></div>
                       </div>
                     </div>
                   ))}

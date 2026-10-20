@@ -161,7 +161,7 @@ export default function NewStockTransferRequest() {
                         disabled={!fromLocationId}
                       />
                       <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => removeLine(idx)} disabled={lines.length === 1}>
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </div>
                   ))}

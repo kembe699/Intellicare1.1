@@ -317,7 +317,7 @@ export default function RevenueReport() {
       { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
       { key: 'paymentMethod', header: 'Payment Mode', sortable: true, render: v => <span className="capitalize">{v}</span> },
       { key: 'cashierName', header: 'Cashier', sortable: true },
-      { key: 'status', header: 'Status', sortable: true, render: v => <span className="capitalize text-red-600 font-medium">{v}</span> },
+      { key: 'status', header: 'Status', sortable: true, render: v => <span className="capitalize text-destructive font-medium">{v}</span> },
       { key: 'note', header: 'Note' },
     ];
     csvColumns = [{ header: 'Date', key: 'paymentDate', transform: v => fmtDate(v) }, { header: 'Receipt #', key: 'receiptNumber' }, { header: 'Patient', key: 'patientName' }, { header: 'Amount', key: 'amount', transform: v => fmtCurrency(v) }, { header: 'Payment Mode', key: 'paymentMethod' }, { header: 'Cashier', key: 'cashierName' }, { header: 'Status', key: 'status' }];
@@ -471,14 +471,14 @@ export default function RevenueReport() {
           </div>
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Cost of Goods Sold</p>
-            <p className="text-2xl font-bold mt-1 text-amber-700">{fmtCurrency(costSummary.totalCOGS)}</p>
+            <p className="text-2xl font-bold mt-1 text-warning">{fmtCurrency(costSummary.totalCOGS)}</p>
             {cogsByAccount.length > 0 && (
               <p className="text-xs text-muted-foreground mt-0.5">{cogsByAccount.map(a => a.accountName).join(', ')}</p>
             )}
           </div>
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Gross Margin</p>
-            <p className={`text-2xl font-bold mt-1 ${costSummary.grossMargin >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtCurrency(costSummary.grossMargin)}</p>
+            <p className={`text-2xl font-bold mt-1 ${costSummary.grossMargin >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(costSummary.grossMargin)}</p>
           </div>
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Gross Margin %</p>
@@ -522,7 +522,7 @@ export default function RevenueReport() {
       ) : (
         <>
           <AdvancedDataTable
-            headerClassName="bg-sky-100 dark:bg-sky-950/40 border-b border-border"
+            headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
             data={displayRows}
             keyExtractor={keyExtractor}
             columns={columnsWithNo}

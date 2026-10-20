@@ -192,7 +192,7 @@ export default function SalaryAdvancesManagement() {
                 { key: 'first_name', header: 'Employee', render: (_v, a) => <span className="font-medium">{a.first_name} {a.last_name}</span> },
                 { key: 'request_date', header: 'Date', render: (v) => formatDate(v) },
                 { key: 'amount', header: 'Amount', align: 'right', render: (v, a) => <span className="font-mono">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
-                { key: 'balance_remaining', header: 'Balance', align: 'right', render: (v, a) => <span className="font-mono text-amber-700">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
+                { key: 'balance_remaining', header: 'Balance', align: 'right', render: (v, a) => <span className="font-mono text-warning">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
                 { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },
                 {
                   key: '__actions', header: 'Actions', align: 'center',

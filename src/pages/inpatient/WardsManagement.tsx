@@ -126,15 +126,15 @@ export default function WardsManagement() {
               <p className="text-xs text-muted-foreground">Total Wards</p>
             </CardContent>
           </Card>
-          <Card className="rounded-lg shadow-sm border-green-200/50 bg-green-50/30">
+          <Card className="rounded-lg shadow-sm border-success-border/50 bg-success-bg/30">
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">{wards.reduce((s: number, w: any) => s + (w.total_beds || 0), 0)}</p>
+              <p className="text-2xl font-bold text-success">{wards.reduce((s: number, w: any) => s + (w.total_beds || 0), 0)}</p>
               <p className="text-xs text-muted-foreground">Total Beds</p>
             </CardContent>
           </Card>
-          <Card className="rounded-lg shadow-sm border-amber-200/50 bg-amber-50/30">
+          <Card className="rounded-lg shadow-sm border-warning-border/50 bg-warning-bg/30">
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-700">{wards.reduce((s: number, w: any) => s + (w.current_occupancy || 0), 0)}</p>
+              <p className="text-2xl font-bold text-warning">{wards.reduce((s: number, w: any) => s + (w.current_occupancy || 0), 0)}</p>
               <p className="text-xs text-muted-foreground">Occupied</p>
             </CardContent>
           </Card>
@@ -250,7 +250,7 @@ export default function WardsManagement() {
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">{ward.current_occupancy || 0}/{ward.total_beds || 0}</span>
                     <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${occupancyPct > 80 ? 'bg-red-500' : occupancyPct > 50 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${occupancyPct}%` }} />
+                      <div className={`h-full rounded-full transition-all ${occupancyPct > 80 ? 'bg-destructive' : occupancyPct > 50 ? 'bg-warning' : 'bg-success'}`} style={{ width: `${occupancyPct}%` }} />
                     </div>
                     <span className="text-xs text-muted-foreground">{occupancyPct}%</span>
                   </div>

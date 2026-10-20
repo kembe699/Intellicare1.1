@@ -515,7 +515,7 @@ export default function TheatreOperationDetail() {
                     onClick={() => toggleChecklistItem(item.id, !item.is_checked)}
                     className="w-full flex items-start gap-2.5 text-left px-2 py-1.5 rounded-md hover:bg-muted/40 transition-colors disabled:cursor-default"
                   >
-                    {item.is_checked ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />}
+                    {item.is_checked ? <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />}
                     <span className={`text-sm ${item.is_checked ? 'line-through text-muted-foreground' : ''}`}>{item.item_text}</span>
                   </button>
                 ))}

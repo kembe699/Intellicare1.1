@@ -1094,7 +1094,7 @@ const Services: React.FC = () => {
               </div>
 
               {priceAdjForm.mode === 'percentage' && priceAdjForm.percentage && !isNaN(parseFloat(priceAdjForm.percentage)) && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: a service priced at 100.00 becomes{' '}
                   <strong>
                     {priceAdjForm.direction === 'increase'
@@ -1106,7 +1106,7 @@ const Services: React.FC = () => {
               )}
 
               {priceAdjForm.mode === 'rate' && priceAdjForm.newRate && !isNaN(parseFloat(priceAdjForm.newRate)) && currentExchangeRate != null && (
-                <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning">
                   Example: a service priced at 100.00 becomes{' '}
                   <strong>{(100 * (parseFloat(priceAdjForm.newRate) / currentExchangeRate)).toFixed(2)}</strong>.
                   This applies immediately to {priceAdjForm.category ? `all "${priceAdjForm.category}" services` : 'ALL active services'} and cannot be undone automatically.

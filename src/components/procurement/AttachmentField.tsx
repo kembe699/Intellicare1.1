@@ -6,7 +6,8 @@ import { Paperclip, FileText, Image as ImageIcon, X, Eye } from 'lucide-react';
 const ACCEPTED = 'application/pdf,image/jpeg,image/png,image/gif,image/webp';
 
 const fileIcon = (file: File) => file.type === 'application/pdf'
-  ? <FileText className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+  ? <FileText className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+  // eslint-disable-next-line no-restricted-syntax -- file-type icon color, not a status
   : <ImageIcon className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />;
 
 const fmtSize = (bytes: number) => bytes < 1024 * 1024
