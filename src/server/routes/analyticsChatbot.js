@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { authorize } = require('../middleware/authorize');
-const { chatbotLimiter } = require('../middleware/rateLimiters');
+const { chatbotLimiter, chatbotLlmLimiter } = require('../middleware/rateLimiters');
 const { answerQuestion, hasPrivilege } = require('../services/analyticsChatbot/chatbotEngine');
+const llmEngine = require('../services/analyticsChatbot/llmEngine');
 const { SUGGESTED_QUESTIONS } = require('../services/analyticsChatbot/responseTemplates');
 
 // Base access gate for the whole feature — "can open the Assistant at all".
@@ -85,7 +86,7 @@ router.delete('/conversations/:id', async (req, res) => {
   }
 });
 
-router.post('/ask', chatbotLimiter, async (req, res) => {
+router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
   try {
     const { sequelize } = req.models;
     const question = String(req.body?.question || '').trim();
@@ -109,22 +110,47 @@ router.post('/ask', chatbotLimiter, async (req, res) => {
       );
     }
 
-    // Follow-up context: the last assistant message in THIS conversation,
-    // if any — see chatbotEngine.js's answerQuestion for exactly which
-    // pieces of it get inherited when the new question doesn't specify
-    // them itself. Permission is still re-checked fresh every turn there,
-    // regardless of what this stored context contains.
-    const [[lastAssistantRow]] = await sequelize.query(
-      `SELECT intent, params FROM chatbot_messages
-        WHERE conversation_id = :id AND role = 'assistant'
-        ORDER BY created_at DESC LIMIT 1`,
-      { replacements: { id: conversationId } },
-    );
-    const priorTurn = lastAssistantRow?.intent
-      ? { intent: lastAssistantRow.intent, params: lastAssistantRow.params }
-      : null;
+    const clinicId = parseInt(req.user?.clinicId, 10) || 1;
+    let result = null;
+    let engineUsed = 'keyword';
 
-    const result = await answerQuestion({ sequelize, req, question, priorTurn });
+    // LLM mode, when enabled: give Claude the real conversation history (not
+    // just one inherited turn) so it can follow up, clarify, and understand
+    // phrasing the keyword engine's fixed patterns never would. Any failure
+    // here (no API key, timeout, API error) falls through to the
+    // deterministic engine below rather than failing the request — the
+    // feature must keep working even if the LLM path is unavailable.
+    if (llmEngine.featureEnabled()) {
+      try {
+        const [historyRows] = await sequelize.query(
+          `SELECT role, content FROM chatbot_messages WHERE conversation_id = :id ORDER BY created_at ASC`,
+          { replacements: { id: conversationId } },
+        );
+        const llmResult = await llmEngine.answerQuestion({ sequelize, req, question, history: historyRows, clinicId });
+        result = { text: llmResult.text, table: null, intentKey: llmResult.toolCalls.map((t) => t.name).join(',') || null, toolCalls: llmResult.toolCalls };
+        engineUsed = 'llm';
+      } catch (e) {
+        console.error('Analytics Assistant LLM engine failed, falling back to keyword engine:', e.message);
+      }
+    }
+
+    if (!result) {
+      // Follow-up context: the last assistant message in THIS conversation,
+      // if any — see chatbotEngine.js's answerQuestion for exactly which
+      // pieces of it get inherited when the new question doesn't specify
+      // them itself. Permission is still re-checked fresh every turn there,
+      // regardless of what this stored context contains.
+      const [[lastAssistantRow]] = await sequelize.query(
+        `SELECT intent, params FROM chatbot_messages
+          WHERE conversation_id = :id AND role = 'assistant'
+          ORDER BY created_at DESC LIMIT 1`,
+        { replacements: { id: conversationId } },
+      );
+      const priorTurn = lastAssistantRow?.intent
+        ? { intent: lastAssistantRow.intent, params: lastAssistantRow.params }
+        : null;
+      result = await answerQuestion({ sequelize, req, question, priorTurn });
+    }
 
     const userMsgId = uuidv4();
     const assistantMsgId = uuidv4();
@@ -151,16 +177,18 @@ router.post('/ask', chatbotLimiter, async (req, res) => {
     );
     await sequelize.query(`UPDATE chatbot_conversations SET updated_at = NOW() WHERE id = :id`, { replacements: { id: conversationId } });
 
-    // Audit trail: the question and the resolved intent/params, never the
-    // query result itself — same convention clinicalInsights.js uses for
-    // its own AI-feature audit entries.
+    // Audit trail: the question and which tools/intent resolved it, never
+    // the query result or the model's prose — same convention
+    // clinicalInsights.js uses for its own AI-feature audit entries.
     try {
       const rr = require('./reports');
       await rr.logAudit({
         req, clinic_id: req.user.clinicId, user_id: req.user.id, user_name: req.user.displayName, user_role: req.user.role,
         module: 'Analytics', action: 'ANALYTICS_CHATBOT_QUERY', entity_type: 'ChatbotConversation', entity_id: conversationId,
         description: question,
-        new_values: { intent: result.intentKey, dateLabel: result.dateRange?.label },
+        new_values: engineUsed === 'llm'
+          ? { engine: 'llm', tools: result.toolCalls }
+          : { engine: 'keyword', intent: result.intentKey, dateLabel: result.dateRange?.label },
       });
     } catch (e) { /* audit failure must never block the request itself */ }
 
