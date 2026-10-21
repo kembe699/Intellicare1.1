@@ -31,6 +31,7 @@ function addDays(d, n) {
 }
 
 const N_DAYS_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10, fourteen: 14, thirty: 30, ninety: 90 };
+const N_MONTHS_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 
 /**
  * Finds a date expression anywhere in `text` and resolves it against `now`.
@@ -62,6 +63,15 @@ function resolveDateExpression(text, now = new Date()) {
   }
   if (/\bthis\s+week\b/.test(lower)) {
     return { matched: true, start: addDays(today0, -7), end: tomorrow0, label: 'This Week' };
+  }
+  // Checked before the plain "last month" (singular) match below, so "last
+  // 5 months" isn't swallowed by it matching "month" alone.
+  const lastNMonths = lower.match(/\b(?:last\s+|for\s+)(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+months?\b/);
+  if (lastNMonths) {
+    const n = Number.isFinite(Number(lastNMonths[1])) ? parseInt(lastNMonths[1], 10) : N_MONTHS_WORDS[lastNMonths[1]];
+    if (n && n > 0 && n <= 36) {
+      return { matched: true, start: new Date(now.getFullYear(), now.getMonth() - n, now.getDate()), end: tomorrow0, label: `Last ${n} Months` };
+    }
   }
   if (/\blast\s+month\b/.test(lower)) {
     const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);

@@ -35,6 +35,10 @@ describe('analyticsChatbot intentClassifier', () => {
     ['What was our turnover today?', 'revenue'],
     ['Who is the busiest doctor this week?', 'doctor_activity'],
     ['Give me a daily report', 'summary'],
+    // Imperative doctor phrasing, not just "which doctor...?"
+    ['Show me the doctors', 'doctor_activity'],
+    ['Show me the doctors for last month', 'doctor_activity'],
+    ['List the doctors', 'doctor_activity'],
     // New meta-intents
     ['What date range was that?', 'date_range_query'],
     ['Give me the date range', 'date_range_query'],
@@ -129,6 +133,26 @@ describe('analyticsChatbot dateParser', () => {
     const r = resolveDateExpression('revenue in the last 14 days', now);
     expect(r.start).toEqual(new Date(2026, 9, 7));
     expect(r.end).toEqual(new Date(2026, 9, 22));
+  });
+
+  test('last N months ("last 5 months")', () => {
+    const r = resolveDateExpression('show me the doctors for last 5 months', now);
+    expect(r.matched).toBe(true);
+    expect(r.start).toEqual(new Date(2026, 4, 21));
+    expect(r.end).toEqual(new Date(2026, 9, 22));
+    expect(r.label).toBe('Last 5 Months');
+  });
+
+  test('"for N months" (no "last") is understood the same way — the exact phrasing a user actually typed', () => {
+    const r = resolveDateExpression('show me for 5 months', now);
+    expect(r.matched).toBe(true);
+    expect(r.start).toEqual(new Date(2026, 4, 21));
+    expect(r.label).toBe('Last 5 Months');
+  });
+
+  test('"last N months" is checked before the plain "last month" match, so it is not swallowed by it', () => {
+    const r = resolveDateExpression('revenue for the last 3 months', now);
+    expect(r.label).toBe('Last 3 Months');
   });
 
   test('between two explicit dates, inclusive of the end date', () => {

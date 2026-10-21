@@ -100,6 +100,10 @@ const INTENTS = [
       /\bhow many patients did\b.*\bdoctor\b/,
       /\b(busiest|most active) doctor\b/, /\bdoctor workload\b/, /\bdoctor caseload\b/,
       /\bconsultations? per doctor\b/, /\bdoctors?'? (performance|activity|caseload)\b/,
+      // Imperative phrasing ("show me the doctors", "doctors for last
+      // month") — not just the interrogative "which doctor...?" forms above.
+      /\bshow me (the )?doctors?\b/, /\bdoctors? (for|in|during|this|last)\b/,
+      /\blist (the )?doctors?\b/,
     ],
   },
   {

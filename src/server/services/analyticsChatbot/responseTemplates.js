@@ -18,7 +18,7 @@ const PERIOD_PHRASES = {
 
 function periodPhrase(label) {
   if (PERIOD_PHRASES[label]) return PERIOD_PHRASES[label];
-  if (label?.startsWith('Last ') && label.endsWith('Days')) return `in the ${label.toLowerCase()}`;
+  if (label?.startsWith('Last ') && (label.endsWith('Days') || label.endsWith('Months'))) return `in the ${label.toLowerCase()}`;
   if (label?.includes(' to ')) return `between ${label}`;
   return label || 'in this period';
 }

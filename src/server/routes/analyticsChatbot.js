@@ -135,19 +135,28 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
     }
 
     if (!result) {
-      // Follow-up context: the last assistant message in THIS conversation,
-      // if any — see chatbotEngine.js's answerQuestion for exactly which
+      // Follow-up context: the most recent assistant message in THIS
+      // conversation that actually resolved to a real topic (intent IS NOT
+      // NULL) — see chatbotEngine.js's answerQuestion for exactly which
       // pieces of it get inherited when the new question doesn't specify
       // them itself. Permission is still re-checked fresh every turn there,
       // regardless of what this stored context contains.
-      const [[lastAssistantRow]] = await sequelize.query(
+      //
+      // Deliberately skips over any intervening "I'm not sure I understood"
+      // turn (stored with intent = NULL) instead of just grabbing the
+      // literal last message: a real topic ("doctor activity") followed by
+      // one unrelated/unsupported question shouldn't permanently erase that
+      // topic — the next genuine follow-up ("I mean for last month") should
+      // still be able to resume it, the same way a person would in
+      // conversation rather than treating one dead-end detour as a hard reset.
+      const [[lastRealTurnRow]] = await sequelize.query(
         `SELECT intent, params FROM chatbot_messages
-          WHERE conversation_id = :id AND role = 'assistant'
+          WHERE conversation_id = :id AND role = 'assistant' AND intent IS NOT NULL
           ORDER BY created_at DESC LIMIT 1`,
         { replacements: { id: conversationId } },
       );
-      const priorTurn = lastAssistantRow?.intent
-        ? { intent: lastAssistantRow.intent, params: lastAssistantRow.params }
+      const priorTurn = lastRealTurnRow?.intent
+        ? { intent: lastRealTurnRow.intent, params: lastRealTurnRow.params }
         : null;
       result = await answerQuestion({ sequelize, req, question, priorTurn });
     }
