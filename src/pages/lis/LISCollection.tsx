@@ -724,6 +724,13 @@ export default function LISCollection() {
 
       {printGroup && printGroup.length > 0 && (
         <>
+          {/* Real label size (50mm x 25mm — a common small thermal barcode
+              label; adjust the @page size below to match the actual label
+              stock/printer if different), scoped to this component's own
+              @page rule so it doesn't affect any other print flow in the
+              app (the global one in index.css is still A4 for everything
+              else) — same pattern src/components/receipts/PaymentReceipt
+              .tsx already uses for its own 80mm receipt size. */}
           <style type="text/css">
             {`
               @media print {
@@ -739,13 +746,21 @@ export default function LISCollection() {
                   top: 0;
                   width: 100%;
                 }
+                @page {
+                  size: 50mm 25mm;
+                  margin: 0;
+                }
                 .print-label {
                   page-break-after: always;
                   display: flex;
                   flex-direction: column;
                   align-items: center;
                   justify-content: center;
-                  padding: 2rem;
+                  width: 50mm;
+                  height: 25mm;
+                  padding: 1mm;
+                  box-sizing: border-box;
+                  overflow: hidden;
                 }
                 .print-label:last-child {
                   page-break-after: auto;
@@ -756,21 +771,17 @@ export default function LISCollection() {
           <div id="printable-labels" className="fixed -left-[9999px] top-0 bg-white text-black">
             {printGroup.map(s => (
               <div key={s.id} className="print-label">
-                <div className="w-full flex justify-center bg-white py-4 overflow-hidden rounded-md border border-gray-100">
-                  <Barcode
-                    value={s.barcode}
-                    width={1.5}
-                    height={60}
-                    fontSize={14}
-                    margin={10}
-                    background="#ffffff"
-                    lineColor="#000000"
-                  />
-                </div>
-                <div className="text-center mt-4 font-bold text-lg">{s.first_name} {s.last_name}</div>
-                <div className="text-center text-sm font-mono text-gray-700">{s.participant_number}</div>
-                <div className="text-center text-sm font-medium mt-1 uppercase">{s.test_name} ({s.test_code})</div>
-                <div className="text-center text-xs text-gray-500 mt-2">{new Date(s.order_time).toLocaleString()}</div>
+                <Barcode
+                  value={s.barcode}
+                  width={1}
+                  height={22}
+                  fontSize={8}
+                  margin={2}
+                  background="#ffffff"
+                  lineColor="#000000"
+                />
+                <div className="text-center text-[8px] font-medium uppercase leading-tight">{s.test_name}</div>
+                <div className="text-center text-[7px] text-gray-700">{new Date(s.order_time).toLocaleDateString()}</div>
               </div>
             ))}
           </div>
