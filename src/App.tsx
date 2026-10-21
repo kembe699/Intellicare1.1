@@ -32,6 +32,7 @@ const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
 const PayrollSign = lazyWithRetry(() => import('./pages/public/PayrollSign'));
 const BookDemo = lazyWithRetry(() => import('./pages/public/BookDemo'));
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const AnalyticsAssistant = lazyWithRetry(() => import('./pages/AnalyticsAssistant'));
 const PatientVisitsHistory = lazyWithRetry(() => import('./pages/PatientVisitsHistory'));
 const PatientsBill = lazyWithRetry(() => import('./pages/PatientsBill'));
 const ProformaInvoice = lazyWithRetry(() => import('./pages/ProformaInvoice'));
@@ -313,6 +314,11 @@ const AppRoutes = () => {
       <Route path="/dashboard" element={
         <ProtectedRoute requiredPrivilege="pages.dashboard.view">
           <Dashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/assistant" element={
+        <ProtectedRoute requiredPrivilege="pages.analytics_assistant.view">
+          <AnalyticsAssistant />
         </ProtectedRoute>
       } />
       <Route path="/clinical/visits-history" element={

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Sidebar, MobileHeader, TopBar } from './Sidebar';
+import { FloatingAssistantButton } from '@/components/common/FloatingAssistantButton';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -19,6 +20,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
+
+      <FloatingAssistantButton />
     </div>
   );
 };

@@ -648,6 +648,7 @@ app.use('/api/fixed-assets', require('./routes/fixedAssets'));
 app.use('/api/theatre', require('./routes/theatre'));
 app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));
 app.use('/api/reports-v2/audit-summary', require('./routes/reportAuditSummary'));
+app.use('/api/analytics-chat', require('./routes/analyticsChatbot'));
 app.use('/api/ledger-accounts', ledgerAccountsRouter);
 app.use('/api/cashier', cashierRouter);
 app.use('/api/cash-transfers', cashTransfersRouter);

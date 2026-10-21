@@ -15,3 +15,4 @@ export * from './IcCard';
 export * from './IcFormField';
 export * from './ConfirmDialog';
 export * from './StatusBadge';
+export * from './FloatingAssistantButton';

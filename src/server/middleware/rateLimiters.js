@@ -94,6 +94,19 @@ const clinicalInsightsLimiter = rateLimit({
   message: { error: 'Too many Clinical Insights requests this hour. Please try again later.' },
 });
 
+// Analytics Assistant chatbot — unlike Clinical Insights this never calls an
+// external API, so the concern isn't cost, it's the same one as
+// authLimiter: a bounded ceiling per user rather than unbounded query load
+// against the database from a chat box.
+const chatbotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  keyGenerator: userKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many questions in a short time. Please wait a few minutes and try again.' },
+});
+
 // Public, unauthenticated "Book a Demo" page (routes/publicBookDemo.js). A
 // real visitor hits availability a few times while browsing the calendar
 // then submits once; this bounds scripted slot-grabbing/spam per source IP.
@@ -121,6 +134,7 @@ module.exports = {
   passwordResetLimiter,
   payrollSignLimiter,
   clinicalInsightsLimiter,
+  chatbotLimiter,
   bookDemoAvailabilityLimiter,
   bookDemoSubmitLimiter,
 };
