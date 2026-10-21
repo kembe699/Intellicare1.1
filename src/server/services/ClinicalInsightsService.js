@@ -11,7 +11,7 @@
  */
 const { v4: uuidv4 } = require('uuid');
 
-const MODEL_DEFAULT = process.env.CLINICAL_INSIGHTS_MODEL || 'claude-sonnet-5';
+const MODEL_DEFAULT = process.env.CLINICAL_INSIGHTS_MODEL || 'claude-sonnet-5-5';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const FETCH_TIMEOUT_MS = 60 * 1000;
 
