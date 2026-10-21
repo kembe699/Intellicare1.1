@@ -124,6 +124,31 @@ async function answerQuestion({ sequelize, req, question, priorTurn }) {
   const classification = classifyIntent(question);
   const dateResolved = resolveDateExpression(question);
 
+  // Meta-questions about the conversation itself ("what date range was
+  // that?", "help") are answered straight from priorTurn without running
+  // any analytics function — and deliberately report THIS turn back under
+  // priorTurn's own intent/dateRange (not their own), so the conversation's
+  // "current topic" carries through them unaffected: ask about revenue,
+  // then "what date range was that?", then "what about yesterday?" still
+  // applies to revenue, not to the date-range question in between.
+  if (classification.matched && classification.intent === 'date_range_query') {
+    const priorDateRange = priorTurn?.params?.start
+      ? { start: new Date(priorTurn.params.start), end: new Date(priorTurn.params.end), label: priorTurn.params.label }
+      : dateResolved;
+    return {
+      ...templates.dateRangeQuery(priorTurn?.params),
+      intentKey: priorTurn?.intent || null,
+      supported: true,
+      dateRange: priorDateRange,
+    };
+  }
+  if (classification.matched && classification.intent === 'help') {
+    const priorDateRange = priorTurn?.params?.start
+      ? { start: new Date(priorTurn.params.start), end: new Date(priorTurn.params.end), label: priorTurn.params.label }
+      : dateResolved;
+    return { ...templates.help(), intentKey: priorTurn?.intent || null, supported: true, dateRange: priorDateRange };
+  }
+
   // Follow-up inheritance: only the pieces the new question didn't specify
   // are carried over from the prior turn — a new intent or new date phrase
   // in THIS question always wins.

@@ -28,6 +28,18 @@ describe('analyticsChatbot intentClassifier', () => {
     ['How many patients did each doctor attend to today?', 'doctor_activity'],
     ['Give me a summary of today\'s hospital activity.', 'summary'],
     ['What are the hospital\'s key statistics for this week?', 'summary'],
+    // Broadened phrasing coverage, same intents as above
+    ['How many walk-ins did we have today?', 'registrations'],
+    ['How many consultations did we have today?', 'visits'],
+    ['How much money did we make today?', 'revenue'],
+    ['What was our turnover today?', 'revenue'],
+    ['Who is the busiest doctor this week?', 'doctor_activity'],
+    ['Give me a daily report', 'summary'],
+    // New meta-intents
+    ['What date range was that?', 'date_range_query'],
+    ['Give me the date range', 'date_range_query'],
+    ['What can you do?', 'help'],
+    ['help', 'help'],
   ])('%s -> %s', (question, expected) => {
     const result = classifyIntent(question);
     expect(result.matched).toBe(true);
@@ -224,5 +236,70 @@ describe('analyticsChatbot responseTemplates', () => {
     const r = responseTemplates.clarifying();
     expect(Array.isArray(r.suggestions)).toBe(true);
     expect(r.suggestions.length).toBeGreaterThan(0);
+  });
+
+  test('date-range query reports back the prior turn\'s actual stored range, not a re-derived one', () => {
+    // Mirrors exactly what actually happens: dateParser.js builds LOCAL-midnight
+    // Date objects, they get JSON-serialized into chatbot_messages.params (which
+    // calls toISOString() internally, same as here), then read back later. Using
+    // real local-midnight Dates (not hand-written 'Z' strings) keeps this test
+    // honest about timezone, instead of silently assuming UTC==local the way the
+    // code itself briefly did (see the fix this guards against: a server east of
+    // UTC previously showed the day BEFORE the real local calendar date).
+    const start = new Date(2026, 9, 1); // local midnight, 1 Oct
+    const end = new Date(2026, 9, 16); // local midnight, 16 Oct (exclusive)
+    const r = responseTemplates.dateRangeQuery({ start: start.toISOString(), end: end.toISOString(), label: 'This Month' });
+    expect(r.text).toBe('That was for This Month: 2026-10-01 to 2026-10-15.');
+  });
+
+  test('date-range query with no prior turn says so instead of guessing a range', () => {
+    const r = responseTemplates.dateRangeQuery(undefined);
+    expect(r.text).toMatch(/haven't answered anything yet/i);
+  });
+
+  test('help lists real, currently-supported capabilities', () => {
+    const r = responseTemplates.help();
+    expect(r.text).toMatch(/registrations/i);
+    expect(r.text).toMatch(/revenue/i);
+    expect(r.text).toMatch(/doctor/i);
+  });
+});
+
+describe('analyticsChatbot chatbotEngine follow-up continuity (no DB required)', () => {
+  const { answerQuestion } = require('../../src/server/services/analyticsChatbot/chatbotEngine');
+  const fakeReq = { user: { id: 1, role: 'admin', clinicId: 1 } };
+
+  // These two meta-intents (date_range_query, help) are answered entirely
+  // from `priorTurn` without touching the database — safe to exercise here
+  // without a tenant connection, unlike the other intents.
+
+  test('"what date range was that?" answers from the prior turn and keeps its intent/range alive for the NEXT follow-up', async () => {
+    const start = new Date(2026, 9, 21); // local midnight, consistent with how dateParser.js actually builds these
+    const end = new Date(2026, 9, 22);
+    const priorTurn = { intent: 'revenue', params: { start: start.toISOString(), end: end.toISOString(), label: 'Today' } };
+    const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'what date range was that?', priorTurn });
+    expect(result.text).toContain('Today');
+    expect(result.text).toContain('2026-10-21');
+    // The conversation's "current topic" is still revenue/Today after this
+    // meta-question — a database-touching follow-up right after it (e.g.
+    // "what about yesterday?") would correctly re-run the revenue intent.
+    expect(result.intentKey).toBe('revenue');
+    expect(result.dateRange.label).toBe('Today');
+  });
+
+  test('"help" never breaks the conversation\'s current topic', async () => {
+    const priorTurn = {
+      intent: 'registrations',
+      params: { start: '2026-10-21T00:00:00.000Z', end: '2026-10-22T00:00:00.000Z', label: 'Today' },
+    };
+    const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'what can you do?', priorTurn });
+    expect(result.text).toMatch(/registrations/i);
+    expect(result.intentKey).toBe('registrations');
+  });
+
+  test('a date-range question with no prior turn at all does not throw and says so', async () => {
+    const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'give me the date range', priorTurn: null });
+    expect(result.text).toMatch(/haven't answered anything yet/i);
+    expect(result.intentKey).toBeNull();
   });
 });
