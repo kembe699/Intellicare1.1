@@ -67,9 +67,35 @@ async function ensureAttendanceTables(sequelize) {
       department VARCHAR(150) NOT NULL,
       shift_id VARCHAR(36) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (clinic_id, branch_id, department)
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  // branch_id is nullable, and a plain UNIQUE constraint treats every NULL
+  // as distinct from every other NULL — which would silently let
+  // ON CONFLICT (clinic_id, branch_id, department) stop matching (and
+  // start duplicating rows) for any branchless caller. COALESCE(branch_id,
+  // -1) makes NULL behave like a real, conflictable value instead — same
+  // fix, same reasoning, as ensureSchemeUniqueness.js's branchExpr.
+  //
+  // A tenant that already ran an earlier version of this function (this
+  // table briefly shipped with a plain `UNIQUE (clinic_id, branch_id,
+  // department)` constraint before this fix) keeps that broken index
+  // forever under CREATE TABLE IF NOT EXISTS alone — found exactly this
+  // way, live, against the preview tenant. Drop it before adding the
+  // COALESCE-based one, same idempotent shape as
+  // ensureDepartmentCodeUniqueness.js.
+  try {
+    const [oldConstraints] = await sequelize.query(`
+      SELECT constraint_name FROM information_schema.table_constraints
+      WHERE constraint_schema = current_schema() AND table_name = 'department_shift_defaults' AND constraint_type = 'UNIQUE'
+    `);
+    for (const c of oldConstraints) {
+      await sequelize.query(`ALTER TABLE department_shift_defaults DROP CONSTRAINT "${c.constraint_name}"`);
+    }
+  } catch (e) { /* best-effort cleanup of the old constraint shape */ }
+  await sequelize.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS department_shift_defaults_uidx
+    ON department_shift_defaults (clinic_id, COALESCE(branch_id, -1), department)
   `);
 
   await sequelize.query(`
