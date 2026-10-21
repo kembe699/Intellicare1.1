@@ -151,6 +151,16 @@ app.use('/api/public/payroll-sign', require('./routes/publicPayroll'));
 // is tenant-specific and keyed off req.path, not this prefix).
 app.use('/api/public/book-demo', require('./routes/publicBookDemo'));
 
+// Employee Portal — a completely separate JWT scheme (isEmployeePortal,
+// see middleware/employeePortalAuth.js), so its /login route must run
+// ahead of authenticateToken (no tenant-user JWT exists yet) and every
+// other route in the file gates itself with its own middleware rather
+// than this app's normal authenticateToken/authorize stack.
+app.use('/api/employee-portal', require('./routes/employeePortal'));
+if (!process.env.ATTENDANCE_QR_SECRET) {
+  console.warn('⚠️  ATTENDANCE_QR_SECRET is not set — geofenced attendance QR codes will fail to generate or verify until it is configured.');
+}
+
 // Branch verification endpoint must be public for login page
 const bcrypt = require('bcrypt');
 const { User } = require('./models');
@@ -660,6 +670,7 @@ app.use('/api/daily-expenses', dailyExpensesRouter);
 app.use('/api/hr', require('./routes/hr'));
 app.use('/api/hr/salary-advances', require('./routes/salaryAdvances'));
 app.use('/api/hr/leave', require('./routes/leave'));
+app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/facilities', facilitiesRouter);
 app.use('/api/facility-settings', facilitySettingsRouter);
 

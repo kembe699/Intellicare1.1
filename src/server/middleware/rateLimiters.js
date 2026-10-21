@@ -142,6 +142,43 @@ const bookDemoSubmitLimiter = rateLimit({
   message: { error: 'Too many booking attempts from this device. Please try again later.' },
 });
 
+// Employee-portal login (routes/employeePortal.js) — same per-account
+// reasoning as accountKey/authLimiter above, keyed on tenant code + employee
+// number rather than email, since that's this surface's actual credential
+// pair. A shared clinic IP must not lock out every employee's attempts.
+function portalAccountKey(req) {
+  const code = String(req.body?.code || '').trim().toLowerCase();
+  const employeeNumber = String(req.body?.employee_number || '').trim().toLowerCase();
+  if (employeeNumber) return `portal:${code}:${employeeNumber}`;
+  return `ip:${req.ip}`;
+}
+
+const portalLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  keyGenerator: portalAccountKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts for this account. Please try again in a few minutes.' },
+});
+
+// Employee-portal clock in/out — always runs after employeePortalAuth, so
+// req.employee is set. Bounds scripted/rapid clock attempts (e.g. replaying
+// a captured QR) per employee rather than per IP, since several employees
+// legitimately clock in from the same site/IP in quick succession.
+function employeeKey(req) {
+  return req.employee?.id ? `employee:${req.employee.id}` : `ip:${req.ip}`;
+}
+
+const portalClockLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: employeeKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many clock in/out attempts. Please wait a few minutes and try again.' },
+});
+
 module.exports = {
   authLimiter,
   authSourceLimiter,
@@ -152,4 +189,6 @@ module.exports = {
   chatbotLlmLimiter,
   bookDemoAvailabilityLimiter,
   bookDemoSubmitLimiter,
+  portalLoginLimiter,
+  portalClockLimiter,
 };
