@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Send, Scan, Syringe, CalendarClock } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Send, Scan, Syringe, CalendarClock, Egg, HeartPulse, Brain, Wind, Bone, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -49,14 +49,18 @@ const GENDER_OPTIONS = [
 
 // General Examination — a fixed checklist of body systems (matching the
 // facility's own paper visit form), each a free-text finding rather than a
-// structured value, since normal/abnormal phrasing varies by examiner.
-const GENERAL_EXAM_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'abdomen', label: 'Abdomen' },
-  { key: 'cardiovascular_system', label: 'Cardiovascular System' },
-  { key: 'central_nervous_system', label: 'Central Nervous System' },
-  { key: 'respiratory_system', label: 'Respiratory System' },
-  { key: 'musculoskeletal_system', label: 'Musculo-skeletal System' },
-  { key: 'other_examinations', label: 'Other Examinations' },
+// structured value, since normal/abnormal phrasing varies by examiner. The
+// icon is a stand-in for the paper form's own system illustration — drawn
+// from the existing lucide-react set already used throughout this file
+// rather than a fetched image, so there's no external asset/licensing
+// dependency and it matches the rest of the app's icon style.
+const GENERAL_EXAM_FIELDS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { key: 'abdomen', label: 'Abdomen', icon: Egg },
+  { key: 'cardiovascular_system', label: 'Cardiovascular System', icon: HeartPulse },
+  { key: 'central_nervous_system', label: 'Central Nervous System', icon: Brain },
+  { key: 'respiratory_system', label: 'Respiratory System', icon: Wind },
+  { key: 'musculoskeletal_system', label: 'Musculo-skeletal System', icon: Bone },
+  { key: 'other_examinations', label: 'Other Examinations', icon: Stethoscope },
 ];
 const EMPTY_GENERAL_EXAM: Record<string, string> = Object.fromEntries(GENERAL_EXAM_FIELDS.map(f => [f.key, '']));
 
@@ -2285,6 +2289,29 @@ export default function LISTestOrders() {
                     <GynaeFields value={vitals.gynae} onChange={(gynae) => setVitals({ ...vitals, gynae })} />
                   )}
 
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">General Examination</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                      {GENERAL_EXAM_FIELDS.map(({ key, label, icon: Icon }) => (
+                        <div key={key}>
+                          <label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Icon className="w-3.5 h-3.5" /> {label}
+                          </label>
+                          <Textarea
+                            placeholder={`Enter ${label.toLowerCase()} findings`}
+                            className="resize-none mt-1"
+                            rows={2}
+                            value={vitals.general_examination[key]}
+                            onChange={e => setVitals({
+                              ...vitals,
+                              general_examination: { ...vitals.general_examination, [key]: e.target.value },
+                            })}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="sticky bottom-0 -mx-4 -mb-4 px-4 pb-4 pt-4 flex justify-end border-t mt-4 bg-background">
                     <Button onClick={() => setMiddleStep(2)} className="w-full sm:w-auto">
                       Next: Select Tests <ArrowRight className="w-4 h-4 ml-2" />
@@ -3144,9 +3171,11 @@ export default function LISTestOrders() {
                           <div>
                             <label className="text-xs font-semibold text-muted-foreground">General Examination</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                              {GENERAL_EXAM_FIELDS.map(({ key, label }) => (
+                              {GENERAL_EXAM_FIELDS.map(({ key, label, icon: Icon }) => (
                                 <div key={key}>
-                                  <label className="text-xs text-muted-foreground">{label}</label>
+                                  <label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                    <Icon className="w-3.5 h-3.5" /> {label}
+                                  </label>
                                   <Textarea
                                     placeholder={`Enter ${label.toLowerCase()} findings`}
                                     className="resize-none mt-1"
@@ -3218,9 +3247,11 @@ export default function LISTestOrders() {
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">General Examination</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                            {GENERAL_EXAM_FIELDS.map(({ key, label }) => (
+                            {GENERAL_EXAM_FIELDS.map(({ key, label, icon: Icon }) => (
                               <div key={key} className="p-3 border rounded-lg bg-card">
-                                <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">{label}</p>
+                                <p className="text-xs text-muted-foreground uppercase font-semibold mb-1 flex items-center gap-1.5">
+                                  <Icon className="w-3.5 h-3.5" /> {label}
+                                </p>
                                 <p>{selectedSummary.vitals?.general_examination?.[key] || '—'}</p>
                               </div>
                             ))}
