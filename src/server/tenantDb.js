@@ -209,6 +209,8 @@ async function buildTenantConnection(schemaName) {
   ensureDepartmentHeadColumn(sequelize).catch(() => {});
   const { ensureLeaveAdvanceWorkflowColumns } = require('./config/ensureLeaveAdvanceWorkflowColumns');
   ensureLeaveAdvanceWorkflowColumns(sequelize).catch(() => {});
+  const { ensureHrWorkflowSettings } = require('./config/ensureHrWorkflowSettings');
+  ensureHrWorkflowSettings(sequelize).catch(() => {});
 
   return { sequelize, models };
 }

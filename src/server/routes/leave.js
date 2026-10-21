@@ -6,6 +6,10 @@ const { authorize } = require('../middleware/authorize');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
+const { getWorkflowSettings } = require('../config/ensureHrWorkflowSettings');
+const { resolveApprover, isApproverFor } = require('../utils/approverResolution');
+const { notifyUser, notifyRole } = require('../services/notificationService');
+const { notifyEmployee } = require('../utils/portalNotify');
 
 // Calendar days inclusive of both endpoints — a simplification (no weekend/
 // holiday exclusion), same "keep it simple" scope as the rest of this
@@ -197,6 +201,40 @@ router.post('/requests', authorize('hr.leave.write'), async (req, res) => {
       }
     });
     const [[created]] = await sequelize.query(`SELECT * FROM leave_requests WHERE id = :id`, { replacements: { id } });
+
+    // Notify whoever acts first: the resolved HOD if that step is on and
+    // one can be resolved for this employee, otherwise HR directly.
+    const [[requestingEmployee]] = await sequelize.query(`SELECT department, first_name, last_name FROM employees WHERE id = :id`, { replacements: { id: b.employee_id } });
+    const settings = await getWorkflowSettings(sequelize, clinicId);
+    const employeeLabel = requestingEmployee ? `${requestingEmployee.first_name} ${requestingEmployee.last_name}` : 'An employee';
+    let notifiedApprover = false;
+    if (settings.leave_require_hod) {
+      const approver = await resolveApprover(sequelize, { clinicId, employeeId: b.employee_id, department: requestingEmployee?.department });
+      if (approver?.approverUserId) {
+        await notifyUser(sequelize, {
+          clinic_id: clinicId, user_id: approver.approverUserId, type: 'leave_request_awaiting_hod',
+          title: 'Leave request awaiting your approval', message: `${employeeLabel} requested ${days} day(s) of ${leaveType.name}.`,
+          entity_type: 'leave_request', entity_id: id, link: '/hr/leave',
+        });
+        notifiedApprover = true;
+      }
+      if (approver?.approverEmployeeId) {
+        await notifyEmployee(sequelize, {
+          clinic_id: clinicId, employee_id: approver.approverEmployeeId, type: 'leave_request_awaiting_hod',
+          title: 'Leave request awaiting your approval', message: `${employeeLabel} requested ${days} day(s) of ${leaveType.name}.`,
+          entity_type: 'leave_request', entity_id: id,
+        });
+        notifiedApprover = true;
+      }
+    }
+    if (!notifiedApprover) {
+      await notifyRole(sequelize, {
+        clinic_id: clinicId, role: 'admin', branch_id: getCreateBranchId(req), type: 'leave_request_awaiting_hr',
+        title: 'Leave request awaiting approval', message: `${employeeLabel} requested ${days} day(s) of ${leaveType.name}.`,
+        entity_type: 'leave_request', entity_id: id, link: '/hr/leave',
+      });
+    }
+
     res.status(201).json(created);
   } catch (error) {
     console.error('Error creating leave request:', error);
@@ -216,11 +254,89 @@ function nonAdminBranchId(req) {
   return req.branchContext?.branchId || req.user?.branchId || null;
 }
 
+async function loadRequestForApproval(req, res, clinicId) {
+  const replacements = { id: req.params.id, clinicId };
+  const branchId = nonAdminBranchId(req);
+  let branchSQL = '';
+  if (branchId) { branchSQL = ' AND branch_id = :branchId'; replacements.branchId = branchId; }
+  const [[request]] = await sequelize.query(
+    `SELECT * FROM leave_requests WHERE id = :id AND clinic_id = :clinicId${branchSQL}`,
+    { replacements }
+  );
+  return request || null;
+}
+
+// HOD step — only reachable/meaningful when hr_workflow_settings.
+// leave_require_hod is on. The caller must be the resolved approver
+// (department head, or that employee's override) for the requester, or an
+// admin; requireApprovalPermission's static per-user grant isn't the right
+// tool here since who qualifies is resolved dynamically per request.
+router.post('/requests/:id/approve-hod', authorize('hr.leave.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const request = await loadRequestForApproval(req, res, clinicId);
+    if (!request) return res.status(404).json({ error: 'Leave request not found' });
+    if (request.status !== 'pending') return res.status(409).json({ error: 'Only a pending request can be approved by the HOD' });
+
+    const [[employee]] = await sequelize.query(`SELECT department, first_name, last_name FROM employees WHERE id = :id`, { replacements: { id: request.employee_id } });
+    const authorized = req.user?.role === 'admin' || await isApproverFor(sequelize, {
+      clinicId, employeeId: request.employee_id, department: employee?.department, actingUserId: req.user?.id,
+    });
+    if (!authorized) return res.status(403).json({ error: 'You are not this employee\'s approver.' });
+
+    await sequelize.query(
+      `UPDATE leave_requests SET status = 'approved_by_hod', hod_approved_by = :userId, hod_approved_at = NOW(), updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: request.id, userId: req.user.id } }
+    );
+    await notifyRole(sequelize, {
+      clinic_id: clinicId, role: 'admin', type: 'leave_request_awaiting_hr',
+      title: 'Leave request awaiting HR approval', message: `${employee?.first_name} ${employee?.last_name}'s leave request was approved by their HOD.`,
+      entity_type: 'leave_request', entity_id: request.id, link: '/hr/leave',
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error approving leave request (HOD):', error);
+    res.status(500).json({ error: 'Failed to approve leave request' });
+  }
+});
+
+router.post('/requests/:id/reject-hod', authorize('hr.leave.read'), async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    if (!reason || !String(reason).trim()) return res.status(400).json({ error: 'A reason is required to reject a leave request.' });
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const request = await loadRequestForApproval(req, res, clinicId);
+    if (!request) return res.status(404).json({ error: 'Leave request not found' });
+    if (request.status !== 'pending') return res.status(409).json({ error: 'Only a pending request can be rejected by the HOD' });
+
+    const [[employee]] = await sequelize.query(`SELECT department, user_id, first_name, last_name FROM employees WHERE id = :id`, { replacements: { id: request.employee_id } });
+    const authorized = req.user?.role === 'admin' || await isApproverFor(sequelize, {
+      clinicId, employeeId: request.employee_id, department: employee?.department, actingUserId: req.user?.id,
+    });
+    if (!authorized) return res.status(403).json({ error: 'You are not this employee\'s approver.' });
+
+    await sequelize.query(
+      `UPDATE leave_requests SET status = 'rejected', hod_approved_by = :userId, hod_rejected_reason = :reason, rejection_reason = :reason, updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: request.id, userId: req.user.id, reason } }
+    );
+    if (employee?.user_id) {
+      await notifyUser(sequelize, { clinic_id: clinicId, user_id: employee.user_id, type: 'leave_request_rejected', title: 'Your leave request was rejected', message: reason, entity_type: 'leave_request', entity_id: request.id });
+    }
+    await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: request.employee_id, type: 'leave_request_rejected', title: 'Your leave request was rejected', message: reason, entity_type: 'leave_request', entity_id: request.id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error rejecting leave request (HOD):', error);
+    res.status(500).json({ error: 'Failed to reject leave request' });
+  }
+});
+
 router.post('/requests/:id/approve', requireApprovalPermission('leave_request_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const conditions = ['id = :id', 'clinic_id = :clinicId', "status = 'pending'"];
-    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
+    const settings = await getWorkflowSettings(sequelize, clinicId);
+    const requiredStatus = settings.leave_require_hod ? 'approved_by_hod' : 'pending';
+    const conditions = ['id = :id', 'clinic_id = :clinicId', 'status = :requiredStatus'];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, requiredStatus };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
@@ -228,7 +344,15 @@ router.post('/requests/:id/approve', requireApprovalPermission('leave_request_ap
        WHERE ${conditions.join(' AND ')}`,
       { replacements }
     );
-    if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found or not pending' });
+    if (meta.rowCount === 0) {
+      return res.status(409).json({ error: settings.leave_require_hod ? 'Request not found, or still awaiting HOD approval' : 'Request not found or not pending' });
+    }
+    const [[request]] = await sequelize.query(`SELECT employee_id FROM leave_requests WHERE id = :id`, { replacements: { id: req.params.id } });
+    const [[employee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: request.employee_id } });
+    if (employee?.user_id) {
+      await notifyUser(sequelize, { clinic_id: clinicId, user_id: employee.user_id, type: 'leave_request_approved', title: 'Your leave request was approved', entity_type: 'leave_request', entity_id: req.params.id });
+    }
+    await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: request.employee_id, type: 'leave_request_approved', title: 'Your leave request was approved', entity_type: 'leave_request', entity_id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to approve leave request' });
@@ -239,8 +363,10 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { reason } = req.body || {};
-    const conditions = ['id = :id', 'clinic_id = :clinicId', "status = 'pending'"];
-    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, reason: reason || null };
+    const settings = await getWorkflowSettings(sequelize, clinicId);
+    const requiredStatus = settings.leave_require_hod ? 'approved_by_hod' : 'pending';
+    const conditions = ['id = :id', 'clinic_id = :clinicId', 'status = :requiredStatus'];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, reason: reason || null, requiredStatus };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
@@ -248,7 +374,13 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
        WHERE ${conditions.join(' AND ')}`,
       { replacements }
     );
-    if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found or not pending' });
+    if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found or not awaiting HR review' });
+    const [[request]] = await sequelize.query(`SELECT employee_id FROM leave_requests WHERE id = :id`, { replacements: { id: req.params.id } });
+    const [[employee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: request.employee_id } });
+    if (employee?.user_id) {
+      await notifyUser(sequelize, { clinic_id: clinicId, user_id: employee.user_id, type: 'leave_request_rejected', title: 'Your leave request was rejected', message: reason, entity_type: 'leave_request', entity_id: req.params.id });
+    }
+    await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: request.employee_id, type: 'leave_request_rejected', title: 'Your leave request was rejected', message: reason, entity_type: 'leave_request', entity_id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to reject leave request' });
@@ -258,7 +390,7 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
 router.post('/requests/:id/cancel', authorize('hr.leave.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const conditions = ['id = :id', 'clinic_id = :clinicId', "status IN ('pending', 'approved')"];
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status IN ('pending', 'approved_by_hod', 'approved')"];
     const replacements = { id: req.params.id, clinicId };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }

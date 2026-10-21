@@ -2,11 +2,27 @@ const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
-const { authorize } = require('../middleware/authorize');
+const { authorize, getRolePrivileges } = require('../middleware/authorize');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
 const { getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
+const { getWorkflowSettings } = require('../config/ensureHrWorkflowSettings');
+const { resolveApprover, isApproverFor } = require('../utils/approverResolution');
+const { notifyUser, notifyRole } = require('../services/notificationService');
+const { notifyEmployee } = require('../utils/portalNotify');
+
+// Inline privilege check (not route middleware) — the Finance/Accounts
+// payout step is only gated by advance.mark_paid when
+// hr_workflow_settings.advance_require_finance is on, a per-request DB
+// read that route-level authorize() can't branch on. Same admin-bypass +
+// role-union logic as authorize.js itself.
+async function hasPrivilege(req, key) {
+  if (req.user?.role === 'admin') return true;
+  const roles = [req.user.role, ...(req.user.additionalRoles || [])];
+  const grants = await getRolePrivileges(req.models?.sequelize || sequelize, req.tenantSchema);
+  return roles.some((r) => grants.get(r)?.has(key));
+}
 
 // A cash advance against future salary. Deliberately simple compared to
 // Supplier Bills' 3-level approval chain — matches Consultant Bills'
@@ -96,10 +112,39 @@ router.post('/', authorize('hr.salary_advances.write'), async (req, res) => {
     }
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const [[employee]] = await sequelize.query(
-      `SELECT id FROM employees WHERE id = :id AND clinic_id = :clinicId`,
+      `SELECT id, department, first_name, last_name, basic_salary, hire_date FROM employees WHERE id = :id AND clinic_id = :clinicId`,
       { replacements: { id: b.employee_id, clinicId } }
     );
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    const amountRequested = parseFloat(b.amount);
+    const settings = await getWorkflowSettings(sequelize, clinicId);
+
+    const maxAllowed = (parseFloat(employee.basic_salary) || 0) * (parseFloat(settings.advance_max_percent_of_salary) / 100);
+    if (maxAllowed > 0 && amountRequested > maxAllowed + 0.01) {
+      return res.status(400).json({ error: `This advance exceeds the limit of ${settings.advance_max_percent_of_salary}% of basic salary (max ${maxAllowed.toFixed(2)}).` });
+    }
+
+    const [[openRow]] = await sequelize.query(
+      `SELECT COUNT(*) AS cnt FROM salary_advances WHERE employee_id = :employeeId AND status IN ('pending', 'approved_by_hod', 'approved', 'disbursed', 'repaying')`,
+      { replacements: { employeeId: b.employee_id } }
+    );
+    if (parseInt(openRow.cnt, 10) >= settings.advance_max_open_advances) {
+      return res.status(400).json({ error: `This employee already has ${openRow.cnt} open advance(s), the maximum allowed is ${settings.advance_max_open_advances}.` });
+    }
+
+    if (settings.advance_min_months_of_service > 0) {
+      if (!employee.hire_date) {
+        return res.status(400).json({ error: `A minimum of ${settings.advance_min_months_of_service} month(s) of service is required and this employee has no hire date on record.` });
+      }
+      const monthsOfService = (Date.now() - new Date(employee.hire_date).getTime()) / (30.44 * 24 * 60 * 60 * 1000);
+      if (monthsOfService < settings.advance_min_months_of_service) {
+        return res.status(400).json({ error: `A minimum of ${settings.advance_min_months_of_service} month(s) of service is required (this employee has ${Math.floor(monthsOfService)}).` });
+      }
+    }
+    if (b.repayment_months !== undefined && Number(b.repayment_months) > settings.advance_max_repayment_months) {
+      return res.status(400).json({ error: `Repayment period cannot exceed ${settings.advance_max_repayment_months} months.` });
+    }
 
     const [[seqRow]] = await sequelize.query(
       `SELECT COALESCE(MAX(NULLIF(regexp_replace(advance_number, '^.*-', ''), '')::int), 0) AS last
@@ -107,20 +152,39 @@ router.post('/', authorize('hr.salary_advances.write'), async (req, res) => {
     );
     const advanceNumber = `ADV-${String((parseInt(seqRow?.last, 10) || 0) + 1).padStart(4, '0')}`;
     const id = uuidv4();
-    const amount = parseFloat(b.amount);
+    const amount = amountRequested;
 
     await sequelize.query(`
-      INSERT INTO salary_advances (id, clinic_id, branch_id, employee_id, advance_number, amount, currency, reason, request_date, status, balance_remaining, created_by, notes, created_at, updated_at)
-      VALUES (:id, :clinicId, :branchId, :employeeId, :advanceNumber, :amount, :currency, :reason, :requestDate, 'pending', :amount, :createdBy, :notes, NOW(), NOW())
+      INSERT INTO salary_advances (id, clinic_id, branch_id, employee_id, advance_number, amount, currency, reason, request_date, status, balance_remaining, repayment_months, created_by, notes, created_at, updated_at)
+      VALUES (:id, :clinicId, :branchId, :employeeId, :advanceNumber, :amount, :currency, :reason, :requestDate, 'pending', :amount, :repaymentMonths, :createdBy, :notes, NOW(), NOW())
     `, {
       replacements: {
         id, clinicId, branchId: getCreateBranchId(req), employeeId: b.employee_id, advanceNumber,
         amount, currency: b.currency || 'USD', reason: b.reason || null,
         requestDate: b.request_date || new Date().toISOString().split('T')[0],
+        repaymentMonths: b.repayment_months ? parseInt(b.repayment_months, 10) : null,
         createdBy: req.user?.id || null, notes: b.notes || null,
       }
     });
     const [[created]] = await sequelize.query(`SELECT * FROM salary_advances WHERE id = :id`, { replacements: { id } });
+
+    const employeeLabel = `${employee.first_name} ${employee.last_name}`;
+    let notifiedApprover = false;
+    if (settings.advance_require_hod) {
+      const approver = await resolveApprover(sequelize, { clinicId, employeeId: b.employee_id, department: employee.department });
+      if (approver?.approverUserId) {
+        await notifyUser(sequelize, { clinic_id: clinicId, user_id: approver.approverUserId, type: 'advance_request_awaiting_hod', title: 'Salary advance awaiting your approval', message: `${employeeLabel} requested an advance of ${b.currency || 'USD'} ${amount}.`, entity_type: 'salary_advance', entity_id: id, link: '/hr/salary-advances' });
+        notifiedApprover = true;
+      }
+      if (approver?.approverEmployeeId) {
+        await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: approver.approverEmployeeId, type: 'advance_request_awaiting_hod', title: 'Salary advance awaiting your approval', message: `${employeeLabel} requested an advance of ${b.currency || 'USD'} ${amount}.`, entity_type: 'salary_advance', entity_id: id });
+        notifiedApprover = true;
+      }
+    }
+    if (!notifiedApprover) {
+      await notifyRole(sequelize, { clinic_id: clinicId, role: 'admin', branch_id: getCreateBranchId(req), type: 'advance_request_awaiting_hr', title: 'Salary advance awaiting approval', message: `${employeeLabel} requested an advance of ${b.currency || 'USD'} ${amount}.`, entity_type: 'salary_advance', entity_id: id, link: '/hr/salary-advances' });
+    }
+
     res.status(201).json(created);
   } catch (error) {
     console.error('Error creating salary advance:', error);
@@ -139,11 +203,73 @@ function nonAdminBranchId(req) {
   return req.branchContext?.branchId || req.user?.branchId || null;
 }
 
+async function loadAdvanceForApproval(req, clinicId) {
+  const replacements = { id: req.params.id, clinicId };
+  const branchId = nonAdminBranchId(req);
+  let branchSQL = '';
+  if (branchId) { branchSQL = ' AND branch_id = :branchId'; replacements.branchId = branchId; }
+  const [[advance]] = await sequelize.query(`SELECT * FROM salary_advances WHERE id = :id AND clinic_id = :clinicId${branchSQL}`, { replacements });
+  return advance || null;
+}
+
+router.post('/:id/approve-hod', authorize('hr.salary_advances.read'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const advance = await loadAdvanceForApproval(req, clinicId);
+    if (!advance) return res.status(404).json({ error: 'Salary advance not found' });
+    if (advance.status !== 'pending') return res.status(409).json({ error: 'Only a pending advance can be approved by the HOD' });
+
+    const [[employee]] = await sequelize.query(`SELECT department, first_name, last_name FROM employees WHERE id = :id`, { replacements: { id: advance.employee_id } });
+    const authorized = req.user?.role === 'admin' || await isApproverFor(sequelize, { clinicId, employeeId: advance.employee_id, department: employee?.department, actingUserId: req.user?.id });
+    if (!authorized) return res.status(403).json({ error: 'You are not this employee\'s approver.' });
+
+    await sequelize.query(
+      `UPDATE salary_advances SET status = 'approved_by_hod', hod_approved_by = :userId, hod_approved_at = NOW(), updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: advance.id, userId: req.user.id } }
+    );
+    await notifyRole(sequelize, { clinic_id: clinicId, role: 'admin', type: 'advance_request_awaiting_hr', title: 'Salary advance awaiting HR approval', message: `${employee?.first_name} ${employee?.last_name}'s advance was approved by their HOD.`, entity_type: 'salary_advance', entity_id: advance.id, link: '/hr/salary-advances' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error approving advance (HOD):', error);
+    res.status(500).json({ error: 'Failed to approve advance' });
+  }
+});
+
+router.post('/:id/reject-hod', authorize('hr.salary_advances.read'), async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    if (!reason || !String(reason).trim()) return res.status(400).json({ error: 'A reason is required to reject an advance.' });
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const advance = await loadAdvanceForApproval(req, clinicId);
+    if (!advance) return res.status(404).json({ error: 'Salary advance not found' });
+    if (advance.status !== 'pending') return res.status(409).json({ error: 'Only a pending advance can be rejected by the HOD' });
+
+    const [[employee]] = await sequelize.query(`SELECT department, user_id FROM employees WHERE id = :id`, { replacements: { id: advance.employee_id } });
+    const authorized = req.user?.role === 'admin' || await isApproverFor(sequelize, { clinicId, employeeId: advance.employee_id, department: employee?.department, actingUserId: req.user?.id });
+    if (!authorized) return res.status(403).json({ error: 'You are not this employee\'s approver.' });
+
+    await sequelize.query(
+      `UPDATE salary_advances SET status = 'cancelled', hod_approved_by = :userId, hod_rejected_reason = :reason, updated_at = NOW() WHERE id = :id`,
+      { replacements: { id: advance.id, userId: req.user.id, reason } }
+    );
+    if (employee?.user_id) {
+      await notifyUser(sequelize, { clinic_id: clinicId, user_id: employee.user_id, type: 'advance_request_rejected', title: 'Your salary advance request was rejected', message: reason, entity_type: 'salary_advance', entity_id: advance.id });
+    }
+    await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: advance.employee_id, type: 'advance_request_rejected', title: 'Your salary advance request was rejected', message: reason, entity_type: 'salary_advance', entity_id: advance.id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error rejecting advance (HOD):', error);
+    res.status(500).json({ error: 'Failed to reject advance' });
+  }
+});
+
 router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const conditions = ['id = :id', 'clinic_id = :clinicId', "status = 'pending'"];
-    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
+    const settings = await getWorkflowSettings(sequelize, clinicId);
+    const requiredStatus = settings.advance_require_hod ? 'approved_by_hod' : 'pending';
+    const conditions = ['id = :id', 'clinic_id = :clinicId', 'status = :requiredStatus'];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, requiredStatus };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
@@ -151,7 +277,15 @@ router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'),
        WHERE ${conditions.join(' AND ')}`,
       { replacements }
     );
-    if (meta.rowCount === 0) return res.status(409).json({ error: 'Advance not found or not pending' });
+    if (meta.rowCount === 0) {
+      return res.status(409).json({ error: settings.advance_require_hod ? 'Advance not found, or still awaiting HOD approval' : 'Advance not found or not pending' });
+    }
+    const [[advance]] = await sequelize.query(`SELECT employee_id FROM salary_advances WHERE id = :id`, { replacements: { id: req.params.id } });
+    const [[employee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: advance.employee_id } });
+    if (employee?.user_id) {
+      await notifyUser(sequelize, { clinic_id: clinicId, user_id: employee.user_id, type: 'advance_request_approved', title: 'Your salary advance was approved', entity_type: 'salary_advance', entity_id: req.params.id });
+    }
+    await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: advance.employee_id, type: 'advance_request_approved', title: 'Your salary advance was approved', entity_type: 'salary_advance', entity_id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to approve advance' });
@@ -161,7 +295,7 @@ router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'),
 router.post('/:id/cancel', authorize('hr.salary_advances.write'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const conditions = ['id = :id', 'clinic_id = :clinicId', "status IN ('pending', 'approved')"];
+    const conditions = ['id = :id', 'clinic_id = :clinicId', "status IN ('pending', 'approved_by_hod', 'approved')"];
     const replacements = { id: req.params.id, clinicId };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
@@ -185,6 +319,11 @@ router.post('/:id/disburse', authorize('hr.salary_advances.write'), async (req, 
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { payment_account_id, account_name, disbursement_date } = req.body || {};
     if (!payment_account_id) return res.status(400).json({ error: 'payment_account_id is required' });
+
+    const settings = await getWorkflowSettings(sequelize, clinicId);
+    if (settings.advance_require_finance && !(await hasPrivilege(req, 'advance.mark_paid'))) {
+      return res.status(403).json({ error: 'This clinic requires Finance/Accounts sign-off before an advance can be paid out.' });
+    }
 
     const disburseReplacements = { id: req.params.id, clinicId };
     let disburseBranchSQL = '';
@@ -233,6 +372,12 @@ router.post('/:id/disburse', authorize('hr.salary_advances.write'), async (req, 
     `, {
       replacements: { id: advance.id, accountId: String(payment_account_id), rate, baseAmount, glId: glEntry.id, userId: req.user?.id || null }
     });
+
+    const [[payoutEmployee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: advance.employee_id } });
+    if (payoutEmployee?.user_id) {
+      await notifyUser(sequelize, { clinic_id: clinicId, user_id: payoutEmployee.user_id, type: 'advance_paid', title: 'Your salary advance has been paid out', entity_type: 'salary_advance', entity_id: advance.id });
+    }
+    await notifyEmployee(sequelize, { clinic_id: clinicId, employee_id: advance.employee_id, type: 'advance_paid', title: 'Your salary advance has been paid out', entity_type: 'salary_advance', entity_id: advance.id });
 
     res.json({ success: true, gl_entry_id: glEntry.id, gl_number: glEntry.gl_number });
   } catch (error) {
