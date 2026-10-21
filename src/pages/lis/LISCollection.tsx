@@ -734,20 +734,27 @@ export default function LISCollection() {
           <style type="text/css">
             {`
               @media print {
-                body * {
-                  visibility: hidden;
-                }
-                #printable-labels, #printable-labels * {
-                  visibility: visible;
-                }
-                #printable-labels {
-                  position: absolute;
-                  left: 0;
-                  top: 0;
-                  width: 100%;
-                }
                 @page {
                   size: 50mm 25mm;
+                  margin: 0;
+                }
+                /* "visibility: hidden" on the rest of the page (the old
+                   approach) still reserves its full layout space, which the
+                   print engine then has to paginate into many 50mm-tall
+                   slices even though nothing is visible on most of them —
+                   that's where the extra blank pages were coming from, only
+                   fixed at a page size this small. Removing the rest of the
+                   page from the flow entirely with display:none, instead of
+                   just hiding it, means the only thing left to paginate is
+                   the label itself. */
+                body *:not(#printable-labels):not(#printable-labels *) {
+                  display: none !important;
+                }
+                #printable-labels {
+                  position: static !important;
+                  left: auto !important;
+                  top: auto !important;
+                  width: 100%;
                   margin: 0;
                 }
                 .print-label {
@@ -758,6 +765,7 @@ export default function LISCollection() {
                   justify-content: center;
                   width: 50mm;
                   height: 25mm;
+                  margin: 0 auto;
                   padding: 1mm;
                   box-sizing: border-box;
                   overflow: hidden;
