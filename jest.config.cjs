@@ -23,6 +23,18 @@ module.exports = {
       displayName: 'unit',
       testMatch: ['<rootDir>/tests/unit/**/*.test.js'],
       testEnvironment: 'node',
+      // The server (src/server) and the repo root each install their own
+      // independent copy of @anthropic-ai/sdk (no npm workspace ties them
+      // together) — without this mapping, a test's jest.mock('@anthropic-ai/sdk')
+      // registers against the root copy while src/server/services/ai/
+      // anthropicClient.js resolves the server's own copy, so the mock
+      // silently never applies and `instanceof` checks against the SDK's
+      // error classes never match across the two separate class objects.
+      // Pinning both to the one physical install the server actually runs
+      // keeps class identity — and the mock — consistent.
+      moduleNameMapper: {
+        '^@anthropic-ai/sdk$': '<rootDir>/src/server/node_modules/@anthropic-ai/sdk',
+      },
     },
     {
       displayName: 'integration',

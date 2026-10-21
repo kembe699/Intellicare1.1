@@ -19,20 +19,19 @@
  *   - No raw SQL, ever — llmTools.executeTool only ever calls
  *     analyticsFunctions.js's fixed, parameterized queries.
  *
- * Mirrors ClinicalInsightsService.js's conventions (raw fetch — this
- * codebase has no @anthropic-ai/sdk dependency and deliberately keeps it
- * that way, see that file — AbortController timeout, isTimeout/
- * isConfigError/isApiError error tagging, a feature flag, a mock mode) but
- * runs synchronously within the request instead of fire-and-forget, since a
- * chat reply has nowhere else to go. If this engine is disabled, errors, or
- * times out, routes/analyticsChatbot.js falls back to the deterministic
- * keyword engine (chatbotEngine.js) so the feature keeps working either way.
+ * Goes through the shared client (services/ai/anthropicClient.js, the
+ * official @anthropic-ai/sdk) rather than raw fetch — isTimeout/
+ * isConfigError/isApiError error tagging and the feature flag/mock mode
+ * are unchanged, but runs synchronously within the request instead of
+ * fire-and-forget (unlike ClinicalInsightsService.js), since a chat reply
+ * has nowhere else to go. If this engine is disabled, errors, or times out,
+ * routes/analyticsChatbot.js falls back to the deterministic keyword engine
+ * (chatbotEngine.js) so the feature keeps working either way.
  */
 const { TOOLS, executeTool } = require('./llmTools');
+const anthropicClient = require('../ai/anthropicClient');
 
 const MODEL_DEFAULT = process.env.ANALYTICS_CHATBOT_MODEL || 'claude-opus-5-5';
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const FETCH_TIMEOUT_MS = 30 * 1000;
 const MAX_TOOL_ROUNDS = 4;
 const MAX_HISTORY_MESSAGES = 16; // ~8 user/assistant turns of context, bounds token cost
 
@@ -76,36 +75,33 @@ async function callAnthropic(body) {
   if (isMockMode()) {
     return { content: [{ type: 'text', text: MOCK_TEXT }], stop_reason: 'end_turn' };
   }
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  const client = anthropicClient.getClient();
+  if (!client) {
     const err = new Error('Analytics Assistant LLM mode is not fully configured (no ANTHROPIC_API_KEY)');
     err.isConfigError = true;
     throw err;
   }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const err = new Error(`Anthropic API error (${res.status})`);
-      err.isApiError = true;
-      throw err;
-    }
-    return await res.json();
+    // `body` is already the exact Messages API request shape (model,
+    // max_tokens, system, output_config, tools, tool_choice, messages) —
+    // the SDK's create() takes the same field names, so this is a direct
+    // pass-through and the response has the same shape callers already read
+    // (response.stop_reason, response.content, ...).
+    return await client.messages.create(body);
   } catch (e) {
-    if (e.name === 'AbortError') {
+    const described = anthropicClient.describeError(e);
+    // Never log the request/response body — it can contain hospital
+    // activity data; type + status + Anthropic's own error message is
+    // enough to diagnose from server logs.
+    console.error(`Analytics Assistant Anthropic call failed: ${described.type} (status ${described.status})`, described.message);
+    if (described.type === 'timeout_error') {
       const err = new Error('Request to the model timed out');
       err.isTimeout = true;
       throw err;
     }
-    throw e;
-  } finally {
-    clearTimeout(timeout);
+    const err = new Error(`Anthropic API error: ${described.type}`);
+    err.isApiError = true;
+    throw err;
   }
 }
 

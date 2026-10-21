@@ -10,10 +10,9 @@
  * nothing here writes back to the patient record.
  */
 const { v4: uuidv4 } = require('uuid');
+const anthropicClient = require('./ai/anthropicClient');
 
-const MODEL_DEFAULT = process.env.CLINICAL_INSIGHTS_MODEL || 'claude-sonnet-5-5';
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const FETCH_TIMEOUT_MS = 60 * 1000;
+const MODEL_DEFAULT = process.env.CLINICAL_INSIGHTS_MODEL || anthropicClient.getDefaultModel();
 
 const SYSTEM_PROMPT = `You are a clinical decision support assistant for hospitals in South Sudan. You assist qualified clinicians; you do not diagnose. Weight locally prevalent conditions appropriately (e.g. malaria, typhoid, tuberculosis, HIV-related illness, malnutrition, diarrhoeal disease) alongside general causes. Base every suggestion only on the data provided. If data is insufficient, say so. Be brief: a busy clinician is scanning this between patients, not reading a report — every field is a short phrase or one short sentence, never a paragraph. Call the submit_clinical_insights tool exactly once with your findings — do not write any other text.`;
 
@@ -281,61 +280,47 @@ async function callAnthropic(payload, model) {
   if (isMockMode()) {
     return { raw: JSON.stringify(MOCK_RESPONSE), modelUsed: `${model} (mock)` };
   }
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  const client = anthropicClient.getClient();
+  if (!client) {
     const err = new Error('Clinical Insights is not fully configured');
     err.isConfigError = true;
     throw err;
   }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        // Headroom above what 5 differentials + urgent flags + data_limitations
-        // typically need, so a verbose response doesn't get cut off mid-way —
-        // truncated tool input fails parsing the same way malformed JSON
-        // does, but for a completely different, budget-driven reason.
-        max_tokens: 2000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: JSON.stringify(payload) }],
-        tools: [CLINICAL_INSIGHTS_TOOL],
-        tool_choice: { type: 'tool', name: CLINICAL_INSIGHTS_TOOL.name },
-      }),
-      signal: controller.signal,
+    const response = await client.messages.create({
+      model,
+      // Headroom above what 5 differentials + urgent flags + data_limitations
+      // typically need, so a verbose response doesn't get cut off mid-way —
+      // truncated tool input fails parsing the same way malformed JSON
+      // does, but for a completely different, budget-driven reason.
+      max_tokens: 2000,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: JSON.stringify(payload) }],
+      tools: [CLINICAL_INSIGHTS_TOOL],
+      tool_choice: { type: 'tool', name: CLINICAL_INSIGHTS_TOOL.name },
     });
-    if (!res.ok) {
-      // Never log the response body — it could echo back parts of the
-      // request; the status code is enough to diagnose from server logs.
-      const err = new Error(`Anthropic API error (${res.status})`);
-      err.isApiError = true;
-      throw err;
-    }
-    const data = await res.json();
-    const toolBlock = (data.content || []).find((c) => c.type === 'tool_use' && c.name === CLINICAL_INSIGHTS_TOOL.name);
+    const toolBlock = (response.content || []).find((c) => c.type === 'tool_use' && c.name === CLINICAL_INSIGHTS_TOOL.name);
     // tool_choice forces exactly this tool, so `input` is already the parsed,
     // schema-shaped object — no JSON-in-prose to extract. Falling back to a
     // stray text block covers the (should-not-happen) case of the model not
     // calling the tool at all, so that still surfaces as a real, diagnosable
     // parse failure instead of silently returning nothing.
-    const raw = toolBlock ? JSON.stringify(toolBlock.input) : ((data.content || []).find((c) => c.type === 'text')?.text || '');
-    return { raw, modelUsed: model, truncated: data.stop_reason === 'max_tokens' };
+    const raw = toolBlock ? JSON.stringify(toolBlock.input) : ((response.content || []).find((c) => c.type === 'text')?.text || '');
+    return { raw, modelUsed: model, truncated: response.stop_reason === 'max_tokens' };
   } catch (e) {
-    if (e.name === 'AbortError') {
+    const described = anthropicClient.describeError(e);
+    // Never log the request/response body — it could echo back parts of the
+    // de-identified payload; type + status + Anthropic's own error message
+    // is enough to diagnose from server logs without touching patient data.
+    console.error(`Clinical Insights Anthropic call failed: ${described.type} (status ${described.status})`, described.message);
+    if (described.type === 'timeout_error') {
       const err = new Error('Request to the model timed out');
       err.isTimeout = true;
       throw err;
     }
-    throw e;
-  } finally {
-    clearTimeout(timeout);
+    const err = new Error(`Anthropic API error: ${described.type}`);
+    err.isApiError = true;
+    throw err;
   }
 }
 

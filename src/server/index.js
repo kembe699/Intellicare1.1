@@ -542,6 +542,8 @@ const servicesRouter = require('./routes/services');
 const departmentsRouter = require('./routes/departments');
 const receiptsRouter = require('./routes/receipts');
 const visitsRouter = require('./routes/visits');
+const adminAiRouter = require('./routes/adminAi');
+const anthropicClient = require('./services/ai/anthropicClient');
 const ledgerAccountsRouter = require('./routes/ledger-accounts');
 const cashierRouter = require('./routes/cashier');
 const cashTransfersRouter = require('./routes/cash-transfers');
@@ -627,6 +629,7 @@ app.use('/api/services', servicesRouter);
 app.use('/api/departments', departmentsRouter);
 app.use('/api/receipts', receiptsRouter);
 app.use('/api/visits', visitsRouter);
+app.use('/api/admin', adminAiRouter);
 app.use('/api/reports-v2/patients', require('./routes/reportPatients'));
 app.use('/api/reports-v2/billing-by-user', require('./routes/reportBillingByUser'));
 app.use('/api/reports-v2/revenue', require('./routes/reportRevenue'));
@@ -1032,6 +1035,8 @@ async function startServer() {
         const level = process.env.NODE_ENV === 'production' ? console.error : console.warn;
         level(`${process.env.NODE_ENV === 'production' ? '🚨' : '⚠️ '} No email transport configured — password reset and welcome emails will NOT be delivered (set RESEND_API_KEY, or EMAIL_USER/EMAIL_PASS)`);
       }
+      const anthropicConfigured = anthropicClient.isConfigured();
+      console.log(`🤖 Anthropic configured: ${anthropicConfigured ? 'yes' : 'no'}, model: ${anthropicClient.getDefaultModel()}`);
       resolve();
     });
   });
