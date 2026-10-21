@@ -1008,11 +1008,10 @@ export default function LISTestOrders() {
     ].join('\n') : '';
 
     const generalExam = v.general_examination || {};
-    const generalExamEntries = GENERAL_EXAM_FIELDS.filter(({ key }) => generalExam[key]);
-    const generalExamHTML = generalExamEntries.length > 0 ? [
+    const generalExamHTML = [
       '<div class="ic-section-title">General Examination</div>',
-      ...generalExamEntries.map(({ key, label }) => plainNote(label, generalExam[key])),
-    ].join('\n') : '';
+      ...GENERAL_EXAM_FIELDS.map(({ key, label }) => plainNote(label, generalExam[key] || '—')),
+    ].join('\n');
 
     const diagnosesHTML = getDiagnosesFromNotes(s.clinical_notes).length > 0 ? [
       '<div class="ic-section-title">Diagnosis</div>',
@@ -3215,14 +3214,14 @@ export default function LISTestOrders() {
 
                       {!editingClinicalNotes && <GynaeFieldsReadOnly value={selectedSummary.vitals?.gynae || {}} />}
 
-                      {!editingClinicalNotes && GENERAL_EXAM_FIELDS.filter(({ key }) => selectedSummary.vitals?.general_examination?.[key]).length > 0 && (
+                      {!editingClinicalNotes && (
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">General Examination</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                            {GENERAL_EXAM_FIELDS.filter(({ key }) => selectedSummary.vitals?.general_examination?.[key]).map(({ key, label }) => (
+                            {GENERAL_EXAM_FIELDS.map(({ key, label }) => (
                               <div key={key} className="p-3 border rounded-lg bg-card">
                                 <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">{label}</p>
-                                <p>{selectedSummary.vitals.general_examination[key]}</p>
+                                <p>{selectedSummary.vitals?.general_examination?.[key] || '—'}</p>
                               </div>
                             ))}
                           </div>
