@@ -295,4 +295,32 @@ describe('llmEngine — feature flag, mock mode, and the tool-use loop', () => {
       answerQuestion({ sequelize: {}, req: { user: { id: 1, role: 'admin' } }, question: 'hello', history: [], clinicId: 1 }),
     ).rejects.toThrow(/not fully configured/i);
   });
+
+  describe('summarizeToolResult — the audit log never gets actual values, only row counts', () => {
+    let summarizeToolResult;
+    beforeEach(() => {
+      ({ summarizeToolResult } = require('../../src/server/services/analyticsChatbot/llmEngine'));
+    });
+
+    test('arrays become counts, never the array contents', () => {
+      const summary = summarizeToolResult({ period: 'Today', doctors: [{ name: 'Dr. A' }, { name: 'Dr. B' }] });
+      expect(summary).toEqual({ doctorsCount: 2 });
+      expect(JSON.stringify(summary)).not.toMatch(/Dr\. A/);
+    });
+
+    test('plain numbers (counts/totals) pass through — these are aggregates, not patient data', () => {
+      const summary = summarizeToolResult({ count: 42, total: 50000, currency: 'SSP' });
+      expect(summary).toEqual({ count: 42, total: 50000 });
+    });
+
+    test('a permission_denied result is summarized as just the error, nothing else', () => {
+      const summary = summarizeToolResult({ error: 'permission_denied', message: 'no access' });
+      expect(summary).toEqual({ error: 'permission_denied' });
+    });
+
+    test('never crashes on a non-object result', () => {
+      expect(summarizeToolResult(null)).toEqual({});
+      expect(summarizeToolResult(undefined)).toEqual({});
+    });
+  });
 });

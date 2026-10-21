@@ -71,6 +71,21 @@ function toAnthropicTools() {
   }));
 }
 
+// A row-count-only summary of a tool result, for the audit log — never the
+// actual values (which can be hospital activity data), just how many rows
+// or what the headline numbers were, so an auditor can see "this call
+// returned 12 rows" without seeing what those 12 rows contained.
+function summarizeToolResult(result) {
+  if (!result || typeof result !== 'object') return {};
+  if (result.error) return { error: result.error };
+  const summary = {};
+  for (const [key, value] of Object.entries(result)) {
+    if (Array.isArray(value)) summary[`${key}Count`] = value.length;
+    else if (typeof value === 'number') summary[key] = value;
+  }
+  return summary;
+}
+
 const MOCK_TEXT = "Mock response. No real model was called (ANALYTICS_CHATBOT_MOCK=true).";
 
 async function callAnthropic(body) {
@@ -152,13 +167,15 @@ async function answerQuestion({ sequelize, req, question, history, clinicId }) {
     messages.push({ role: 'assistant', content: response.content });
     const toolResults = [];
     for (const block of toolUseBlocks) {
-      toolCalls.push({ name: block.name, input: block.input });
       let result;
       try {
         result = await executeTool(block.name, block.input, { sequelize, req, clinicId });
       } catch (e) {
         result = { error: 'tool_execution_failed', message: e.message };
       }
+      // Row counts only, for the audit log (routes/analyticsChatbot.js) —
+      // never the actual values, which can be hospital activity data.
+      toolCalls.push({ name: block.name, input: block.input, resultSummary: summarizeToolResult(result) });
       toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
     }
     messages.push({ role: 'user', content: toolResults });
@@ -171,4 +188,4 @@ async function answerQuestion({ sequelize, req, question, history, clinicId }) {
   throw err;
 }
 
-module.exports = { answerQuestion, featureEnabled, isMockMode, MODEL_DEFAULT };
+module.exports = { answerQuestion, featureEnabled, isMockMode, MODEL_DEFAULT, summarizeToolResult };

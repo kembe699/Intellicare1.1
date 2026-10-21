@@ -186,15 +186,18 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
     );
     await sequelize.query(`UPDATE chatbot_conversations SET updated_at = NOW() WHERE id = :id`, { replacements: { id: conversationId } });
 
-    // Audit trail: the question and which tools/intent resolved it, never
-    // the query result or the model's prose — same convention
-    // clinicalInsights.js uses for its own AI-feature audit entries.
+    // Audit trail: which tools/intent resolved the question and row counts
+    // only — deliberately never the question text itself (a user could type
+    // anything, including something that names a patient) nor the query
+    // result/model prose. `tools` (LLM mode) already carries each call's
+    // resultSummary — a row-count-only shape, see llmEngine.js's
+    // summarizeToolResult — never the actual values.
     try {
       const rr = require('./reports');
       await rr.logAudit({
         req, clinic_id: req.user.clinicId, user_id: req.user.id, user_name: req.user.displayName, user_role: req.user.role,
         module: 'Analytics', action: 'ANALYTICS_CHATBOT_QUERY', entity_type: 'ChatbotConversation', entity_id: conversationId,
-        description: question,
+        description: `Analytics Assistant question (${engineUsed} engine)`,
         new_values: engineUsed === 'llm'
           ? { engine: 'llm', tools: result.toolCalls }
           : { engine: 'keyword', intent: result.intentKey, dateLabel: result.dateRange?.label },
