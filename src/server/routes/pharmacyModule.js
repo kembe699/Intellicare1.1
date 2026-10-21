@@ -2779,8 +2779,15 @@ router.get('/stock-movement', authorize('pharmacy.read'), async (req, res) => {
     let dateFrom, dateTo, days, periodLabel;
     if (req.query.period || (req.query.startDate && req.query.endDate)) {
       const { start, end, label } = resolveDashboardDateRange(req.query);
-      dateFrom = start.toISOString().split('T')[0];
-      dateTo = new Date(end.getTime() - 86400000).toISOString().split('T')[0];
+      // resolveDashboardDateRange builds LOCAL-midnight Date objects (same
+      // server-local convention as the rest of the dashboard filter) —
+      // toISOString() converts to UTC first, which silently shows the day
+      // BEFORE the real local calendar date on a server east of UTC. Format
+      // off the local getters instead, same fix as the Analytics Assistant's
+      // responseTemplates.js dateRangeQuery.
+      const localDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      dateFrom = localDateStr(start);
+      dateTo = localDateStr(new Date(end.getTime() - 86400000));
       days = null;
       periodLabel = label;
     } else {

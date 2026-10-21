@@ -140,4 +140,33 @@ function priorPeriodOf(resolved) {
   return { matched: true, start, end, label: `Previous ${resolved.label}` };
 }
 
-module.exports = { resolveDateExpression, splitComparisonClauses, priorPeriodOf };
+const NAMED_PERIOD_PHRASES = {
+  today: 'today',
+  yesterday: 'yesterday',
+  this_week: 'this week',
+  last_week: 'last week',
+  this_month: 'this month',
+  last_month: 'last month',
+  this_year: 'this year',
+};
+
+/**
+ * Same resolution as resolveDateExpression, but keyed by an exact enum value
+ * instead of matched out of free text — used by the LLM tool-use engine
+ * (llmEngine.js), where Claude picks a period by name/explicit dates rather
+ * than the deterministic engine matching a phrase out of the raw question.
+ * Reuses resolveDateExpression's actual date math (by feeding it the
+ * equivalent phrase) rather than re-implementing it, so the two engines can
+ * never drift into disagreeing about what "this week" means.
+ */
+function resolveNamedPeriod({ named_period, last_n_days, start_date, end_date } = {}, now = new Date()) {
+  if (start_date && end_date) {
+    return resolveDateExpression(`between ${start_date} and ${end_date}`, now);
+  }
+  if (last_n_days) {
+    return resolveDateExpression(`last ${last_n_days} days`, now);
+  }
+  return resolveDateExpression(NAMED_PERIOD_PHRASES[named_period] || 'today', now);
+}
+
+module.exports = { resolveDateExpression, splitComparisonClauses, priorPeriodOf, resolveNamedPeriod };

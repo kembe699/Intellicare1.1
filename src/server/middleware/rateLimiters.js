@@ -94,10 +94,10 @@ const clinicalInsightsLimiter = rateLimit({
   message: { error: 'Too many Clinical Insights requests this hour. Please try again later.' },
 });
 
-// Analytics Assistant chatbot — unlike Clinical Insights this never calls an
-// external API, so the concern isn't cost, it's the same one as
-// authLimiter: a bounded ceiling per user rather than unbounded query load
-// against the database from a chat box.
+// Analytics Assistant chatbot — a bounded ceiling per user against
+// unbounded query load from a chat box, same reasoning as authLimiter.
+// Applies regardless of which engine answers (deterministic keyword match
+// or the LLM below) — the free local engine still deserves a ceiling.
 const chatbotLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 60,
@@ -105,6 +105,20 @@ const chatbotLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many questions in a short time. Please wait a few minutes and try again.' },
+});
+
+// A second, tighter limit stacked on top of chatbotLimiter above — once the
+// Analytics Assistant's LLM mode is enabled (ANALYTICS_CHATBOT_LLM_ENABLED),
+// each question can call a paid external API, same cost concern as
+// clinicalInsightsLimiter. Always applied (harmless when LLM mode is off,
+// since the free local engine never calls it tight enough to matter).
+const chatbotLlmLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 40,
+  keyGenerator: userKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many questions to the Analytics Assistant this hour. Please try again later.' },
 });
 
 // Public, unauthenticated "Book a Demo" page (routes/publicBookDemo.js). A
@@ -135,6 +149,7 @@ module.exports = {
   payrollSignLimiter,
   clinicalInsightsLimiter,
   chatbotLimiter,
+  chatbotLlmLimiter,
   bookDemoAvailabilityLimiter,
   bookDemoSubmitLimiter,
 };

@@ -386,7 +386,11 @@ export default function DispensingWorkflow() {
     try {
       const lineItems = lines
         .filter(l => l.selling_price > 0)
-        .map(l => ({ serviceName: l.drug_name, quantity: l.quantity_prescribed, unitPrice: l.selling_price, totalPrice: l.selling_price * l.quantity_prescribed }));
+        .map(l => ({
+          serviceId: l.drug_id, serviceName: l.drug_name, quantity: l.quantity_prescribed,
+          unitPrice: l.selling_price, totalPrice: l.selling_price * l.quantity_prescribed,
+          category: 'Pharmacy / Inventory',
+        }));
       if (lineItems.length === 0) {
         // Every line had no price configured — nothing was billed, so this sale
         // won't appear anywhere for the cashier to collect payment on.
@@ -483,7 +487,7 @@ export default function DispensingWorkflow() {
       if (res.ok) {
         const created = await res.json();
         await billForSale(saleForm.person_id, saleForm.person_name, [{
-          drug_name: drug.drug_name, quantity_prescribed: qty, selling_price: finalPrice,
+          drug_id: drug.id, drug_name: drug.drug_name, quantity_prescribed: qty, selling_price: finalPrice,
         }]);
         setAddLineDrugId('');
         setAddLineQty('1');
@@ -1082,7 +1086,10 @@ export default function DispensingWorkflow() {
         // own unitPrice must be price-per-dose-unit for qty*unitPrice to
         // still equal totalPrice, or this overcharges by units_per_pack.
         const unitsPerPack = Number(drug.units_per_pack) || 1;
-        const lineItem = { serviceName: drug.drug_name, quantity: qty, unitPrice: sellingPrice / unitsPerPack, totalPrice: sellingPrice * packEquivalent(qty, drug) };
+        // serviceId/category: this is always a drug dispense, so the category is known with
+        // certainty right here — no need to guess it later from "drug.drug_name" the way
+        // reportClinicPerformance.js's fuzzy matching otherwise has to.
+        const lineItem = { serviceId: drug.id, serviceName: drug.drug_name, quantity: qty, unitPrice: sellingPrice / unitsPerPack, totalPrice: sellingPrice * packEquivalent(qty, drug), category: 'Pharmacy / Inventory' };
         if (existingBillRes.ok) {
           const existingBill = await existingBillRes.json();
           const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {

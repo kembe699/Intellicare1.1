@@ -641,11 +641,18 @@ class TheatreService {
             clinicId,
             branchId: op.branch_id,
             lineItems: [{
+              serviceId: itemId,
               serviceName: item.item_name,
               quantity: qty,
               unitPrice: parseFloat(item.selling_price),
               totalPrice: parseFloat(item.selling_price) * qty,
               revenueCategory: item.item_category === 'drugs' ? 'pharma' : 'theatre',
+              // `revenueCategory` above is consumed for GL account resolution and then
+              // stripped before the line item is persisted (see billingResolver.js) — it
+              // never survives into stored data for reporting. `category` is the readable,
+              // persisted equivalent, known for certain here since we already know whether
+              // this item came off the shelf as a drug or theatre consumable.
+              category: item.item_category === 'drugs' ? 'Pharmacy / Inventory' : 'Theatre',
             }],
             createdBy: userId ? String(userId) : 'system',
             notes: `Theatre: ${op.procedure_name}`,

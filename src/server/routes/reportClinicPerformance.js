@@ -60,6 +60,21 @@
 // `uncategorizedShare` so the frontend can disclose how much of the picture
 // is actually attributed vs. unattributed.
 //
+// ── Root fix, applied going forward ──────────────────────────────────────
+// Every place a bill line item is actually created from a catalog pick —
+// BillDetails.tsx's Add Item panel, DispensingWorkflow.tsx's prescription/
+// direct-sale billing, clinical.js's lab-request auto-bill, TheatreService
+// .js's item-usage billing — now stamps the line item with its real
+// `category` at creation time, since the category is known with certainty
+// right there (the user just picked the catalog row). The matching logic
+// below checks `item.category` first and only falls back to the normalized-
+// name approximation above for line items that predate this fix. This
+// shrinks `uncategorizedShare` for new activity automatically; it does
+// nothing for historical bills, which never had a category captured and
+// have no reliable way to get one now short of a flagged, approximate
+// backfill (not done here — see the Analytics Assistant's analyticsFunctions
+// .js header for why that was deliberately left as a separate decision).
+//
 // ── Billed vs. Collected ────────────────────────────────────────────────
 // Identical estimation logic/priority order to reportLaboratory.js:
 //   1. Per-item `paid: true/false` flag or `status: 'paid'` on the line item
@@ -318,9 +333,14 @@ router.get('/', async (req, res) => {
       for (const item of items) {
         const rawName = item?.serviceName || item?.name || item?.service_name;
         const n = normalizeName(rawName);
-        if (!n) continue; // no usable name on this line item at all — skip
+        if (!n && !item?.category) continue; // no usable name or category on this line item at all — skip
 
-        const category = nameToCategory.get(n) || (pharmacyNames.has(n) ? PHARMACY_LABEL : UNCATEGORIZED);
+        // Lines added since the category-capture fix (BillDetails.tsx, DispensingWorkflow
+        // .tsx, clinical.js's lab auto-bill, TheatreService.js) carry their real category
+        // directly — captured at the moment the catalog item was picked, not guessed later.
+        // Trust that first; only fall back to normalized-name matching (the old, admittedly
+        // incomplete approximation — see header note) for line items that predate the fix.
+        const category = item?.category || nameToCategory.get(n) || (pharmacyNames.has(n) ? PHARMACY_LABEL : UNCATEGORIZED);
         if (category === UNCATEGORIZED) unmatchedItemCount++; else matchedItemCount++;
 
         const { amount: itemTotal, isInsurance } = await resolveItemAmount(item, bill, rateCache, clinicId);

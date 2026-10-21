@@ -107,14 +107,43 @@ function compare(metricLabel, a, b, labelA, labelB, currencyCode) {
 }
 
 const LIMITATION_MESSAGES = {
-  department_breakdown:
-    "Department-level figures aren't reliably trackable yet in IntelliCare's current data model — bills aren't consistently linked to a department. For the best available estimate, see the Clinic Performance report under Reports.",
   doctor_revenue:
     "Revenue per doctor isn't reliably trackable yet — patient bills aren't linked to the doctor who provided the service. For visit/consultation counts per doctor, ask about doctor activity instead; for a revenue estimate, see the Doctor Performance report under Reports.",
 };
 
 function limitation(intentKey) {
   return { text: LIMITATION_MESSAGES[intentKey] || "I can't answer that reliably yet with the data available." };
+}
+
+/**
+ * Billed-revenue-by-category — see analyticsFunctions.js's getDepartmentBreakdown
+ * for why this is BILLED, not collected, and why only exactly-captured
+ * categories count. `categorizedBilled`/`totalBilled` are always reported
+ * together so the answer is honest about coverage instead of implying the
+ * whole period's billing is accounted for.
+ */
+function departmentBreakdown({ rows, totalBilled, categorizedBilled }, label, currencyCode) {
+  const phrase = periodPhrase(label);
+  if (totalBilled === 0) {
+    return { text: `No billing activity was recorded ${phrase}.` };
+  }
+  if (rows.length === 0) {
+    return {
+      text: `None of the bills ${phrase} have category information captured — they predate category tracking. See the Clinic Performance report under Reports for an approximate, name-matched breakdown instead.`,
+    };
+  }
+  const top = rows[0];
+  const coveragePct = Math.round((categorizedBilled / totalBilled) * 100);
+  const coverageNote = coveragePct >= 99
+    ? ''
+    : ` (based on the ${coveragePct}% of billing ${phrase} that has a category captured — the rest predates category tracking)`;
+  return {
+    text: `${top.category} had the most billed activity ${phrase}, at ${formatMoney(top.amount, currencyCode)}${coverageNote}.`,
+    table: {
+      columns: ['Category', 'Billed'],
+      rows: rows.map((r) => [r.category, formatMoney(r.amount, currencyCode)]),
+    },
+  };
 }
 
 function accessDenied() {
@@ -127,12 +156,55 @@ const SUGGESTED_QUESTIONS = [
   { text: 'Which doctor attended to the most patients today?', requiresPermission: null },
   { text: 'How much revenue was collected today?', requiresPermission: 'accounting.read' },
   { text: "Give me today's hospital summary.", requiresPermission: null },
+  { text: 'What can you do?', requiresPermission: null },
 ];
 
 function clarifying() {
   return {
-    text: "I'm not sure I understood that question. Here are some things you can ask me:",
+    text: "I'm not sure I understood that question. Here are some things you can ask me — or ask \"what can you do?\" for the full list.",
     suggestions: SUGGESTED_QUESTIONS.map((s) => s.text),
+  };
+}
+
+/**
+ * Answers "what date range was that?" straight from the prior turn's stored
+ * params — never re-derives or guesses a range, since the whole point is to
+ * report back exactly what was actually used to answer the previous
+ * question. `end` is stored exclusive (the day after the range, so a
+ * `< end` SQL comparison is correct) — shown here as the last INCLUDED day,
+ * which is what a person actually means by "date range".
+ */
+function dateRangeQuery(priorParams) {
+  if (!priorParams?.start) {
+    return { text: "I haven't answered anything yet in this conversation — ask me something first, then I can tell you what date range it covered." };
+  }
+  const start = new Date(priorParams.start);
+  const lastIncluded = new Date(new Date(priorParams.end).getTime() - 1);
+  // dateParser.js builds these as LOCAL-midnight Date objects (server-local
+  // time, same convention as every other "today" in this app — see its own
+  // header comment). `.toISOString()` converts to UTC first, which silently
+  // shifts the displayed calendar date back a day on a server running
+  // east of UTC (confirmed live: this server is Africa/Cairo, UTC+3) — so
+  // format off the LOCAL getters instead, never toISOString(), to show the
+  // actual calendar date the range was resolved against.
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { text: `That was for ${priorParams.label}: ${fmt(start)} to ${fmt(lastIncluded)}.` };
+}
+
+function help() {
+  return {
+    text: [
+      "Here's what I can help with — ask in your own words, no exact phrasing needed:",
+      '• Patient registrations — "how many patients registered this week?"',
+      '• Patient visits — "how many visits today?"',
+      '• Revenue collected — "how much revenue this month?" (requires financial access)',
+      '• Doctor activity — "which doctor saw the most patients?", or ask about one by name',
+      '• Revenue by department/category — "which department made the most today?"',
+      '• A full hospital summary — "give me today\'s summary"',
+      '• Comparisons — "compare today\'s revenue with yesterday\'s"',
+      '• Date ranges: today, yesterday, this/last week, this/last month, this year, "last 14 days", or "between 2026-10-01 and 2026-10-15"',
+      '• Follow-ups — ask something, then just say "what about yesterday?" or "what date range was that?"',
+    ].join('\n'),
   };
 }
 
@@ -141,6 +213,9 @@ module.exports = {
   visits,
   revenue,
   doctorActivity,
+  departmentBreakdown,
+  dateRangeQuery,
+  help,
   summary,
   compare,
   limitation,
