@@ -44,13 +44,13 @@ function assertValidSchema(schema) {
  * raw sequelize.query() calls both land in the right schema with no call-site
  * changes. `public` stays on the path so shared extensions still resolve.
  */
-function buildSequelize(schemaName, { logging } = {}) {
+function buildSequelize(schemaName, { logging, user: userOverride, pass: passOverride, poolMax } = {}) {
   const schema = assertValidSchema(schemaName);
   const host = connectionHost();
   const port = parseInt(process.env.DB_PORT || '5432', 10);
   const database = process.env.DB_NAME;
-  const user = process.env.DB_USER;
-  const pass = process.env.DB_PASSWORD || '';
+  const user = userOverride || process.env.DB_USER;
+  const pass = passOverride ?? (process.env.DB_PASSWORD || '');
 
   if (!database || !user) {
     throw new Error('DB_NAME and DB_USER must be set');
@@ -89,7 +89,7 @@ function buildSequelize(schemaName, { logging } = {}) {
       // fixed, but the margin was too thin to absorb an ordinary busy moment.
       // Managed Postgres allows 100 connections, so a handful of tenants at 10
       // each still leaves room for migrations, the control plane and psql.
-      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+      max: poolMax ?? parseInt(process.env.DB_POOL_MAX || '10', 10),
       min: 0,
       acquire: 30000,
       idle: 10000,

@@ -407,6 +407,23 @@ async function getLabRegistryOverview(sequelize, { req, start, end }) {
 // account view (payroll, depreciation, COGS, etc.) — a materially larger,
 // different number from getExpensesTotal above, which is only the manual
 // daily_expenses voucher log.
+//
+// Known gap in the read-only-role defense-in-depth layer (see
+// ensureAnalyticsReadOnlyRole.js / tenantDb.js's getReadOnlyTenantConnection):
+// the `sequelize` parameter here is accepted for signature consistency
+// with every other function in this file, but reportIncomeStatement.js's
+// fetchSection/fetchCashRevenue don't use it — they resolve their own
+// connection via tenantContext (AsyncLocalStorage), same as every other
+// route in this app. That means this one tool's queries still run on the
+// normal full-access tenant connection even when the Analytics Assistant's
+// read-only connection is in use for everything else. Not a regression —
+// application-level permission checks (accounting.read, see llmTools.js)
+// are still the primary protection here — but worth knowing if the
+// read-only layer is ever treated as a complete guarantee rather than a
+// second layer. Fixing it would mean threading an injectable connection
+// through reportIncomeStatement.js itself, which this change deliberately
+// doesn't touch — that route is relied on by the real Income Statement
+// report page and isn't something to risk destabilizing for this.
 async function getFullIncomeStatement(sequelize, { req, clinicId, start, end }, basis = 'cash') {
   const reportIncomeStatement = require('../../routes/reportIncomeStatement');
   const toDateStr = (d) => {
@@ -657,6 +674,52 @@ async function getFacilityCounts(sequelize) {
   return { branches: parseInt(branchRow?.cnt || 0, 10), clinics: clinicsCount };
 }
 
+// Appointments scheduled in a period, by status. Real status enum
+// (appointments.js): 'scheduled' (default) -> 'queued' (converted into a
+// visit) or 'cancelled' — confirmed from the route's own update validation
+// (`status must be scheduled or cancelled`) plus the explicit 'queued'
+// transition.
+async function getAppointmentsByStatus(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements, 'a.branch_id');
+  const [rows] = await sequelize.query(
+    `SELECT a.status, COUNT(*) AS cnt
+       FROM appointments a
+      WHERE a.clinic_id = :clinicId AND a.scheduled_date >= :start AND a.scheduled_date < :end${branchSQL}
+      GROUP BY a.status
+      ORDER BY cnt DESC`,
+    { replacements },
+  );
+  return rows.map((r) => ({ status: r.status, count: parseInt(r.cnt, 10) }));
+}
+
+// Inter-branch patient referrals in a period, by status. Real status enum
+// (patientReferrals.js's own decide() helper): pending -> accepted/
+// rejected, or cancelled by the requester.
+async function getReferralsByStatus(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  // patient_referrals has both from_branch_id and to_branch_id — scope on
+  // whichever branch this user belongs to being either side of the
+  // referral, so a branch-scoped user sees referrals they sent OR received.
+  let branchSQL = '';
+  if (!(req.user?.role === 'admin' && !req.branchContext?.adminScoped)) {
+    const branchId = req.branchContext?.branchId || req.user?.branchId;
+    if (branchId) {
+      replacements.branchId = branchId;
+      branchSQL = ' AND (from_branch_id = :branchId OR to_branch_id = :branchId)';
+    }
+  }
+  const [rows] = await sequelize.query(
+    `SELECT status, COUNT(*) AS cnt
+       FROM patient_referrals
+      WHERE clinic_id = :clinicId AND created_at >= :start AND created_at < :end${branchSQL}
+      GROUP BY status
+      ORDER BY cnt DESC`,
+    { replacements },
+  );
+  return rows.map((r) => ({ status: r.status, count: parseInt(r.cnt, 10) }));
+}
+
 module.exports = {
   getRegistrationsCount,
   getTotalPatientsCount,
@@ -678,6 +741,8 @@ module.exports = {
   getInpatientOccupancy,
   getStaffAccountsCount,
   getFacilityCounts,
+  getAppointmentsByStatus,
+  getReferralsByStatus,
   getDoctorActivity,
   getDepartmentBreakdown,
   listDoctors,

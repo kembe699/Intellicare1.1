@@ -114,6 +114,17 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
     let result = null;
     let engineUsed = 'keyword';
 
+    // The actual analytics queries (not conversation bookkeeping above,
+    // which still needs to INSERT/UPDATE and so always uses the normal
+    // `sequelize`) run on the dedicated read-only connection when one is
+    // available for this tenant — see tenantDb.js's getReadOnlyTenantConnection
+    // and ensureAnalyticsReadOnlyRole.js. Falls back to the normal
+    // connection whenever the read-only layer isn't configured or isn't
+    // ready yet for this schema; this is a defense-in-depth addition, never
+    // a hard requirement for the assistant to answer.
+    const { getReadOnlyTenantConnection } = require('../tenantDb');
+    const analyticsSequelize = (await getReadOnlyTenantConnection(req.tenantSchema).catch(() => null)) || sequelize;
+
     // LLM mode, when enabled: give Claude the real conversation history (not
     // just one inherited turn) so it can follow up, clarify, and understand
     // phrasing the keyword engine's fixed patterns never would. Any failure
@@ -126,7 +137,7 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
           `SELECT role, content FROM chatbot_messages WHERE conversation_id = :id ORDER BY created_at ASC`,
           { replacements: { id: conversationId } },
         );
-        const llmResult = await llmEngine.answerQuestion({ sequelize, req, question, history: historyRows, clinicId });
+        const llmResult = await llmEngine.answerQuestion({ sequelize: analyticsSequelize, req, question, history: historyRows, clinicId });
         result = { text: llmResult.text, table: null, intentKey: llmResult.toolCalls.map((t) => t.name).join(',') || null, toolCalls: llmResult.toolCalls };
         engineUsed = 'llm';
       } catch (e) {
@@ -158,7 +169,7 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
       const priorTurn = lastRealTurnRow?.intent
         ? { intent: lastRealTurnRow.intent, params: lastRealTurnRow.params }
         : null;
-      result = await answerQuestion({ sequelize, req, question, priorTurn });
+      result = await answerQuestion({ sequelize: analyticsSequelize, req, question, priorTurn });
     }
 
     const userMsgId = uuidv4();

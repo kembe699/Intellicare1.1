@@ -220,6 +220,26 @@ async function main() {
       console.error(`  ⚠ chart of accounts not seeded: ${coaErr.message}`);
     }
 
+    // The Analytics Assistant's dedicated read-only role grant (see
+    // ensureAnalyticsReadOnlyRole.js) — after COMMIT, same reasoning as
+    // chart of accounts above: a failure here is non-essential and must
+    // never roll back an otherwise-complete, loginable tenant. A no-op
+    // when DB_READONLY_PASSWORD isn't set. tenantDb.js's own fire-and-
+    // forget grant (on this schema's first real connection) is the
+    // retroactive safety net if this step doesn't run for any reason.
+    try {
+      const { grantReadOnlySelect } = require('../config/ensureAnalyticsReadOnlyRole');
+      const { buildSequelize: buildSequelizeForGrant } = require('../config/dbConnectionOptions');
+      const grantSequelize = buildSequelizeForGrant(schemaName);
+      try {
+        await grantReadOnlySelect(grantSequelize, schemaName);
+      } finally {
+        await grantSequelize.close();
+      }
+    } catch (roErr) {
+      console.error(`  ⚠ read-only role grant not applied: ${roErr.message}`);
+    }
+
     console.log(JSON.stringify({ ok: true, schemaName, tables: tableCount, seededRows, userId }));
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});

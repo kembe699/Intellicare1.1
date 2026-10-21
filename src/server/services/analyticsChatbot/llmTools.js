@@ -178,6 +178,16 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'get_appointments',
+    description: "Appointments scheduled in a period, by status (scheduled, queued once converted into a visit, or cancelled). Use for 'appointments', 'how many appointments today', 'scheduled visits'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_referrals',
+    description: "Inter-branch patient referrals in a period, by status (pending, accepted, rejected, cancelled). Use for 'referrals', 'patient referrals', 'how many patients were referred'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
 ];
 
 async function executeTool(name, input, { sequelize, req, clinicId }) {
@@ -381,6 +391,14 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
         analytics.getFacilityCounts(sequelize),
       ]);
       return { staffAccounts: accounts.count, role: input?.role || null, branches: facilities.branches, clinics: facilities.clinics };
+    }
+    case 'get_appointments': {
+      const rows = await analytics.getAppointmentsByStatus(sequelize, ctx);
+      return { period, byStatus: rows };
+    }
+    case 'get_referrals': {
+      const rows = await analytics.getReferralsByStatus(sequelize, ctx);
+      return { period, byStatus: rows };
     }
     default:
       return { error: 'unknown_tool', message: `No such tool: ${name}` };

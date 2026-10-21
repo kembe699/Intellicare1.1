@@ -291,6 +291,20 @@ describe('executeTool — permission checks run server-side, before any query', 
     expect(analytics.getStaffAccountsCount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ role: 'doctor' }));
   });
 
+  test('get_appointments needs no special permission', async () => {
+    analytics.getAppointmentsByStatus.mockResolvedValue([{ status: 'scheduled', count: 8 }, { status: 'cancelled', count: 1 }]);
+    const result = await executeTool('get_appointments', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.byStatus).toHaveLength(2);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_referrals needs no special permission', async () => {
+    analytics.getReferralsByStatus.mockResolvedValue([{ status: 'pending', count: 2 }, { status: 'accepted', count: 5 }]);
+    const result = await executeTool('get_referrals', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.byStatus).toHaveLength(2);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
   test('registrations and visits need no special permission', async () => {
     analytics.getRegistrationsCount.mockResolvedValue({ count: 7 });
     const result = await executeTool(

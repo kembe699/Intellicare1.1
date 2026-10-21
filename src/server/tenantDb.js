@@ -188,6 +188,14 @@ async function buildTenantConnection(schemaName) {
   const { ensureChatbotTables } = require('./config/ensureChatbotTables');
   ensureChatbotTables(sequelize).catch(() => {});
 
+  // The Analytics Assistant's dedicated read-only Postgres role (see
+  // ensureAnalyticsReadOnlyRole.js) — grants it SELECT on this tenant's
+  // schema, same per-tenant/fire-and-forget pattern as everything above. A
+  // genuine no-op when DB_READONLY_PASSWORD isn't set (the feature is
+  // entirely opt-in).
+  const { grantReadOnlySelect } = require('./config/ensureAnalyticsReadOnlyRole');
+  grantReadOnlySelect(sequelize, schema).catch(() => {});
+
   return { sequelize, models };
 }
 
@@ -204,6 +212,59 @@ async function getTenantConnection(schemaName) {
   return connection;
 }
 
+// A second, SELECT-only connection pool for the Analytics Assistant (see
+// ensureAnalyticsReadOnlyRole.js) — genuinely separate credentials/pool
+// from getTenantConnection's full-access one, not the same connection with
+// different query logic. Returns null whenever this layer isn't usable
+// (DB_READONLY_PASSWORD unset, or this schema's grant hasn't landed yet) so
+// every caller can fall back to the normal tenant connection unconditionally
+// — this is a defense-in-depth addition, never a hard requirement for the
+// assistant to work.
+const readOnlyConnections = new Map(); // schema -> sequelize
+const readOnlyPending = new Map();
+const readOnlyFailures = new Map(); // schema -> ms timestamp of last failed attempt
+const READONLY_RETRY_COOLDOWN_MS = 60 * 1000;
+
+async function getReadOnlyTenantConnection(schemaName) {
+  const { isConfigured, READONLY_ROLE } = require('./config/ensureAnalyticsReadOnlyRole');
+  if (!isConfigured()) return null;
+  const schema = assertValidSchema(schemaName);
+
+  if (readOnlyConnections.has(schema)) return readOnlyConnections.get(schema);
+
+  // Don't retry a schema whose role/grant isn't ready on every single
+  // question — the grant is applied fire-and-forget elsewhere and, once it
+  // lands, the next attempt after this cooldown picks it up.
+  const lastFailure = readOnlyFailures.get(schema);
+  if (lastFailure && Date.now() - lastFailure < READONLY_RETRY_COOLDOWN_MS) return null;
+
+  if (!readOnlyPending.has(schema)) {
+    readOnlyPending.set(schema, (async () => {
+      const sequelize = buildSequelize(schema, {
+        user: READONLY_ROLE,
+        pass: process.env.DB_READONLY_PASSWORD,
+        poolMax: parseInt(process.env.DB_READONLY_POOL_MAX || '3', 10),
+      });
+      // A real SELECT, not just authenticate() — proves the role's grants
+      // have actually landed for this schema (grantReadOnlySelect runs
+      // fire-and-forget and can still be in flight the first time a
+      // schema's connection is built), not just that the credentials work.
+      await sequelize.query('SELECT 1 FROM users LIMIT 1');
+      return sequelize;
+    })().finally(() => readOnlyPending.delete(schema)));
+  }
+
+  try {
+    const sequelize = await readOnlyPending.get(schema);
+    readOnlyConnections.set(schema, sequelize);
+    readOnlyFailures.delete(schema);
+    return sequelize;
+  } catch {
+    readOnlyFailures.set(schema, Date.now());
+    return null;
+  }
+}
+
 // Used after provisioning (or dropping) a tenant schema in the same process, so
 // a stale connection — e.g. one opened by a failed earlier attempt at the same
 // name — is never reused.
@@ -213,6 +274,12 @@ function evictTenantConnection(schemaName) {
     existing.sequelize.close().catch(() => {});
     connections.delete(schemaName);
   }
+  const existingReadOnly = readOnlyConnections.get(schemaName);
+  if (existingReadOnly) {
+    existingReadOnly.close().catch(() => {});
+    readOnlyConnections.delete(schemaName);
+  }
+  readOnlyFailures.delete(schemaName);
 }
 
 // Test-only cleanup: each Jest test FILE gets its own fresh module registry
@@ -228,9 +295,14 @@ function evictTenantConnection(schemaName) {
 // (see jest.config.cjs's setupFilesAfterEnv) so each file's connection(s) are
 // released the moment that file's own tests finish, not up to 10s later.
 async function closeAllConnections() {
-  const closing = Array.from(connections.values()).map((c) => c.sequelize.close().catch(() => {}));
+  const closing = [
+    ...Array.from(connections.values()).map((c) => c.sequelize.close().catch(() => {})),
+    ...Array.from(readOnlyConnections.values()).map((s) => s.close().catch(() => {})),
+  ];
   connections.clear();
+  readOnlyConnections.clear();
+  readOnlyFailures.clear();
   await Promise.all(closing);
 }
 
-module.exports = { getTenantConnection, evictTenantConnection, closeAllConnections };
+module.exports = { getTenantConnection, getReadOnlyTenantConnection, evictTenantConnection, closeAllConnections };
