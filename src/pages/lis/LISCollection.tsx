@@ -746,8 +746,18 @@ export default function LISCollection() {
                    fixed at a page size this small. Removing the rest of the
                    page from the flow entirely with display:none, instead of
                    just hiding it, means the only thing left to paginate is
-                   the label itself. */
-                body *:not(#printable-labels):not(#printable-labels *) {
+                   the label itself.
+                   #printable-labels isn't a direct child of <body> (React
+                   renders it nested inside AppLayout's own wrapper divs), so
+                   excluding only ITS OWN descendants isn't enough — every
+                   element BETWEEN body and #printable-labels would still
+                   match this rule and get display:none too, which hides the
+                   whole subtree underneath it (including the label) even
+                   though the label itself was correctly excluded. The
+                   :has() clause also exempts every ancestor of
+                   #printable-labels, which is what was producing a blank
+                   printed page even after the page-count fix above. */
+                body *:not(#printable-labels):not(#printable-labels *):not(:has(#printable-labels)) {
                   display: none !important;
                 }
                 #printable-labels {
