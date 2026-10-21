@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { UOM_OPTIONS } from '@/lib/uomOptions';
 import { formatDate } from '@/lib/format';
 
 interface InventoryItem {
@@ -64,23 +65,6 @@ const CATEGORY_OPTIONS = CATEGORIES.map(c => ({ value: c, label: c.charAt(0).toU
 const STOCK_FILTER_OPTIONS = [
   { value: 'all', label: 'All stock' }, { value: 'low', label: 'Low Stock' },
   { value: 'out', label: 'Out of Stock' }, { value: 'over', label: 'Over Stock' },
-];
-
-const UOM_OPTIONS = [
-  { value: 'Tab', label: 'Tablet(s)' }, { value: 'Cap', label: 'Capsule(s)' },
-  { value: 'Amp', label: 'Ampoule(s)' }, { value: 'Vial', label: 'Vial(s)' },
-  { value: 'Bottle', label: 'Bottle(s)' }, { value: 'Sachet', label: 'Sachet(s)' },
-  { value: 'Tube', label: 'Tube(s)' }, { value: 'Syringe', label: 'Syringe(s)' },
-  { value: 'mL', label: 'Millilitre(s)' }, { value: 'L', label: 'Litre(s)' },
-  { value: 'g', label: 'Gram(s)' }, { value: 'mg', label: 'Milligram(s)' },
-  { value: 'mcg', label: 'Microgram(s)' }, { value: 'IU', label: 'International Units' },
-  { value: 'U', label: 'Units' }, { value: 'Each', label: 'Each' },
-  { value: 'Box', label: 'Box(es)' }, { value: 'Pack', label: 'Pack(s)' },
-  { value: 'Strip', label: 'Strip(s)' }, { value: 'Dose', label: 'Dose(s)' },
-  { value: 'Patch', label: 'Patch(es)' }, { value: 'Supp', label: 'Suppository/Suppositories' },
-  { value: 'Drop', label: 'Drop(s)' }, { value: 'Puff', label: 'Puff(s) / Inhalation' },
-  { value: 'Roll', label: 'Roll(s)' }, { value: 'Pair', label: 'Pair(s)' },
-  { value: 'Set', label: 'Set(s)' }, { value: 'Piece', label: 'Piece(s)' },
 ];
 
 const stockStatus = (item: InventoryItem) => {

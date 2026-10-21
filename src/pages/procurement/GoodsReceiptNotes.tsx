@@ -672,34 +672,13 @@ const GoodsReceiptNotes: React.FC = () => {
                     render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
                   },
                   {
+                    // Download/Inspect/Accept/Reject all already live inside
+                    // the View modal itself (see the GRN details dialog's own
+                    // Actions row below) — no need to duplicate them here too.
                     key: '__actions', header: 'Actions', align: 'center',
                     render: (_v, grn) => (
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" aria-label="Download" variant="ghost" className="w-7 h-7" onClick={() => downloadGRNReport(grn)}><Download className="w-3.5 h-3.5 text-success" /></Button>
                         <Button size="icon" aria-label="View" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
-                        {grn.status === 'pending_inspection' && (
-                          <>
-                            <Button size="icon" aria-label="Inspect" variant="ghost" className="w-7 h-7" onClick={() => inspectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'inspect' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5 text-primary" />}
-                            </Button>
-                            <Button size="icon" aria-label="Confirm" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
-                            </Button>
-                            <Button size="icon" aria-label="Close" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
-                            </Button>
-                          </>
-                        )}
-                        {grn.status === 'inspected' && (
-                          <>
-                            <Button size="icon" aria-label="Confirm" variant="ghost" className="w-7 h-7" onClick={() => acceptGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'accept' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
-                            </Button>
-                            <Button size="icon" aria-label="Close" variant="ghost" className="w-7 h-7" onClick={() => rejectGRN(grn.id)} disabled={processing?.id === grn.id}>
-                              {processing?.id === grn.id && processing.action === 'reject' ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
-                            </Button>
-                          </>
-                        )}
                       </div>
                     ),
                   },

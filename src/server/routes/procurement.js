@@ -1246,6 +1246,49 @@ async function loadEditableP0(req) {
   return { po: pos[0] };
 }
 
+// Order-level field edits on a draft PO — currently just po_currency (the
+// Purchase Order Details modal's own Currency field). Deliberately NOT
+// converting existing line item prices when the currency changes: this is
+// a draft, not-yet-submitted order, so changing currency here is treated
+// as correcting a mislabeled order, not re-pricing it into a new currency.
+router.put('/purchase-orders/:id', authorize('procurement.purchase_orders.write'), async (req, res) => {
+  try {
+    const { po, error } = await loadEditableP0(req);
+    if (error) return res.status(error.code).json(error.body);
+
+    if (req.body.po_currency === undefined) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+    const poCurrency = String(req.body.po_currency || '').trim().toUpperCase();
+    if (!poCurrency) {
+      return res.status(400).json({ error: 'Currency is required' });
+    }
+
+    await sequelize.query(
+      'UPDATE purchase_orders SET po_currency = :po_currency, updated_at = NOW() WHERE id = :id',
+      { replacements: { po_currency: poCurrency, id: req.params.id } }
+    );
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        clinic_id: po.clinic_id, user_id: req.user?.id, user_name: req.user?.display_name || req.user?.displayName,
+        user_role: req.user?.role, module: 'Procurement', action: 'PO_UPDATED',
+        entity_type: 'PurchaseOrder', entity_id: String(req.params.id),
+        description: `PO ${po.po_number}: currency changed`,
+        old_values: { po_currency: po.po_currency }, new_values: { po_currency: poCurrency },
+        ip_address: req.ip, status: 'success'
+      });
+    } catch (e) { /* audit must never block the edit */ }
+
+    const [[updated]] = await sequelize.query('SELECT * FROM purchase_orders WHERE id = :id', { replacements: { id: req.params.id } });
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating purchase order:', error);
+    res.status(500).json({ error: 'Failed to update purchase order' });
+  }
+});
+
 router.post('/purchase-orders/:id/items', authorize('procurement.purchase_orders.write'), async (req, res) => {
   try {
     const { item_name, description, quantity, unit_price, unit_of_measure } = req.body;

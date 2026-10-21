@@ -27,6 +27,7 @@ import {
   ShoppingCart, Loader2, PenLine, ArrowLeft, ChevronsUpDown, Check as CheckIcon, X, Download
 } from 'lucide-react';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
+import { UOM_OPTIONS } from '@/lib/uomOptions';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate } from '@/lib/format';
 
@@ -161,6 +162,12 @@ const PurchaseRequisitions: React.FC = () => {
   // own), so this is what actually converts them for display when a non-base currency is
   // picked for the PO being created.
   const [poCreateRate, setPOCreateRate] = useState(1);
+  // Per-line unit cost overrides, keyed by line id (or index as a fallback) —
+  // lets the user correct a PR's estimated price before the PO is actually
+  // created, instead of only ever accepting the converted estimate as-is.
+  // Reset whenever the modal opens fresh or the currency changes (an edit
+  // typed in the old currency has no well-defined value in the new one).
+  const [poItemOverrides, setPOItemOverrides] = useState<Record<string | number, number>>({});
   const [loadingRate, setLoadingRate] = useState(false);
 
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -582,6 +589,14 @@ const PurchaseRequisitions: React.FC = () => {
     }
   };
 
+  // The unit cost actually used to create the PO for one PR line: the
+  // user's own override if they edited it, otherwise the PR's estimated
+  // price converted into whichever currency is selected.
+  const getEffectiveUnitCost = (line: PRLine, idx: number) => {
+    const key = line.id ?? idx;
+    return poItemOverrides[key] !== undefined ? poItemOverrides[key] : (line.estimated_unit_price || 0) * poCreateRate;
+  };
+
   const openCreatePO = async (pr: PR) => {
     setPrForPO(pr);
     setPOFormData({
@@ -592,6 +607,7 @@ const PurchaseRequisitions: React.FC = () => {
       payment_terms: 'Net30', po_currency: currency.code, notes: `Created from ${pr.pr_number}`
     });
     setPOCreateRate(1);
+    setPOItemOverrides({});
     setPOFromPRFiles([]);
     await fetchSuppliers();
     setShowDetailsModal(false);
@@ -606,14 +622,16 @@ const PurchaseRequisitions: React.FC = () => {
 
     setCreatingPO(true);
     try {
-      // Map PR line items to PO items — the PR's estimated prices are always in the base
-      // currency, so convert them into whatever currency was picked for this PO (poCreateRate)
-      // rather than sending the raw base-currency numbers mislabeled as the new currency.
-      const items = (prForPO.lines || []).map(line => ({
+      // Map PR line items to PO items — unit cost is whatever's actually
+      // shown in the preview table (the PR's estimated price converted into
+      // the PO's currency, or the user's own override if they edited it —
+      // see getEffectiveUnitCost), never recomputed fresh from the raw
+      // base-currency estimate here.
+      const items = (prForPO.lines || []).map((line, idx) => ({
         item_name: line.item_description,
         description: line.item_specification || '',
         quantity: line.quantity_required,
-        unit_price: Math.round(line.estimated_unit_price * poCreateRate * 100) / 100,
+        unit_price: Math.round(getEffectiveUnitCost(line, idx) * 100) / 100,
         unit_of_measure: line.unit_of_measure
       }));
 
@@ -859,10 +877,17 @@ const PurchaseRequisitions: React.FC = () => {
                       </div>
                       <div>
                         <Label className="text-xs mb-1 block">UOM</Label>
-                        <Input className="h-8 text-xs" value={draft.unit_of_measure} onChange={e => updateDraft('unit_of_measure', e.target.value)} />
+                        <Combobox
+                          options={UOM_OPTIONS}
+                          value={draft.unit_of_measure}
+                          onChange={v => updateDraft('unit_of_measure', v)}
+                          placeholder="Select UOM..."
+                          searchPlaceholder="Search..."
+                          className="h-8 text-xs"
+                        />
                       </div>
                       <div>
-                        <Label className="text-xs mb-1 block">Est. Unit Price</Label>
+                        <Label className="text-xs mb-1 block">Est. Unit Cost</Label>
                         <Input className="h-8 text-xs" type="number" step="0.01" value={draft.estimated_unit_price} onChange={e => updateDraft('estimated_unit_price', parseFloat(e.target.value) || 0)} />
                       </div>
                     </div>
@@ -1041,7 +1066,7 @@ const PurchaseRequisitions: React.FC = () => {
                       { key: 'item_description', header: 'Description' },
                       { key: 'quantity_required', header: 'Qty', align: 'right' },
                       { key: 'unit_of_measure', header: 'UOM' },
-                      { key: 'estimated_unit_price', header: 'Unit Price', align: 'right', render: (v) => <span className="font-mono">{fmt(v)}</span> },
+                      { key: 'estimated_unit_price', header: 'Unit Cost', align: 'right', render: (v) => <span className="font-mono">{fmt(v)}</span> },
                       { key: 'estimated_line_total', header: 'Total', align: 'right', render: (v) => <span className="font-mono">{fmt(v)}</span> },
                     ]}
                   />
@@ -1157,15 +1182,19 @@ const PurchaseRequisitions: React.FC = () => {
                           : (currency.code ? [{ value: currency.code, label: currency.code }] : [])
                       }
                       value={poFormData.po_currency}
-                      onChange={v => { setPOFormData({...poFormData, po_currency: v}); fetchPOCreateRate(v); }}
+                      onChange={v => { setPOFormData({...poFormData, po_currency: v}); fetchPOCreateRate(v); setPOItemOverrides({}); }}
                       searchPlaceholder="Search..."
                     />
                   </div>
                   <div>
-                    <Label>Delivery Address</Label>
-                    <Input value={poFormData.delivery_address}
-                      onChange={e => setPOFormData({...poFormData, delivery_address: e.target.value})}
-                      placeholder="e.g., Main Warehouse" />
+                    <Label>Storage Location</Label>
+                    <Combobox
+                      options={storageLocations.map(loc => ({ value: loc.location_name, label: loc.location_name }))}
+                      value={poFormData.delivery_address}
+                      onChange={v => setPOFormData({...poFormData, delivery_address: v})}
+                      placeholder="Select storage location..."
+                      searchPlaceholder="Search..."
+                    />
                   </div>
                   <div className="col-span-2">
                     <Label>Notes</Label>
@@ -1193,14 +1222,26 @@ const PurchaseRequisitions: React.FC = () => {
                         { key: 'item_description', header: 'Description' },
                         { key: 'quantity_required', header: 'Qty', align: 'right' },
                         { key: 'unit_of_measure', header: 'UOM' },
-                        { key: 'estimated_unit_price', header: 'Unit Price', align: 'right', render: (v) => <span className="font-mono">{fmtAs(v * poCreateRate, poFormData.po_currency)}</span> },
-                        { key: 'estimated_line_total', header: 'Total', align: 'right', render: (v) => <span className="font-mono">{fmtAs(v * poCreateRate, poFormData.po_currency)}</span> },
+                        {
+                          key: 'estimated_unit_price', header: 'Unit Cost', align: 'right',
+                          render: (_v, line, idx) => (
+                            <Input
+                              type="number" step="0.01" min="0"
+                              className="h-7 w-24 ml-auto text-right font-mono text-xs"
+                              value={getEffectiveUnitCost(line, idx)}
+                              onChange={e => setPOItemOverrides(prev => ({ ...prev, [line.id ?? idx]: parseFloat(e.target.value) || 0 }))}
+                            />
+                          ),
+                        },
+                        { key: 'estimated_line_total', header: 'Total', align: 'right', render: (_v, line, idx) => <span className="font-mono">{fmtAs(getEffectiveUnitCost(line, idx) * (line.quantity_required || 0), poFormData.po_currency)}</span> },
                       ]}
                     />
                     {(prForPO.lines || []).length > 0 && (
                       <div className="border border-t-0 border-border rounded-b-md bg-muted/20 -mt-px px-3 py-2 flex justify-between text-sm font-semibold">
                         <span>Total ({poFormData.po_currency}):</span>
-                        <span className="font-mono">{fmtAs(prForPO.total_amount * poCreateRate, poFormData.po_currency)}</span>
+                        <span className="font-mono">
+                          {fmtAs((prForPO.lines || []).reduce((sum, line, idx) => sum + getEffectiveUnitCost(line, idx) * (line.quantity_required || 0), 0), poFormData.po_currency)}
+                        </span>
                       </div>
                     )}
                   </div>

@@ -38,6 +38,13 @@ interface Supplier {
   town?: string;
 }
 
+interface StoreLocation {
+  id: string | number;
+  location_name: string;
+  location_type?: string;
+  item_count?: number;
+}
+
 interface InventoryItem {
   id: string;
   item_code: string;
@@ -106,6 +113,7 @@ const PurchaseOrders: React.FC = () => {
   const { currency, fmt } = useCurrency();
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [storageLocations, setStorageLocations] = useState<StoreLocation[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [availableCurrencies, setAvailableCurrencies] = useState<{code: string; name: string; symbol: string; decimal_places: number; is_base_currency: boolean}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,6 +132,7 @@ const PurchaseOrders: React.FC = () => {
   // worse than no edit.
   const [editingItems, setEditingItems] = useState(false);
   const [itemDrafts, setItemDrafts] = useState<PurchaseOrderItem[]>([]);
+  const [currencyDraft, setCurrencyDraft] = useState('');
   const [removedItemIds, setRemovedItemIds] = useState<Array<string | number>>([]);
   const [savingItemEdits, setSavingItemEdits] = useState(false);
   const [pendingItems, setPendingItems] = useState<any[]>([]);
@@ -171,6 +180,15 @@ const PurchaseOrders: React.FC = () => {
     }
   };
 
+  const fetchStorageLocations = async () => {
+    try {
+      const res = await authFetch(`/api/inventory/locations?clinic_id=${user?.clinic || ''}`);
+      if (res.ok) setStorageLocations(await res.json());
+    } catch (error) {
+      console.error('Error fetching storage locations:', error);
+    }
+  };
+
   const fetchInventory = async () => {
     try {
       // inventory_items (Item Master) — the same source Item Master, Batch
@@ -206,7 +224,7 @@ const PurchaseOrders: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchOrders(); fetchSuppliers(); fetchInventory(); fetchCurrencies(); }, []);
+  useEffect(() => { fetchOrders(); fetchSuppliers(); fetchInventory(); fetchCurrencies(); fetchStorageLocations(); }, []);
 
   // Load user signature
   useEffect(() => {
@@ -534,6 +552,7 @@ const PurchaseOrders: React.FC = () => {
     if (!selectedOrder) return;
     setItemDrafts((selectedOrder.items || []).map(i => ({ ...i })));
     setRemovedItemIds([]);
+    setCurrencyDraft(selectedOrder.po_currency || currency.code);
     setEditingItems(true);
   };
 
@@ -541,6 +560,7 @@ const PurchaseOrders: React.FC = () => {
     setEditingItems(false);
     setItemDrafts([]);
     setRemovedItemIds([]);
+    setCurrencyDraft('');
   };
 
   const updateItemDraft = (id: string | number, field: 'quantity' | 'unit_price' | 'description', value: string) => {
@@ -599,8 +619,18 @@ const PurchaseOrders: React.FC = () => {
         if (!res.ok) throw new Error('Failed to update an item');
       }
 
-      const touched = changed.length + removedItemIds.length;
-      toast.success(touched === 0 ? 'No changes to save' : `${touched} line${touched === 1 ? '' : 's'} updated`);
+      const currencyChanged = currencyDraft && currencyDraft !== (selectedOrder.po_currency || currency.code);
+      if (currencyChanged) {
+        const res = await authFetch(`/api/procurement/purchase-orders/${selectedOrder.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ po_currency: currencyDraft }),
+        });
+        if (!res.ok) throw new Error('Failed to update currency');
+      }
+
+      const touched = changed.length + removedItemIds.length + (currencyChanged ? 1 : 0);
+      toast.success(touched === 0 ? 'No changes to save' : `${touched} change${touched === 1 ? '' : 's'} saved`);
 
       // Re-read the order rather than patching local state: the server
       // recalculates the PO total from its lines on every item change, and that
@@ -718,8 +748,15 @@ const PurchaseOrders: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs">Delivery Address</Label>
-                  <Input className="mt-1" value={formData.delivery_address} onChange={e => setFormData({...formData, delivery_address: e.target.value})} placeholder="e.g., Main Warehouse" />
+                  <Label className="text-xs">Storage Location</Label>
+                  <Combobox
+                    options={storageLocations.map(loc => ({ value: loc.location_name, label: loc.location_name }))}
+                    value={formData.delivery_address}
+                    onChange={v => setFormData({...formData, delivery_address: v})}
+                    placeholder="Select storage location..."
+                    searchPlaceholder="Search..."
+                    className="mt-1"
+                  />
                 </div>
               </div>
 
@@ -805,24 +842,14 @@ const PurchaseOrders: React.FC = () => {
                   render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v}</Badge>,
                 },
                 {
+                  // Download/Add Items/Delete/status-advance all already live
+                  // inside the View modal itself (see the PO Details Dialog's
+                  // own Action Buttons row below) — no need to duplicate them
+                  // here too.
                   key: '__actions', header: 'Actions', align: 'center',
                   render: (_v, order) => (
                     <div className="flex items-center justify-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => viewOrder(order)}><Eye className="w-3.5 h-3.5" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => downloadPOReport(order)}><Download className="w-3.5 h-3.5 text-success" /></Button>
-                      {order.status === 'draft' && (
-                        <Button size="sm" variant="ghost" onClick={() => openAddItems(order)}><Plus className="w-3.5 h-3.5 text-primary" /></Button>
-                      )}
-                      {order.status === 'draft' && (
-                        <Button size="sm" variant="ghost" onClick={() => { setDeletingOrder(order); setDeleteReason(''); }}>
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                        </Button>
-                      )}
-                      {getNextStatus(order.status) && (
-                        <Button size="sm" variant="ghost" onClick={() => updateOrderStatus(order.id, getNextStatus(order.status)!)} disabled={processingId === order.id}>
-                          {processingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : React.createElement(getStatusIcon(order.status), { className: 'w-3.5 h-3.5 text-success' })}
-                        </Button>
-                      )}
                     </div>
                   ),
                 },
@@ -962,7 +989,7 @@ const PurchaseOrders: React.FC = () => {
 
         {/* PO Details Dialog */}
         <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Purchase Order Details</DialogTitle>
               <DialogDescription>View order information, items, and take actions.</DialogDescription>
@@ -983,9 +1010,27 @@ const PurchaseOrders: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><span className="text-muted-foreground">Supplier:</span> <span className="font-medium">{selectedOrder.supplier_name || getSupplierName(selectedOrder.supplier_id)}</span></div>
                   <div><span className="text-muted-foreground">Payment Terms:</span> <span className="font-medium">{selectedOrder.payment_terms || '—'}</span></div>
-                  <div><span className="text-muted-foreground">Currency:</span> <span className="font-medium">{selectedOrder.po_currency || currency.code}</span></div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Currency:</span>
+                    {editingItems && canEditItems(selectedOrder) ? (
+                      <Combobox
+                        options={
+                          availableCurrencies.length > 0
+                            ? availableCurrencies.map(c => ({ value: c.code, label: c.code }))
+                            : (currency.code ? [{ value: currency.code, label: currency.code }] : [])
+                        }
+                        value={currencyDraft}
+                        onChange={setCurrencyDraft}
+                        placeholder="Select currency..."
+                        searchPlaceholder="Search..."
+                        className="h-7 w-32 text-xs"
+                      />
+                    ) : (
+                      <span className="font-medium">{selectedOrder.po_currency || currency.code}</span>
+                    )}
+                  </div>
                   <div><span className="text-muted-foreground">Delivery Date:</span> <span className="font-medium">{selectedOrder.requested_delivery_date ? formatDate(selectedOrder.requested_delivery_date) : '—'}</span></div>
-                  {selectedOrder.delivery_address && <div className="col-span-2"><span className="text-muted-foreground">Delivery Address:</span> <span className="font-medium">{selectedOrder.delivery_address}</span></div>}
+                  {selectedOrder.delivery_address && <div className="col-span-2"><span className="text-muted-foreground">Storage Location:</span> <span className="font-medium">{selectedOrder.delivery_address}</span></div>}
                 </div>
 
                 {selectedOrder.notes && (
