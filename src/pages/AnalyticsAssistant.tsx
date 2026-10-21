@@ -45,6 +45,7 @@ const AnalyticsAssistant: React.FC = () => {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const loadConversations = async () => {
     try {
@@ -68,6 +69,15 @@ const AnalyticsAssistant: React.FC = () => {
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
+
+  // The input is disabled while a reply is in flight (see the `disabled={sending}`
+  // below) so the user can't send a second question before the first finishes —
+  // but a browser drops focus the moment a focused element becomes disabled and
+  // never gives it back on its own, which left the user having to click back into
+  // the field before every reply. Re-focus it ourselves once sending completes.
+  useEffect(() => {
+    if (!sending) inputRef.current?.focus();
+  }, [sending]);
 
   const openConversation = async (id: string) => {
     setActiveId(id);
@@ -299,6 +309,7 @@ const AnalyticsAssistant: React.FC = () => {
           <form onSubmit={handleSubmit} className="border-t border-border p-3">
             <div className="mx-auto flex max-w-2xl items-center gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
