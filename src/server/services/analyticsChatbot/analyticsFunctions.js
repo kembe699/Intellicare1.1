@@ -5,21 +5,36 @@
  * read-only requirement in full. There is no free-form query path; an
  * intent that isn't one of the functions below simply cannot be asked.
  *
- * ── Why department-level and per-doctor revenue aren't here ─────────────
- * IntelliCare's data model has no foreign key from a bill line item to a
- * department, and no doctor_id column on patient_bills at all (confirmed by
- * reading reportClinicPerformance.js and reportDoctorPerformance.js, the
- * two existing reports that already grapple with this). The only existing
- * way to approximate department revenue is reportClinicPerformance.js's
- * normalized-name matching against the `services` catalog, which that
- * report's own comments say is "far from complete" even on live data and
- * explicitly buckets unmatched line items as "Uncategorized". Reusing that
- * heuristic here, presented as a chatbot's confident answer, would violate
- * the spec's own "never fabricate, never guess missing values" requirement
- * — so these two questions are intentionally routed (see
- * responseTemplates.js) to an honest limitation message pointing at the
- * Clinic Performance / Doctor Performance reports instead of a computed
- * number. Visit/registration counts and doctor *activity* (not revenue)
+ * ── Department breakdown: exact category only, never the fuzzy fallback ──
+ * `patient_bills.services` line items didn't used to carry a department/
+ * category at all — reportClinicPerformance.js approximates one after the
+ * fact via normalized-name string matching against the `services` catalog,
+ * which that report's own comments say is "far from complete" (the catalog
+ * only had 6 rows; many billed names never match it; pharmacy/drug items
+ * were never in it to begin with). That's been fixed at the ROOT instead:
+ * every place a line item is created from an actual catalog pick
+ * (BillDetails.tsx, DispensingWorkflow.tsx, clinical.js's lab auto-bill,
+ * TheatreService.js) now stamps a real `category` on the line item at
+ * creation time — see each file's own comment for exactly where. getDepartment
+ * BreakdownTotals below reads ONLY that exact, captured field — never the
+ * fuzzy name-matching reportClinicPerformance.js still falls back to for
+ * line items that predate this fix — and openly reports what share of
+ * billed revenue in the period actually had a category captured, so the
+ * answer never implies more certainty than the data supports.
+ *
+ * ── Why per-doctor revenue still isn't here ──────────────────────────────
+ * `patient_bills` has no `doctor_id`/`visit_id` column at all (confirmed by
+ * reading reportDoctorPerformance.js) — unlike department, there was no
+ * single "stamp it at creation time" fix available, because nothing at
+ * billing time reliably knows which doctor the charge belongs to (a bill is
+ * created from LIS test orders, pharmacy dispenses, and theatre usage, any
+ * of which can span or follow more than one doctor's involvement with the
+ * same patient). reportDoctorPerformance.js's own revenue attribution is an
+ * explicitly-disclosed, same-day-billing heuristic for exactly this reason.
+ * Reusing it here as a confident chatbot answer would still violate the
+ * spec's "never fabricate" requirement, so this question is routed (see
+ * responseTemplates.js) to a limitation message pointing at that report
+ * instead. Visit/registration counts and doctor *activity* (not revenue)
  * have real foreign keys and are computed exactly, below.
  *
  * ── Revenue definition ───────────────────────────────────────────────────
@@ -127,10 +142,62 @@ async function getDoctorActivity(sequelize, { req, start, end, doctorId }) {
   return rows.map((r) => ({ id: r.id, displayName: r.displayName, visits: parseInt(r.visits, 10) }));
 }
 
+/**
+ * Billed revenue by category, counting only line items that carry the exact
+ * `category` field captured at creation time (see header comment) — a line
+ * item with no category is still counted in `totalBilled` (so the total
+ * always reconciles) but excluded from `rows`/`categorizedBilled`, and the
+ * gap between the two is reported rather than hidden. Deliberately BILLED,
+ * not collected: a line item's own totalPrice is an exact, stored number,
+ * while "collected" would mean re-deriving an estimate per item (the same
+ * prorated-by-bill-status approximation reportClinicPerformance.js already
+ * does) — stacking one estimate (which category) on top of another
+ * (how much of it was actually paid) is exactly the kind of compounded
+ * guess the spec's anti-fabrication requirement rules out.
+ */
+async function getDepartmentBreakdown(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements);
+  const [bills] = await sequelize.query(
+    `SELECT services FROM patient_bills
+      WHERE clinic_id = :clinicId AND bill_date >= :start AND bill_date < :end${branchSQL}`,
+    { replacements },
+  );
+
+  const byCategory = new Map();
+  let totalBilled = 0;
+  let categorizedBilled = 0;
+
+  for (const bill of bills) {
+    let items = [];
+    try {
+      const parsed = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services;
+      if (Array.isArray(parsed)) items = parsed;
+    } catch {
+      continue; // malformed JSON on this bill — skip it, don't crash the request
+    }
+    for (const item of items) {
+      const amount = parseFloat(item?.totalPrice ?? item?.total_price ?? 0) || 0;
+      totalBilled += amount;
+      if (item?.category) {
+        categorizedBilled += amount;
+        byCategory.set(item.category, (byCategory.get(item.category) || 0) + amount);
+      }
+    }
+  }
+
+  const rows = [...byCategory.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return { rows, totalBilled, categorizedBilled };
+}
+
 module.exports = {
   getRegistrationsCount,
   getVisitsCount,
   getRevenueTotal,
   getDoctorActivity,
+  getDepartmentBreakdown,
   listDoctors,
 };

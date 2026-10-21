@@ -295,10 +295,14 @@ async function addLabTestsToExistingBill(visitData) {
         try {
           const labTest = await LabTest.findOne({ where: { test_name: testName } });
           const price = parseFloat(labTest?.price) || 0;
-          return { serviceName: testName, name: testName, quantity: 1, unitPrice: price, totalPrice: price, department: 'Laboratory', type: 'Lab Test', date: new Date().toISOString() };
+          // `category` (new): this is unconditionally a lab test, so the category is known
+          // for certain right here — no need for a later report to guess it from the name.
+          // `department` is the older, display-only field this line already carried; kept
+          // alongside rather than replaced, in case anything else still reads it.
+          return { serviceName: testName, name: testName, quantity: 1, unitPrice: price, totalPrice: price, department: 'Laboratory', category: 'Laboratory', type: 'Lab Test', date: new Date().toISOString() };
         } catch (error) {
           console.error(`Error fetching price for ${testName}:`, error);
-          return { serviceName: testName, name: testName, quantity: 1, unitPrice: 0, totalPrice: 0, department: 'Laboratory', type: 'Lab Test', date: new Date().toISOString() };
+          return { serviceName: testName, name: testName, quantity: 1, unitPrice: 0, totalPrice: 0, department: 'Laboratory', category: 'Laboratory', type: 'Lab Test', date: new Date().toISOString() };
         }
       })
     );

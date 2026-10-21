@@ -54,7 +54,11 @@ async function runIntent(sequelize, req, intentKey, dateRange, { clinicId, docto
       }
       return templates.summary({ registrations: reg, visits: vis, revenue: rev, topDoctor: doctors[0] || null }, dateRange.label, currencyCode, canSeeRevenue);
     }
-    case 'department_breakdown':
+    case 'department_breakdown': {
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const data = await analytics.getDepartmentBreakdown(sequelize, ctx);
+      return templates.departmentBreakdown(data, dateRange.label, baseCurrency.code);
+    }
     case 'doctor_revenue':
       return templates.limitation(intentKey);
     default:

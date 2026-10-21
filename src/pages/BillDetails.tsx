@@ -361,8 +361,14 @@ export default function BillDetails() {
       const basePrice = priceOverride !== '' ? (parseFloat(priceOverride) || 0) : amt(product.selling_price);
       const unitPrice = applyDiscount(basePrice);
       lineItem = {
+        // `serviceId` here is an inventory_items id, not a services id — the two catalogs
+        // share this field name for historical reasons (see reportClinicPerformance.js's
+        // matching logic, which tries both). `category` is new: captured directly at the
+        // point we KNOW this is a product/drug pick, rather than guessed later from the
+        // name — see reportClinicPerformance.js's "Pharmacy / Inventory" label, matched here
+        // exactly so a line item category coming from either path reads the same way.
         serviceId: product.id, serviceName: product.item_name, quantity: qty,
-        unitPrice, totalPrice: unitPrice * qty,
+        unitPrice, totalPrice: unitPrice * qty, category: 'Pharmacy / Inventory',
       };
     } else {
       const service = services.find(s => s.id === newItemCatalogId);
@@ -370,20 +376,27 @@ export default function BillDetails() {
       const schemePricing = patientSchemes.length > 0 ? schemeServicePricing.find((p: any) => p.service_id === service.id) : null;
       const basePrice = priceOverride !== '' ? (parseFloat(priceOverride) || 0) : amt(service.price);
       const finalUnitPrice = applyDiscount(basePrice);
-      // This bill already has a scheme locked in (it was created/auto-billed under one) —
-      // add-services re-prices from bill.scheme_id automatically server-side (real exchange
-      // rate, folded into the bill's one SSP total), so just pass the real serviceId and let
-      // it do that; don't zero/stash here too, or the stale fields end up looking like a
-      // separate, unbilled insurance line even though it's actually already included and owed.
+      // `category` comes straight off the catalog row the user just picked — captured once,
+      // here, instead of re-guessed later from a free-text name (see reportClinicPerformance
+      // .js's normalized-name matching, which this makes unnecessary for any bill created
+      // from this point on). `serviceId` is included in all three branches below — it used to
+      // be dropped in the two "no locked-in scheme" branches, which meant a report built
+      // later had no reliable way to know which catalog service (if any) this line was.
+      const base = { serviceName: service.service_name || service.name, quantity: qty, category: service.category };
       lineItem = bill.scheme_id
-        ? { serviceId: service.id, serviceName: service.service_name || service.name, quantity: qty, unitPrice: finalUnitPrice, totalPrice: finalUnitPrice * qty }
+        // This bill already has a scheme locked in (it was created/auto-billed under one) —
+        // add-services re-prices from bill.scheme_id automatically server-side (real exchange
+        // rate, folded into the bill's one SSP total), so just pass the real serviceId and let
+        // it do that; don't zero/stash here too, or the stale fields end up looking like a
+        // separate, unbilled insurance line even though it's actually already included and owed.
+        ? { ...base, serviceId: service.id, unitPrice: finalUnitPrice, totalPrice: finalUnitPrice * qty }
         // No scheme on this bill (it was auto-billed as cash before scheme-awareness existed,
         // and a bill's mode can't change after creation) — bill this line at 0 in SSP instead
         // and stash the real insurance price/currency for the Insurance Claim card, matching
         // the same treatment prescriptions get from Dispensing.
         : schemePricing
-        ? { serviceName: service.service_name || service.name, quantity: qty, unitPrice: 0, totalPrice: 0, schemePrice: parseFloat(schemePricing.scheme_price) || 0, schemeCurrency: schemeCurrencyCode }
-        : { serviceName: service.service_name || service.name, quantity: qty, unitPrice: finalUnitPrice, totalPrice: finalUnitPrice * qty };
+        ? { ...base, serviceId: service.id, unitPrice: 0, totalPrice: 0, schemePrice: parseFloat(schemePricing.scheme_price) || 0, schemeCurrency: schemeCurrencyCode }
+        : { ...base, serviceId: service.id, unitPrice: finalUnitPrice, totalPrice: finalUnitPrice * qty };
     }
 
     // Recorded purely for display in the Bill Items table — when this line was added, and

@@ -41,6 +41,11 @@ describe('analyticsChatbot intentClassifier', () => {
     expect(result.supported).toBe(false);
   });
 
+  test('department breakdown is a supported, computed intent (not a limitation)', () => {
+    const result = classifyIntent('Which department generated the most revenue today?');
+    expect(result.supported).toBe(true);
+  });
+
   test('revenue intent requires accounting.read', () => {
     const result = classifyIntent('How much revenue was collected today?');
     expect(result.requiresPermission).toBe('accounting.read');
@@ -184,9 +189,35 @@ describe('analyticsChatbot responseTemplates', () => {
   });
 
   test('a limitation intent never returns a fabricated figure', () => {
-    const r = responseTemplates.limitation('department_breakdown');
+    const r = responseTemplates.limitation('doctor_revenue');
     expect(r.text).toMatch(/reliably trackable/i);
     expect(r.text).not.toMatch(/\d/); // no numbers at all
+  });
+
+  test('department breakdown reports only exactly-categorized revenue, with its own coverage disclosed', () => {
+    const r = responseTemplates.departmentBreakdown(
+      {
+        rows: [{ category: 'Pharmacy / Inventory', amount: 500 }, { category: 'Laboratory', amount: 300 }],
+        totalBilled: 1000,
+        categorizedBilled: 800,
+      },
+      'Today',
+      'SSP',
+    );
+    expect(r.text).toContain('Pharmacy / Inventory');
+    expect(r.text).toContain('80%');
+    expect(r.table.rows).toHaveLength(2);
+  });
+
+  test('department breakdown with no categorized line items at all points at the Clinic Performance report instead of guessing', () => {
+    const r = responseTemplates.departmentBreakdown({ rows: [], totalBilled: 1000, categorizedBilled: 0 }, 'Today', 'SSP');
+    expect(r.text).toMatch(/Clinic Performance/);
+    expect(r.table).toBeUndefined();
+  });
+
+  test('department breakdown with zero billing activity says so plainly', () => {
+    const r = responseTemplates.departmentBreakdown({ rows: [], totalBilled: 0, categorizedBilled: 0 }, 'Today', 'SSP');
+    expect(r.text).toBe('No billing activity was recorded today.');
   });
 
   test('clarifying response includes suggestions, not a guessed answer', () => {

@@ -15,12 +15,10 @@
  * but to give an honest "this isn't reliably trackable yet" response
  * instead of silently falling through to "I didn't understand" (confidence
  * handling: a question the assistant understood but can't answer safely is
- * a different case from one it didn't understand at all). See
- * analyticsFunctions.js's header comment for exactly why department-level
- * and per-doctor revenue aren't computed: IntelliCare's data model has no
- * reliable foreign key for either (department revenue would mean reusing
- * reportClinicPerformance.js's fuzzy, admittedly-incomplete line-item
- * matching; per-doctor revenue has no doctor_id on patient_bills at all).
+ * a different case from one it didn't understand at all). doctor_revenue is
+ * the one remaining case — see analyticsFunctions.js's header comment for
+ * why: patient_bills has no doctor_id/visit_id at all, so there's no single
+ * point to capture it the way department_breakdown now does.
  */
 // Order matters: intentClassifier.js keeps the FIRST intent it meets on a
 // tied score, so the more specific intents below (a revenue question that
@@ -36,7 +34,7 @@ const INTENTS = [
   {
     key: 'department_breakdown',
     requiresPermission: 'accounting.read',
-    supported: false,
+    supported: true,
     patterns: [/\bdepartment/, /\bbusiest (department|clinic)\b/, /\bby department\b/],
   },
   {

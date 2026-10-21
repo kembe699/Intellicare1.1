@@ -107,14 +107,43 @@ function compare(metricLabel, a, b, labelA, labelB, currencyCode) {
 }
 
 const LIMITATION_MESSAGES = {
-  department_breakdown:
-    "Department-level figures aren't reliably trackable yet in IntelliCare's current data model — bills aren't consistently linked to a department. For the best available estimate, see the Clinic Performance report under Reports.",
   doctor_revenue:
     "Revenue per doctor isn't reliably trackable yet — patient bills aren't linked to the doctor who provided the service. For visit/consultation counts per doctor, ask about doctor activity instead; for a revenue estimate, see the Doctor Performance report under Reports.",
 };
 
 function limitation(intentKey) {
   return { text: LIMITATION_MESSAGES[intentKey] || "I can't answer that reliably yet with the data available." };
+}
+
+/**
+ * Billed-revenue-by-category — see analyticsFunctions.js's getDepartmentBreakdown
+ * for why this is BILLED, not collected, and why only exactly-captured
+ * categories count. `categorizedBilled`/`totalBilled` are always reported
+ * together so the answer is honest about coverage instead of implying the
+ * whole period's billing is accounted for.
+ */
+function departmentBreakdown({ rows, totalBilled, categorizedBilled }, label, currencyCode) {
+  const phrase = periodPhrase(label);
+  if (totalBilled === 0) {
+    return { text: `No billing activity was recorded ${phrase}.` };
+  }
+  if (rows.length === 0) {
+    return {
+      text: `None of the bills ${phrase} have category information captured — they predate category tracking. See the Clinic Performance report under Reports for an approximate, name-matched breakdown instead.`,
+    };
+  }
+  const top = rows[0];
+  const coveragePct = Math.round((categorizedBilled / totalBilled) * 100);
+  const coverageNote = coveragePct >= 99
+    ? ''
+    : ` (based on the ${coveragePct}% of billing ${phrase} that has a category captured — the rest predates category tracking)`;
+  return {
+    text: `${top.category} had the most billed activity ${phrase}, at ${formatMoney(top.amount, currencyCode)}${coverageNote}.`,
+    table: {
+      columns: ['Category', 'Billed'],
+      rows: rows.map((r) => [r.category, formatMoney(r.amount, currencyCode)]),
+    },
+  };
 }
 
 function accessDenied() {
@@ -141,6 +170,7 @@ module.exports = {
   visits,
   revenue,
   doctorActivity,
+  departmentBreakdown,
   summary,
   compare,
   limitation,
