@@ -768,7 +768,17 @@ export default function LISCollection() {
                   margin: 0;
                 }
                 .print-label {
+                  /* Legacy + modern (CSS Fragmentation) forms of the same
+                     rule, kept side by side — different engine/version
+                     combinations give the legacy and modern properties
+                     different priority, so setting both is cheap insurance
+                     rather than betting on one. break-before: avoid is the
+                     one new thing here: nothing should ever force a page
+                     break BEFORE the first (or only) label. */
+                  page-break-before: avoid;
+                  break-before: avoid;
                   page-break-after: always;
+                  break-after: page;
                   display: flex;
                   flex-direction: column;
                   align-items: center;
@@ -782,6 +792,7 @@ export default function LISCollection() {
                 }
                 .print-label:last-child {
                   page-break-after: auto;
+                  break-after: auto;
                 }
               }
             `}
