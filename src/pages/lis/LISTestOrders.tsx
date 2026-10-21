@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
-import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Sparkles, AlertTriangle, RefreshCw, Send, Scan, Syringe, CalendarClock } from 'lucide-react';
+import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Send, Scan, Syringe, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
-import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo, GynaeFieldsReadOnly } from '@/components/clinical/GynaeFields';
+import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo, GynaeFieldsReadOnly, hasGynaeInfo } from '@/components/clinical/GynaeFields';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate } from '@/lib/format';
 
@@ -127,21 +127,6 @@ export default function LISTestOrders() {
   const [quickRegisterSchemes, setQuickRegisterSchemes] = useState<any[]>([]);
   const [quickRegisterForm, setQuickRegisterForm] = useState(EMPTY_QUICK_REGISTER);
   const [quickRegisterSubmitting, setQuickRegisterSubmitting] = useState(false);
-
-  // Clinical Insights — decision support only, read-only, never writes back
-  // to the patient record. See ClinicalInsightsService.js for what's sent.
-  const [showClinicalInsights, setShowClinicalInsights] = useState(false);
-  const [clinicalInsightsStatus, setClinicalInsightsStatus] = useState<'idle' | 'pending' | 'completed' | 'failed'>('idle');
-  const [clinicalInsightsResponse, setClinicalInsightsResponse] = useState<any | null>(null);
-  const [clinicalInsightsError, setClinicalInsightsError] = useState<string | null>(null);
-  // True only when WE gave up waiting client-side (the generation may still
-  // complete in the background) — distinct from the server itself reporting
-  // status: 'failed'. Drives whether "Try again" resumes waiting on the same
-  // request or actually starts a brand new (billable) one — see
-  // requestClinicalInsights's regenerate param.
-  const [clinicalInsightsClientTimedOut, setClinicalInsightsClientTimedOut] = useState(false);
-  const clinicalInsightsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const clinicalInsightsDeadlineRef = useRef<number>(0);
 
   // Refer Patient — quick inter-branch referral from wherever the current
   // patient is already in view, so a doctor doesn't have to leave this
@@ -708,93 +693,6 @@ export default function LISTestOrders() {
     }
   };
 
-  // Clinical Insights — stops polling on unmount so a background timer never
-  // outlives the component (e.g. the doctor navigates away while pending).
-  useEffect(() => {
-    return () => { if (clinicalInsightsPollRef.current) clearInterval(clinicalInsightsPollRef.current); };
-  }, []);
-
-  const stopClinicalInsightsPoll = () => {
-    if (clinicalInsightsPollRef.current) {
-      clearInterval(clinicalInsightsPollRef.current);
-      clinicalInsightsPollRef.current = null;
-    }
-  };
-
-  const pollClinicalInsights = (orderId: string) => {
-    stopClinicalInsightsPoll();
-    // The server's own model call can run up to 60s (its AbortController
-    // timeout) before it even starts writing a result — plus request/DB
-    // round-trip and, on a Render free/starter instance that had spun down,
-    // real cold-start latency on top of that. 60s here routinely gave up on
-    // a request that was still genuinely in flight. 110s leaves comfortable
-    // margin above the server's own 60s cap without leaving a doctor waiting
-    // indefinitely on a truly stuck request (the backend sweep independently
-    // fails anything still pending after 3 minutes).
-    clinicalInsightsDeadlineRef.current = Date.now() + 110 * 1000;
-    clinicalInsightsPollRef.current = setInterval(async () => {
-      try {
-        const res = await authFetch(`/api/lis/orders/${orderId}/clinical-insights`, { credentials: 'include' });
-        const data = await res.json();
-        if (data.status === 'completed') {
-          setClinicalInsightsStatus('completed');
-          setClinicalInsightsResponse(data.response);
-          stopClinicalInsightsPoll();
-        } else if (data.status === 'failed') {
-          setClinicalInsightsClientTimedOut(false);
-          setClinicalInsightsStatus('failed');
-          setClinicalInsightsError(data.error_message || 'Failed to generate insights.');
-          stopClinicalInsightsPoll();
-        } else if (Date.now() > clinicalInsightsDeadlineRef.current) {
-          // We gave up watching, but the generation may still complete in the
-          // background — "Try again" below resumes waiting on it instead of
-          // paying for a brand new request.
-          setClinicalInsightsClientTimedOut(true);
-          setClinicalInsightsStatus('failed');
-          setClinicalInsightsError('This is taking longer than usual. It may still finish in the background — click Try again to check.');
-          stopClinicalInsightsPoll();
-        }
-      } catch {
-        // A transient network blip during polling isn't fatal — keep polling
-        // until the deadline above gives up.
-      }
-    }, 3000);
-  };
-
-  const requestClinicalInsights = async (regenerate = false) => {
-    if (!selectedSummary) return;
-    setShowClinicalInsights(true);
-    setClinicalInsightsStatus('pending');
-    setClinicalInsightsResponse(null);
-    setClinicalInsightsError(null);
-    setClinicalInsightsClientTimedOut(false);
-    try {
-      const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/clinical-insights${regenerate ? '?regenerate=true' : ''}`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setClinicalInsightsStatus('failed');
-        setClinicalInsightsError(data.error || 'Failed to request clinical insights.');
-        return;
-      }
-      if (data.status === 'completed') {
-        // A cached result — fetch it once rather than polling for something
-        // that's already done.
-        const getRes = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/clinical-insights`, { credentials: 'include' });
-        const getData = await getRes.json();
-        setClinicalInsightsStatus('completed');
-        setClinicalInsightsResponse(getData.response);
-        return;
-      }
-      pollClinicalInsights(selectedSummary.order_id);
-    } catch {
-      setClinicalInsightsStatus('failed');
-      setClinicalInsightsError('Network error requesting clinical insights.');
-    }
-  };
-
   // The doctor already records a diagnosis for the visit (saved into
   // clinical_notes as "Diagnosis: ..." by DiagnosisPicker, either coded
   // "<code> - <description>" or free-text) — the admission-request flow
@@ -829,6 +727,44 @@ export default function LISTestOrders() {
     if (!notes) return '';
     const idx = notes.indexOf('Diagnosis:');
     return (idx === -1 ? notes : notes.slice(0, idx)).trim();
+  };
+
+  // Vitals rendered as a table (Vital Sign / Unit / Normal Values / Input),
+  // shared by the live Visit Summary view and the printed/downloaded one so
+  // both always show the same rows. blood_pressure is stored as one
+  // "systolic/diastolic" string and height in cm — split/converted here for
+  // display only; the underlying data model is unchanged. Fasting status is
+  // intentionally left out of this table (shown elsewhere) since it isn't a
+  // vital sign with a normal range.
+  const VITALS_TABLE_SPEC: Array<{ key: string; label: string; unit: string; normal: string }> = [
+    { key: 'temperature', label: 'Temperature', unit: '°C', normal: '35.5 - 37.5' },
+    { key: 'pulse', label: 'Pulse Rate', unit: 'Beats/minute', normal: '60 - 90' },
+    { key: 'respiratory_rate', label: 'Respiratory Rate', unit: 'Brth/minute', normal: '18 - 30' },
+    { key: 'systolic', label: 'Systolic', unit: 'mmHg', normal: '90 - 140' },
+    { key: 'diastolic', label: 'Diastolic', unit: 'mmHg', normal: '50 - 90' },
+    { key: 'weight', label: 'Weight', unit: 'Kilograms', normal: '0 - 100' },
+    { key: 'height', label: 'Height', unit: 'Metres', normal: '0 - 2' },
+    { key: 'spo2', label: 'SPO2', unit: '%', normal: '85 - 100' },
+  ];
+  const getVitalsTableRows = (vitals?: any): Array<{ label: string; unit: string; normal: string; value: string }> => {
+    const v = vitals || {};
+    const [systolic, diastolic] = (v.blood_pressure || '').split('/').map((s: string) => s.trim());
+    const values: Record<string, string> = {
+      temperature: v.temperature || '',
+      pulse: v.pulse || '',
+      respiratory_rate: v.respiratory_rate || '',
+      systolic: systolic || '',
+      diastolic: diastolic || '',
+      weight: v.weight || '',
+      height: v.height ? (parseFloat(v.height) / 100).toFixed(2) : '',
+      spo2: v.spo2 || '',
+    };
+    return VITALS_TABLE_SPEC.map((spec) => ({
+      label: spec.label,
+      unit: spec.unit,
+      normal: spec.normal,
+      value: values[spec.key] || '—',
+    }));
   };
 
   const handleRequestAdmission = async () => {
@@ -1030,19 +966,35 @@ export default function LISTestOrders() {
     const patientName = `${s.first_name} ${s.last_name}`.trim();
     const age = calculateAge(s.date_of_birth);
 
-    const vitalPairs: Array<[string, string]> = [
-      ['Blood Pressure', v.blood_pressure ? `${v.blood_pressure} mmHg` : '—'],
-      ['Pulse', v.pulse ? `${v.pulse} bpm` : '—'],
-      ['Temperature', v.temperature ? `${v.temperature} °C` : '—'],
-      ['Resp. Rate', v.respiratory_rate ? `${v.respiratory_rate} bpm` : '—'],
-      ['Weight', v.weight ? `${v.weight} kg` : '—'],
-      ['Height', v.height ? `${v.height} cm` : '—'],
-      ['SpO2', v.spo2 ? `${v.spo2} %` : '—'],
-      ['Fasting', v.fasting_status || '—'],
-    ];
-    const vitalsHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin-bottom:14px;">
-      ${vitalPairs.map(([label, value]) => `<div class="ic-info-row"><span class="ic-info-label">${label}:</span><span class="ic-info-value">${value}</span></div>`).join('')}
-    </div>`;
+    const plainNote = (label: string, value?: string | null) =>
+      value ? `<p style="margin:2px 0 8px 0;font-size:11px;line-height:1.5;color:#334155;"><strong style="color:#0F172A">${label}:</strong> ${value}</p>` : '';
+
+    const vitalsHTML = docTemplate.buildTable(
+      [{ label: 'Vital Sign' }, { label: 'Unit' }, { label: 'Normal Values' }, { label: 'Input' }],
+      getVitalsTableRows(v).map((row) => ({ cells: [row.label, row.unit, row.normal, row.value] }))
+    );
+
+    const gynae = v.gynae;
+    const gynaeHTML = hasGynaeInfo(gynae) ? [
+      '<div class="ic-section-title">Gynecology / Obstetric</div>',
+      plainNote('Pregnancy Status', gynae?.pregnancy_status),
+      plainNote('LMP', gynae?.lmp),
+      plainNote('EDD', gynae?.edd),
+      plainNote('Gravida', gynae?.gravida),
+      plainNote('Para', gynae?.para),
+      plainNote('Menstrual Cycle', gynae?.menstrual_cycle),
+      plainNote('Presenting Symptoms', gynae?.presenting_symptoms),
+      gynae?.antenatal_enabled ? plainNote('Gestational Age', gynae?.antenatal?.gestational_age_weeks ? `${gynae.antenatal.gestational_age_weeks} weeks` : '') : '',
+      gynae?.antenatal_enabled ? plainNote('Fundal Height', gynae?.antenatal?.fundal_height_cm ? `${gynae.antenatal.fundal_height_cm} cm` : '') : '',
+      gynae?.antenatal_enabled ? plainNote('Fetal Heart Rate', gynae?.antenatal?.fetal_heart_rate ? `${gynae.antenatal.fetal_heart_rate} bpm` : '') : '',
+      gynae?.antenatal_enabled ? plainNote('Fetal Presentation', gynae?.antenatal?.fetal_presentation) : '',
+      gynae?.antenatal_enabled ? plainNote('Antenatal Notes', gynae?.antenatal?.notes) : '',
+    ].join('\n') : '';
+
+    const diagnosesHTML = getDiagnosesFromNotes(s.clinical_notes).length > 0 ? [
+      '<div class="ic-section-title">Diagnosis</div>',
+      `<p style="margin:2px 0 8px 0;font-size:11px;line-height:1.5;color:#334155;">${getDiagnosesFromNotes(s.clinical_notes).join('; ')}</p>`,
+    ].join('\n') : '';
 
     const testsHTML = docTemplate.buildTable(
       [{ label: 'Test' }, { label: 'Status' }],
@@ -1139,9 +1091,6 @@ export default function LISTestOrders() {
       </table>`;
     }).join('\n');
 
-    const plainNote = (label: string, value?: string | null) =>
-      value ? `<p style="margin:2px 0 8px 0;font-size:11px;line-height:1.5;color:#334155;"><strong style="color:#0F172A">${label}:</strong> ${value}</p>` : '';
-
     const bodyHTML = [
       docTemplate.buildInfoGrid(
         { title: 'Patient Details', rows: [
@@ -1155,6 +1104,8 @@ export default function LISTestOrders() {
           { label: 'Visit Time', value: docTemplate.formatDate(new Date(s.created_at)) },
         ]}
       ),
+      '<div class="ic-section-title">Vitals</div>',
+      vitalsHTML,
       plainNote('Chief Complaints', (v.chief_complaints || []).length > 0 ? v.chief_complaints.join(', ') : ''),
       plainNote('History of Presenting Illness', v.history_of_presenting_illness),
       plainNote('Medical History', v.medical_history),
@@ -1163,15 +1114,15 @@ export default function LISTestOrders() {
       plainNote('Social History', v.social_history),
       plainNote('Economic History', v.economic_history),
       plainNote('Allergies', v.allergies),
-      plainNote('Clinical Notes', s.clinical_notes),
+      gynaeHTML,
+      plainNote('Clinical Notes', getPlainNotes(s.clinical_notes)),
       plainNote('Impressions', v.impressions),
-      '<div class="ic-section-title">Vitals</div>',
-      vitalsHTML,
       '<div class="ic-section-title">Tests Ordered</div>',
       testsHTML,
       resultSectionsHTML,
-      nursingHTML,
+      diagnosesHTML,
       prescriptionsHTML,
+      nursingHTML,
       radiologyHTML,
       docTemplate.buildSignatures([
         { label: 'Printed By', name: user?.displayName || '', signature: signature || undefined },
@@ -3026,11 +2977,6 @@ export default function LISTestOrders() {
                         Close Visit
                       </Button>
                     )}
-                    {hasPrivilege('lis.clinical.insights.write') && (
-                      <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(false)} className="text-violet-600 border-violet-300 hover:bg-violet-50">
-                        <Sparkles className="w-4 h-4 mr-2" /> Clinical Insights
-                      </Button>
-                    )}
                     {hasPrivilege('referrals.write') && (
                       <Button variant="outline" size="sm" onClick={openReferDialog}>
                         <ArrowLeftRight className="w-4 h-4 mr-2" /> Refer
@@ -3074,6 +3020,32 @@ export default function LISTestOrders() {
                         <div>
                           <p className="text-xs text-muted-foreground uppercase font-semibold">Room / Clinic</p>
                           <p className="font-medium">{selectedSummary.room_number || selectedSummary.clinic_name || '—'}</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Vitals</p>
+                        <div className="border rounded-lg overflow-hidden bg-card">
+                          <table className="w-full text-sm">
+                            <thead className="bg-muted/30">
+                              <tr>
+                                <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Vital Sign</th>
+                                <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Unit</th>
+                                <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Normal Values</th>
+                                <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Input</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {getVitalsTableRows(selectedSummary.vitals).map((row) => (
+                                <tr key={row.label}>
+                                  <td className="px-3 py-2 font-medium">{row.label}</td>
+                                  <td className="px-3 py-2 text-muted-foreground">{row.unit}</td>
+                                  <td className="px-3 py-2 text-muted-foreground">{row.normal}</td>
+                                  <td className="px-3 py-2 font-medium">{row.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
 
@@ -3178,38 +3150,6 @@ export default function LISTestOrders() {
                         </div>
                       )}
 
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Vitals</p>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm border rounded-lg p-3 bg-card">
-                          {[
-                            ['Blood Pressure', selectedSummary.vitals?.blood_pressure, 'mmHg'],
-                            ['Pulse', selectedSummary.vitals?.pulse, 'bpm'],
-                            ['Temperature', selectedSummary.vitals?.temperature, '°C'],
-                            ['Resp. Rate', selectedSummary.vitals?.respiratory_rate, 'bpm'],
-                            ['Weight', selectedSummary.vitals?.weight, 'kg'],
-                            ['Height', selectedSummary.vitals?.height, 'cm'],
-                            ['SpO2', selectedSummary.vitals?.spo2, '%'],
-                            ['Fasting', selectedSummary.vitals?.fasting_status, ''],
-                          ].map(([label, value, unit]) => (
-                            <div key={label as string}>
-                              <p className="text-xs text-muted-foreground">{label}</p>
-                              <p className="font-medium">{value ? `${value}${unit}` : '—'}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {getDiagnosesFromNotes(selectedSummary.clinical_notes).length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Diagnoses</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {getDiagnosesFromNotes(selectedSummary.clinical_notes).map((d, i) => (
-                              <span key={`${d}-${i}`} className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">{d}</span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       {getPlainNotes(selectedSummary.clinical_notes) && (
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Clinical Notes</p>
@@ -3272,6 +3212,17 @@ export default function LISTestOrders() {
                           <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg">No tests ordered on this visit.</div>
                         )}
                       </div>
+
+                      {getDiagnosesFromNotes(selectedSummary.clinical_notes).length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Diagnoses</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {getDiagnosesFromNotes(selectedSummary.clinical_notes).map((d, i) => (
+                              <span key={`${d}-${i}`} className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">{d}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
@@ -3597,7 +3548,6 @@ export default function LISTestOrders() {
                           <FlaskConical className="w-3.5 h-3.5" /> Request Another Service
                         </p>
                         <div className="border rounded-lg p-3 space-y-2.5 bg-card">
-                          <p className="text-xs text-muted-foreground">Order a follow-up/confirmatory test or service for this same visit — it's added to the collection queue (for lab tests) and billed right away.</p>
                           <Popover open={reqServicePopoverOpen} onOpenChange={setReqServicePopoverOpen}>
                             <PopoverTrigger asChild>
                               <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal h-auto min-h-9 py-2 text-left">
@@ -3914,102 +3864,6 @@ export default function LISTestOrders() {
               {quickRegisterSubmitting ? 'Registering...' : 'Register & Queue'}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showClinicalInsights} onOpenChange={(open) => { setShowClinicalInsights(open); if (!open) stopClinicalInsightsPoll(); }}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg"><Sparkles className="w-5 h-5 text-violet-600" /> Clinical Insights</DialogTitle>
-            <DialogDescription>Read-only decision support — nothing here is saved to the patient record.</DialogDescription>
-          </DialogHeader>
-          <div className="rounded-md border border-warning-border bg-warning-bg text-warning text-sm px-4 py-3">
-            AI-generated suggestions for clinician consideration only. Not a diagnosis. Clinical judgement must prevail.
-          </div>
-
-          {clinicalInsightsStatus === 'pending' && (
-            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-              <Loader2 className="w-6 h-6 animate-spin" />
-              <p className="text-sm">Generating suggestions...</p>
-            </div>
-          )}
-
-          {clinicalInsightsStatus === 'failed' && (
-            <div className="space-y-3">
-              <div className="rounded-md border border-destructive-border bg-destructive-bg text-destructive text-sm px-3 py-3 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>{clinicalInsightsError || 'Something went wrong generating suggestions.'}</span>
-              </div>
-              {/* A client-side give-up resumes waiting on the same (possibly still
-                  finishing) request; a genuine server-reported failure starts a new
-                  one — see pollClinicalInsights/requestClinicalInsights. */}
-              <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(!clinicalInsightsClientTimedOut)}>
-                <RefreshCw className="w-4 h-4 mr-2" /> Try again
-              </Button>
-            </div>
-          )}
-
-          {clinicalInsightsStatus === 'completed' && clinicalInsightsResponse && (
-            <div className="space-y-6">
-              {(clinicalInsightsResponse.urgent_flags || []).length > 0 && (
-                <div className="space-y-2.5">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Urgent Flags
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {clinicalInsightsResponse.urgent_flags.map((f: any, i: number) => (
-                      <div key={i} className="rounded-lg border border-destructive-border bg-destructive-bg px-4 py-3">
-                        <p className="text-sm font-medium text-destructive">{f.finding}</p>
-                        <p className="text-sm text-destructive mt-1 leading-relaxed">{f.reason}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2.5">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Differentials</h4>
-                {(clinicalInsightsResponse.differentials || []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No differentials suggested.</p>
-                ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {clinicalInsightsResponse.differentials.map((d: any, i: number) => (
-                      <div key={i} className="rounded-lg border p-4 space-y-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold">{d.condition}</p>
-                          <span className={cn(
-                            'text-xs font-bold px-2 py-0.5 rounded-full uppercase shrink-0',
-                            d.confidence === 'high' ? 'bg-success-bg text-success' :
-                            d.confidence === 'moderate' ? 'bg-warning-bg text-warning' : 'bg-muted text-muted-foreground'
-                          )}>{d.confidence}</span>
-                        </div>
-                        {(d.supporting_findings || []).length > 0 && (
-                          <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Supports:</span> {d.supporting_findings.join(', ')}</p>
-                        )}
-                        {(d.against_findings || []).length > 0 && (
-                          <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Against:</span> {d.against_findings.join(', ')}</p>
-                        )}
-                        {d.suggested_next_step && (
-                          <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Suggested next step:</span> {d.suggested_next_step}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {clinicalInsightsResponse.data_limitations && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Data Limitations</h4>
-                  <p className="text-sm p-4 border rounded-lg bg-card text-muted-foreground leading-relaxed">{clinicalInsightsResponse.data_limitations}</p>
-                </div>
-              )}
-
-              <Button variant="outline" size="sm" onClick={() => requestClinicalInsights(true)}>
-                <RefreshCw className="w-4 h-4 mr-2" /> Regenerate
-              </Button>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 
