@@ -137,6 +137,47 @@ const TOOLS = [
     description: "Lab (LIS) activity overview in a period: orders outstanding (not yet approved: pending collection, routed, received, or analyzed), orders completed (approved), total, and the manager-review backlog (results awaiting a manager's sign-off right now, a current snapshot regardless of the period given). Matches the LIS dashboard and the manager-review queue exactly. Use for 'lab registry', 'lis overview', 'how's the lab doing', 'pending reviews'.",
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
+  {
+    name: 'get_bills_by_status',
+    description: "Patient bills raised in a period, grouped by status (pending, partial, paid, overdue, active, written_off) — count and billed total per status. Requires financial access. Use for 'bills by status', 'how many bills are overdue', 'billing breakdown'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_outstanding_balance',
+    description: "Total outstanding (unpaid) balance across all patient bills right now — a current snapshot, not scoped to any period. Requires financial access. Use for 'outstanding balance', 'how much is owed to us', 'receivables', 'unpaid bills'.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_staff_count',
+    description: "Active staff headcount right now (employees with employment_type='staff', excludes consultants and anyone terminated/on leave) — a current snapshot. No special permission needed (payroll figures are a separate concern this tool does not expose). Use for 'how many staff do we have', 'staff count', 'headcount'.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_radiology_overview',
+    description: "Radiology requests in a period, by status: pending, in progress, completed, and the total. Use for 'radiology', 'imaging requests', 'how's radiology doing'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_theatre_overview',
+    description: "Theatre/OR operations in a period: total, completed, cancelled, deaths, and average procedure duration in minutes. Revenue from billed operations is included only if the user has financial access (omitted, not guessed, otherwise). Use for 'theatre', 'operating room', 'surgeries', 'operations'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_inpatient_occupancy',
+    description: "Current inpatient/ward status — a snapshot, not scoped to any period: active admissions, total beds, available beds, total wards, occupancy rate (%), plus admissions and discharges specifically TODAY (always today, regardless of any period mentioned — this mirrors the real Inpatient dashboard's own figures exactly). Use for 'inpatient', 'admissions', 'bed occupancy', 'ward status', 'how full are we'.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_system_counts',
+    description: "Basic system configuration counts, never passwords or tokens: active user accounts (optionally filtered to one role), configured branches, and configured clinics. Use for 'how many staff accounts', 'how many branches', 'how many clinics do we have set up'.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        role: { type: 'string', enum: ['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'accountant', 'finance_manager', 'auditor', 'procurement', 'nurse', 'cashier'], description: 'Filter the account count to just this role — omit for all active accounts.' },
+      },
+      required: [],
+    },
+  },
 ];
 
 async function executeTool(name, input, { sequelize, req, clinicId }) {
@@ -287,6 +328,59 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
         managerReviewBacklog: data.managerReviewBacklog,
         note: 'managerReviewBacklog is a current snapshot regardless of the period given; the order counts above are scoped to the period.',
       };
+    }
+    case 'get_bills_by_status': {
+      if (!(await hasPrivilege(req, 'accounting.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have financial/accounting access.' };
+      }
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const rows = await analytics.getBillsByStatus(sequelize, ctx);
+      return { period, currency: baseCurrency.code, byStatus: rows };
+    }
+    case 'get_outstanding_balance': {
+      if (!(await hasPrivilege(req, 'accounting.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have financial/accounting access.' };
+      }
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const data = await analytics.getOutstandingBalance(sequelize, { req, clinicId });
+      return { count: data.count, total: data.total, currency: baseCurrency.code, note: 'Current snapshot — not scoped to any period.' };
+    }
+    case 'get_staff_count': {
+      const data = await analytics.getActiveStaffCount(sequelize, { req, clinicId });
+      return { count: data.count, note: 'Current snapshot — not scoped to any period. Excludes consultants and anyone terminated/on leave.' };
+    }
+    case 'get_radiology_overview': {
+      const data = await analytics.getRadiologyOverview(sequelize, ctx);
+      return { period, pending: data.pending, inProgress: data.inProgress, completed: data.completed, total: data.total };
+    }
+    case 'get_theatre_overview': {
+      const canSeeRevenue = await hasPrivilege(req, 'accounting.read');
+      const data = await analytics.getTheatreOverview(sequelize, ctx);
+      const result = {
+        period,
+        total: data.total,
+        completed: data.completed,
+        cancelled: data.cancelled,
+        deaths: data.deaths,
+        avgDurationMinutes: data.avgDurationMinutes,
+      };
+      if (canSeeRevenue) {
+        const baseCurrency = await CurrencyService.getBaseCurrency();
+        result.totalRevenue = data.totalRevenue;
+        result.currency = baseCurrency.code;
+      }
+      return result;
+    }
+    case 'get_inpatient_occupancy': {
+      const data = await analytics.getInpatientOccupancy(sequelize, { req, clinicId });
+      return { ...data, note: 'Current snapshot — not scoped to any period. admittedToday/dischargedToday are always today.' };
+    }
+    case 'get_system_counts': {
+      const [accounts, facilities] = await Promise.all([
+        analytics.getStaffAccountsCount(sequelize, { req, role: input?.role }),
+        analytics.getFacilityCounts(sequelize),
+      ]);
+      return { staffAccounts: accounts.count, role: input?.role || null, branches: facilities.branches, clinics: facilities.clinics };
     }
     default:
       return { error: 'unknown_tool', message: `No such tool: ${name}` };

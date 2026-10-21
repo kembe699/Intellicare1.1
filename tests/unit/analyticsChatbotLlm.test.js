@@ -30,7 +30,7 @@ describe('llmTools — the tool allowlist Claude is actually given', () => {
   });
 
   test('every period-scoped tool declares the period parameter — snapshot tools (no period of their own) are the deliberate exceptions', () => {
-    const SNAPSHOT_TOOLS = new Set(['get_total_patients', 'get_doctor_directory', 'get_low_stock', 'get_inventory_status']);
+    const SNAPSHOT_TOOLS = new Set(['get_total_patients', 'get_doctor_directory', 'get_low_stock', 'get_inventory_status', 'get_outstanding_balance', 'get_staff_count', 'get_inpatient_occupancy', 'get_system_counts']);
     for (const tool of TOOLS) {
       if (SNAPSHOT_TOOLS.has(tool.name)) {
         expect(tool.input_schema.properties.period).toBeUndefined();
@@ -215,6 +215,80 @@ describe('executeTool — permission checks run server-side, before any query', 
     expect(result.pharmacy).toEqual({ dispensedCount: 8, dispensedValue: 3000 });
     expect(result.purchaseOrders).toEqual({ count: 2, totalValue: 9000 });
     expect(result.inventory).toEqual({ outOfStockCount: 1, expiringCount: 4 });
+  });
+
+  test('get_bills_by_status is permission-gated and returns the per-status breakdown', async () => {
+    hasPrivilege.mockResolvedValue(true);
+    CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
+    analytics.getBillsByStatus.mockResolvedValue([{ status: 'paid', count: 10, total: 5000 }, { status: 'overdue', count: 2, total: 800 }]);
+    const result = await executeTool('get_bills_by_status', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'accountant' } }, clinicId: 1 });
+    expect(result.byStatus).toHaveLength(2);
+    expect(result.currency).toBe('SSP');
+  });
+
+  test('get_bills_by_status denies an unauthorized user', async () => {
+    hasPrivilege.mockResolvedValue(false);
+    const result = await executeTool('get_bills_by_status', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.error).toBe('permission_denied');
+    expect(analytics.getBillsByStatus).not.toHaveBeenCalled();
+  });
+
+  test('get_outstanding_balance needs financial access and is a current snapshot', async () => {
+    hasPrivilege.mockResolvedValue(true);
+    CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
+    analytics.getOutstandingBalance.mockResolvedValue({ count: 5, total: 12000 });
+    const result = await executeTool('get_outstanding_balance', {}, { sequelize: {}, req: { user: { role: 'accountant' } }, clinicId: 1 });
+    expect(result.total).toBe(12000);
+    expect(result.count).toBe(5);
+  });
+
+  test('get_staff_count needs no special permission', async () => {
+    analytics.getActiveStaffCount.mockResolvedValue({ count: 48 });
+    const result = await executeTool('get_staff_count', {}, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.count).toBe(48);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_radiology_overview needs no special permission', async () => {
+    analytics.getRadiologyOverview.mockResolvedValue({ pending: 3, inProgress: 1, completed: 10, total: 14 });
+    const result = await executeTool('get_radiology_overview', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.total).toBe(14);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_theatre_overview includes revenue only when the user has financial access', async () => {
+    hasPrivilege.mockResolvedValue(false);
+    analytics.getTheatreOverview.mockResolvedValue({ total: 5, completed: 4, cancelled: 1, deaths: 0, totalRevenue: 20000, avgDurationMinutes: 90 });
+    const result = await executeTool('get_theatre_overview', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'nurse' } }, clinicId: 1 });
+    expect(result.total).toBe(5);
+    expect(result.totalRevenue).toBeUndefined();
+    expect(result.currency).toBeUndefined();
+  });
+
+  test('get_theatre_overview reveals revenue when the user is authorized', async () => {
+    hasPrivilege.mockResolvedValue(true);
+    CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
+    analytics.getTheatreOverview.mockResolvedValue({ total: 5, completed: 4, cancelled: 1, deaths: 0, totalRevenue: 20000, avgDurationMinutes: 90 });
+    const result = await executeTool('get_theatre_overview', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'accountant' } }, clinicId: 1 });
+    expect(result.totalRevenue).toBe(20000);
+    expect(result.currency).toBe('SSP');
+  });
+
+  test('get_inpatient_occupancy needs no special permission and is a current snapshot', async () => {
+    analytics.getInpatientOccupancy.mockResolvedValue({ activeAdmissions: 12, totalBeds: 50, availableBeds: 10, totalWards: 4, dischargedToday: 2, admittedToday: 3, occupancyRatePercent: 80 });
+    const result = await executeTool('get_inpatient_occupancy', {}, { sequelize: {}, req: { user: { role: 'nurse' } }, clinicId: 1 });
+    expect(result.occupancyRatePercent).toBe(80);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_system_counts needs no special permission and passes an optional role filter through', async () => {
+    analytics.getStaffAccountsCount.mockResolvedValue({ count: 6 });
+    analytics.getFacilityCounts.mockResolvedValue({ branches: 3, clinics: 7 });
+    const result = await executeTool('get_system_counts', { role: 'doctor' }, { sequelize: {}, req: { user: { role: 'admin' } }, clinicId: 1 });
+    expect(result.staffAccounts).toBe(6);
+    expect(result.branches).toBe(3);
+    expect(result.clinics).toBe(7);
+    expect(analytics.getStaffAccountsCount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ role: 'doctor' }));
   });
 
   test('registrations and visits need no special permission', async () => {

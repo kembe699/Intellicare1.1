@@ -443,6 +443,220 @@ async function getFullIncomeStatement(sequelize, { req, clinicId, start, end }, 
   };
 }
 
+// Bills raised in a period, grouped by patient_bills.status (the real enum:
+// pending/partial/paid/overdue/active/written_off — confirmed from the live
+// ALTER in billingEnhanced.js, not guessed). count + billed total per status.
+async function getBillsByStatus(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements);
+  const [rows] = await sequelize.query(
+    `SELECT status, COUNT(*) AS cnt, COALESCE(SUM(total_amount), 0) AS total
+       FROM patient_bills
+      WHERE clinic_id = :clinicId AND bill_date >= :start AND bill_date < :end${branchSQL}
+      GROUP BY status
+      ORDER BY cnt DESC`,
+    { replacements },
+  );
+  return rows.map((r) => ({ status: r.status, count: parseInt(r.cnt, 10), total: parseFloat(r.total) }));
+}
+
+// Current outstanding balance — a snapshot, not period-scoped (an unpaid
+// bill from any date is still outstanding today). Same filter as the real
+// receivables list/aging report (billingEnhanced.js): balance_amount > 0
+// AND status != 'paid'. That real route applies no branch scoping at all
+// (a gap in the existing code) — this tool still scopes by branch properly
+// rather than copying that gap.
+async function getOutstandingBalance(sequelize, { req, clinicId }) {
+  const replacements = { clinicId };
+  const branchSQL = branchScope(req, replacements);
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS total
+       FROM patient_bills
+      WHERE clinic_id = :clinicId AND balance_amount > 0 AND status != 'paid'${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10), total: parseFloat(row?.total || 0) };
+}
+
+// Active staff headcount — mirrors hr.js's own "how many active staff"
+// query exactly (employees.employment_type='staff' excludes consultants;
+// employment_status='active' excludes terminated/on_leave; is_active=true
+// is the soft-delete flag). Distinct from `users` (system login accounts)
+// — see getStaffAccountsCount below for that.
+async function getActiveStaffCount(sequelize, { req, clinicId }) {
+  const replacements = { clinicId };
+  const branchSQL = branchScope(req, replacements);
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM employees
+      WHERE clinic_id = :clinicId AND employment_type = 'staff' AND employment_status = 'active' AND is_active = true${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10) };
+}
+
+// Radiology requests by status in a period — mirrors radiology.js's own
+// real status literals (pending -> in_progress -> completed; no cancelled
+// status exists for this table). Branch scoping here is deliberately the
+// NULL-inclusive form radiology.js itself uses (its own comment: legacy/
+// catalog rows with no branch_id must stay visible everywhere) rather than
+// this file's stricter default branchScope, so a branch-scoped user sees
+// the same count the real Radiology page would show them.
+async function getRadiologyOverview(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  let branchSQL = '';
+  if (!(req.user?.role === 'admin' && !req.branchContext?.adminScoped)) {
+    const branchId = req.branchContext?.branchId || req.user?.branchId;
+    if (branchId) {
+      replacements.branchId = branchId;
+      branchSQL = ' AND (branch_id = :branchId OR branch_id IS NULL)';
+    }
+  }
+  const [[row]] = await sequelize.query(
+    `SELECT
+        COUNT(*) FILTER (WHERE status = 'pending') AS pending_cnt,
+        COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress_cnt,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed_cnt,
+        COUNT(*) AS total_cnt
+       FROM radiology_requests
+      WHERE clinic_id = :clinicId AND request_date >= :start AND request_date < :end${branchSQL}`,
+    { replacements },
+  );
+  return {
+    pending: parseInt(row?.pending_cnt || 0, 10),
+    inProgress: parseInt(row?.in_progress_cnt || 0, 10),
+    completed: parseInt(row?.completed_cnt || 0, 10),
+    total: parseInt(row?.total_cnt || 0, 10),
+  };
+}
+
+// Theatre/OR operations in a period — the same aggregation
+// reportTheatre.js's own summary computes (status counts, deaths via
+// outcome='death', revenue only for billed operations, average duration).
+// reportTheatre.js is a router file with no exported function to call
+// directly (unlike reportIncomeStatement.js), so this is a verified
+// inline copy of its real query, same precedent as the LIS/pharmacy/
+// purchase-order functions above.
+async function getTheatreOverview(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements, 'o');
+  const [[row]] = await sequelize.query(
+    `SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE o.status = 'completed') AS completed,
+        COUNT(*) FILTER (WHERE o.status = 'cancelled') AS cancelled,
+        COUNT(*) FILTER (WHERE o.outcome = 'death') AS deaths,
+        COALESCE(SUM(o.procedure_fee) FILTER (WHERE o.bill_id IS NOT NULL), 0) AS total_revenue,
+        AVG(o.duration_minutes) FILTER (WHERE o.duration_minutes IS NOT NULL) AS avg_duration_minutes
+       FROM theatre_operations o
+      WHERE o.clinic_id = :clinicId AND o.scheduled_at >= :start AND o.scheduled_at < :end${branchSQL}`,
+    { replacements },
+  );
+  return {
+    total: parseInt(row?.total || 0, 10),
+    completed: parseInt(row?.completed || 0, 10),
+    cancelled: parseInt(row?.cancelled || 0, 10),
+    deaths: parseInt(row?.deaths || 0, 10),
+    totalRevenue: parseFloat(row?.total_revenue || 0),
+    avgDurationMinutes: row?.avg_duration_minutes != null ? parseFloat(row.avg_duration_minutes) : null,
+  };
+}
+
+// Current inpatient occupancy — a snapshot (not period-scoped), reusing
+// inpatient.js's own GET /inpatient/stats query verbatim (same table/
+// column/status literals: beds.status, inpatient_admissions.status).
+// dischargedToday/admittedToday are always "today" in this real query,
+// same as the page itself — not affected by any period the caller passes.
+async function getInpatientOccupancy(sequelize, { req, clinicId }) {
+  const scoped = (extraReplacements = {}) => {
+    const replacements = { clinicId, ...extraReplacements };
+    const branchSQL = branchScope(req, replacements);
+    return { replacements, branchSQL };
+  };
+
+  const activeQ = scoped();
+  const [[active]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'active'${activeQ.branchSQL}`,
+    { replacements: activeQ.replacements },
+  );
+  const totalBedsQ = scoped();
+  const [[totalBeds]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM beds WHERE clinic_id = :clinicId AND is_active = true${totalBedsQ.branchSQL}`,
+    { replacements: totalBedsQ.replacements },
+  );
+  const availableBedsQ = scoped();
+  const [[availableBeds]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM beds WHERE clinic_id = :clinicId AND is_active = true AND status = 'available'${availableBedsQ.branchSQL}`,
+    { replacements: availableBedsQ.replacements },
+  );
+  const wardsQ = scoped();
+  const [[wards]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM wards WHERE clinic_id = :clinicId AND is_active = true${wardsQ.branchSQL}`,
+    { replacements: wardsQ.replacements },
+  );
+  const dischargedQ = scoped();
+  const [[dischargedToday]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND status = 'discharged' AND DATE(discharge_date) = CURRENT_DATE${dischargedQ.branchSQL}`,
+    { replacements: dischargedQ.replacements },
+  );
+  const admittedQ = scoped();
+  const [[admittedToday]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM inpatient_admissions WHERE clinic_id = :clinicId AND DATE(admission_date) = CURRENT_DATE${admittedQ.branchSQL}`,
+    { replacements: admittedQ.replacements },
+  );
+
+  const totalBedsN = parseInt(totalBeds?.cnt || 0, 10);
+  const availableBedsN = parseInt(availableBeds?.cnt || 0, 10);
+
+  return {
+    activeAdmissions: parseInt(active?.cnt || 0, 10),
+    totalBeds: totalBedsN,
+    availableBeds: availableBedsN,
+    totalWards: parseInt(wards?.cnt || 0, 10),
+    dischargedToday: parseInt(dischargedToday?.cnt || 0, 10),
+    admittedToday: parseInt(admittedToday?.cnt || 0, 10),
+    occupancyRatePercent: totalBedsN > 0 ? Math.round(((totalBedsN - availableBedsN) / totalBedsN) * 100) : null,
+  };
+}
+
+// System login accounts (`users` — distinct from `employees`/HR records
+// above), active only. Never selects password_hash/signature — this file
+// only ever runs COUNT(*), nothing resembling users.js's own explicit
+// safe-column list is even needed here.
+async function getStaffAccountsCount(sequelize, { req, role }) {
+  const replacements = {};
+  const branchSQL = branchScope(req, replacements);
+  const roleSQL = role ? ' AND role = :role' : '';
+  if (role) replacements.role = role;
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM users WHERE is_active = true${roleSQL}${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10) };
+}
+
+// Facility configuration counts — branches (physical locations) and
+// clinics (service catalog) are genuinely different concepts in this
+// schema, reported separately rather than picking one. Mirrors clinics.js's
+// own fallback (count dr_clinics; if empty, count clinic_names instead)
+// since a real tenant might only have rows in the fallback table. Neither
+// table is branch-scoped — branches/clinics are facility-wide config
+// lists, same as facilities.js's own unscoped branch listing.
+async function getFacilityCounts(sequelize) {
+  const [[branchRow]] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM branches WHERE is_active = true`);
+  const [[drClinicsRow]] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM dr_clinics WHERE is_active = true`);
+  let clinicsCount = parseInt(drClinicsRow?.cnt || 0, 10);
+  if (clinicsCount === 0) {
+    try {
+      const [[fallbackRow]] = await sequelize.query(`SELECT COUNT(*) AS cnt FROM clinic_names`);
+      clinicsCount = parseInt(fallbackRow?.cnt || 0, 10);
+    } catch {
+      // clinic_names doesn't exist in every tenant's schema — dr_clinics
+      // being genuinely empty (0) is a perfectly valid real answer too.
+    }
+  }
+  return { branches: parseInt(branchRow?.cnt || 0, 10), clinics: clinicsCount };
+}
+
 module.exports = {
   getRegistrationsCount,
   getTotalPatientsCount,
@@ -456,6 +670,14 @@ module.exports = {
   getPharmacyDispensingTotal,
   getLabRegistryOverview,
   getFullIncomeStatement,
+  getBillsByStatus,
+  getOutstandingBalance,
+  getActiveStaffCount,
+  getRadiologyOverview,
+  getTheatreOverview,
+  getInpatientOccupancy,
+  getStaffAccountsCount,
+  getFacilityCounts,
   getDoctorActivity,
   getDepartmentBreakdown,
   listDoctors,
