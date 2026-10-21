@@ -35,10 +35,11 @@ describe('analyticsChatbot intentClassifier', () => {
     ['What was our turnover today?', 'revenue'],
     ['Who is the busiest doctor this week?', 'doctor_activity'],
     ['Give me a daily report', 'summary'],
-    // Imperative doctor phrasing, not just "which doctor...?"
+    // Imperative doctor-activity phrasing, not just "which doctor...?"
     ['Show me the doctors', 'doctor_activity'],
     ['Show me the doctors for last month', 'doctor_activity'],
-    ['List the doctors', 'doctor_activity'],
+    ['doctors visits last week', 'doctor_activity'],
+    ['seen by which doctors', 'doctor_activity'],
     // New meta-intents
     ['What date range was that?', 'date_range_query'],
     ['Give me the date range', 'date_range_query'],
@@ -48,6 +49,17 @@ describe('analyticsChatbot intentClassifier', () => {
     ['How many patients are there in the system?', 'total_patients'],
     ['How many patients do we have in total?', 'total_patients'],
     ['What is the total number of patients?', 'total_patients'],
+    // Doctor directory (a static roster) vs. doctor_activity (a period-scoped count)
+    ['show me all doctors registered in the system', 'doctor_directory'],
+    ['List the doctors', 'doctor_directory'],
+    ['who are the doctors', 'doctor_directory'],
+    // New financial intents
+    ['How much did we spend this month?', 'expenses'],
+    ['show me income statements and expenses please', 'income_statement'],
+    ['what is our net income this month?', 'income_statement'],
+    // Inventory
+    ['are any items low on stock?', 'low_stock'],
+    ['give me an inventory report', 'low_stock'],
   ])('%s -> %s', (question, expected) => {
     const result = classifyIntent(question);
     expect(result.matched).toBe(true);
@@ -234,6 +246,57 @@ describe('analyticsChatbot responseTemplates', () => {
     expect(r.text).not.toMatch(/today|this week|this month/i);
   });
 
+  test('doctor directory lists names directly for a small roster, no table needed', () => {
+    const r = responseTemplates.doctorDirectory([{ display_name: 'Dr. A' }, { display_name: 'Dr. B' }]);
+    expect(r.text).toContain('Dr. A');
+    expect(r.text).toContain('Dr. B');
+    expect(r.table).toBeUndefined();
+  });
+
+  test('doctor directory uses a table for a large roster instead of a huge sentence', () => {
+    const doctors = Array.from({ length: 8 }, (_, i) => ({ display_name: `Dr. ${i}` }));
+    const r = responseTemplates.doctorDirectory(doctors);
+    expect(r.table.rows).toHaveLength(8);
+  });
+
+  test('doctor directory with no doctors says so plainly', () => {
+    const r = responseTemplates.doctorDirectory([]);
+    expect(r.text).toMatch(/no doctors registered/i);
+  });
+
+  test('low stock is a current snapshot, not period-scoped', () => {
+    const r = responseTemplates.lowStock({ count: 4 });
+    expect(r.text).toContain('4');
+    expect(r.text).not.toMatch(/today|this week|this month/i);
+  });
+
+  test('low stock with zero items says so plainly, not silently', () => {
+    const r = responseTemplates.lowStock({ count: 0 });
+    expect(r.text).toBe('No items are currently low on stock.');
+  });
+
+  test('expenses never claims a number that was not passed in, and is honest about zero', () => {
+    const r = responseTemplates.expenses({ total: 50000, count: 4 }, 'Today', 'SSP');
+    expect(r.text).toContain('50,000.00');
+    expect(r.text).toContain('4');
+    const zero = responseTemplates.expenses({ total: 0, count: 0 }, 'Today', 'SSP');
+    expect(zero.text).toMatch(/no expenses/i);
+  });
+
+  test('income statement computes net from exactly the revenue/expenses it was given, and discloses it is simplified', () => {
+    const r = responseTemplates.incomeStatement({ total: 1000 }, { total: 400 }, 'Today', 'SSP');
+    expect(r.text).toContain('1,000.00');
+    expect(r.text).toContain('400.00');
+    expect(r.text).toContain('600.00'); // net = 1000 - 400
+    expect(r.text).toMatch(/simplified/i);
+  });
+
+  test('income statement reports a shortfall honestly when expenses exceed revenue', () => {
+    const r = responseTemplates.incomeStatement({ total: 100 }, { total: 300 }, 'Today', 'SSP');
+    expect(r.text).toMatch(/shortfall/i);
+    expect(r.text).toContain('200.00'); // |100 - 300|
+  });
+
   test('a limitation intent never returns a fabricated figure', () => {
     const r = responseTemplates.limitation('doctor_revenue');
     expect(r.text).toMatch(/reliably trackable/i);
@@ -388,6 +451,24 @@ describe('analyticsChatbot chatbotEngine follow-up continuity (no DB required)',
     expect(result.intentKey).toBe('doctor_activity');
     expect(result.dateRange.label).toBe('Yesterday');
   });
+
+  // Snapshot intents (total_patients, doctor_directory, low_stock) have no
+  // period of their own — a bare date phrase after one of them doesn't mean
+  // anything, so it must NOT be treated as "continue this with a new date"
+  // the way it correctly is for a period-scoped intent like doctor_activity.
+  const priorDirectoryTurn = { intent: 'doctor_directory', params: null };
+
+  test('a date-only follow-up after a snapshot intent does not get treated as a continuation', async () => {
+    const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'what about yesterday?', priorTurn: priorDirectoryTurn });
+    expect(result.intentKey).toBeNull();
+    expect(result.text).toMatch(/not sure I understood/i);
+  });
+
+  test('an explicit repeat word still correctly re-runs a snapshot intent (there is no date to misapply)', async () => {
+    const fakeSequelize = { query: jest.fn().mockResolvedValue([[]]) };
+    const result = await answerQuestion({ sequelize: fakeSequelize, req: fakeReq, question: 'run that again', priorTurn: priorDirectoryTurn });
+    expect(result.intentKey).toBe('doctor_directory');
+  });
 });
 
 // User-facing style requirement: no em dashes in anything the chatbot
@@ -401,8 +482,17 @@ describe('analyticsChatbot responseTemplates never emit an em dash', () => {
     ['registrations (zero)', responseTemplates.registrations({ count: 0 }, 'Today')],
     ['totalPatients', responseTemplates.totalPatients({ count: 10 })],
     ['totalPatients (zero)', responseTemplates.totalPatients({ count: 0 })],
+    ['doctorDirectory', responseTemplates.doctorDirectory([{ display_name: 'Dr A' }])],
+    ['doctorDirectory (large)', responseTemplates.doctorDirectory(Array.from({ length: 8 }, (_, i) => ({ display_name: `Dr ${i}` })))],
+    ['doctorDirectory (empty)', responseTemplates.doctorDirectory([])],
+    ['lowStock', responseTemplates.lowStock({ count: 2 })],
+    ['lowStock (zero)', responseTemplates.lowStock({ count: 0 })],
     ['visits', responseTemplates.visits({ count: 3 }, 'Today')],
     ['revenue', responseTemplates.revenue({ total: 100, count: 2 }, 'Today', 'SSP')],
+    ['expenses', responseTemplates.expenses({ total: 100, count: 2 }, 'Today', 'SSP')],
+    ['expenses (zero)', responseTemplates.expenses({ total: 0, count: 0 }, 'Today', 'SSP')],
+    ['incomeStatement', responseTemplates.incomeStatement({ total: 1000 }, { total: 400 }, 'Today', 'SSP')],
+    ['incomeStatement (shortfall)', responseTemplates.incomeStatement({ total: 100 }, { total: 300 }, 'Today', 'SSP')],
     ['doctorActivity', responseTemplates.doctorActivity([{ displayName: 'Dr X', visits: 3 }], 'Today')],
     ['doctorActivity (empty)', responseTemplates.doctorActivity([], 'Today')],
     [

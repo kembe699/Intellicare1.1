@@ -50,11 +50,62 @@ function visits({ count }, label) {
   return { text: `There ${count === 1 ? 'was' : 'were'} ${count} patient ${plural(count, 'visit')} ${phrase}.` };
 }
 
+/** A static roster, not period-scoped — same reasoning as totalPatients above. */
+function doctorDirectory(doctors) {
+  if (doctors.length === 0) return { text: 'There are no doctors registered in the system yet.' };
+  const names = doctors.map((d) => d.display_name);
+  if (doctors.length <= 5) {
+    return { text: `There ${doctors.length === 1 ? 'is' : 'are'} ${doctors.length} ${plural(doctors.length, 'doctor')} registered: ${names.join(', ')}.` };
+  }
+  return {
+    text: `There are ${doctors.length} doctors registered in the system.`,
+    table: { columns: ['Doctor'], rows: doctors.map((d) => [d.display_name]) },
+  };
+}
+
+/** A current-moment snapshot, not period-scoped — same reasoning as totalPatients above. */
+function lowStock({ count }) {
+  if (count === 0) return { text: 'No items are currently low on stock.' };
+  return { text: `${count} ${plural(count, 'item')} ${count === 1 ? 'is' : 'are'} currently at or below its reorder level. See the Inventory report for details.` };
+}
+
 function revenue({ total, count }, label, currencyCode) {
   const phrase = periodPhrase(label);
   if (count === 0) return { text: `No revenue was collected ${phrase}.` };
   return {
     text: `The hospital collected ${formatMoney(total, currencyCode)} ${phrase}, across ${count} ${plural(count, 'receipt')}.`,
+  };
+}
+
+/**
+ * Cash-basis, paid-vouchers-only — see analyticsFunctions.js's
+ * getExpensesTotal for exactly what this does and doesn't include (the
+ * daily_expenses log, not the full GL expense-account view).
+ */
+function expenses({ total, count }, label, currencyCode) {
+  const phrase = periodPhrase(label);
+  if (count === 0) return { text: `No expenses were recorded as paid ${phrase}.` };
+  return {
+    text: `The hospital paid out ${formatMoney(total, currencyCode)} in expenses ${phrase}, across ${count} ${plural(count, 'voucher')}.`,
+  };
+}
+
+/**
+ * revenue minus expenses, both from the same sources getRevenueTotal/
+ * getExpensesTotal already use elsewhere in this chatbot — not the full
+ * general-ledger income statement (see getExpensesTotal's header comment
+ * for why that's a deliberately different, broader number). Disclosed
+ * plainly in the reply rather than presented as the official P&L.
+ */
+function incomeStatement(rev, exp, label, currencyCode) {
+  const phrase = periodPhrase(label);
+  const net = rev.total - exp.total;
+  const verb = net >= 0 ? 'a net gain of' : 'a net shortfall of';
+  return {
+    text: [
+      `For ${phrase}: ${formatMoney(rev.total, currencyCode)} collected, ${formatMoney(exp.total, currencyCode)} paid out in expenses, for ${verb} ${formatMoney(Math.abs(net), currencyCode)}.`,
+      "This is a simplified view (receipts collected minus paid expense vouchers), not the full general ledger income statement. See the Income Statement report under Reports for the complete accrual figures.",
+    ].join('\n'),
   };
 }
 
@@ -202,13 +253,18 @@ function help() {
     text: [
       "Here's what I can help with. Ask in your own words, no exact phrasing needed:",
       '• Patient registrations: "how many patients registered this week?"',
+      '• Total patients in the system: "how many patients do we have in total?"',
       '• Patient visits: "how many visits today?"',
       '• Revenue collected: "how much revenue this month?" (requires financial access)',
+      '• Expenses paid: "how much did we spend this month?" (requires financial access)',
+      '• Income statement (revenue minus expenses): "show me the income statement for this month" (requires financial access)',
       '• Doctor activity: "which doctor saw the most patients?", or ask about one by name',
+      '• Doctor directory: "list all doctors registered in the system"',
       '• Revenue by department/category: "which department made the most today?"',
+      '• Low stock alerts: "are any items low on stock?"',
       '• A full hospital summary: "give me today\'s summary"',
       '• Comparisons: "compare today\'s revenue with yesterday\'s"',
-      '• Date ranges: today, yesterday, this/last week, this/last month, this year, "last 14 days", or "between 2026-10-01 and 2026-10-15"',
+      '• Date ranges: today, yesterday, this/last week, this/last month, this year, "last 14 days", "last 5 months", or "between 2026-10-01 and 2026-10-15"',
       '• Follow-ups: ask something, then just say "what about yesterday?" or "what date range was that?"',
     ].join('\n'),
   };
@@ -217,8 +273,12 @@ function help() {
 module.exports = {
   registrations,
   totalPatients,
+  doctorDirectory,
+  lowStock,
   visits,
   revenue,
+  expenses,
+  incomeStatement,
   doctorActivity,
   departmentBreakdown,
   dateRangeQuery,

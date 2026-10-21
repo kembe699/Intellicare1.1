@@ -209,11 +209,64 @@ async function getDepartmentBreakdown(sequelize, { req, clinicId, start, end }) 
   return { rows, totalBilled, categorizedBilled };
 }
 
+/**
+ * Cash-basis, same spirit as getRevenueTotal above: counts an expense when
+ * it was actually PAID OUT (status='paid', paid_at in range), not when it
+ * was logged/submitted for approval (a 'pending_approval'/'approved' row
+ * hasn't left the bank yet). This is deliberately the `daily_expenses`
+ * table only — the manually-logged operational expense voucher log — NOT
+ * the full general-ledger expense-account view reportIncomeStatement.js's
+ * accrual mode computes (payroll, depreciation, COGS postings, etc. are a
+ * broader, different number — see reportAccounting.js's own comment on
+ * this exact distinction). For the same colloquial "how much did we
+ * spend" question this chatbot's revenue/visits/registrations answers are
+ * already scoped to, this is the right match in kind, not just the
+ * cheapest query.
+ */
+async function getExpensesTotal(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements);
+  const [[row]] = await sequelize.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
+       FROM daily_expenses
+      WHERE clinic_id = :clinicId AND status = 'paid'
+        AND paid_at >= :start AND paid_at < :end${branchSQL}`,
+    { replacements },
+  );
+  return { total: parseFloat(row?.total || 0), count: parseInt(row?.cnt || 0, 10) };
+}
+
+/**
+ * Current-moment snapshot (not period-scoped — "how many items are low on
+ * stock right now" has no date range, same reasoning as getTotalPatientsCount
+ * above), mirroring dashboard.js's own lowStockAlerts query exactly.
+ * Deliberately NOT a total inventory VALUE figure: inventory_items.
+ * cost_currency varies per item, and summing quantity*cost across mixed
+ * currencies without converting to a base currency first (the way
+ * reportInventory.js carefully does) would silently produce a meaningless
+ * number — exactly the kind of fabricated-looking-precise figure this
+ * assistant is built to avoid. A count is safe; a value total is not,
+ * without importing that conversion logic.
+ */
+async function getLowStockCount(sequelize, { req, clinicId }) {
+  const replacements = { clinicId };
+  const branchSQL = branchScope(req, replacements);
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM inventory_items
+      WHERE clinic_id = :clinicId AND is_active = true
+        AND quantity_on_hand <= minimum_stock_level${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10) };
+}
+
 module.exports = {
   getRegistrationsCount,
   getTotalPatientsCount,
   getVisitsCount,
   getRevenueTotal,
+  getExpensesTotal,
+  getLowStockCount,
   getDoctorActivity,
   getDepartmentBreakdown,
   listDoctors,

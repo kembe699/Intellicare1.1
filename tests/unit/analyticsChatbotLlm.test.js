@@ -21,7 +21,7 @@ const { TOOLS, executeTool } = require('../../src/server/services/analyticsChatb
 
 describe('llmTools — the tool allowlist Claude is actually given', () => {
   test('every tool has a name, description, and a well-formed input schema', () => {
-    expect(TOOLS.length).toBeGreaterThanOrEqual(7);
+    expect(TOOLS.length).toBeGreaterThanOrEqual(11);
     for (const tool of TOOLS) {
       expect(typeof tool.name).toBe('string');
       expect(typeof tool.description).toBe('string');
@@ -29,9 +29,10 @@ describe('llmTools — the tool allowlist Claude is actually given', () => {
     }
   });
 
-  test('every period-scoped tool actually declares the period parameter — get_total_patients is the one deliberate exception (an all-time snapshot, not scoped to any period)', () => {
+  test('every period-scoped tool declares the period parameter — snapshot tools (no period of their own) are the deliberate exceptions', () => {
+    const SNAPSHOT_TOOLS = new Set(['get_total_patients', 'get_doctor_directory', 'get_low_stock']);
     for (const tool of TOOLS) {
-      if (tool.name === 'get_total_patients') {
+      if (SNAPSHOT_TOOLS.has(tool.name)) {
         expect(tool.input_schema.properties.period).toBeUndefined();
         continue;
       }
@@ -96,6 +97,52 @@ describe('executeTool — permission checks run server-side, before any query', 
     const result = await executeTool('get_total_patients', {}, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
     expect(result.count).toBe(412);
     expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_doctor_directory needs no period input and no special permission', async () => {
+    analytics.listDoctors.mockResolvedValue([{ id: 1, display_name: 'Dr. Sarah Johnson' }]);
+    const result = await executeTool('get_doctor_directory', {}, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.doctors).toEqual([{ id: 1, name: 'Dr. Sarah Johnson' }]);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_low_stock needs no period input and no special permission', async () => {
+    analytics.getLowStockCount.mockResolvedValue({ count: 3 });
+    const result = await executeTool('get_low_stock', {}, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.count).toBe(3);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_expenses is permission-gated, and the query never runs for an unauthorized user', async () => {
+    hasPrivilege.mockResolvedValue(false);
+    const result = await executeTool(
+      'get_expenses', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 },
+    );
+    expect(result.error).toBe('permission_denied');
+    expect(analytics.getExpensesTotal).not.toHaveBeenCalled();
+  });
+
+  test('get_income_statement composes revenue and expenses into a net figure, and is permission-gated', async () => {
+    hasPrivilege.mockResolvedValue(true);
+    CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
+    analytics.getRevenueTotal.mockResolvedValue({ total: 500, count: 2 });
+    analytics.getExpensesTotal.mockResolvedValue({ total: 200, count: 1 });
+    const result = await executeTool(
+      'get_income_statement', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'accountant' } }, clinicId: 1 },
+    );
+    expect(result.revenue).toBe(500);
+    expect(result.expenses).toBe(200);
+    expect(result.netIncome).toBe(300);
+  });
+
+  test('get_income_statement is permission-gated the same way as get_revenue/get_expenses', async () => {
+    hasPrivilege.mockResolvedValue(false);
+    const result = await executeTool(
+      'get_income_statement', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 },
+    );
+    expect(result.error).toBe('permission_denied');
+    expect(analytics.getRevenueTotal).not.toHaveBeenCalled();
+    expect(analytics.getExpensesTotal).not.toHaveBeenCalled();
   });
 
   test('registrations and visits need no special permission', async () => {

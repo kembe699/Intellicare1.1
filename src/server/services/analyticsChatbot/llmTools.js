@@ -77,6 +77,26 @@ const TOOLS = [
     description: 'A combined summary for a period: registrations, visits, revenue (if the user is authorized), and the busiest doctor.',
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
+  {
+    name: 'get_doctor_directory',
+    description: 'The full roster of doctors currently registered in the system (just names), with no date scope at all. Use this for "who are the doctors" / "list all doctors" style questions, NOT for visit/activity counts (use get_doctor_activity for those).',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_low_stock',
+    description: 'The current count of inventory items at or below their reorder level right now — a current snapshot, not scoped to any period. There is deliberately no tool for total inventory VALUE (cost * quantity), since items can be costed in different currencies and summing across them without conversion would be misleading.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_expenses',
+    description: "Total cash expenses actually PAID OUT (from the daily expense voucher log, status='paid' only — not pending/unapproved requests, and not the full general-ledger expense view) in a period. Requires financial access.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_income_statement',
+    description: "Revenue collected minus expenses paid for a period (a simplified cash-basis net figure, not the full general-ledger accrual income statement). Requires financial access. Use this when asked for 'income statement', 'profit and loss', 'net income', or when the user asks for revenue AND expenses together.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
 ];
 
 async function executeTool(name, input, { sequelize, req, clinicId }) {
@@ -149,6 +169,40 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
         visits: vis.count,
         revenue: revenue || { error: 'permission_denied' },
         topDoctor: doctors[0] || null,
+      };
+    }
+    case 'get_doctor_directory': {
+      const doctors = await analytics.listDoctors(sequelize, { req, clinicId });
+      return { doctors: doctors.map((d) => ({ id: d.id, name: d.display_name })) };
+    }
+    case 'get_low_stock': {
+      const data = await analytics.getLowStockCount(sequelize, { req, clinicId });
+      return { count: data.count, note: 'Current snapshot — not scoped to any period.' };
+    }
+    case 'get_expenses': {
+      if (!(await hasPrivilege(req, 'accounting.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have financial/accounting access.' };
+      }
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const data = await analytics.getExpensesTotal(sequelize, ctx);
+      return { period, total: data.total, currency: baseCurrency.code, voucherCount: data.count };
+    }
+    case 'get_income_statement': {
+      if (!(await hasPrivilege(req, 'accounting.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have financial/accounting access.' };
+      }
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const [rev, exp] = await Promise.all([
+        analytics.getRevenueTotal(sequelize, ctx),
+        analytics.getExpensesTotal(sequelize, ctx),
+      ]);
+      return {
+        period,
+        currency: baseCurrency.code,
+        revenue: rev.total,
+        expenses: exp.total,
+        netIncome: rev.total - exp.total,
+        note: 'Simplified cash-basis figure (receipts collected minus paid expense vouchers), not the full general-ledger accrual income statement.',
       };
     }
     default:

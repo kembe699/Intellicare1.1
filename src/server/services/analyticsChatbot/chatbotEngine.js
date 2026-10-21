@@ -8,8 +8,15 @@ const { getRolePrivileges } = require('../../middleware/authorize');
 const CurrencyService = require('../CurrencyService');
 
 const INTENTS_BY_KEY = Object.fromEntries(INTENTS.map((i) => [i.key, i]));
-const COMPARABLE_INTENTS = new Set(['registrations', 'visits', 'revenue']);
+const COMPARABLE_INTENTS = new Set(['registrations', 'visits', 'revenue', 'expenses']);
 const REPEAT_RE = /\b(again|repeat|same|once more|re-?run)\b/i;
+// Current-moment snapshots with no period of their own — a bare date phrase
+// in a follow-up ("what about yesterday?") after one of these doesn't mean
+// anything, so it must NOT be treated as "continue this with a new date"
+// the way it correctly is for a period-scoped intent like revenue. Only an
+// explicit repeat word ("run that again") still makes sense here, since
+// that just means "re-check the current state."
+const SNAPSHOT_INTENTS = new Set(['total_patients', 'doctor_directory', 'low_stock']);
 
 /** Same admin-bypass / role+additionalRoles check authorize.js's middleware does, as a plain async predicate. */
 async function hasPrivilege(req, privilegeKey) {
@@ -30,6 +37,27 @@ async function runIntent(sequelize, req, intentKey, dateRange, { clinicId, docto
     case 'total_patients': {
       const data = await analytics.getTotalPatientsCount(sequelize, ctx);
       return templates.totalPatients(data);
+    }
+    case 'doctor_directory': {
+      const doctors = await analytics.listDoctors(sequelize, { req, clinicId });
+      return templates.doctorDirectory(doctors);
+    }
+    case 'low_stock': {
+      const data = await analytics.getLowStockCount(sequelize, { req, clinicId });
+      return templates.lowStock(data);
+    }
+    case 'expenses': {
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const data = await analytics.getExpensesTotal(sequelize, ctx);
+      return templates.expenses(data, dateRange.label, baseCurrency.code);
+    }
+    case 'income_statement': {
+      const baseCurrency = await CurrencyService.getBaseCurrency();
+      const [rev, exp] = await Promise.all([
+        analytics.getRevenueTotal(sequelize, ctx),
+        analytics.getExpensesTotal(sequelize, ctx),
+      ]);
+      return templates.incomeStatement(rev, exp, dateRange.label, baseCurrency.code);
     }
     case 'visits': {
       const data = await analytics.getVisitsCount(sequelize, ctx);
@@ -99,6 +127,15 @@ async function runComparison(sequelize, req, intentKey, question, { clinicId }) 
     valueA = valueA.count;
     valueB = valueB.count;
     metricLabel = 'Visits';
+  } else if (intentKey === 'expenses') {
+    [valueA, valueB] = await Promise.all([
+      analytics.getExpensesTotal(sequelize, ctxFor(dateA)),
+      analytics.getExpensesTotal(sequelize, ctxFor(dateB)),
+    ]);
+    currencyCode = (await CurrencyService.getBaseCurrency()).code;
+    valueA = valueA.total;
+    valueB = valueB.total;
+    metricLabel = 'Expenses';
   } else {
     [valueA, valueB] = await Promise.all([
       analytics.getRegistrationsCount(sequelize, ctxFor(dateA)),
@@ -165,7 +202,8 @@ async function answerQuestion({ sequelize, req, question, priorTurn }) {
   // yesterday?") or an explicit repeat word ("run that again"). Anything
   // else with no intent match falls through to clarifying() below instead
   // of guessing it's a follow-up.
-  const looksLikeFollowUp = dateResolved.matched || REPEAT_RE.test(question);
+  const priorIsSnapshot = priorTurn?.intent && SNAPSHOT_INTENTS.has(priorTurn.intent);
+  const looksLikeFollowUp = REPEAT_RE.test(question) || (dateResolved.matched && !priorIsSnapshot);
   let intentKey = classification.matched
     ? classification.intent
     : (looksLikeFollowUp ? priorTurn?.intent : null);

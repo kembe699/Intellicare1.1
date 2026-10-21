@@ -80,6 +80,28 @@ const INTENTS = [
     ],
   },
   {
+    // Checked before 'revenue' below, whose own bare /\bincome\b/ pattern
+    // would otherwise swallow "income statement" questions.
+    key: 'income_statement',
+    requiresPermission: 'accounting.read',
+    supported: true,
+    patterns: [
+      /\bincome statements?\b/, /\bprofit (and|&) loss\b/, /\bp\s?(&|and)\s?l\b/,
+      /\bnet (income|profit)\b/, /\brevenue (and|vs\.?|minus) expenses\b/,
+      /\bhow (are we|is the hospital) doing financially\b/,
+    ],
+  },
+  {
+    key: 'expenses',
+    requiresPermission: 'accounting.read',
+    supported: true,
+    patterns: [
+      /\bexpenses?\b/, /\bspending\b/, /\bhow much (did we|was) spent\b/,
+      /\bmoney (spent|went out|paid out)\b/, /\boutgoings?\b/, /\bpurchases?\b/,
+      /\bexpense vouchers?\b/, /\bhow much (did|do) we (spend|pay out)\b/,
+    ],
+  },
+  {
     key: 'revenue',
     requiresPermission: 'accounting.read',
     supported: true,
@@ -91,19 +113,34 @@ const INTENTS = [
     ],
   },
   {
+    // "Show me all doctors registered in the system" — a static roster, not
+    // a period-scoped activity count. Checked before 'registrations' below
+    // (whose own "regist..." pattern would otherwise claim the word
+    // "registered" here) and before 'doctor_activity' isn't required, but
+    // placed near it for readability.
+    key: 'doctor_directory',
+    requiresPermission: null,
+    supported: true,
+    patterns: [
+      /\ball doctors\b/, /\bdoctors? registered\b/, /\bdoctors? in the system\b/,
+      /\blist (all |of )?(the )?doctors?\b/, /\bwho are the doctors\b/,
+      /\bdoctor (roster|directory|list)\b/, /\bshow me all (the )?doctors?\b/,
+    ],
+  },
+  {
     key: 'doctor_activity',
     requiresPermission: null,
     supported: true,
     patterns: [
-      /\bwhich doctor\b/, /\beach doctor\b/, /\bdoctor performance\b/,
+      /\bwhich doctors?\b/, /\beach doctor\b/, /\bdoctor performance\b/,
       /\bdoctor.*\b(most|attend|handle[d]?|patients?)\b/,
       /\bhow many patients did\b.*\bdoctor\b/,
       /\b(busiest|most active) doctor\b/, /\bdoctor workload\b/, /\bdoctor caseload\b/,
       /\bconsultations? per doctor\b/, /\bdoctors?'? (performance|activity|caseload)\b/,
+      /\bdoctors? visits?\b/, /\bseen by (which )?doctors?\b/, /\bby which doctors?\b/,
       // Imperative phrasing ("show me the doctors", "doctors for last
       // month") — not just the interrogative "which doctor...?" forms above.
       /\bshow me (the )?doctors?\b/, /\bdoctors? (for|in|during|this|last)\b/,
-      /\blist (the )?doctors?\b/,
     ],
   },
   {
@@ -140,6 +177,15 @@ const INTENTS = [
       /\bencounters?\b/, /\bpatients? (came|attended)\b/,
       /\bconsultations?\b/, /\bappointments?\b/, /\bpeople (seen|visited)\b/,
       /\bfootfall\b/, /\bclinic visits?\b/, /\bhow many (people|patients) (came in|showed up)\b/,
+    ],
+  },
+  {
+    key: 'low_stock',
+    requiresPermission: null,
+    supported: true,
+    patterns: [
+      /\blow (on )?stock\b/, /\bstock (alert|level)s?\b/, /\binventory (report|status|alert)s?\b/,
+      /\brunning low\b/, /\brunning out\b/, /\breorder\b/, /\bout of stock\b/,
     ],
   },
   {
