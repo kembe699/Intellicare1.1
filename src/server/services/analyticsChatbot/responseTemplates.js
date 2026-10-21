@@ -114,7 +114,7 @@ function compare(metricLabel, a, b, labelA, labelB, currencyCode) {
 
 const LIMITATION_MESSAGES = {
   doctor_revenue:
-    "Revenue per doctor isn't reliably trackable yet — patient bills aren't linked to the doctor who provided the service. For visit/consultation counts per doctor, ask about doctor activity instead; for a revenue estimate, see the Doctor Performance report under Reports.",
+    "Revenue per doctor isn't reliably trackable yet. Patient bills aren't linked to the doctor who provided the service. For visit/consultation counts per doctor, ask about doctor activity instead; for a revenue estimate, see the Doctor Performance report under Reports.",
 };
 
 function limitation(intentKey) {
@@ -135,14 +135,14 @@ function departmentBreakdown({ rows, totalBilled, categorizedBilled }, label, cu
   }
   if (rows.length === 0) {
     return {
-      text: `None of the bills ${phrase} have category information captured — they predate category tracking. See the Clinic Performance report under Reports for an approximate, name-matched breakdown instead.`,
+      text: `None of the bills ${phrase} have category information captured. They predate category tracking. See the Clinic Performance report under Reports for an approximate, name-matched breakdown instead.`,
     };
   }
   const top = rows[0];
   const coveragePct = Math.round((categorizedBilled / totalBilled) * 100);
   const coverageNote = coveragePct >= 99
     ? ''
-    : ` (based on the ${coveragePct}% of billing ${phrase} that has a category captured — the rest predates category tracking)`;
+    : ` (based on the ${coveragePct}% of billing ${phrase} that has a category captured; the rest predates category tracking)`;
   return {
     text: `${top.category} had the most billed activity ${phrase}, at ${formatMoney(top.amount, currencyCode)}${coverageNote}.`,
     table: {
@@ -167,7 +167,7 @@ const SUGGESTED_QUESTIONS = [
 
 function clarifying() {
   return {
-    text: "I'm not sure I understood that question. Here are some things you can ask me — or ask \"what can you do?\" for the full list.",
+    text: "I'm not sure I understood that question. Here are some things you can ask me, or ask \"what can you do?\" for the full list.",
     suggestions: SUGGESTED_QUESTIONS.map((s) => s.text),
   };
 }
@@ -182,7 +182,7 @@ function clarifying() {
  */
 function dateRangeQuery(priorParams) {
   if (!priorParams?.start) {
-    return { text: "I haven't answered anything yet in this conversation — ask me something first, then I can tell you what date range it covered." };
+    return { text: "I haven't answered anything yet in this conversation. Ask me something first, and I can tell you what date range it covered." };
   }
   const start = new Date(priorParams.start);
   const lastIncluded = new Date(new Date(priorParams.end).getTime() - 1);
@@ -200,16 +200,16 @@ function dateRangeQuery(priorParams) {
 function help() {
   return {
     text: [
-      "Here's what I can help with — ask in your own words, no exact phrasing needed:",
-      '• Patient registrations — "how many patients registered this week?"',
-      '• Patient visits — "how many visits today?"',
-      '• Revenue collected — "how much revenue this month?" (requires financial access)',
-      '• Doctor activity — "which doctor saw the most patients?", or ask about one by name',
-      '• Revenue by department/category — "which department made the most today?"',
-      '• A full hospital summary — "give me today\'s summary"',
-      '• Comparisons — "compare today\'s revenue with yesterday\'s"',
+      "Here's what I can help with. Ask in your own words, no exact phrasing needed:",
+      '• Patient registrations: "how many patients registered this week?"',
+      '• Patient visits: "how many visits today?"',
+      '• Revenue collected: "how much revenue this month?" (requires financial access)',
+      '• Doctor activity: "which doctor saw the most patients?", or ask about one by name',
+      '• Revenue by department/category: "which department made the most today?"',
+      '• A full hospital summary: "give me today\'s summary"',
+      '• Comparisons: "compare today\'s revenue with yesterday\'s"',
       '• Date ranges: today, yesterday, this/last week, this/last month, this year, "last 14 days", or "between 2026-10-01 and 2026-10-15"',
-      '• Follow-ups — ask something, then just say "what about yesterday?" or "what date range was that?"',
+      '• Follow-ups: ask something, then just say "what about yesterday?" or "what date range was that?"',
     ].join('\n'),
   };
 }

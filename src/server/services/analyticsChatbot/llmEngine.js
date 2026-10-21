@@ -58,7 +58,8 @@ Hard rules:
 - For a question outside what these tools cover (e.g. inventory stock levels, a specific patient's record, appointments, HR) say plainly that you can currently only help with registrations, visits, revenue, department breakdowns, and doctor activity — don't guess at an answer from outside your tools.
 - Use the full conversation history for follow-ups ("what about yesterday?" means re-run the same kind of question for a different period; "what date range was that?" or "what can you do?" can be answered directly from what you already said, with no new tool call).
 - Keep answers brief and direct — a sentence or two, like a colleague giving a quick number, not a report. Use a short table only when listing several items (e.g. a doctor ranking or a department breakdown) genuinely helps.
-- Currency amounts: state the currency code the tool gave you, formatted plainly (e.g. "SSP 4,250,000.00").`;
+- Currency amounts: state the currency code the tool gave you, formatted plainly (e.g. "SSP 4,250,000.00").
+- Formatting: never use an em dash (—) anywhere in your reply. Use a period, comma, colon, or semicolon instead.`;
 }
 
 function toAnthropicTools() {
@@ -69,7 +70,7 @@ function toAnthropicTools() {
   }));
 }
 
-const MOCK_TEXT = "Mock response — no real model was called (ANALYTICS_CHATBOT_MOCK=true).";
+const MOCK_TEXT = "Mock response. No real model was called (ANALYTICS_CHATBOT_MOCK=true).";
 
 async function callAnthropic(body) {
   if (isMockMode()) {
@@ -143,7 +144,7 @@ async function answerQuestion({ sequelize, req, question, history, clinicId }) {
     const toolUseBlocks = (response.content || []).filter((c) => c.type === 'tool_use');
     if (toolUseBlocks.length === 0) {
       const text = (response.content || []).find((c) => c.type === 'text')?.text || '';
-      return { text: text.trim() || "I wasn't able to put together an answer for that — could you rephrase?", toolCalls };
+      return { text: text.trim() || "I wasn't able to put together an answer for that. Could you rephrase?", toolCalls };
     }
 
     // Execute every tool call from this turn, then return ALL results in one

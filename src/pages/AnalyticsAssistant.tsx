@@ -182,7 +182,7 @@ const AnalyticsAssistant: React.FC = () => {
             {loadingConversations ? (
               <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
             ) : conversations.length === 0 ? (
-              <p className="px-2 py-4 text-sm text-muted-foreground">No conversations yet — ask a question to start one.</p>
+              <p className="px-2 py-4 text-sm text-muted-foreground">No conversations yet. Ask a question to start one.</p>
             ) : (
               <ul className="space-y-1">
                 {conversations.map((c) => (
@@ -217,7 +217,7 @@ const AnalyticsAssistant: React.FC = () => {
             </button>
             <Sparkles className="h-4 w-4 text-primary" />
             <h1 className="text-sm font-semibold text-foreground">Analytics Assistant</h1>
-            <span className="ml-auto text-xs text-muted-foreground">Runs locally — no data leaves this server</span>
+            <span className="ml-auto text-xs text-muted-foreground">Runs locally, no data leaves this server</span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -230,7 +230,7 @@ const AnalyticsAssistant: React.FC = () => {
                 </div>
                 <h2 className="text-lg font-semibold text-foreground">Ask about your hospital's activity</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Registrations, visits, revenue, and doctor activity — in plain language.
+                  Registrations, visits, revenue, and doctor activity, in plain language.
                 </p>
                 {suggestions.length > 0 && (
                   <div className="mt-6 flex flex-wrap justify-center gap-2">

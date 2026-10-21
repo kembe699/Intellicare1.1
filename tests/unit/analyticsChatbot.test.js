@@ -365,3 +365,49 @@ describe('analyticsChatbot chatbotEngine follow-up continuity (no DB required)',
     expect(result.dateRange.label).toBe('Yesterday');
   });
 });
+
+// User-facing style requirement: no em dashes in anything the chatbot
+// actually says. Exercises every template with representative input so a
+// future edit can't silently reintroduce one.
+describe('analyticsChatbot responseTemplates never emit an em dash', () => {
+  const EM_DASH = /—/;
+
+  test.each([
+    ['registrations', responseTemplates.registrations({ count: 5 }, 'Today')],
+    ['registrations (zero)', responseTemplates.registrations({ count: 0 }, 'Today')],
+    ['totalPatients', responseTemplates.totalPatients({ count: 10 })],
+    ['totalPatients (zero)', responseTemplates.totalPatients({ count: 0 })],
+    ['visits', responseTemplates.visits({ count: 3 }, 'Today')],
+    ['revenue', responseTemplates.revenue({ total: 100, count: 2 }, 'Today', 'SSP')],
+    ['doctorActivity', responseTemplates.doctorActivity([{ displayName: 'Dr X', visits: 3 }], 'Today')],
+    ['doctorActivity (empty)', responseTemplates.doctorActivity([], 'Today')],
+    [
+      'summary',
+      responseTemplates.summary(
+        { registrations: { count: 1 }, visits: { count: 1 }, revenue: { total: 1, count: 1 }, topDoctor: { displayName: 'Dr X', visits: 1 } },
+        'Today', 'SSP', true,
+      ),
+    ],
+    [
+      'departmentBreakdown',
+      responseTemplates.departmentBreakdown({ rows: [{ category: 'A', amount: 1 }], totalBilled: 1, categorizedBilled: 1 }, 'Today', 'SSP'),
+    ],
+    [
+      'departmentBreakdown (partial coverage)',
+      responseTemplates.departmentBreakdown({ rows: [{ category: 'A', amount: 1 }], totalBilled: 10, categorizedBilled: 1 }, 'Today', 'SSP'),
+    ],
+    ['departmentBreakdown (none categorized)', responseTemplates.departmentBreakdown({ rows: [], totalBilled: 1, categorizedBilled: 0 }, 'Today', 'SSP')],
+    ['limitation', responseTemplates.limitation('doctor_revenue')],
+    ['accessDenied', responseTemplates.accessDenied()],
+    ['clarifying', responseTemplates.clarifying()],
+    ['dateRangeQuery (no prior turn)', responseTemplates.dateRangeQuery(undefined)],
+    [
+      'dateRangeQuery',
+      responseTemplates.dateRangeQuery({ start: new Date(2026, 9, 21).toISOString(), end: new Date(2026, 9, 22).toISOString(), label: 'Today' }),
+    ],
+    ['help', responseTemplates.help()],
+    ['compare', responseTemplates.compare('Revenue', 1, 2, 'Today', 'Yesterday', 'SSP')],
+  ])('%s', (_name, result) => {
+    expect(result.text).not.toMatch(EM_DASH);
+  });
+});
