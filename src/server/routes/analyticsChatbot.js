@@ -208,6 +208,12 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
       conversationId,
       reply: { text: result.text, table: result.table || null, suggestions: result.suggestions || null },
       intent: result.intentKey,
+      // Tells the UI whether to show "running in basic mode" — only
+      // meaningful when LLM mode is actually enabled for this deployment;
+      // if it was never enabled, the keyword engine answering isn't a
+      // fallback, it's just how the feature normally runs.
+      engine: engineUsed,
+      llmEnabled: llmEngine.featureEnabled(),
     });
   } catch (error) {
     console.error('Error answering chatbot question:', error.message);

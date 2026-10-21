@@ -19,6 +19,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   table?: { columns: string[]; rows: (string | number)[][] } | null;
+  suggestions?: string[] | null;
   intent?: string | null;
   createdAt?: string;
   pending?: boolean;
@@ -26,13 +27,18 @@ interface ChatMessage {
 
 /**
  * The Analytics Assistant — a natural-language analytics chatbot over
- * IntelliCare's own data, answered entirely by local keyword/date parsing
- * and predefined, read-only queries (src/server/services/analyticsChatbot/)
- * — no external AI API is ever called and no question or hospital data
- * leaves this server. A full page (not a modal) so it behaves like a
- * dedicated chat app — sidebar conversation history on the left, a message
- * thread on the right — reached via the floating button on every other
- * page (FloatingAssistantButton.tsx).
+ * IntelliCare's own data (src/server/services/analyticsChatbot/). Answered
+ * either by local keyword/date parsing and predefined, read-only queries
+ * (no data ever leaves this server), or — when an environment has LLM mode
+ * enabled (ANALYTICS_CHATBOT_LLM_ENABLED) — by Claude choosing and calling
+ * those same read-only queries as tools; only tool arguments and aggregate
+ * results are sent to Anthropic's API, never raw patient records. The
+ * server always falls back to the local engine if the LLM path is
+ * unavailable, surfaced here as the "Running in basic mode" banner. A full
+ * page (not a modal) so it behaves like a dedicated chat app — sidebar
+ * conversation history on the left, a message thread on the right —
+ * reached via the floating button on every other page
+ * (FloatingAssistantButton.tsx).
  */
 const AnalyticsAssistant: React.FC = () => {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -44,6 +50,11 @@ const AnalyticsAssistant: React.FC = () => {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Shown only when LLM mode is enabled for this deployment but the most
+  // recent reply fell back to the deterministic engine (API down, timed
+  // out, or not configured) — the feature still answers, just without the
+  // LLM's open-ended understanding, so the user should know why.
+  const [basicMode, setBasicMode] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -138,6 +149,7 @@ const AnalyticsAssistant: React.FC = () => {
       const data = await res.json();
       const isNewConversation = !activeId;
       setActiveId(data.conversationId);
+      setBasicMode(Boolean(data.llmEnabled) && data.engine !== 'llm');
       setMessages((prev) => {
         const withoutPending = prev.filter((m) => !m.pending);
         return [
@@ -147,6 +159,7 @@ const AnalyticsAssistant: React.FC = () => {
             role: 'assistant',
             content: data.reply.text,
             table: data.reply.table,
+            suggestions: data.reply.suggestions,
             intent: data.intent,
           },
         ];
@@ -227,7 +240,11 @@ const AnalyticsAssistant: React.FC = () => {
             </button>
             <Sparkles className="h-4 w-4 text-primary" />
             <h1 className="text-sm font-semibold text-foreground">Analytics Assistant</h1>
-            <span className="ml-auto text-xs text-muted-foreground">Runs locally, no data leaves this server</span>
+            {basicMode && (
+              <span className="ml-auto flex items-center gap-1.5 rounded-full bg-warning-bg px-2.5 py-1 text-xs font-medium text-warning border border-warning-border">
+                Running in basic mode
+              </span>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -260,7 +277,7 @@ const AnalyticsAssistant: React.FC = () => {
             ) : (
               <div className="mx-auto flex max-w-2xl flex-col gap-4">
                 {messages.map((m) => (
-                  <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div key={m.id} className={cn('flex flex-col', m.role === 'user' ? 'items-end' : 'items-start')}>
                     <div
                       className={cn(
                         'max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm',
@@ -299,6 +316,21 @@ const AnalyticsAssistant: React.FC = () => {
                         </>
                       )}
                     </div>
+                    {!m.pending && m.role === 'assistant' && m.suggestions && m.suggestions.length > 0 && (
+                      <div className="mt-2 flex w-full max-w-[85%] flex-wrap gap-1.5">
+                        {m.suggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            disabled={sending}
+                            onClick={() => sendMessage(s)}
+                            className="rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div ref={threadEndRef} />
