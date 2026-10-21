@@ -20,12 +20,21 @@ const { hasPrivilege } = require('../../src/server/services/analyticsChatbot/cha
 const { TOOLS, executeTool } = require('../../src/server/services/analyticsChatbot/llmTools');
 
 describe('llmTools — the tool allowlist Claude is actually given', () => {
-  test('every tool has a name, description, and a period-shaped input schema', () => {
-    expect(TOOLS.length).toBeGreaterThanOrEqual(6);
+  test('every tool has a name, description, and a well-formed input schema', () => {
+    expect(TOOLS.length).toBeGreaterThanOrEqual(7);
     for (const tool of TOOLS) {
       expect(typeof tool.name).toBe('string');
       expect(typeof tool.description).toBe('string');
       expect(tool.input_schema.type).toBe('object');
+    }
+  });
+
+  test('every period-scoped tool actually declares the period parameter — get_total_patients is the one deliberate exception (an all-time snapshot, not scoped to any period)', () => {
+    for (const tool of TOOLS) {
+      if (tool.name === 'get_total_patients') {
+        expect(tool.input_schema.properties.period).toBeUndefined();
+        continue;
+      }
       expect(tool.input_schema.properties.period).toBeDefined();
       expect(tool.input_schema.required).toContain('period');
     }
@@ -80,6 +89,13 @@ describe('executeTool — permission checks run server-side, before any query', 
     );
     expect(result.error).toBe('permission_denied');
     expect(analytics.getDepartmentBreakdown).not.toHaveBeenCalled();
+  });
+
+  test('get_total_patients needs no period input and no special permission', async () => {
+    analytics.getTotalPatientsCount.mockResolvedValue({ count: 412 });
+    const result = await executeTool('get_total_patients', {}, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.count).toBe(412);
+    expect(hasPrivilege).not.toHaveBeenCalled();
   });
 
   test('registrations and visits need no special permission', async () => {

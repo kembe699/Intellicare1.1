@@ -9,6 +9,7 @@ const CurrencyService = require('../CurrencyService');
 
 const INTENTS_BY_KEY = Object.fromEntries(INTENTS.map((i) => [i.key, i]));
 const COMPARABLE_INTENTS = new Set(['registrations', 'visits', 'revenue']);
+const REPEAT_RE = /\b(again|repeat|same|once more|re-?run)\b/i;
 
 /** Same admin-bypass / role+additionalRoles check authorize.js's middleware does, as a plain async predicate. */
 async function hasPrivilege(req, privilegeKey) {
@@ -25,6 +26,10 @@ async function runIntent(sequelize, req, intentKey, dateRange, { clinicId, docto
     case 'registrations': {
       const data = await analytics.getRegistrationsCount(sequelize, ctx);
       return templates.registrations(data, dateRange.label);
+    }
+    case 'total_patients': {
+      const data = await analytics.getTotalPatientsCount(sequelize, ctx);
+      return templates.totalPatients(data);
     }
     case 'visits': {
       const data = await analytics.getVisitsCount(sequelize, ctx);
@@ -151,8 +156,19 @@ async function answerQuestion({ sequelize, req, question, priorTurn }) {
 
   // Follow-up inheritance: only the pieces the new question didn't specify
   // are carried over from the prior turn — a new intent or new date phrase
-  // in THIS question always wins.
-  let intentKey = classification.matched ? classification.intent : priorTurn?.intent;
+  // in THIS question always wins. Inheriting the prior intent when nothing
+  // matched used to be unconditional — any unrelated text ("hey", a typo'd
+  // question with no matching pattern) silently re-ran the LAST question
+  // instead of saying "I didn't understand", which looked like the bot was
+  // stuck repeating itself. Now that only happens when the new message
+  // actually signals "continue the same thing" — a date phrase ("what about
+  // yesterday?") or an explicit repeat word ("run that again"). Anything
+  // else with no intent match falls through to clarifying() below instead
+  // of guessing it's a follow-up.
+  const looksLikeFollowUp = dateResolved.matched || REPEAT_RE.test(question);
+  let intentKey = classification.matched
+    ? classification.intent
+    : (looksLikeFollowUp ? priorTurn?.intent : null);
   const dateRange = dateResolved.matched || !priorTurn?.params?.start
     ? dateResolved
     : { start: new Date(priorTurn.params.start), end: new Date(priorTurn.params.end), label: priorTurn.params.label };

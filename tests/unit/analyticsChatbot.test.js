@@ -40,6 +40,10 @@ describe('analyticsChatbot intentClassifier', () => {
     ['Give me the date range', 'date_range_query'],
     ['What can you do?', 'help'],
     ['help', 'help'],
+    // Total patients (all-time snapshot) vs. registrations (new, in a period)
+    ['How many patients are there in the system?', 'total_patients'],
+    ['How many patients do we have in total?', 'total_patients'],
+    ['What is the total number of patients?', 'total_patients'],
   ])('%s -> %s', (question, expected) => {
     const result = classifyIntent(question);
     expect(result.matched).toBe(true);
@@ -200,6 +204,12 @@ describe('analyticsChatbot responseTemplates', () => {
     expect(r.text).toBe('No patients were registered today.');
   });
 
+  test('total patients is an all-time snapshot, with no period phrase attached', () => {
+    const r = responseTemplates.totalPatients({ count: 412 });
+    expect(r.text).toBe('There are 412 patients in the system.');
+    expect(r.text).not.toMatch(/today|this week|this month/i);
+  });
+
   test('a limitation intent never returns a fabricated figure', () => {
     const r = responseTemplates.limitation('doctor_revenue');
     expect(r.text).toMatch(/reliably trackable/i);
@@ -301,5 +311,57 @@ describe('analyticsChatbot chatbotEngine follow-up continuity (no DB required)',
     const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'give me the date range', priorTurn: null });
     expect(result.text).toMatch(/haven't answered anything yet/i);
     expect(result.intentKey).toBeNull();
+  });
+
+  // Regression coverage for a real bug a user hit: once a conversation had
+  // one real answer, ANY unmatched text (a bare "hey", a typo'd question)
+  // was unconditionally inherited as "same question again", so the bot
+  // looked stuck repeating its last answer forever no matter what was
+  // typed. Fixed so inheritance only happens when the new message actually
+  // signals a follow-up (a date phrase, or an explicit repeat word) —
+  // everything else correctly falls through to a clarifying response.
+  const priorDoctorTurn = {
+    intent: 'doctor_activity',
+    params: { start: new Date(2026, 9, 21).toISOString(), end: new Date(2026, 9, 22).toISOString(), label: 'Today' },
+  };
+
+  test('an unrelated greeting after a real answer asks a clarifying question instead of silently repeating it', async () => {
+    const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'hey', priorTurn: priorDoctorTurn });
+    expect(result.intentKey).toBeNull();
+    expect(result.text).toMatch(/not sure I understood/i);
+  });
+
+  test('a typo-laden but genuinely new question after a real answer switches topic correctly, not stuck on the old one', async () => {
+    // "susye" (typo for "system") doesn't stop this from matching
+    // total_patients — "how many patients are there" alone is enough — so
+    // this one resolves to a real, different intent rather than clarifying.
+    // Either way, the bug this guards against is the SAME: it must not
+    // silently stay on the old doctor_activity topic.
+    const fakeSequelize = { query: jest.fn().mockResolvedValue([[{ cnt: 5 }]]) };
+    const result = await answerQuestion({
+      sequelize: fakeSequelize, req: fakeReq, question: 'how many patients are there in the susye', priorTurn: priorDoctorTurn,
+    });
+    expect(result.intentKey).toBe('total_patients');
+    expect(result.intentKey).not.toBe('doctor_activity');
+  });
+
+  test('truly gibberish text after a real answer asks a clarifying question, not a stale repeat', async () => {
+    const result = await answerQuestion({ sequelize: null, req: fakeReq, question: 'asdkjfh qwerty nonsense', priorTurn: priorDoctorTurn });
+    expect(result.intentKey).toBeNull();
+    expect(result.text).toMatch(/not sure I understood/i);
+  });
+
+  test('"run that again" still correctly inherits and re-runs the prior topic', async () => {
+    const fakeSequelize = { query: jest.fn().mockResolvedValue([[]]) };
+    const result = await answerQuestion({ sequelize: fakeSequelize, req: fakeReq, question: 'run that again', priorTurn: priorDoctorTurn });
+    expect(result.intentKey).toBe('doctor_activity');
+    expect(fakeSequelize.query).toHaveBeenCalled();
+  });
+
+  test('a new date phrase alone ("what about yesterday?") still correctly inherits the prior topic', async () => {
+    const fakeSequelize = { query: jest.fn().mockResolvedValue([[]]) };
+    const result = await answerQuestion({ sequelize: fakeSequelize, req: fakeReq, question: 'what about yesterday?', priorTurn: priorDoctorTurn });
+    expect(result.intentKey).toBe('doctor_activity');
+    expect(result.dateRange.label).toBe('Yesterday');
   });
 });

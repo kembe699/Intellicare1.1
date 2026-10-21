@@ -103,6 +103,20 @@ const INTENTS = [
     ],
   },
   {
+    // "How many patients are there (in total/in the system)?" — a current-
+    // moment snapshot, distinct from "registrations" below (new patients IN
+    // A PERIOD). Listed first since it's the more specific phrasing;
+    // "registrations" below would otherwise swallow "how many patients ...".
+    key: 'total_patients',
+    requiresPermission: null,
+    supported: true,
+    patterns: [
+      /\bhow many patients? (are there|do we have|in (the )?(system|hospital|database))\b/,
+      /\btotal (number of )?patients\b/, /\ball patients\b/, /\bpatient count\b/,
+      /\bhow many patients? (in )?total\b/,
+    ],
+  },
+  {
     key: 'registrations',
     requiresPermission: null,
     supported: true,

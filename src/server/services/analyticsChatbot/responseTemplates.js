@@ -38,6 +38,12 @@ function registrations({ count }, label) {
   return { text: `A total of ${count} ${plural(count, 'patient')} ${count === 1 ? 'was' : 'were'} registered ${phrase}.` };
 }
 
+/** All-time snapshot — deliberately no period phrase, since this isn't scoped to one. */
+function totalPatients({ count }) {
+  if (count === 0) return { text: 'There are no patients in the system yet.' };
+  return { text: `There ${count === 1 ? 'is' : 'are'} ${count} ${plural(count, 'patient')} in the system.` };
+}
+
 function visits({ count }, label) {
   const phrase = periodPhrase(label);
   if (count === 0) return { text: `No patient visits were recorded ${phrase}.` };
@@ -210,6 +216,7 @@ function help() {
 
 module.exports = {
   registrations,
+  totalPatients,
   visits,
   revenue,
   doctorActivity,

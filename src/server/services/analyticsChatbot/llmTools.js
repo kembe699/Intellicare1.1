@@ -41,6 +41,11 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
   {
+    name: 'get_total_patients',
+    description: 'The ALL-TIME total number of patients in the system right now — a current snapshot, not scoped to any period. Use this for "how many patients are there / do we have / in total", NOT for "how many patients were registered this week" (that is get_patient_registrations).',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'get_patient_visits',
     description: 'Count of patient visits / clinical encounters in a period.',
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
@@ -83,6 +88,10 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
     case 'get_patient_registrations': {
       const data = await analytics.getRegistrationsCount(sequelize, ctx);
       return { period, count: data.count };
+    }
+    case 'get_total_patients': {
+      const data = await analytics.getTotalPatientsCount(sequelize, { req });
+      return { count: data.count, note: 'All-time snapshot — not scoped to any period.' };
     }
     case 'get_patient_visits': {
       const data = await analytics.getVisitsCount(sequelize, ctx);

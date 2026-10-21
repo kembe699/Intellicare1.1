@@ -82,6 +82,22 @@ async function getRegistrationsCount(sequelize, { req, start, end }) {
   return { count: parseInt(row?.cnt || 0, 10) };
 }
 
+/**
+ * All-time patient count — a current-moment snapshot, not scoped to any
+ * period (same metric and same reasoning as dashboard.js's totalPatients:
+ * "how many patients were registered this week" and "how many patients are
+ * there in total" are two different questions with two different answers).
+ */
+async function getTotalPatientsCount(sequelize, { req }) {
+  const replacements = {};
+  const branchSQL = branchScope(req, replacements);
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM lis_participants WHERE 1=1${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10) };
+}
+
 async function getVisitsCount(sequelize, { req, start, end }) {
   const replacements = { start, end };
   const branchSQL = branchScope(req, replacements);
@@ -195,6 +211,7 @@ async function getDepartmentBreakdown(sequelize, { req, clinicId, start, end }) 
 
 module.exports = {
   getRegistrationsCount,
+  getTotalPatientsCount,
   getVisitsCount,
   getRevenueTotal,
   getDoctorActivity,
