@@ -47,10 +47,24 @@ const GENDER_OPTIONS = [
   { value: 'Other', label: 'Other' },
 ];
 
+// General Examination — a fixed checklist of body systems (matching the
+// facility's own paper visit form), each a free-text finding rather than a
+// structured value, since normal/abnormal phrasing varies by examiner.
+const GENERAL_EXAM_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'abdomen', label: 'Abdomen' },
+  { key: 'cardiovascular_system', label: 'Cardiovascular System' },
+  { key: 'central_nervous_system', label: 'Central Nervous System' },
+  { key: 'respiratory_system', label: 'Respiratory System' },
+  { key: 'musculoskeletal_system', label: 'Musculo-skeletal System' },
+  { key: 'other_examinations', label: 'Other Examinations' },
+];
+const EMPTY_GENERAL_EXAM: Record<string, string> = Object.fromEntries(GENERAL_EXAM_FIELDS.map(f => [f.key, '']));
+
 const EMPTY_CLINICAL_NOTES_FORM = {
   history_of_presenting_illness: '', medical_history: '', surgical_history: '',
   family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '',
   gynae: EMPTY_GYNAE_INFO as GynaeInfo,
+  general_examination: { ...EMPTY_GENERAL_EXAM },
 };
 
 // Visit Summary's editable Clinical Notes form only ever carries the notes/
@@ -71,6 +85,7 @@ function buildClinicalNotesForm(existingVitals: any) {
     allergies: v.allergies || '',
     impressions: v.impressions || '',
     gynae: { ...EMPTY_GYNAE_INFO, ...(v.gynae || {}) },
+    general_examination: { ...EMPTY_GENERAL_EXAM, ...(v.general_examination || {}) },
   };
 }
 
@@ -142,6 +157,7 @@ export default function LISTestOrders() {
     history_of_presenting_illness: '', medical_history: '', surgical_history: '',
     family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '',
     gynae: EMPTY_GYNAE_INFO as GynaeInfo,
+    general_examination: { ...EMPTY_GENERAL_EXAM },
   };
   const [vitals, setVitals] = useState(EMPTY_VITALS);
   // Visit Summary's own editable Clinical Notes (separate from the "Place
@@ -991,6 +1007,13 @@ export default function LISTestOrders() {
       gynae?.antenatal_enabled ? plainNote('Antenatal Notes', gynae?.antenatal?.notes) : '',
     ].join('\n') : '';
 
+    const generalExam = v.general_examination || {};
+    const generalExamEntries = GENERAL_EXAM_FIELDS.filter(({ key }) => generalExam[key]);
+    const generalExamHTML = generalExamEntries.length > 0 ? [
+      '<div class="ic-section-title">General Examination</div>',
+      ...generalExamEntries.map(({ key, label }) => plainNote(label, generalExam[key])),
+    ].join('\n') : '';
+
     const diagnosesHTML = getDiagnosesFromNotes(s.clinical_notes).length > 0 ? [
       '<div class="ic-section-title">Diagnosis</div>',
       `<p style="margin:2px 0 8px 0;font-size:11px;line-height:1.5;color:#334155;">${getDiagnosesFromNotes(s.clinical_notes).join('; ')}</p>`,
@@ -1115,6 +1138,7 @@ export default function LISTestOrders() {
       plainNote('Economic History', v.economic_history),
       plainNote('Allergies', v.allergies),
       gynaeHTML,
+      generalExamHTML,
       plainNote('Clinical Notes', getPlainNotes(s.clinical_notes)),
       plainNote('Impressions', v.impressions),
       '<div class="ic-section-title">Tests Ordered</div>',
@@ -2681,59 +2705,63 @@ export default function LISTestOrders() {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Strength</label>
-                      <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Strength</label>
+                        <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
+                        <Combobox
+                          options={FREQUENCY_OPTIONS.map(f => ({
+                            value: f.code,
+                            label: `${f.code} — ${f.label}`,
+                          }))}
+                          value={rxFrequency}
+                          onChange={v => setRxFrequency(v)}
+                          placeholder="e.g. twice a day"
+                          searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                          className="mt-1 h-9"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
-                      <Combobox
-                        options={FREQUENCY_OPTIONS.map(f => ({
-                          value: f.code,
-                          label: `${f.code} — ${f.label}`,
-                        }))}
-                        value={rxFrequency}
-                        onChange={v => setRxFrequency(v)}
-                        placeholder="e.g. twice a day"
-                        searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
-                        className="mt-1 h-9"
-                      />
-                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
+                        <Input
+                          type="number" min="0" placeholder="e.g. 5"
+                          value={rxDuration}
+                          onChange={e => setRxDuration(e.target.value)}
+                          className="mt-1"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
-                      <Input
-                        type="number" min="0" placeholder="e.g. 5"
-                        value={rxDuration}
-                        onChange={e => setRxDuration(e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
-                      <Input
-                        type="number" min="1" placeholder="Total units to give out"
-                        value={rxQty}
-                        onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
-                        className="mt-1"
-                      />
-                      {rxSuggestedQty != null && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
-                          {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
-                            <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
-                              use this
-                            </button>
-                          )}
-                        </p>
-                      )}
-                      {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
-                        </p>
-                      )}
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
+                        <Input
+                          type="number" min="1" placeholder="Total units to give out"
+                          value={rxQty}
+                          onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
+                          className="mt-1"
+                        />
+                        {rxSuggestedQty != null && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
+                            {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
+                              <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
+                                use this
+                              </button>
+                            )}
+                          </p>
+                        )}
+                        {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -3114,6 +3142,27 @@ export default function LISTestOrders() {
                             <GynaeFields value={clinicalNotesForm.gynae} onChange={(gynae) => setClinicalNotesForm({ ...clinicalNotesForm, gynae })} />
                           )}
 
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">General Examination</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                              {GENERAL_EXAM_FIELDS.map(({ key, label }) => (
+                                <div key={key}>
+                                  <label className="text-xs text-muted-foreground">{label}</label>
+                                  <Textarea
+                                    placeholder={`Enter ${label.toLowerCase()} findings`}
+                                    className="resize-none mt-1"
+                                    rows={2}
+                                    value={clinicalNotesForm.general_examination[key]}
+                                    onChange={e => setClinicalNotesForm({
+                                      ...clinicalNotesForm,
+                                      general_examination: { ...clinicalNotesForm.general_examination, [key]: e.target.value },
+                                    })}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
                           <div className="flex justify-end gap-2 pt-1">
                             <Button variant="outline" onClick={() => { setEditingClinicalNotes(false); setClinicalNotesForm(buildClinicalNotesForm(selectedSummary.vitals)); }}>Cancel</Button>
                             <Button onClick={handleSaveClinicalNotes} disabled={savingClinicalNotes}>
@@ -3165,6 +3214,20 @@ export default function LISTestOrders() {
                       )}
 
                       {!editingClinicalNotes && <GynaeFieldsReadOnly value={selectedSummary.vitals?.gynae || {}} />}
+
+                      {!editingClinicalNotes && GENERAL_EXAM_FIELDS.filter(({ key }) => selectedSummary.vitals?.general_examination?.[key]).length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">General Examination</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            {GENERAL_EXAM_FIELDS.filter(({ key }) => selectedSummary.vitals?.general_examination?.[key]).map(({ key, label }) => (
+                              <div key={key} className="p-3 border rounded-lg bg-card">
+                                <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">{label}</p>
+                                <p>{selectedSummary.vitals.general_examination[key]}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
@@ -3429,62 +3492,66 @@ export default function LISTestOrders() {
                           </div>
                         </div>
 
-                        <div>
-                          <label className="text-xs font-semibold text-muted-foreground">Strength</label>
-                          <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Strength</label>
+                            <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
+                            <Combobox
+                              options={FREQUENCY_OPTIONS.map(f => ({
+                                value: f.code,
+                                label: `${f.code} — ${f.label}`,
+                              }))}
+                              value={rxFrequency}
+                              onChange={v => setRxFrequency(v)}
+                              placeholder="e.g. twice a day"
+                              searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                              className="mt-1 h-9"
+                            />
+                          </div>
                         </div>
 
-                        <div>
-                          <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
-                          <Combobox
-                            options={FREQUENCY_OPTIONS.map(f => ({
-                              value: f.code,
-                              label: `${f.code} — ${f.label}`,
-                            }))}
-                            value={rxFrequency}
-                            onChange={v => setRxFrequency(v)}
-                            placeholder="e.g. twice a day"
-                            searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
-                            className="mt-1 h-9"
-                          />
-                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
+                            <Input
+                              type="number" min="0" placeholder="e.g. 5"
+                              value={rxDuration}
+                              onChange={e => setRxDuration(e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
 
-                        <div>
-                          <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
-                          <Input
-                            type="number" min="0" placeholder="e.g. 5"
-                            value={rxDuration}
-                            onChange={e => setRxDuration(e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
-                          <Input
-                            type="number" min="1" placeholder="Total units to give out"
-                            value={rxQty}
-                            onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
-                            className="mt-1"
-                          />
-                          {/* Show the arithmetic rather than silently overwriting the
-                              prescriber's number, so a computed total is always
-                              traceable back to dose x frequency x days. */}
-                          {rxSuggestedQty != null && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
-                              {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
-                                <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
-                                  use this
-                                </button>
-                              )}
-                            </p>
-                          )}
-                          {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
-                            </p>
-                          )}
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
+                            <Input
+                              type="number" min="1" placeholder="Total units to give out"
+                              value={rxQty}
+                              onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
+                              className="mt-1"
+                            />
+                            {/* Show the arithmetic rather than silently overwriting the
+                                prescriber's number, so a computed total is always
+                                traceable back to dose x frequency x days. */}
+                            {rxSuggestedQty != null && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
+                                {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
+                                  <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
+                                    use this
+                                  </button>
+                                )}
+                              </p>
+                            )}
+                            {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div>
