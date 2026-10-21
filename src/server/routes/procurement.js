@@ -1843,20 +1843,41 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
         // condition, so an item auto-created without a branch_id silently disappears
         // from Item Master (while still showing up in per-location stock views, which
         // don't filter by branch) for every non-admin user.
-        await sequelize.query(`
-          INSERT INTO inventory_items (id, clinic_id, branch_id, item_code, item_name, unit_of_measure,
-            quantity_on_hand, current_unit_cost, average_unit_cost, created_at, updated_at)
-          VALUES (:id, :clinic_id, :branch_id, :item_code, :item_name, :uom, 0, 0, 0, NOW(), NOW())
-          ON CONFLICT (clinic_id, item_code) DO UPDATE SET item_name = EXCLUDED.item_name
-        `, {
-          replacements: {
-            id: inventoryItemId, clinic_id: grn.clinic_id, branch_id: getCreateBranchId(req),
-            item_code: autoCode, item_name: line.item_description,
-            uom: line.unit_of_measure || 'Each'
-          },
-          transaction: t
-        });
-        // Re-fetch in case ON DUPLICATE KEY returned existing row
+        //
+        // Deliberately NOT an ON CONFLICT (clinic_id, item_code) upsert: inventory_items'
+        // own unique constraint on item_code has changed shape across tenants over time
+        // — ensureInventoryItemCodeUniqueness.js widens it from (clinic_id, item_code)
+        // to (clinic_id, branch_id, item_code) per tenant, and that migration is
+        // fire-and-forget on first connection (tenantDb.js), so which shape is live on
+        // any given tenant isn't guaranteed. Naming either shape here throws "no unique
+        // or exclusion constraint matching the ON CONFLICT specification" on whichever
+        // tenants are on the OTHER shape — confirmed live: this was the actual cause of
+        // GRN acceptance failing outright with a 500 whenever a line item needed a new
+        // inventory_items row auto-created. A plain INSERT has no such requirement —
+        // Postgres enforces whichever unique constraint actually exists regardless, so
+        // this works unconditionally; only a genuine race (two concurrent accepts
+        // creating the same new code at once) needs the catch below.
+        try {
+          await sequelize.query(`
+            INSERT INTO inventory_items (id, clinic_id, branch_id, item_code, item_name, unit_of_measure,
+              quantity_on_hand, current_unit_cost, average_unit_cost, created_at, updated_at)
+            VALUES (:id, :clinic_id, :branch_id, :item_code, :item_name, :uom, 0, 0, 0, NOW(), NOW())
+          `, {
+            replacements: {
+              id: inventoryItemId, clinic_id: grn.clinic_id, branch_id: getCreateBranchId(req),
+              item_code: autoCode, item_name: line.item_description,
+              uom: line.unit_of_measure || 'Each'
+            },
+            transaction: t
+          });
+        } catch (insertErr) {
+          if (insertErr.original?.code !== '23505') throw insertErr; // only swallow a genuine uniqueness race
+          await sequelize.query(
+            'UPDATE inventory_items SET item_name = :item_name WHERE clinic_id = :cid AND item_code = :code',
+            { replacements: { item_name: line.item_description, cid: grn.clinic_id, code: autoCode }, transaction: t }
+          );
+        }
+        // Re-fetch — either the row just inserted, or the one a concurrent request/race already created.
         const [created] = await sequelize.query(
           'SELECT id FROM inventory_items WHERE item_code = :code AND clinic_id = :cid LIMIT 1',
           { replacements: { code: autoCode, cid: grn.clinic_id }, transaction: t }

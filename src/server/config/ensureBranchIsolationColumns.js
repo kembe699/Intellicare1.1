@@ -47,6 +47,14 @@ const TABLES_NEEDING_BRANCH_ID = [
   // Procurement (transactional only — suppliers/procurement_settings stay shared)
   'purchase_requisitions', 'pr_line_items', 'purchase_orders', 'purchase_order_items',
   'goods_receipt_notes', 'grn_line_items', 'supplier_bill_approvals', 'supplier_bill_payments',
+  // Already branch_id-aware elsewhere (the item list route, reportInventory.js)
+  // but missing from this migration itself on at least one tenant found while
+  // debugging GRN acceptance — the goods-receipt accept flow auto-creates a
+  // new inventory_items row for any line item it doesn't already recognize,
+  // and that INSERT throws outright on a tenant where this column doesn't
+  // exist yet. Idempotent like every entry here — a no-op on a tenant that
+  // already has it.
+  'inventory_items',
   // Lab test catalog — which tests a branch can run is per-branch capability,
   // not shared reference data (unlike the drug/service catalogs, which stay
   // shared). lab_test_components has no branch_id of its own; it's always
