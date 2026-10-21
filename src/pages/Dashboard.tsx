@@ -28,6 +28,7 @@ interface DashboardStats {
   lowStockItems: number;
   queuePatients: number;
   totalOutstanding: number;
+  periodLabel?: string;
 }
 
 const PAID_COLOR = 'hsl(var(--success))';
@@ -120,45 +121,55 @@ const Dashboard: React.FC = () => {
   const [stockLoading, setStockLoading] = useState(false);
   const [labData, setLabData] = useState<any | null>(null);
   const [labLoading, setLabLoading] = useState(false);
+  const [period, setPeriod] = useState<Period>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const isCustomRange = Boolean(customFrom && customTo);
+
+  // Same Today/This Week/This Month/custom-range filter the Collections hero
+  // card already sends, reused for every other dashboard fetch below so the
+  // whole page moves together instead of only that one card.
+  const periodParams = isCustomRange
+    ? `startDate=${customFrom}&endDate=${customTo}`
+    : `period=${period}`;
+  const activePeriodLabel = isCustomRange
+    ? `${customFrom} to ${customTo}`
+    : PERIODS.find((p) => p.value === period)?.label ?? 'Today';
 
   useEffect(() => {
     if (!isLabView) return;
     let cancelled = false;
     setLabLoading(true);
-    authFetch('/api/lis/lab-dashboard')
+    authFetch(`/api/lis/lab-dashboard?${periodParams}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setLabData(d); })
       .catch(() => { if (!cancelled) setLabData(null); })
       .finally(() => { if (!cancelled) setLabLoading(false); });
     return () => { cancelled = true; };
-  }, [isLabView]);
+  }, [isLabView, periodParams]);
 
   useEffect(() => {
     if (!isPharmacyView) return;
     let cancelled = false;
     setStockLoading(true);
-    authFetch('/api/pharmacy-module/stock-movement?days=30')
+    authFetch(`/api/pharmacy-module/stock-movement?${periodParams}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setStockMovement(d); })
       .catch(() => { if (!cancelled) setStockMovement(null); })
       .finally(() => { if (!cancelled) setStockLoading(false); });
     return () => { cancelled = true; };
-  }, [isPharmacyView]);
+  }, [isPharmacyView, periodParams]);
 
   const CAN_VIEW_COLLECTIONS = ['admin', 'accountant'];
   const canViewCollections = !!user?.role && CAN_VIEW_COLLECTIONS.includes(user.role);
   const [collectionsRevealed, setCollectionsRevealed] = useState(false);
   const maskMoney = (formatted: string) => (collectionsRevealed ? formatted : '••••••••');
   const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
-  const [period, setPeriod] = useState<Period>('today');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [receiptsLoading, setReceiptsLoading] = useState(true);
   const [paymentsFrom, setPaymentsFrom] = useState('');
   const [paymentsTo, setPaymentsTo] = useState('');
 
-  const isCustomRange = Boolean(customFrom && customTo);
   const isPaymentsRangeFiltered = Boolean(paymentsFrom && paymentsTo);
 
   const clinicId = user?.clinic || '1';
@@ -168,7 +179,7 @@ const Dashboard: React.FC = () => {
     (async () => {
       try {
         setLoading(true);
-        const data = await dashboardApi.get(`/stats/${clinicId}`);
+        const data = await dashboardApi.get(`/stats/${clinicId}?${periodParams}`);
         setStats(data);
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
@@ -176,7 +187,7 @@ const Dashboard: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [user, clinicId]);
+  }, [user, clinicId, periodParams]);
 
   useEffect(() => {
     if (!user) return;
@@ -302,7 +313,7 @@ const Dashboard: React.FC = () => {
                   description: 'Only administrators and accountants can view collection figures.',
                 })
               }
-              label={isCustomRange ? `Collections — ${customFrom} to ${customTo}` : `Collections — ${PERIODS.find((p) => p.value === period)?.label}`}
+              label={`Collections — ${activePeriodLabel}`}
               value={fmt(receiptStats.totalAmount)}
               stats={[
                 { label: 'Receipts recorded', value: String(receiptStats.totalReceipts) },
@@ -377,11 +388,11 @@ const Dashboard: React.FC = () => {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Completed today</p>
+                        <p className="text-xs text-muted-foreground">Completed ({activePeriodLabel})</p>
                         <p className="mt-0.5 text-lg font-semibold text-foreground">{labData.totals.completedToday}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Requested today</p>
+                        <p className="text-xs text-muted-foreground">Requested ({activePeriodLabel})</p>
                         <p className="mt-0.5 text-lg font-semibold text-foreground">{labData.totals.requestedToday}</p>
                       </div>
                       <div>
@@ -402,7 +413,7 @@ const Dashboard: React.FC = () => {
           ) : isPharmacyView ? (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Dispensing Report (last 30 days)</CardTitle>
+                <CardTitle className="text-base">Dispensing Report ({stockMovement?.period?.label ?? activePeriodLabel})</CardTitle>
               </CardHeader>
               <CardContent>
                 {stockLoading ? (
@@ -468,7 +479,7 @@ const Dashboard: React.FC = () => {
           ) : (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Today at a Glance</CardTitle>
+              <CardTitle className="text-base">{activePeriodLabel} at a Glance</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-x-4 gap-y-4">
@@ -477,11 +488,11 @@ const Dashboard: React.FC = () => {
                   <p className="mt-0.5 text-lg font-semibold text-foreground">{stats.totalPatients}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Today's Registrations</p>
+                  <p className="text-xs text-muted-foreground">Registrations ({activePeriodLabel})</p>
                   <p className="mt-0.5 text-lg font-semibold text-foreground">{stats.todayPatients}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Today's Visits</p>
+                  <p className="text-xs text-muted-foreground">Visits ({activePeriodLabel})</p>
                   <p className="mt-0.5 text-lg font-semibold text-foreground">{stats.todayVisits}</p>
                 </div>
                 <div>
@@ -493,7 +504,7 @@ const Dashboard: React.FC = () => {
                   <p className="mt-0.5 text-lg font-semibold text-foreground">{stats.pendingLabTests}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Completed Today</p>
+                  <p className="text-xs text-muted-foreground">Completed ({activePeriodLabel})</p>
                   <p className="mt-0.5 text-lg font-semibold text-foreground">{stats.completedLabTests}</p>
                 </div>
                 <div>

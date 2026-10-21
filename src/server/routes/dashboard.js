@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PatientQueue, Visit, sequelize } = require('../models');
 const { getBranchCondition } = require('../middleware/branchFilter');
+const { resolveDashboardDateRange } = require('../utils/dashboardDateRange');
 
 // Non-admin users only see rows from their own branch; admins see
 // everything. Inline, named-`:param`-style helper (this file's raw SQL
@@ -32,12 +33,15 @@ router.get('/stats/:clinicId', async (req, res) => {
       return res.status(500).json({ error: 'Database connection failed' });
     }
     
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
+    // Date range for the dashboard's Today/This Week/This Month/custom-range
+    // filter — only applies to the three metrics below that are genuinely
+    // "activity in a period" (new registrations, visits, completed lab
+    // tests). The other 5 stats computed further down are current-moment
+    // snapshots (total patients, queue, pending lab tests, low stock,
+    // outstanding balance) and are deliberately NOT filtered by this range —
+    // see their own comments for why.
+    const { start: today, end: tomorrow, label: periodLabel } = resolveDashboardDateRange(req.query);
+
     console.log(`Date range: ${today.toISOString()} to ${tomorrow.toISOString()}`);
 
     // Total Patients — `patients`/Patient (queried below only for the branch
@@ -225,7 +229,8 @@ router.get('/stats/:clinicId', async (req, res) => {
       completedLabTests,
       lowStockItems: lowStockAlerts,
       queuePatients,
-      totalOutstanding
+      totalOutstanding,
+      periodLabel
     };
 
     console.log('Dashboard stats calculated:', stats);

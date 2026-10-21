@@ -183,6 +183,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureStockLocationUniqueness } = require('./config/ensureStockLocationUniqueness');
   ensureStockLocationUniqueness(sequelize, schema).catch(() => {});
 
+  // chatbot_conversations/chatbot_messages (Analytics Assistant chat
+  // history), ensured per-tenant the same way.
+  const { ensureChatbotTables } = require('./config/ensureChatbotTables');
+  ensureChatbotTables(sequelize).catch(() => {});
+
   return { sequelize, models };
 }
 

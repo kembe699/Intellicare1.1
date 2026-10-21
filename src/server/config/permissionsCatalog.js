@@ -186,6 +186,13 @@ const CATALOG = [
   ['pages.setup_rooms.view', 'View rooms setup page', 'pages', 'Access to the rooms setup page', ['admin', 'doctor']],
   ['pages.setup_configurations.view', 'View configurations setup page', 'pages', 'Access to the facility configurations setup page', ['admin', 'doctor']],
   ['pages.procurement_requisitions.view', 'View purchase requisitions page', 'pages', 'Access to the purchase requisitions page', ['admin', 'finance_manager', 'accountant', 'doctor', 'pharmacy', 'procurement']],
+  // Base access to the Analytics Assistant chatbot. Broad by design — this
+  // only gates whether someone can open the page and ask non-financial
+  // questions (registrations, visits, doctor activity); a revenue/financial
+  // question is checked again per-request against accounting.read inside
+  // the route itself (see routes/analyticsChatbot.js), same "page access is
+  // not metric access" split the rest of the reports system already uses.
+  ['pages.analytics_assistant.view', 'View Analytics Assistant', 'pages', 'Access to the natural-language analytics chatbot', ['admin', 'reception', 'doctor', 'lab', 'pharmacy', 'reports', 'accountant', 'finance_manager', 'auditor', 'nurse', 'cashier']],
   // Deliberately never granted to any role — Setup > Security manages roles,
   // privileges, and user accounts, so it must stay permanently admin-only,
   // exactly like the backend routes it fronts (see roles.js, users.js

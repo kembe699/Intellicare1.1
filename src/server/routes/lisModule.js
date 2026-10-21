@@ -6,6 +6,7 @@ const { authorize } = require('../middleware/authorize');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
 const { getNextQueueNumber } = require('../config/ensureQueueNumberSupport');
 const { getNextPatientNumber } = require('../config/ensurePatientNumberCounterTable');
+const { resolveDashboardDateRange } = require('../utils/dashboardDateRange');
 
 // Named-parameter counterpart to branchFilter's getBranchConditionSQL, for the handlers
 // below that already build their query with Sequelize's :param replacements object
@@ -1739,7 +1740,13 @@ router.post('/results/batch-review', authorize('lis.results.review'), async (req
 router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) => {
   try {
     const db = req.models?.sequelize || sequelize;
-    const today = new Date().toISOString().split('T')[0];
+    // completedToday/requestedToday respect the dashboard's Today/This
+    // Week/This Month/custom-range filter; the queue-snapshot totals below
+    // (awaitingCollection/inProgress/awaitingApproval/completed/outstanding)
+    // deliberately don't — they answer "what's in the queue right now",
+    // which has no period of its own (same reasoning as dashboard.js's
+    // totalOutstanding).
+    const { start, end, label: periodLabel } = resolveDashboardDateRange(req.query);
     const branchFilter = getBranchConditionSQL(req, 's');
     const branchNamed = getBranchConditionNamed(req, '');
 
@@ -1757,12 +1764,12 @@ router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) =
 
     const [[todayRow]] = await db.query(
       `SELECT COUNT(*)::int AS n FROM lis_specimens
-        WHERE status = 'approved' AND DATE(COALESCE(updated_at, created_at)) = :today ${branchNamed.sql}`,
-      { replacements: { today, ...branchNamed.replacements } }
+        WHERE status = 'approved' AND COALESCE(updated_at, created_at) >= :start AND COALESCE(updated_at, created_at) < :end ${branchNamed.sql}`,
+      { replacements: { start, end, ...branchNamed.replacements } }
     );
     const [[todayNewRow]] = await db.query(
-      `SELECT COUNT(*)::int AS n FROM lis_specimens WHERE DATE(created_at) = :today ${branchNamed.sql}`,
-      { replacements: { today, ...branchNamed.replacements } }
+      `SELECT COUNT(*)::int AS n FROM lis_specimens WHERE created_at >= :start AND created_at < :end ${branchNamed.sql}`,
+      { replacements: { start, end, ...branchNamed.replacements } }
     );
 
     // The queue itself — newest first, with the patient the sample belongs to.
@@ -1791,6 +1798,7 @@ router.get('/lab-dashboard', authorize('lis.dashboard.read'), async (req, res) =
         requestedToday: todayNewRow?.n || 0,
         total: outstanding + completed,
       },
+      periodLabel,
       byStatus,
       queue: queue.map(r => ({
         id: r.id,

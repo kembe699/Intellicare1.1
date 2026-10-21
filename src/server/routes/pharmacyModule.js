@@ -9,6 +9,7 @@ const { authorize } = require('../middleware/authorize');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
 const { findInsufficientStockLine } = require('../utils/checkDrugStock');
+const { resolveDashboardDateRange } = require('../utils/dashboardDateRange');
 
 // This entire file had no authorize() calls at all — every route (including controlled-
 // substance dispensing, price edits, and drug-interaction deletes) was reachable by any
@@ -2771,9 +2772,22 @@ router.post('/dispensing-receipt', authorize('pharmacy.write'), async (req, res)
 router.get('/stock-movement', authorize('pharmacy.read'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const days = Math.min(parseInt(req.query.days, 10) || 30, 365);
-    const dateFrom = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-    const dateTo = new Date().toISOString().split('T')[0];
+    // The dashboard's Today/This Week/This Month/custom-range filter (period
+    // or startDate+endDate) takes priority when present; `days` is the
+    // original rolling-window param, kept as the fallback for any caller
+    // that doesn't send the dashboard's filter params.
+    let dateFrom, dateTo, days, periodLabel;
+    if (req.query.period || (req.query.startDate && req.query.endDate)) {
+      const { start, end, label } = resolveDashboardDateRange(req.query);
+      dateFrom = start.toISOString().split('T')[0];
+      dateTo = new Date(end.getTime() - 86400000).toISOString().split('T')[0];
+      days = null;
+      periodLabel = label;
+    } else {
+      days = Math.min(parseInt(req.query.days, 10) || 30, 365);
+      dateFrom = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+      dateTo = new Date().toISOString().split('T')[0];
+    }
     const repl = { clinicId, dateFrom, dateTo };
 
     const [rows] = await sequelize.query(`
@@ -2821,7 +2835,7 @@ router.get('/stock-movement', authorize('pharmacy.read'), async (req, res) => {
     `, { replacements: { clinicId } });
 
     res.json({
-      period: { dateFrom, dateTo, days },
+      period: { dateFrom, dateTo, days, label: periodLabel || `last ${days} days` },
       totals: {
         items: items.length,
         movedItems: moved.length,
