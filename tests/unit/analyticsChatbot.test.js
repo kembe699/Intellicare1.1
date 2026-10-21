@@ -167,6 +167,26 @@ describe('analyticsChatbot dateParser', () => {
     expect(r.label).toBe('Last 3 Months');
   });
 
+  test('all time — a fixed sentinel start, not a special no-lower-bound code path', () => {
+    const r = resolveDateExpression('show me for all the all time', now);
+    expect(r.matched).toBe(true);
+    expect(r.start).toEqual(new Date(2000, 0, 1));
+    expect(r.end).toEqual(new Date(2026, 9, 22));
+    expect(r.label).toBe('All Time');
+  });
+
+  test('all time, alternate phrasing: "since the beginning"', () => {
+    const r = resolveDateExpression('total revenue since the beginning', now);
+    expect(r.matched).toBe(true);
+    expect(r.label).toBe('All Time');
+  });
+
+  test('all time, alternate phrasing: "from the start"', () => {
+    const r = resolveDateExpression('how many patients have we had from the start', now);
+    expect(r.matched).toBe(true);
+    expect(r.label).toBe('All Time');
+  });
+
   test('between two explicit dates, inclusive of the end date', () => {
     const r = resolveDateExpression('revenue between 2026-10-01 and 2026-10-15', now);
     expect(r.start).toEqual(new Date('2026-10-01T00:00:00'));

@@ -25,7 +25,7 @@ const PERIOD_SCHEMA = {
   properties: {
     named_period: {
       type: 'string',
-      enum: ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year'],
+      enum: ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year', 'all_time'],
       description: '"this_week" is a rolling 7-day window ending today, "this_month" is the 1st of the current month through today — matching the Dashboard\'s own Today/This Week/This Month filters exactly, not an ISO calendar week.',
     },
     last_n_days: { type: 'integer', description: 'Use instead of named_period for "last N days" style questions.' },

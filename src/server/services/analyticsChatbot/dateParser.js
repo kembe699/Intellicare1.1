@@ -55,6 +55,15 @@ function resolveDateExpression(text, now = new Date()) {
     return { matched: true, start, end, label: `${between[1]} to ${between[2]}` };
   }
 
+  // "All time" — the whole history of the system, no lower bound. A fixed
+  // sentinel start date (well before this system's own existence) rather
+  // than a null/omitted WHERE clause, so every analyticsFunctions.js query
+  // keeps its one existing "start <= col < end" shape instead of needing a
+  // special no-lower-bound code path.
+  if (/\ball[\s-]?time\b/.test(lower) || /\bsince (the )?beginning\b/.test(lower) || /\bfrom the start\b/.test(lower)) {
+    return { matched: true, start: new Date(2000, 0, 1), end: tomorrow0, label: 'All Time' };
+  }
+
   if (/\byesterday\b/.test(lower)) {
     return { matched: true, start: addDays(today0, -1), end: today0, label: 'Yesterday' };
   }
@@ -158,6 +167,7 @@ const NAMED_PERIOD_PHRASES = {
   this_month: 'this month',
   last_month: 'last month',
   this_year: 'this year',
+  all_time: 'all time',
 };
 
 /**
