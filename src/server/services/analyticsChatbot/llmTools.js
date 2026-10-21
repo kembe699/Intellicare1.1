@@ -74,7 +74,7 @@ const TOOLS = [
   },
   {
     name: 'get_hospital_summary',
-    description: 'A combined summary for a period: registrations, visits, revenue (if the user is authorized), and the busiest doctor.',
+    description: "A broad overview across every module for a period in one call: registrations, visits, revenue (if authorized), the busiest doctor, lab orders outstanding/completed and the manager-review backlog, pharmacy dispensing, purchase orders, and inventory out-of-stock/expiring counts. Use this for 'overview', 'what's happening', 'all activities', 'how's the hospital doing' — anything asking broadly rather than about one specific module.",
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
   {
@@ -94,7 +94,47 @@ const TOOLS = [
   },
   {
     name: 'get_income_statement',
-    description: "Revenue collected minus expenses paid for a period (a simplified cash-basis net figure, not the full general-ledger accrual income statement). Requires financial access. Use this when asked for 'income statement', 'profit and loss', 'net income', or when the user asks for revenue AND expenses together.",
+    description: "The real income statement (Profit & Loss) for a period, from the actual chart-of-accounts / general ledger — the same figures the Reports page's Income Statement shows, not an approximation. basis='cash' (default) recognizes revenue when collected, matching the cashier and the Dashboard; basis='accrual' recognizes it when billed, matching the receivable balance. Expenses are always the full general-ledger expense view (payroll, depreciation, cost of sales, etc. — a materially larger figure than get_expenses below, which is only the manual expense-voucher log). Requires financial access. Use this for 'income statement', 'profit and loss', 'net income', or 'revenue and expenses together'.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        period: PERIOD_SCHEMA,
+        basis: { type: 'string', enum: ['cash', 'accrual'], description: "'cash' (default) = recognized when collected/paid; 'accrual' = recognized when billed/incurred. Only set this if the user specifically asks for billed-not-collected or an accrual view." },
+      },
+      required: ['period'],
+    },
+  },
+  {
+    name: 'get_purchase_orders',
+    description: "Purchase orders in a period, by status (draft, check, approved, authorized, received, cancelled) — count and total value, overall and broken down per status. Use for 'any POs', 'purchase orders', 'pending purchase orders', procurement questions.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        period: PERIOD_SCHEMA,
+        status: { type: 'string', enum: ['draft', 'check', 'approved', 'authorized', 'received', 'cancelled'], description: 'Filter to just this status — omit for all statuses (the result still includes a full per-status breakdown either way).' },
+      },
+      required: ['period'],
+    },
+  },
+  {
+    name: 'get_pharmacy_dispensing',
+    description: "Pharmacy dispensing activity in a period: count, quantity, and value of medications actually dispensed, plus how many of those were later returned/partially returned, and how many distinct patients were served. This IS the dispensing report (matches the Pharmacy Report page's own numbers). Use for 'pharmacy dispensing report', 'what was dispensed', 'pharmacy activity'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_inventory_status',
+    description: "Current inventory health snapshot: items out of stock right now, and stock batches expiring within a window (default 90 days). Not scoped to any period (these are current-moment facts). Deliberately no inventory VALUE total here either, same reasoning as get_low_stock — see that tool. Use for 'what's going on with inventory', 'out of stock', 'expiring stock'.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        expiring_within_days: { type: 'integer', description: 'How many days ahead to check for expiring batches. Defaults to 90 if omitted.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_lab_registry',
+    description: "Lab (LIS) activity overview in a period: orders outstanding (not yet approved: pending collection, routed, received, or analyzed), orders completed (approved), total, and the manager-review backlog (results awaiting a manager's sign-off right now, a current snapshot regardless of the period given). Matches the LIS dashboard and the manager-review queue exactly. Use for 'lab registry', 'lis overview', 'how's the lab doing', 'pending reviews'.",
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
 ];
@@ -152,10 +192,15 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
     }
     case 'get_hospital_summary': {
       const canSeeRevenue = await hasPrivilege(req, 'accounting.read');
-      const [reg, vis, doctors] = await Promise.all([
+      const [reg, vis, doctors, lab, dispensing, purchaseOrders, outOfStock, expiring] = await Promise.all([
         analytics.getRegistrationsCount(sequelize, ctx),
         analytics.getVisitsCount(sequelize, ctx),
         analytics.getDoctorActivity(sequelize, ctx),
+        analytics.getLabRegistryOverview(sequelize, ctx),
+        analytics.getPharmacyDispensingTotal(sequelize, ctx),
+        analytics.getPurchaseOrdersSummary(sequelize, ctx),
+        analytics.getOutOfStockCount(sequelize, { req, clinicId }),
+        analytics.getExpiringStockCount(sequelize, { req, clinicId }),
       ]);
       let revenue = null;
       if (canSeeRevenue) {
@@ -169,6 +214,10 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
         visits: vis.count,
         revenue: revenue || { error: 'permission_denied' },
         topDoctor: doctors[0] || null,
+        lab: { ordersOutstanding: lab.ordersOutstanding, ordersCompleted: lab.ordersCompleted, managerReviewBacklog: lab.managerReviewBacklog },
+        pharmacy: { dispensedCount: dispensing.dispensedCount, dispensedValue: dispensing.dispensedValue },
+        purchaseOrders: { count: purchaseOrders.count, totalValue: purchaseOrders.totalValue },
+        inventory: { outOfStockCount: outOfStock.count, expiringCount: expiring.count },
       };
     }
     case 'get_doctor_directory': {
@@ -191,18 +240,52 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
       if (!(await hasPrivilege(req, 'accounting.read'))) {
         return { error: 'permission_denied', message: 'This user does not have financial/accounting access.' };
       }
+      const basis = input?.basis === 'accrual' ? 'accrual' : 'cash';
       const baseCurrency = await CurrencyService.getBaseCurrency();
-      const [rev, exp] = await Promise.all([
-        analytics.getRevenueTotal(sequelize, ctx),
-        analytics.getExpensesTotal(sequelize, ctx),
-      ]);
+      const data = await analytics.getFullIncomeStatement(sequelize, ctx, basis);
       return {
         period,
+        basis,
         currency: baseCurrency.code,
-        revenue: rev.total,
-        expenses: exp.total,
-        netIncome: rev.total - exp.total,
-        note: 'Simplified cash-basis figure (receipts collected minus paid expense vouchers), not the full general-ledger accrual income statement.',
+        revenue: data.totalRevenue,
+        expenses: data.totalExpenses,
+        netIncome: data.netIncome,
+        expensesByCategory: data.expenseSections,
+        note: `From the general ledger (chart of accounts), basis=${basis} — the same figures the Reports page's Income Statement shows.`,
+      };
+    }
+    case 'get_purchase_orders': {
+      const data = await analytics.getPurchaseOrdersSummary(sequelize, { ...ctx, status: input?.status });
+      return { period, count: data.count, totalValue: data.totalValue, byStatus: data.byStatus };
+    }
+    case 'get_pharmacy_dispensing': {
+      const data = await analytics.getPharmacyDispensingTotal(sequelize, ctx);
+      return {
+        period,
+        dispensedCount: data.dispensedCount,
+        dispensedQuantity: data.dispensedQuantity,
+        dispensedValue: data.dispensedValue,
+        returnedCount: data.returnedCount,
+        patientCount: data.patientCount,
+      };
+    }
+    case 'get_inventory_status': {
+      const days = Number.isFinite(input?.expiring_within_days) ? input.expiring_within_days : 90;
+      const [outOfStock, expiring] = await Promise.all([
+        analytics.getOutOfStockCount(sequelize, { req, clinicId }),
+        analytics.getExpiringStockCount(sequelize, { req, clinicId, days }),
+      ]);
+      return { outOfStockCount: outOfStock.count, expiringCount: expiring.count, expiringWithinDays: days, note: 'Current snapshot — not scoped to any period.' };
+    }
+    case 'get_lab_registry': {
+      const data = await analytics.getLabRegistryOverview(sequelize, ctx);
+      return {
+        period,
+        ordersOutstanding: data.ordersOutstanding,
+        ordersCompleted: data.ordersCompleted,
+        ordersTotal: data.ordersTotal,
+        managerReviewBacklog: data.managerReviewBacklog,
+        note: 'managerReviewBacklog is a current snapshot regardless of the period given; the order counts above are scoped to the period.',
       };
     }
     default:

@@ -433,3 +433,12 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
+// Exposed so other server-side callers (the Analytics Assistant's
+// get_income_statement tool) can compute the exact same real,
+// chart-of-accounts-backed figure this route reports — not a separate
+// approximation — without a second HTTP round trip. Attaching these to the
+// exported router function is safe: Express only ever calls it as
+// middleware via app.use(), and extra named properties don't affect that.
+module.exports.fetchSection = fetchSection;
+module.exports.fetchCashRevenue = fetchCashRevenue;
+module.exports.splitExpenseSections = splitExpenseSections;

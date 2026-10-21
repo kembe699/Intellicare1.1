@@ -260,6 +260,189 @@ async function getLowStockCount(sequelize, { req, clinicId }) {
   return { count: parseInt(row?.cnt || 0, 10) };
 }
 
+// Items with zero stock on hand right now — a current snapshot, same
+// WHERE clause as reportInventory.js's own GET /out-of-stock.
+async function getOutOfStockCount(sequelize, { req, clinicId }) {
+  const replacements = { clinicId };
+  const branchSQL = branchScope(req, replacements, 'i.branch_id');
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM inventory_items i
+      WHERE i.clinic_id = :clinicId AND i.is_active = true
+        AND i.quantity_on_hand = 0${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10) };
+}
+
+// Batches expiring within `days` (default 90) — expiry lives on
+// inventory_batches, not inventory_items itself (confirmed against
+// reportInventory.js's own GET /near-expiry, same WHERE clause: not yet
+// expired, still active/partially used stock, expiry within the window).
+async function getExpiringStockCount(sequelize, { req, clinicId, days = 90 }) {
+  const replacements = { clinicId, days };
+  const branchSQL = branchScope(req, replacements, 'bt.branch_id');
+  const [[row]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM inventory_batches bt
+      WHERE bt.clinic_id = :clinicId
+        AND bt.status IN ('active', 'partial_use')
+        AND bt.is_expired IS NOT TRUE
+        AND bt.expiry_date IS NOT NULL
+        AND bt.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + (:days || ' days')::interval${branchSQL}`,
+    { replacements },
+  );
+  return { count: parseInt(row?.cnt || 0, 10), days };
+}
+
+// Purchase orders by status in a period — reportDate on order_date, matching
+// the Procurement module's own status workflow (draft -> check -> approved
+// -> authorized -> received, or cancelled). Deliberately counts/sums only —
+// see purchase-orders.js's own model comment: payment_terms/paid_amount
+// exist on the real table but aren't on the Sequelize model, so a "how much
+// is still unpaid on POs" figure isn't safely derivable here without
+// querying those raw columns specifically, which this function doesn't need
+// for a status/value overview.
+async function getPurchaseOrdersSummary(sequelize, { req, clinicId, start, end, status }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements);
+  const statusSQL = status ? ' AND status = :status' : '';
+  if (status) replacements.status = status;
+  const [[totals]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt, COALESCE(SUM(total_amount), 0) AS total
+       FROM purchase_orders
+      WHERE clinic_id = :clinicId AND order_date >= :start AND order_date < :end${statusSQL}${branchSQL}`,
+    { replacements },
+  );
+  const byStatusReplacements = { clinicId, start, end };
+  const byStatusBranchSQL = branchScope(req, byStatusReplacements);
+  const [byStatus] = await sequelize.query(
+    `SELECT status, COUNT(*) AS cnt, COALESCE(SUM(total_amount), 0) AS total
+       FROM purchase_orders
+      WHERE clinic_id = :clinicId AND order_date >= :start AND order_date < :end${byStatusBranchSQL}
+      GROUP BY status
+      ORDER BY cnt DESC`,
+    { replacements: byStatusReplacements },
+  );
+  return {
+    count: parseInt(totals?.cnt || 0, 10),
+    totalValue: parseFloat(totals?.total || 0),
+    byStatus: byStatus.map((r) => ({ status: r.status, count: parseInt(r.cnt, 10), total: parseFloat(r.total) })),
+  };
+}
+
+// Pharmacy dispensing volume/value in a period — dispensing_records is the
+// real, live table (drugs/drug_inventory/pharmacy_dispensing are confirmed
+// dead/empty — see reportPharmacy.js's own header comment). status='dispensed'
+// excludes fully/partially returned lines from the headline total, matching
+// pharmacyModule.js's own "today's dispensing" stat; returns are still
+// reported separately so a return rate is visible, never silently dropped.
+async function getPharmacyDispensingTotal(sequelize, { req, clinicId, start, end }) {
+  const replacements = { clinicId, start, end };
+  const branchSQL = branchScope(req, replacements, 'dr.branch_id');
+  const [[row]] = await sequelize.query(
+    `SELECT
+        COUNT(*) FILTER (WHERE dr.status = 'dispensed') AS dispensed_cnt,
+        COALESCE(SUM(dr.quantity_dispensed) FILTER (WHERE dr.status = 'dispensed'), 0) AS dispensed_qty,
+        COALESCE(SUM(dr.total_price) FILTER (WHERE dr.status = 'dispensed'), 0) AS dispensed_value,
+        COUNT(*) FILTER (WHERE dr.status IN ('returned', 'partially_returned')) AS returned_cnt,
+        COUNT(DISTINCT dr.patient_id) FILTER (WHERE dr.status = 'dispensed') AS patient_cnt
+       FROM dispensing_records dr
+      WHERE dr.clinic_id = :clinicId
+        AND dr.dispensing_date >= :start AND dr.dispensing_date < :end${branchSQL}`,
+    { replacements },
+  );
+  return {
+    dispensedCount: parseInt(row?.dispensed_cnt || 0, 10),
+    dispensedQuantity: parseFloat(row?.dispensed_qty || 0),
+    dispensedValue: parseFloat(row?.dispensed_value || 0),
+    returnedCount: parseInt(row?.returned_cnt || 0, 10),
+    patientCount: parseInt(row?.patient_cnt || 0, 10),
+  };
+}
+
+// Lab (LIS) activity overview — mirrors lab-dashboard's own status buckets
+// exactly (lisModule.js GET /lis/lab-dashboard): outstanding = specimens
+// not yet approved (pending_collection + routed + received + analyzed),
+// completed = status='approved'. Manager-review backlog is a separate,
+// already-live number (lis_results.status='pending_manager_review',
+// the exact source LISManagerReview.tsx itself reads). Not clinic_id
+// scoped — lis_test_orders/lis_specimens.clinic_id is a separate, often-
+// null, unreliable column (see this file's header comment); branch_id is
+// the reliable scope here, same as every other LIS-backed function above.
+async function getLabRegistryOverview(sequelize, { req, start, end }) {
+  const statusReplacements = { start, end };
+  const statusBranchSQL = branchScope(req, statusReplacements, 's.branch_id');
+  const [byStatus] = await sequelize.query(
+    `SELECT s.status, COUNT(*) AS cnt
+       FROM lis_specimens s
+      WHERE s.created_at >= :start AND s.created_at < :end${statusBranchSQL}
+      GROUP BY s.status`,
+    { replacements: statusReplacements },
+  );
+  const byStatusMap = Object.fromEntries(byStatus.map((r) => [r.status, parseInt(r.cnt, 10)]));
+  const outstanding = (byStatusMap.pending_collection || 0) + (byStatusMap.routed || 0) + (byStatusMap.received || 0) + (byStatusMap.analyzed || 0);
+  const completed = byStatusMap.approved || 0;
+
+  const backlogReplacements = {};
+  const backlogBranchSQL = branchScope(req, backlogReplacements, 'r.branch_id');
+  const [[backlogRow]] = await sequelize.query(
+    `SELECT COUNT(*) AS cnt FROM lis_results r WHERE r.status = 'pending_manager_review'${backlogBranchSQL}`,
+    { replacements: backlogReplacements },
+  );
+
+  return {
+    ordersOutstanding: outstanding,
+    ordersCompleted: completed,
+    ordersTotal: outstanding + completed,
+    managerReviewBacklog: parseInt(backlogRow?.cnt || 0, 10),
+    byStatus: byStatusMap,
+  };
+}
+
+// Real, chart-of-accounts-backed income statement — reuses
+// reportIncomeStatement.js's own computation functions directly (not a
+// second implementation of the waterfall-allocation logic) so this always
+// matches the Reports page exactly. basis='cash' (default, matches that
+// route's own default) recognizes revenue when collected; basis='accrual'
+// recognizes it when billed. Expenses are always the full GL expense-
+// account view (payroll, depreciation, COGS, etc.) — a materially larger,
+// different number from getExpensesTotal above, which is only the manual
+// daily_expenses voucher log.
+async function getFullIncomeStatement(sequelize, { req, clinicId, start, end }, basis = 'cash') {
+  const reportIncomeStatement = require('../../routes/reportIncomeStatement');
+  const toDateStr = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const dateFrom = toDateStr(start);
+  // `end` here is exclusive (the day after the last included day, per
+  // dateParser.js) — the report's own dateFrom/dateTo are inclusive, so the
+  // inclusive dateTo is one day before it.
+  const dateTo = toDateStr(new Date(end.getTime() - 24 * 60 * 60 * 1000));
+
+  const [revenue, expenses] = await Promise.all([
+    basis === 'accrual'
+      ? reportIncomeStatement.fetchSection(clinicId, 'revenue', dateFrom, dateTo, req)
+      : reportIncomeStatement.fetchCashRevenue(clinicId, dateFrom, dateTo, req),
+    reportIncomeStatement.fetchSection(clinicId, 'expense', dateFrom, dateTo, req),
+  ]);
+  const totalRevenue = revenue.reduce((sum, r) => sum + r.amount, 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const expenseSections = reportIncomeStatement.splitExpenseSections(expenses);
+
+  return {
+    basis,
+    period: { dateFrom, dateTo },
+    revenueByAccount: revenue,
+    expensesByAccount: expenses,
+    expenseSections,
+    totalRevenue,
+    totalExpenses,
+    netIncome: totalRevenue - totalExpenses,
+  };
+}
+
 module.exports = {
   getRegistrationsCount,
   getTotalPatientsCount,
@@ -267,6 +450,12 @@ module.exports = {
   getRevenueTotal,
   getExpensesTotal,
   getLowStockCount,
+  getOutOfStockCount,
+  getExpiringStockCount,
+  getPurchaseOrdersSummary,
+  getPharmacyDispensingTotal,
+  getLabRegistryOverview,
+  getFullIncomeStatement,
   getDoctorActivity,
   getDepartmentBreakdown,
   listDoctors,

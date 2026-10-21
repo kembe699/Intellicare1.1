@@ -21,7 +21,7 @@ const { TOOLS, executeTool } = require('../../src/server/services/analyticsChatb
 
 describe('llmTools — the tool allowlist Claude is actually given', () => {
   test('every tool has a name, description, and a well-formed input schema', () => {
-    expect(TOOLS.length).toBeGreaterThanOrEqual(11);
+    expect(TOOLS.length).toBeGreaterThanOrEqual(15);
     for (const tool of TOOLS) {
       expect(typeof tool.name).toBe('string');
       expect(typeof tool.description).toBe('string');
@@ -30,7 +30,7 @@ describe('llmTools — the tool allowlist Claude is actually given', () => {
   });
 
   test('every period-scoped tool declares the period parameter — snapshot tools (no period of their own) are the deliberate exceptions', () => {
-    const SNAPSHOT_TOOLS = new Set(['get_total_patients', 'get_doctor_directory', 'get_low_stock']);
+    const SNAPSHOT_TOOLS = new Set(['get_total_patients', 'get_doctor_directory', 'get_low_stock', 'get_inventory_status']);
     for (const tool of TOOLS) {
       if (SNAPSHOT_TOOLS.has(tool.name)) {
         expect(tool.input_schema.properties.period).toBeUndefined();
@@ -122,17 +122,30 @@ describe('executeTool — permission checks run server-side, before any query', 
     expect(analytics.getExpensesTotal).not.toHaveBeenCalled();
   });
 
-  test('get_income_statement composes revenue and expenses into a net figure, and is permission-gated', async () => {
+  test('get_income_statement pulls the real general-ledger figure (getFullIncomeStatement), not the cash shortcut, and is permission-gated', async () => {
     hasPrivilege.mockResolvedValue(true);
     CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
-    analytics.getRevenueTotal.mockResolvedValue({ total: 500, count: 2 });
-    analytics.getExpensesTotal.mockResolvedValue({ total: 200, count: 1 });
+    analytics.getFullIncomeStatement.mockResolvedValue({
+      totalRevenue: 500, totalExpenses: 200, netIncome: 300, expenseSections: { operating: 150, costOfSales: 50, miscellaneous: 0 },
+    });
     const result = await executeTool(
       'get_income_statement', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'accountant' } }, clinicId: 1 },
     );
     expect(result.revenue).toBe(500);
     expect(result.expenses).toBe(200);
     expect(result.netIncome).toBe(300);
+    expect(analytics.getFullIncomeStatement).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'cash');
+  });
+
+  test('get_income_statement defaults to cash basis but honors an explicit accrual request', async () => {
+    hasPrivilege.mockResolvedValue(true);
+    CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
+    analytics.getFullIncomeStatement.mockResolvedValue({ totalRevenue: 900, totalExpenses: 400, netIncome: 500, expenseSections: {} });
+    const result = await executeTool(
+      'get_income_statement', { period: { named_period: 'today' }, basis: 'accrual' }, { sequelize: {}, req: { user: { role: 'accountant' } }, clinicId: 1 },
+    );
+    expect(result.basis).toBe('accrual');
+    expect(analytics.getFullIncomeStatement).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'accrual');
   });
 
   test('get_income_statement is permission-gated the same way as get_revenue/get_expenses', async () => {
@@ -141,8 +154,67 @@ describe('executeTool — permission checks run server-side, before any query', 
       'get_income_statement', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 },
     );
     expect(result.error).toBe('permission_denied');
-    expect(analytics.getRevenueTotal).not.toHaveBeenCalled();
-    expect(analytics.getExpensesTotal).not.toHaveBeenCalled();
+    expect(analytics.getFullIncomeStatement).not.toHaveBeenCalled();
+  });
+
+  test('get_purchase_orders needs no special permission and passes an optional status filter through', async () => {
+    analytics.getPurchaseOrdersSummary.mockResolvedValue({ count: 4, totalValue: 12000, byStatus: [{ status: 'approved', count: 4, total: 12000 }] });
+    const result = await executeTool(
+      'get_purchase_orders', { period: { named_period: 'today' }, status: 'approved' }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 },
+    );
+    expect(result.count).toBe(4);
+    expect(result.totalValue).toBe(12000);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+    expect(analytics.getPurchaseOrdersSummary).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: 'approved' }));
+  });
+
+  test('get_pharmacy_dispensing needs no special permission', async () => {
+    analytics.getPharmacyDispensingTotal.mockResolvedValue({ dispensedCount: 10, dispensedQuantity: 40, dispensedValue: 5000, returnedCount: 1, patientCount: 8 });
+    const result = await executeTool('get_pharmacy_dispensing', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.dispensedCount).toBe(10);
+    expect(result.dispensedValue).toBe(5000);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_inventory_status needs no period input and no special permission, defaults expiring_within_days to 90', async () => {
+    analytics.getOutOfStockCount.mockResolvedValue({ count: 2 });
+    analytics.getExpiringStockCount.mockResolvedValue({ count: 5, days: 90 });
+    const result = await executeTool('get_inventory_status', {}, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.outOfStockCount).toBe(2);
+    expect(result.expiringCount).toBe(5);
+    expect(result.expiringWithinDays).toBe(90);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+    expect(analytics.getExpiringStockCount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ days: 90 }));
+  });
+
+  test('get_lab_registry needs no special permission', async () => {
+    analytics.getLabRegistryOverview.mockResolvedValue({ ordersOutstanding: 3, ordersCompleted: 12, ordersTotal: 15, managerReviewBacklog: 2 });
+    const result = await executeTool('get_lab_registry', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'reception' } }, clinicId: 1 });
+    expect(result.ordersOutstanding).toBe(3);
+    expect(result.managerReviewBacklog).toBe(2);
+    expect(hasPrivilege).not.toHaveBeenCalled();
+  });
+
+  test('get_hospital_summary covers every module in one call, not just registrations/visits/revenue', async () => {
+    hasPrivilege.mockResolvedValue(true);
+    CurrencyService.getBaseCurrency.mockResolvedValue({ code: 'SSP' });
+    analytics.getRegistrationsCount.mockResolvedValue({ count: 20 });
+    analytics.getVisitsCount.mockResolvedValue({ count: 35 });
+    analytics.getDoctorActivity.mockResolvedValue([{ doctor: 'Dr. A', visits: 10 }]);
+    analytics.getRevenueTotal.mockResolvedValue({ total: 50000, count: 12 });
+    analytics.getLabRegistryOverview.mockResolvedValue({ ordersOutstanding: 3, ordersCompleted: 12, managerReviewBacklog: 1 });
+    analytics.getPharmacyDispensingTotal.mockResolvedValue({ dispensedCount: 8, dispensedValue: 3000 });
+    analytics.getPurchaseOrdersSummary.mockResolvedValue({ count: 2, totalValue: 9000 });
+    analytics.getOutOfStockCount.mockResolvedValue({ count: 1 });
+    analytics.getExpiringStockCount.mockResolvedValue({ count: 4 });
+    const result = await executeTool('get_hospital_summary', { period: { named_period: 'today' } }, { sequelize: {}, req: { user: { role: 'admin' } }, clinicId: 1 });
+    expect(result.registrations).toBe(20);
+    expect(result.visits).toBe(35);
+    expect(result.revenue.total).toBe(50000);
+    expect(result.lab).toEqual({ ordersOutstanding: 3, ordersCompleted: 12, managerReviewBacklog: 1 });
+    expect(result.pharmacy).toEqual({ dispensedCount: 8, dispensedValue: 3000 });
+    expect(result.purchaseOrders).toEqual({ count: 2, totalValue: 9000 });
+    expect(result.inventory).toEqual({ outOfStockCount: 1, expiringCount: 4 });
   });
 
   test('registrations and visits need no special permission', async () => {
