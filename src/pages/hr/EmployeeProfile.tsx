@@ -14,7 +14,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Users, Edit, Phone, Mail, MapPin, Loader2, Check, Plus, Trash2,
-  ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt, Smartphone, Copy,
+  ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt, Smartphone, Copy, HandCoins,
 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 
@@ -38,6 +38,7 @@ export default function EmployeeProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currencies, setCurrencies] = useState<any[]>([]);
+  const [advances, setAdvances] = useState<any[]>([]);
 
   const [showAddComponent, setShowAddComponent] = useState(false);
   const [componentForm, setComponentForm] = useState({ component_type: 'allowance', name: '', amount: '', is_percentage: false, account_code: '' });
@@ -173,7 +174,14 @@ export default function EmployeeProfile() {
     } catch (e) { /* non-blocking */ }
   };
 
-  useEffect(() => { fetchEmployee(); fetchCurrencies(); fetchSalaryStructures(); }, [id]);
+  const fetchAdvances = async () => {
+    try {
+      const res = await authFetch(`/api/hr/salary-advances?employee_id=${id}`);
+      if (res.ok) setAdvances(await res.json());
+    } catch (e) { /* non-blocking */ }
+  };
+
+  useEffect(() => { fetchEmployee(); fetchCurrencies(); fetchSalaryStructures(); fetchAdvances(); }, [id]);
 
   useEffect(() => {
     if (employee?.employment_type === 'consultant') {
@@ -694,6 +702,73 @@ export default function EmployeeProfile() {
                       ))}
                     </tbody>
                   </table>
+                )}
+              </div>
+
+              <div className="bg-card rounded-lg border shadow-sm p-5 space-y-3">
+                <h3 className="font-medium flex items-center gap-2"><HandCoins className="w-4 h-4 text-primary" /> Salary Advances</h3>
+                {advances.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No salary advances for this {roleLabel.toLowerCase()}.</p>
+                ) : (
+                  <>
+                    {(() => {
+                      const totalTaken = advances.reduce((s: number, a: any) => s + (parseFloat(a.amount) || 0), 0);
+                      const totalOutstanding = advances.reduce((s: number, a: any) => s + (parseFloat(a.balance_remaining) || 0), 0);
+                      const totalRepaid = totalTaken - totalOutstanding;
+                      return (
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="rounded-lg border p-3">
+                            <p className="text-xs text-muted-foreground">Total Taken</p>
+                            <p className="text-base font-semibold">{formatInCurrency(totalTaken)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3">
+                            <p className="text-xs text-muted-foreground">Total Repaid</p>
+                            <p className="text-base font-semibold text-success">{formatInCurrency(totalRepaid)}</p>
+                          </div>
+                          <div className="rounded-lg border p-3">
+                            <p className="text-xs text-muted-foreground">Outstanding</p>
+                            <p className={`text-base font-semibold ${totalOutstanding > 0 ? 'text-destructive' : ''}`}>{formatInCurrency(totalOutstanding)}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr className="text-left text-muted-foreground text-xs">
+                          <th scope="col" className="px-3 py-2 font-medium">Advance #</th>
+                          <th scope="col" className="px-3 py-2 font-medium">Date</th>
+                          <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                          <th scope="col" className="px-3 py-2 font-medium text-right">Amount</th>
+                          <th scope="col" className="px-3 py-2 font-medium text-right">Balance</th>
+                          <th scope="col" className="px-3 py-2 font-medium"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {advances.map((a: any) => (
+                          <tr key={a.id}>
+                            <td className="px-3 py-2 font-mono text-primary">{a.advance_number}</td>
+                            <td className="px-3 py-2">{formatDate(a.request_date)}</td>
+                            <td className="px-3 py-2">
+                              <StatusBadge
+                                status={a.status}
+                                map={{ pending: 'warning', approved_by_hod: 'info', approved: 'info', disbursed: 'primary', repaying: 'primary', repaid: 'success', cancelled: 'neutral' }}
+                                label={a.status.replace(/_/g, ' ')}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono">{formatInCurrency(a.amount, a.currency)}</td>
+                            <td className="px-3 py-2 text-right font-mono">{formatInCurrency(a.balance_remaining, a.currency)}</td>
+                            <td className="px-3 py-2 text-right">
+                              {['approved', 'disbursed', 'repaying'].includes(a.status) && (
+                                <Link to={`/hr/salary-advances?id=${a.id}`} className="text-xs text-primary hover:underline">
+                                  {a.status === 'approved' ? 'Disburse' : 'Record Repayment'}
+                                </Link>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
                 )}
               </div>
               </>

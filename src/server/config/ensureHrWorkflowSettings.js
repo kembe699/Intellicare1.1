@@ -6,6 +6,8 @@
  * open advances, max repayment months, min months of service). Ensured
  * per-tenant the same way as every other ensureXxxTable in this codebase.
  */
+const { addColumnIfMissing } = require('./ensureEmployeePortalAccess');
+
 async function ensureHrWorkflowSettings(sequelize) {
   await sequelize.query(`
     CREATE TABLE IF NOT EXISTS hr_workflow_settings (
@@ -17,11 +19,17 @@ async function ensureHrWorkflowSettings(sequelize) {
       advance_max_open_advances INTEGER NOT NULL DEFAULT 1,
       advance_max_repayment_months INTEGER NOT NULL DEFAULT 12,
       advance_min_months_of_service INTEGER NOT NULL DEFAULT 0,
+      advance_deduction_cap_percent NUMERIC(5,2) NOT NULL DEFAULT 50,
+      advance_deduct_same_period BOOLEAN NOT NULL DEFAULT FALSE,
       updated_by INTEGER,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Backfill for tenants where this table already existed before these two
+  // columns were added — CREATE TABLE IF NOT EXISTS above is a no-op there.
+  await addColumnIfMissing(sequelize, 'hr_workflow_settings', 'advance_deduction_cap_percent', 'NUMERIC(5,2) NOT NULL DEFAULT 50');
+  await addColumnIfMissing(sequelize, 'hr_workflow_settings', 'advance_deduct_same_period', 'BOOLEAN NOT NULL DEFAULT FALSE');
 
   // A per-employee override of who approves their requests, instead of
   // their department's head — kept as its own table rather than a new
@@ -73,6 +81,8 @@ async function getWorkflowSettings(sequelize, clinicId) {
     advance_max_open_advances: 1,
     advance_max_repayment_months: 12,
     advance_min_months_of_service: 0,
+    advance_deduction_cap_percent: 50,
+    advance_deduct_same_period: false,
   };
 }
 

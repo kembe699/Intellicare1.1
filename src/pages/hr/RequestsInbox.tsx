@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge, type StatusBadgeTone } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,7 @@ function LeaveTab() {
 }
 
 function AdvancesTab() {
+  const navigate = useNavigate();
   const { confirm, confirmDialog } = useConfirmDialog();
   const requireHod = useRequireHod('advance_require_hod');
   const [rows, setRows] = useState<any[]>([]);
@@ -202,6 +204,11 @@ function AdvancesTab() {
                 {r.status === 'pending' && !requireHod && <Button size="sm" variant="outline" onClick={() => approveHr(r)}>Approve</Button>}
                 {r.status === 'approved_by_hod' && <Button size="sm" variant="outline" onClick={() => approveHr(r)}>Approve (HR)</Button>}
                 {['pending', 'approved_by_hod'].includes(r.status) && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setRejectTarget(r)}>Reject</Button>}
+                {['approved', 'disbursed', 'repaying'].includes(r.status) && (
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/hr/salary-advances?id=${r.id}`)}>
+                    {r.status === 'approved' ? 'Disburse' : 'Record Repayment'}
+                  </Button>
+                )}
               </div>
             ),
           },

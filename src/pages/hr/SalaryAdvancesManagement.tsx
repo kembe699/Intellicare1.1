@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge, type StatusBadgeTone } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -83,6 +83,22 @@ export default function SalaryAdvancesManagement() {
 
   useEffect(() => { fetchEmployees(); fetchAccounts(); }, []);
   useEffect(() => { fetchAdvances(); }, [statusFilter]);
+
+  // Deep-link from RequestsInbox.tsx (?id=<advance.id>) — once the list has
+  // loaded, jump straight to that advance's disburse/repay dialog instead
+  // of just landing on the list. Guarded to fire only once per page load,
+  // not on every refetch after the dialog closes.
+  const [searchParams] = useSearchParams();
+  const deepLinkedId = searchParams.get('id');
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!deepLinkedId || autoOpenedRef.current || loading || advances.length === 0) return;
+    const found = advances.find((a) => a.id === deepLinkedId);
+    if (found && ['approved', 'disbursed', 'repaying'].includes(found.status)) {
+      autoOpenedRef.current = true;
+      openAction(found, found.status === 'approved' ? 'disburse' : 'repay');
+    }
+  }, [deepLinkedId, loading, advances]);
 
   const handleCreate = async () => {
     if (creating) return;

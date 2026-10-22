@@ -10,6 +10,7 @@
  *    `sequelize` explicitly instead of closing over one.
  */
 const AccountingService = require('./AccountingService');
+const { v4: uuidv4 } = require('uuid');
 
 async function resolvePayrollAccounts(clinicId) {
   const [salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount] = await Promise.all([
@@ -107,6 +108,63 @@ async function payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseC
       { replacements: { id: line.id, glId: glEntry.id, rate, baseNet, userId: userId || null }, transaction }
     );
 
+    // Salary-advance-sourced deductions (hr.js's payroll-run generation
+    // tags these with source_type/source_id — see
+    // ensureLeaveAdvanceWorkflowColumns.js) only actually reduce the
+    // advance's balance now, at the moment the line is really paid — not
+    // when the draft run was generated, same principle salaryAdvances.js's
+    // own manual /repay already follows. No second GL entry: the line item
+    // above already credited account 1250 for this exact amount as part of
+    // the one balanced payroll entry.
+    for (const d of components) {
+      if (d.source_type !== 'salary_advance' || !d.source_id) continue;
+      const [[advance]] = await sequelize.query(
+        `SELECT balance_remaining, currency FROM salary_advances WHERE id = :id FOR UPDATE`,
+        { replacements: { id: d.source_id }, transaction }
+      );
+      if (!advance) continue; // advance was deleted/not found — nothing to reconcile against
+
+      const advanceCurrency = advance.currency || 'USD';
+      let amountInAdvanceCurrency = parseFloat(d.amount) || 0;
+      if (advanceCurrency !== cur) {
+        const backRate = await AccountingService.getExchangeRate(clinicId, cur, advanceCurrency, run.run_date).catch(() => 1);
+        amountInAdvanceCurrency = AccountingService.convertAmount(amountInAdvanceCurrency, backRate || 1);
+      }
+
+      const balance = parseFloat(advance.balance_remaining) || 0;
+      // Staleness guard — deliberately does NOT silently clamp to whatever
+      // balance is left (e.g. a manual repayment, or a different payroll
+      // run, reduced it since this run was generated): paying a different
+      // amount than what the payslip actually shows would be wrong, not
+      // just imprecise. Fails the whole payment so HR can regenerate the
+      // run with a correct, current deduction instead.
+      if (amountInAdvanceCurrency > balance + 0.01) {
+        throw Object.assign(
+          new Error(`Salary advance ${d.source_id}'s balance changed since this payroll run was generated (was deducting ${amountInAdvanceCurrency.toFixed(2)}, only ${balance.toFixed(2)} remains) — regenerate the payroll run and try again.`),
+          { statusCode: 409 },
+        );
+      }
+
+      const newBalance = Math.round((balance - amountInAdvanceCurrency) * 100) / 100;
+      const newStatus = newBalance <= 0.01 ? 'repaid' : 'repaying';
+      await sequelize.query(
+        `UPDATE salary_advances SET balance_remaining = :balance, status = :status, updated_at = NOW() WHERE id = :id`,
+        { replacements: { id: d.source_id, balance: Math.max(newBalance, 0), status: newStatus }, transaction }
+      );
+      await sequelize.query(
+        `INSERT INTO salary_advance_repayments (id, salary_advance_id, amount, payment_date, payment_account_id, gl_entry_id, recorded_by, notes)
+         VALUES (:id, :advanceId, :amount, :paymentDate, :paymentAccountId, :glId, :recordedBy, :notes)`,
+        {
+          replacements: {
+            id: uuidv4(), advanceId: d.source_id, amount: amountInAdvanceCurrency, paymentDate: run.run_date,
+            paymentAccountId, glId: glEntry.id, recordedBy: userId || null,
+            notes: `Automatic payroll deduction — ${run.run_number}`,
+          },
+          transaction,
+        }
+      );
+    }
+
     await transaction.commit();
   } catch (error) {
     if (!transaction.finished) await transaction.rollback().catch(() => {});
@@ -137,4 +195,41 @@ async function finalizeRunIfFullyPaid(sequelize, runId, userId) {
   return false;
 }
 
-module.exports = { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid };
+// NOT CALLED FROM ANYWHERE YET. Undoes exactly the salary-advance side
+// effect payOnePayrollLine's deduction loop above applies — restores
+// balance_remaining/status on the advance and marks the repayment row
+// reversed (never deletes it, so the original payment stays in the
+// employee's history) — written now so it's ready the moment this
+// codebase gets a real "reverse/void a paid payroll line" feature. There
+// is no such feature today: no un-approve, no un-pay, no GL reversal
+// anywhere in the payroll module. Whatever builds that should also post a
+// reversing GL entry crediting/debiting the same accounts in the opposite
+// direction — deliberately not this function's job, since it only touches
+// the salary_advances side of the picture.
+async function restoreSalaryAdvanceDeduction(sequelize, repaymentId, transaction) {
+  const [[repayment]] = await sequelize.query(
+    `SELECT * FROM salary_advance_repayments WHERE id = :id AND reversed_at IS NULL`,
+    { replacements: { id: repaymentId }, transaction }
+  );
+  if (!repayment) return null;
+
+  const [[advance]] = await sequelize.query(
+    `SELECT balance_remaining, amount FROM salary_advances WHERE id = :id FOR UPDATE`,
+    { replacements: { id: repayment.salary_advance_id }, transaction }
+  );
+  if (!advance) return null;
+
+  const restoredBalance = Math.min(parseFloat(advance.balance_remaining) + parseFloat(repayment.amount), parseFloat(advance.amount));
+  const newStatus = restoredBalance >= parseFloat(advance.amount) - 0.01 ? 'disbursed' : 'repaying';
+  await sequelize.query(
+    `UPDATE salary_advances SET balance_remaining = :balance, status = :status, updated_at = NOW() WHERE id = :id`,
+    { replacements: { id: repayment.salary_advance_id, balance: restoredBalance, status: newStatus }, transaction }
+  );
+  await sequelize.query(
+    `UPDATE salary_advance_repayments SET reversed_at = NOW() WHERE id = :id`,
+    { replacements: { id: repaymentId }, transaction }
+  );
+  return { advanceId: repayment.salary_advance_id, restoredAmount: parseFloat(repayment.amount) };
+}
+
+module.exports = { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid, restoreSalaryAdvanceDeduction };

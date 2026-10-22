@@ -8,6 +8,7 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 const AccountingService = require('../services/AccountingService');
 const { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid } = require('../services/PayrollPayment');
 const { requireApprovalPermission } = require('../middleware/requireApprovalPermission');
+const { getWorkflowSettings } = require('../config/ensureHrWorkflowSettings');
 const { getConsultationsForDoctor } = require('../services/ConsultantConsultations');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
@@ -1140,6 +1141,101 @@ router.get('/payroll/runs/:id/sheet', authorize('hr.payroll.read'), async (req, 
   }
 });
 
+// Computes this employee's automatic salary-advance repayment deduction(s)
+// for one payroll run. Returns objects in the SAME shape
+// employee_salary_components-derived deductions already use
+// (component_type/name/amount/is_percentage/account_code), so they drop
+// straight into the existing deductions array/INSERT loop unchanged, plus
+// source_type/source_id (the two new payroll_run_line_components columns —
+// see ensureLeaveAdvanceWorkflowColumns.js) tracing each one back to the
+// salary_advances row it came from. account_code '1250' is the same
+// "Employee Advances Receivable" account salaryAdvances.js's own
+// disburse/repay already post to, so this deduction's GL credit lands on
+// the exact account that needs reconciling — no second GL entry is ever
+// posted for this; payOnePayrollLine's existing GL line-item loop already
+// does it as part of the one balanced payroll entry.
+async function computeAdvanceDeductionsForEmployee({ clinicId, employee, runDate, periodStart, settings, preAdvanceNet, transaction }) {
+  const [advances] = await sequelize.query(
+    `SELECT id, advance_number, amount, currency, balance_remaining, repayment_months, disbursed_at
+       FROM salary_advances
+      WHERE clinic_id = :clinicId AND employee_id = :employeeId
+        AND status IN ('disbursed', 'repaying') AND balance_remaining > 0.01
+      ORDER BY request_date ASC`,
+    { replacements: { clinicId, employeeId: employee.id }, transaction }
+  );
+  if (advances.length === 0) return [];
+
+  const payrollCurrency = employee.salary_currency || 'USD';
+  const capPercent = parseFloat(settings.advance_deduction_cap_percent);
+  const capAmount = capPercent > 0 ? preAdvanceNet * (capPercent / 100) : null;
+  let accumulated = 0;
+  const result = [];
+
+  for (const advance of advances) {
+    // Period boundary — an advance disbursed during the period being paid
+    // for is skipped by default (it hasn't "aged" into a repayment
+    // obligation yet); advance_deduct_same_period opts a clinic out of
+    // that wait.
+    if (!settings.advance_deduct_same_period && advance.disbursed_at && new Date(advance.disbursed_at) >= periodStart) continue;
+
+    // Duplicate-run guard — this advance already has a deduction line on a
+    // non-cancelled run (draft awaiting approval, approved-but-unpaid, or
+    // already paid) — never claim it a second time from a regenerated or
+    // concurrently-created run.
+    const [[already]] = await sequelize.query(
+      `SELECT 1 FROM payroll_run_line_components c
+         JOIN payroll_run_lines l ON l.id = c.payroll_run_line_id
+         JOIN payroll_runs r ON r.id = l.payroll_run_id
+        WHERE c.source_type = 'salary_advance' AND c.source_id = :advanceId AND r.status != 'cancelled'
+        LIMIT 1`,
+      { replacements: { advanceId: advance.id }, transaction }
+    );
+    if (already) continue;
+
+    const balance = parseFloat(advance.balance_remaining) || 0;
+    const principal = parseFloat(advance.amount) || 0;
+    const installment = advance.repayment_months
+      ? Math.min(Math.round((principal / advance.repayment_months) * 100) / 100, balance)
+      : balance; // no term set — the user's own stated default: full balance, next pay period.
+    if (installment <= 0) continue;
+
+    // Convert into the employee's own payroll currency (if different),
+    // keyed to the run's own date so this and payOnePayrollLine's later
+    // reverse conversion use the same, reproducible historical rate.
+    const advanceCurrency = advance.currency || 'USD';
+    let amount = installment;
+    if (advanceCurrency !== payrollCurrency) {
+      const rate = await AccountingService.getExchangeRate(clinicId, advanceCurrency, payrollCurrency, runDate).catch(() => 1);
+      amount = AccountingService.convertAmount(installment, rate || 1);
+    }
+
+    // The % cap applies across this employee's advances together, oldest
+    // obligation first — whatever doesn't fit under the cap is simply left
+    // out of this run's deduction (balance_remaining is only ever touched
+    // at actual payment time, never here), so it's automatically still
+    // eligible next run — a genuine carry-forward with no separate
+    // bookkeeping needed.
+    if (capAmount != null) {
+      const headroom = capAmount - accumulated;
+      if (headroom <= 0.01) continue;
+      if (amount > headroom) amount = Math.round(headroom * 100) / 100;
+    }
+    if (amount <= 0) continue;
+    accumulated += amount;
+
+    result.push({
+      component_type: 'deduction',
+      name: `Salary Advance Repayment (${advance.advance_number})`,
+      amount,
+      is_percentage: false,
+      account_code: '1250',
+      source_type: 'salary_advance',
+      source_id: advance.id,
+    });
+  }
+  return result;
+}
+
 // Creates a draft run and snapshots every active employee's current salary +
 // components into payroll_run_lines/payroll_run_line_components. Snapshotted
 // deliberately — editing an employee's standing salary later must never
@@ -1184,6 +1280,9 @@ router.post('/payroll/runs', authorize('hr.payroll.write'), async (req, res) => 
     );
     const runNumber = `PR-${String((parseInt(seqRow?.last, 10) || 0) + 1).padStart(4, '0')}`;
     const runId = uuidv4();
+    const runDate = new Date(); // same instant as the run_date CURRENT_DATE below
+    const periodStart = new Date(period_year, period_month - 1, 1);
+    const settings = await getWorkflowSettings(sequelize, clinicId);
 
     await sequelize.query(`
       INSERT INTO payroll_runs (id, clinic_id, branch_id, run_number, period_month, period_year, run_date, status, payment_account_id, created_by, notes, created_at, updated_at)
@@ -1205,10 +1304,17 @@ router.post('/payroll/runs', authorize('hr.payroll.write'), async (req, res) => 
       const basic = parseFloat(emp.basic_salary) || 0;
       const calcAmount = (c) => (c.is_percentage ? basic * (parseFloat(c.amount) || 0) / 100 : parseFloat(c.amount) || 0);
       const allowances = components.filter(c => c.component_type === 'allowance');
-      const deductions = components.filter(c => c.component_type === 'deduction');
+      const baseDeductions = components.filter(c => c.component_type === 'deduction');
       const allowancesTotal = allowances.reduce((s, c) => s + calcAmount(c), 0);
-      const deductionsTotal = deductions.reduce((s, c) => s + calcAmount(c), 0);
+      const otherDeductionsTotal = baseDeductions.reduce((s, c) => s + calcAmount(c), 0);
       const grossPay = basic + allowancesTotal;
+      const preAdvanceNet = grossPay - otherDeductionsTotal;
+
+      const advanceDeductions = await computeAdvanceDeductionsForEmployee({
+        clinicId, employee: emp, runDate, periodStart, settings, preAdvanceNet, transaction: t,
+      });
+      const deductions = [...baseDeductions, ...advanceDeductions];
+      const deductionsTotal = otherDeductionsTotal + advanceDeductions.reduce((s, c) => s + c.amount, 0);
       const netPay = grossPay - deductionsTotal;
 
       const lineId = uuidv4();
@@ -1225,10 +1331,10 @@ router.post('/payroll/runs', authorize('hr.payroll.write'), async (req, res) => 
 
       for (const c of [...allowances, ...deductions]) {
         await sequelize.query(`
-          INSERT INTO payroll_run_line_components (id, payroll_run_line_id, component_type, name, amount, account_code, created_at)
-          VALUES (:id, :lineId, :type, :name, :amount, :accountCode, NOW())
+          INSERT INTO payroll_run_line_components (id, payroll_run_line_id, component_type, name, amount, account_code, source_type, source_id, created_at)
+          VALUES (:id, :lineId, :type, :name, :amount, :accountCode, :sourceType, :sourceId, NOW())
         `, {
-          replacements: { id: uuidv4(), lineId, type: c.component_type, name: c.name, amount: calcAmount(c), accountCode: c.account_code || null },
+          replacements: { id: uuidv4(), lineId, type: c.component_type, name: c.name, amount: calcAmount(c), accountCode: c.account_code || null, sourceType: c.source_type || null, sourceId: c.source_id || null },
           transaction: t,
         });
       }
