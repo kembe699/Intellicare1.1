@@ -164,6 +164,19 @@ router.post('/operations/:id/items', authorize('theatre.write'), async (req, res
   }
 });
 
+router.put('/operations/:id/items/:itemId/administer', authorize('theatre.write'), async (req, res) => {
+  try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
+    const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
+    const item = await TheatreService.administerItem(clinicId, req.params.id, req.params.itemId, req.user?.id);
+    await logAudit(req, { action: 'ITEM_ADMINISTERED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Confirmed ${item.item_name} administered`, new_values: item });
+    res.json(item);
+  } catch (error) {
+    console.error('Error confirming item administered for theatre operation:', error);
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to confirm item administered' });
+  }
+});
+
 router.post('/operations/:id/team', authorize('theatre.write'), async (req, res) => {
   try {
     if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;

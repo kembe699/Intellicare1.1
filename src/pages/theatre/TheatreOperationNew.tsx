@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/notify';
 import { ArrowLeft, Loader2, CalendarClock, Search, X } from 'lucide-react';
-import { PatientOption, TheatreRoom, TheatreRequest, ROLE_LABEL } from './theatreShared';
+import { PatientOption, TheatreRoom, TheatreRequest, ProcedureServiceOption, ROLE_LABEL } from './theatreShared';
 
 interface Employee { id: string; first_name: string; last_name: string; }
 
@@ -18,6 +19,7 @@ type TeamRole = 'surgeon' | 'anesthetist' | 'scrub_nurse';
 
 export default function TheatreOperationNew() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const requestId = searchParams.get('request_id') || '';
 
@@ -26,6 +28,8 @@ export default function TheatreOperationNew() {
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
   const [procedureName, setProcedureName] = useState('');
+  const [procedures, setProcedures] = useState<ProcedureServiceOption[]>([]);
+  const [selectedProcedure, setSelectedProcedure] = useState<ProcedureServiceOption | null>(null);
   const [rooms, setRooms] = useState<TheatreRoom[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [roomId, setRoomId] = useState('');
@@ -71,6 +75,23 @@ export default function TheatreOperationNew() {
       if (empRes.ok) setEmployees(await empRes.json());
     })();
   }, []);
+
+  // Same catalog-driven source TheatreRequests.tsx already uses — only
+  // /setup/services entries categorized 'Procedure' are offered, so a
+  // procedure picked here always carries a real price. This is what was
+  // missing on the "schedule directly, no prior request" path: without it,
+  // Procedure was free text and Procedure Fee was an easy-to-skip optional
+  // box, so no bill was ever created (see TheatreService.completeOperation's
+  // procedure_fee != null guard).
+  useEffect(() => {
+    (async () => {
+      const res = await authFetch(`/api/clinical/services/${user?.clinic || '1'}`, { credentials: 'include' });
+      if (res.ok) {
+        const all = await res.json();
+        setProcedures(all.filter((s: ProcedureServiceOption) => s.category === 'Procedure'));
+      }
+    })();
+  }, [user?.clinic]);
 
   const applyRequest = (req: TheatreRequest) => {
     setChosenRequest(req);
@@ -237,7 +258,20 @@ export default function TheatreOperationNew() {
                 {chosenRequest ? (
                   <div className="border rounded-md px-3 py-2 bg-muted/30 text-sm">{procedureName}</div>
                 ) : (
-                  <Input value={procedureName} onChange={(e) => setProcedureName(e.target.value)} placeholder="e.g. Appendectomy" />
+                  <Combobox
+                    options={procedures.map((p) => ({ value: p.id, label: `${p.service_name} — SSP ${Number(p.price || 0).toLocaleString()}` }))}
+                    value={selectedProcedure?.id || ''}
+                    onChange={(procId) => {
+                      const p = procedures.find((pr) => pr.id === procId) || null;
+                      setSelectedProcedure(p);
+                      setProcedureName(p?.service_name || '');
+                      // Still editable afterward below for a genuine override —
+                      // this just stops the fee from defaulting to blank/unbilled.
+                      setProcedureFee(p ? String(p.price || 0) : '');
+                    }}
+                    placeholder="Select a procedure..." searchPlaceholder="Search procedures..."
+                    emptyText="No Procedure-category services found — add one in Setup > Services"
+                  />
                 )}
               </div>
 

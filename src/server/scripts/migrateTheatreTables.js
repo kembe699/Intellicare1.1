@@ -232,6 +232,19 @@ async function migrateTheatreTables(db = sequelize) {
   // Inventory doesn't silently reclassify history.
   try { await db.query(`ALTER TABLE theatre_operation_items ADD COLUMN IF NOT EXISTS item_category VARCHAR(100)`); } catch (err) { console.error('Could not add theatre_operation_items.item_category:', err.message); }
 
+  // Administer confirmation: recording usage (stock deduction + billing,
+  // unchanged) and confirming an item was actually given to the patient are
+  // two different facts — administered_at being set IS the "administered"
+  // status, no separate enum needed. Both null means "recorded, not yet
+  // confirmed administered".
+  const theatreOperationItemAdministerColumns = [
+    'ADD COLUMN IF NOT EXISTS administered_at TIMESTAMPTZ',
+    'ADD COLUMN IF NOT EXISTS administered_by VARCHAR(36)',
+  ];
+  for (const clause of theatreOperationItemAdministerColumns) {
+    try { await db.query(`ALTER TABLE theatre_operation_items ${clause}`); } catch (err) { console.error(`Could not add theatre_operation_items column (${clause}):`, err.message); }
+  }
+
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_clinic ON theatre_requests (clinic_id)',
     'CREATE INDEX IF NOT EXISTS idx_theatre_requests_status ON theatre_requests (status)',

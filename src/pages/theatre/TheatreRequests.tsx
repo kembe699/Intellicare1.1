@@ -15,6 +15,7 @@ import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
 import { Scissors, Plus, X, CalendarPlus, Search, Loader2 } from 'lucide-react';
 import { TheatreRequest, PatientOption, ProcedureServiceOption, PRIORITY_BADGE, STATUS_BADGE, patientName } from './theatreShared';
+import { DiagnosisAutocomplete } from '@/components/clinical/DiagnosisAutocomplete';
 
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle?: string }) {
   return (
@@ -45,6 +46,7 @@ export default function TheatreRequests() {
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
   const [department, setDepartment] = useState('');
+  const [departments, setDepartments] = useState<any[]>([]);
   const [procedures, setProcedures] = useState<ProcedureServiceOption[]>([]);
   const [selectedProcedure, setSelectedProcedure] = useState<ProcedureServiceOption | null>(null);
   const [diagnosis, setDiagnosis] = useState('');
@@ -63,6 +65,19 @@ export default function TheatreRequests() {
         const all = await res.json();
         setProcedures(all.filter((s: ProcedureServiceOption) => s.category === 'Procedure'));
       }
+    })();
+  }, [user?.clinic]);
+
+  // Same fetch+Combobox pattern already used for department pickers
+  // elsewhere (EmployeeListPage.tsx, PurchaseRequisitions.tsx, Services.tsx)
+  // — a real catalog instead of free text, while still storing just the
+  // department name (requesting_department is a plain string column).
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await authFetch(`/api/departments?clinic=${user?.clinic || 1}`, { credentials: 'include' });
+        if (res.ok) setDepartments((await res.json()).filter((d: any) => d.is_active));
+      } catch { /* non-blocking */ }
     })();
   }, [user?.clinic]);
 
@@ -212,7 +227,12 @@ export default function TheatreRequests() {
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Requesting Department (optional)</label>
-                  <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Surgical Ward" />
+                  <Combobox
+                    options={[{ value: '', label: '— None —' }, ...departments.map((d: any) => ({ value: d.department_name, label: d.department_name }))]}
+                    value={department} onChange={setDepartment}
+                    placeholder="Select department..." searchPlaceholder="Search departments..."
+                    emptyText="No departments yet — add one under Setup > Departments."
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Priority</label>
@@ -233,7 +253,7 @@ export default function TheatreRequests() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Diagnosis</label>
-                  <Input value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} placeholder="Optional" />
+                  <DiagnosisAutocomplete value={diagnosis} onChange={setDiagnosis} placeholder="Optional — type or search ICD-10" />
                 </div>
                 <div className="lg:col-span-2">
                   <label className="text-xs font-medium text-muted-foreground block mb-1.5">Notes</label>

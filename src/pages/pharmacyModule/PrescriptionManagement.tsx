@@ -716,59 +716,63 @@ export default function PrescriptionManagement() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Strength</label>
-                  <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Strength</label>
+                    <Input placeholder="e.g. 200mg" value={rxDose} onChange={e => setRxDose(e.target.value)} className="mt-1" />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
+                    <Combobox
+                      options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
+                      value={rxFrequency}
+                      onChange={v => setRxFrequency(v)}
+                      placeholder="e.g. twice a day"
+                      searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
+                      className="mt-1 h-9"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Frequency *</label>
-                  <Combobox
-                    options={FREQUENCY_OPTIONS.map(f => ({ value: f.code, label: `${f.code} — ${f.label}` }))}
-                    value={rxFrequency}
-                    onChange={v => setRxFrequency(v)}
-                    placeholder="e.g. twice a day"
-                    searchPlaceholder="Search e.g. TDS, twice, 8 hourly..."
-                    className="mt-1 h-9"
-                  />
-                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
+                    <Input
+                      type="number" min="0" placeholder="e.g. 5"
+                      value={rxDuration}
+                      onChange={e => setRxDuration(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Duration (days)</label>
-                  <Input
-                    type="number" min="0" placeholder="e.g. 5"
-                    value={rxDuration}
-                    onChange={e => setRxDuration(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
-                  <Input
-                    type="number" min="1" placeholder="Total units to give out"
-                    value={rxQty}
-                    onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
-                    className="mt-1"
-                  />
-                  {/* Show the arithmetic rather than silently overwriting the
-                      prescriber's number, so a computed total is always traceable
-                      back to dose x frequency x days. */}
-                  {rxSuggestedQty != null && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
-                      {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
-                        <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
-                          use this
-                        </button>
-                      )}
-                    </p>
-                  )}
-                  {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
-                    </p>
-                  )}
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Quantity to Dispense *</label>
+                    <Input
+                      type="number" min="1" placeholder="Total units to give out"
+                      value={rxQty}
+                      onChange={e => { setRxQtyTouched(true); setRxQty(e.target.value); }}
+                      className="mt-1"
+                    />
+                    {/* Show the arithmetic rather than silently overwriting the
+                        prescriber's number, so a computed total is always traceable
+                        back to dose x frequency x days. */}
+                    {rxSuggestedQty != null && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {rxDoseAmount} × {findFrequency(rxFrequency)?.perDay}/day × {rxDuration} days = <strong>{rxSuggestedQty}</strong>
+                        {rxQtyTouched && String(rxSuggestedQty) !== rxQty && (
+                          <button type="button" className="ml-2 underline" onClick={() => { setRxQtyTouched(false); setRxQty(String(rxSuggestedQty)); }}>
+                            use this
+                          </button>
+                        )}
+                      </p>
+                    )}
+                    {rxFrequency && !findFrequency(rxFrequency)?.perDay && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {findFrequency(rxFrequency)?.code === 'PRN' ? 'As needed — enter the quantity to dispense.' : 'Single dose — enter the quantity to dispense.'}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div>

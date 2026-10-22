@@ -13,6 +13,9 @@ export interface StockItemOption { id: string; item_name: string; item_code: str
 export interface OperationItemUsage {
   id: string; item_id: string; item_name: string; location_id: string | null; location_name: string | null;
   quantity: string; unit_of_measure: string | null; dispensed_by: string | null; dispensed_at: string; notes: string | null;
+  administered_at: string | null; administered_by: string | null;
+  /** Only present on the response from recording usage (POST /items), not on the stored row. */
+  billed?: boolean; billReason?: 'no_selling_price' | 'billing_failed' | null;
 }
 
 export interface TheatreRequest {

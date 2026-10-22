@@ -8,14 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from '@/lib/notify';
 import { usePromptDialog } from '@/hooks/use-prompt-dialog';
+import { GynaeFieldsReadOnly, hasGynaeInfo } from '@/components/clinical/GynaeFields';
 import {
   ArrowLeft, Loader2, Scissors, Play, Square, XCircle, User, MapPin,
-  Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe, Users, X,
+  Stethoscope, Activity, CheckCircle2, Circle, Plus, Download, FileWarning, Syringe, Users, X, Eye, ClipboardCheck,
 } from 'lucide-react';
 import * as docTemplate from '@/utils/documentTemplate';
 import {
@@ -44,6 +46,32 @@ function useElapsedTimer(startedAt: string | null, running: boolean) {
 
 const PHASES: Array<'pre_op' | 'intra_op' | 'post_op'> = ['pre_op', 'intra_op', 'post_op'];
 
+// A whitelist of the known primitive vitals fields, rather than a generic
+// Object.entries(vitals) walk — that's exactly what produced the old
+// "gynae: [object Object]" bug (template-literal-coercing a nested object).
+// Whitelisting also means any OTHER nested object this shape ever grows
+// (general_examination, etc.) is silently skipped here instead of corrupting
+// the row list the same way.
+const VITALS_LABELS: Record<string, string> = {
+  blood_pressure: 'Blood Pressure', temperature: 'Temperature (°C)', pulse: 'Pulse (bpm)',
+  respiratory_rate: 'Resp. Rate (bpm)', spo2: 'SpO2 (%)', weight: 'Weight (kg)', height: 'Height (cm)',
+  fasting_status: 'Fasting Status',
+};
+
+function getVitalsRows(vitals: any): Array<{ label: string; value: string }> {
+  if (!vitals) return [];
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const [key, label] of Object.entries(VITALS_LABELS)) {
+    const val = vitals[key];
+    if (val === undefined || val === null || val === '') continue;
+    rows.push({ label, value: String(val) });
+  }
+  if (Array.isArray(vitals.chief_complaints) && vitals.chief_complaints.length > 0) {
+    rows.push({ label: 'Chief Complaints', value: vitals.chief_complaints.join(', ') });
+  }
+  return rows;
+}
+
 export default function TheatreOperationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -68,6 +96,7 @@ export default function TheatreOperationDetail() {
 
   const [patientVisits, setPatientVisits] = useState<any[] | null>(null);
   const [labResultsBySpecimen, setLabResultsBySpecimen] = useState<Record<string, any[]>>({});
+  const [viewResultsFor, setViewResultsFor] = useState<{ test: any; results: any[] } | null>(null);
 
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [locationId, setLocationId] = useState('');
@@ -76,6 +105,7 @@ export default function TheatreOperationDetail() {
   const [itemQty, setItemQty] = useState('');
   const [itemNotes, setItemNotes] = useState('');
   const [recordingItem, setRecordingItem] = useState(false);
+  const [administeringId, setAdministeringId] = useState<string | null>(null);
 
   const [employees, setEmployees] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
 
@@ -235,7 +265,15 @@ export default function TheatreOperationDetail() {
         body: JSON.stringify({ location_id: locationId, item_id: selectedItem.id, quantity: qty, notes: itemNotes || null }),
       });
       if (res.ok) {
-        toast.success(`${qty} ${selectedItem.unit_of_measure || ''} of ${selectedItem.item_name} recorded`);
+        const usage = await res.json();
+        if (usage.billed === false) {
+          const reason = usage.billReason === 'no_selling_price'
+            ? 'no selling price is set for it in Inventory'
+            : 'billing it to the patient failed';
+          toast.warning(`${selectedItem.item_name} was recorded and deducted from stock, but NOT billed — ${reason}.`);
+        } else {
+          toast.success(`${qty} ${selectedItem.unit_of_measure || ''} of ${selectedItem.item_name} recorded`);
+        }
         setSelectedItem(null); setItemSearch(''); setItemQty(''); setItemNotes('');
         fetchOperation();
       } else {
@@ -246,6 +284,19 @@ export default function TheatreOperationDetail() {
       toast.error('Network error');
     } finally {
       setRecordingItem(false);
+    }
+  };
+
+  const administerItem = async (itemId: string) => {
+    setAdministeringId(itemId);
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/items/${itemId}/administer`, { method: 'PUT' });
+      if (res.ok) { toast.success('Marked as administered'); fetchOperation(); }
+      else { const err = await res.json().catch(() => ({})); toast.error(err.error || 'Failed to confirm administered'); }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setAdministeringId(null);
     }
   };
 
@@ -424,37 +475,71 @@ export default function TheatreOperationDetail() {
               {!patientVisits || patientVisits.length === 0 ? (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5"><FileWarning className="w-3.5 h-3.5" /> No linked visit history found for this patient.</p>
               ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {patientVisits.slice(0, 5).map((v: any, i: number) => (
-                    <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0 space-y-1.5">
-                      <p className="font-medium">{v.created_at ? formatDate(v.created_at) : ''}</p>
-                      {v.vitals && <p className="text-muted-foreground">Vitals: {Object.entries(v.vitals).filter(([, val]) => val).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</p>}
-                      {v.tests?.map((t: any) => {
-                        const results = labResultsBySpecimen[t.id];
-                        return (
-                          <div key={t.id} className="pl-2 border-l-2 border-border/70">
-                            <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
-                            {t.status === 'approved' && Array.isArray(results) && results.length > 0 && (
-                              <table className="w-full text-xs mt-1">
-                                <tbody>
-                                  {results.map((r: any) => (
-                                    <tr key={r.id} className={r.flag ? 'text-destructive' : ''}>
-                                      <td className="pr-2 py-0.5">{r.analyte}</td>
-                                      <td className="pr-2 py-0.5 font-mono">{r.value} {r.unit || ''}</td>
-                                      <td className="text-muted-foreground py-0.5">{r.reference_range || ''}{r.flag ? ` (${r.flag})` : ''}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {patientVisits.slice(0, 5).map((v: any, i: number) => {
+                    const vitalsRows = getVitalsRows(v.vitals);
+                    return (
+                      <div key={v.id || i} className="text-xs border-b border-border/50 pb-2 last:border-0 space-y-1.5">
+                        <p className="font-medium">{v.created_at ? formatDate(v.created_at) : ''}</p>
+                        {vitalsRows.length > 0 && (
+                          <table className="w-full text-xs">
+                            <tbody>
+                              {vitalsRows.map((row) => (
+                                <tr key={row.label} className="border-b border-border/30 last:border-0">
+                                  <td className="py-0.5 pr-2 text-muted-foreground whitespace-nowrap">{row.label}</td>
+                                  <td className="py-0.5 font-medium">{row.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        {hasGynaeInfo(v.vitals?.gynae) && <GynaeFieldsReadOnly value={v.vitals.gynae} />}
+                        {v.tests?.map((t: any) => {
+                          const results = labResultsBySpecimen[t.id];
+                          const hasResults = t.status === 'approved' && Array.isArray(results) && results.length > 0;
+                          return (
+                            <div key={t.id} className="pl-2 border-l-2 border-border/70 flex items-center justify-between gap-2">
+                              <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
+                              {hasResults && (
+                                <Button variant="outline" size="sm" className="h-6 px-2 text-xs gap-1 shrink-0" onClick={() => setViewResultsFor({ test: t, results })}>
+                                  <Eye className="w-3 h-3" /> View Results
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
+
+            <Dialog open={!!viewResultsFor} onOpenChange={(open) => !open && setViewResultsFor(null)}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{viewResultsFor?.test.test_name || viewResultsFor?.test.name}</DialogTitle>
+                </DialogHeader>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-muted-foreground">
+                      <th className="text-left py-1.5 font-medium">Component</th>
+                      <th className="text-left py-1.5 font-medium">Value</th>
+                      <th className="text-left py-1.5 font-medium">Range</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewResultsFor?.results.map((r: any) => (
+                      <tr key={r.id} className={`border-b border-border/50 last:border-0 ${r.flag ? 'text-destructive' : ''}`}>
+                        <td className="py-1.5">{r.analyte}</td>
+                        <td className="py-1.5 font-mono font-medium">{r.value} {r.unit || ''}</td>
+                        <td className="py-1.5 text-muted-foreground">{r.reference_range || ''}{r.flag ? ` (${r.flag})` : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DialogContent>
+            </Dialog>
 
             {/* Full multi-member roster — the summary lines above stay as the
                 quick-glance primary per role; this is the complete list. */}
@@ -613,17 +698,17 @@ export default function TheatreOperationDetail() {
                         <Input placeholder="Quantity" type="number" min="0" step="0.01" value={itemQty} onChange={(e) => setItemQty(e.target.value)} className="h-9 text-sm w-28" />
                         <Input placeholder="Notes (optional)" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} className="h-9 text-sm flex-1" />
                         <Button size="sm" onClick={recordItemUsage} disabled={recordingItem} className="gap-1.5">
-                          {recordingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Syringe className="h-3.5 w-3.5" />} Use
+                          {recordingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Syringe className="h-3.5 w-3.5" />} Add
                         </Button>
                       </div>
                     )}
                   </div>
                 )}
                 {operation.items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">Nothing recorded as used yet.</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">Nothing added yet.</p>
                 ) : (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="text-left py-1.5">Time</th><th scope="col" className="text-left py-1.5">Item</th><th scope="col" className="text-right py-1.5">Qty</th><th scope="col" className="text-left py-1.5">From</th></tr></thead>
+                    <thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="text-left py-1.5">Time</th><th scope="col" className="text-left py-1.5">Item</th><th scope="col" className="text-right py-1.5">Qty</th><th scope="col" className="text-left py-1.5">From</th><th scope="col" className="text-left py-1.5">Administered</th></tr></thead>
                     <tbody>
                       {operation.items.map((it) => (
                         <tr key={it.id} className="border-b border-border/50">
@@ -631,6 +716,19 @@ export default function TheatreOperationDetail() {
                           <td className="py-1.5">{it.item_name}</td>
                           <td className="py-1.5 text-right font-mono">{it.quantity} {it.unit_of_measure}</td>
                           <td className="py-1.5">{it.location_name || '—'}</td>
+                          <td className="py-1.5">
+                            {it.administered_at ? (
+                              <span className="inline-flex items-center gap-1 text-success text-xs" title={new Date(it.administered_at).toLocaleString()}>
+                                <ClipboardCheck className="w-3.5 h-3.5" /> {new Date(it.administered_at).toLocaleTimeString()}
+                              </span>
+                            ) : canWrite ? (
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs gap-1" onClick={() => administerItem(it.id)} disabled={administeringId === it.id}>
+                                {administeringId === it.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3 h-3" />} Administer
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Not yet</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

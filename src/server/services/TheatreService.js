@@ -628,6 +628,14 @@ class TheatreService {
       // called the same way, after its own insert commits). GL posting is
       // left to ledgerSweeper.js's existing reconciliation, same as those
       // inpatient charges — not a second, synchronous GL path.
+      //
+      // billed/billReason are surfaced on the response (not just logged) so
+      // the UI can actually tell staff a charge is missing — previously a
+      // zero-price item or a billing failure both looked identical to a
+      // normal success in the response, and a thrown billing error was only
+      // ever written to the server console.
+      let billed = false;
+      let billReason = null;
       if (parseFloat(item.selling_price) > 0) {
         try {
           const [[op]] = await sequelize.query(
@@ -657,19 +665,44 @@ class TheatreService {
             createdBy: userId ? String(userId) : 'system',
             notes: `Theatre: ${op.procedure_name}`,
           });
+          billed = true;
         } catch (billErr) {
           // Non-fatal: the item is already recorded and stock already
           // deducted — a billing failure here must be visible, not silently
           // swallowed, but must never undo what already succeeded.
           console.error(`Theatre operation ${operationId}: item "${item.item_name}" recorded and stock deducted, but billing failed —`, billErr.message);
+          billReason = 'billing_failed';
         }
+      } else {
+        billReason = 'no_selling_price';
       }
 
-      return created;
+      return { ...created, billed, billReason };
     } catch (error) {
       if (!transaction.finished) await transaction.rollback().catch(() => {});
       throw error;
     }
+  }
+
+  // Pure confirmation stamp — stock deduction and billing already happened
+  // in recordItemUsage above, unchanged. administered_at being set IS the
+  // "administered" status (see migrateTheatreTables.js's comment on these
+  // columns); idempotent WHERE guard means a second click is a harmless
+  // no-op rather than overwriting who/when it was first confirmed.
+  async administerItem(clinicId, operationId, itemId, userId) {
+    await this._assertOperationEditable(operationId, clinicId);
+    const [, meta] = await sequelize.query(
+      `UPDATE theatre_operation_items SET administered_at = NOW(), administered_by = :userId
+       WHERE id = :itemId AND operation_id = :operationId AND administered_at IS NULL`,
+      { replacements: { itemId, operationId, userId: userId || null } }
+    );
+    if (meta.rowCount === 0) {
+      const [[existing]] = await sequelize.query(`SELECT id FROM theatre_operation_items WHERE id = :itemId AND operation_id = :operationId`, { replacements: { itemId, operationId } });
+      if (!existing) throw httpError('Item not found on this operation', 404);
+      throw httpError('Already marked administered', 409);
+    }
+    const [[updated]] = await sequelize.query(`SELECT * FROM theatre_operation_items WHERE id = :itemId`, { replacements: { itemId } });
+    return updated;
   }
 }
 
