@@ -63,11 +63,34 @@ Hard rules:
 - Formatting: never use an em dash (—) anywhere in your reply. Use a period, comma, colon, or semicolon instead.`;
 }
 
+// Anthropic's strict tool mode rejects the request outright if ANY object
+// node in the schema is missing additionalProperties: false — not just the
+// top-level one. TOOLS' schemas nest further objects (e.g. the shared
+// PERIOD_SCHEMA under `properties.period`), so the old single top-level
+// spread here was never actually valid — confirmed live against the real
+// API: "tools.0.custom: For 'object' type, 'additionalProperties' must be
+// explicitly set to false", on tool index 0's nested period schema. This
+// walks the whole schema tree instead of assuming one level is enough.
+function closeObjectSchemas(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  const closed = { ...schema };
+  if (closed.type === 'object') {
+    if (closed.additionalProperties === undefined) closed.additionalProperties = false;
+    if (closed.properties) {
+      closed.properties = Object.fromEntries(
+        Object.entries(closed.properties).map(([k, v]) => [k, closeObjectSchemas(v)]),
+      );
+    }
+  }
+  if (closed.items) closed.items = closeObjectSchemas(closed.items);
+  return closed;
+}
+
 function toAnthropicTools() {
   return TOOLS.map((t) => ({
     ...t,
     strict: true,
-    input_schema: { ...t.input_schema, additionalProperties: false },
+    input_schema: closeObjectSchemas(t.input_schema),
   }));
 }
 
