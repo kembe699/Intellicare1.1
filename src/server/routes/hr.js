@@ -50,7 +50,9 @@ router.get('/employees', authorize('hr.employees.read'), async (req, res) => {
       `SELECT * FROM employees WHERE ${where} ORDER BY first_name ASC, last_name ASC`,
       { replacements }
     );
-    res.json(employees);
+    // Never send the portal_code_hash/portal_pin_hash bcrypt hashes to the
+    // client — same reasoning as GET /employees/:id.
+    res.json(employees.map(({ portal_code_hash, portal_pin_hash, ...e }) => e));
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
@@ -272,7 +274,12 @@ router.get('/employees/:id', authorize('hr.employees.read'), async (req, res) =>
       salaryStructure = s || null;
     }
 
-    res.json({ ...employee, salary_components: components, payroll_history: payrollHistory, salary_structure: salaryStructure });
+    // portal_code_hash/portal_pin_hash are bcrypt hashes — never sent to the
+    // client, same reasoning as never returning users.password_hash. The
+    // profile page only needs to know portal_access_enabled/
+    // portal_pin_set_at/portal_last_login_at, which stay in the response.
+    const { portal_code_hash, portal_pin_hash, ...employeeSafe } = employee;
+    res.json({ ...employeeSafe, salary_components: components, payroll_history: payrollHistory, salary_structure: salaryStructure });
   } catch (error) {
     console.error('Error fetching employee:', error);
     res.status(500).json({ error: 'Failed to fetch employee' });
@@ -422,6 +429,55 @@ router.post('/employees/:id/reactivate', authorize('hr.employees.write'), async 
   } catch (error) {
     console.error('Error reactivating employee:', error);
     res.status(500).json({ error: 'Failed to reactivate employee' });
+  }
+});
+
+// ─── Employee Portal access (Section 5) ─────────────────────────────────
+// Generates a fresh 6-digit one-time code, shown to HR exactly once in
+// this response and never again — only its bcrypt hash is stored. Works
+// both for a first-time grant and a "lost code" reset (same effect:
+// portal_pin_hash is cleared too, so the employee must set a new PIN via
+// the one-time code on their next portal login, same as a brand-new grant).
+router.post('/employees/:id/portal-access/generate', authorize('portal.manage_access'), async (req, res) => {
+  try {
+    const bcrypt = require('bcrypt');
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
+    const [[employee]] = await sequelize.query(
+      `SELECT id FROM employees WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`,
+      { replacements }
+    );
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const codeHash = await bcrypt.hash(code, 12);
+    await sequelize.query(
+      `UPDATE employees SET portal_access_enabled = TRUE, portal_code_hash = :codeHash, portal_pin_hash = NULL,
+         portal_pin_set_at = NULL, portal_failed_attempts = 0, portal_locked_until = NULL, updated_at = NOW()
+       WHERE id = :id`,
+      { replacements: { id: employee.id, codeHash } }
+    );
+    res.json({ code });
+  } catch (error) {
+    console.error('Error generating portal access code:', error);
+    res.status(500).json({ error: 'Failed to generate portal access code' });
+  }
+});
+
+router.post('/employees/:id/portal-access/disable', authorize('portal.manage_access'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const replacements = { id: req.params.id, clinicId };
+    const [, meta] = await sequelize.query(
+      `UPDATE employees SET portal_access_enabled = FALSE, updated_at = NOW()
+       WHERE id = :id AND clinic_id = :clinicId${branchScope(req, replacements)}`,
+      { replacements }
+    );
+    if (meta.rowCount === 0) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error disabling portal access:', error);
+    res.status(500).json({ error: 'Failed to disable portal access' });
   }
 });
 

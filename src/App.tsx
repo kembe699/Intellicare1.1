@@ -87,6 +87,10 @@ const PayrollRunDetail = lazyWithRetry(() => import('./pages/hr/PayrollRunDetail
 const SalaryStructuresManagement = lazyWithRetry(() => import('./pages/hr/SalaryStructuresManagement'));
 const SalaryAdvancesManagement = lazyWithRetry(() => import('./pages/hr/SalaryAdvancesManagement'));
 const LeaveManagement = lazyWithRetry(() => import('./pages/hr/LeaveManagement'));
+const AttendanceSites = lazyWithRetry(() => import('./pages/hr/AttendanceSites'));
+const AttendanceDisplay = lazyWithRetry(() => import('./pages/hr/AttendanceDisplay'));
+const AttendanceDashboard = lazyWithRetry(() => import('./pages/hr/AttendanceDashboard'));
+const RequestsInbox = lazyWithRetry(() => import('./pages/hr/RequestsInbox'));
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
@@ -594,6 +598,26 @@ const AppRoutes = () => {
       <Route path="/hr/leave" element={
         <ProtectedRoute requiredPrivilege="hr.leave.read">
           <LeaveManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/attendance/sites" element={
+        <ProtectedRoute requiredPrivilege="attendance.manage_sites">
+          <AttendanceSites />
+        </ProtectedRoute>
+      } />
+      <Route path="/attendance/display/:siteId" element={
+        <ProtectedRoute requiredPrivilege="attendance.manage_sites">
+          <AttendanceDisplay />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/attendance" element={
+        <ProtectedRoute requiredPrivilege="attendance.view">
+          <AttendanceDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/requests" element={
+        <ProtectedRoute requiredPrivilege="hr.leave.read">
+          <RequestsInbox />
         </ProtectedRoute>
       } />
       <Route path="/procurement/requisitions" element={

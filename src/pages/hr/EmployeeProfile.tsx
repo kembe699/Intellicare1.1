@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/notify';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Users, Edit, Phone, Mail, MapPin, Loader2, Check, Plus, Trash2,
-  ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt,
+  ArrowLeft, Wallet, Calendar, Landmark, Stethoscope, RefreshCw, Percent, Receipt, Smartphone, Copy,
 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 
@@ -27,6 +29,10 @@ export default function EmployeeProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currency } = useCurrency();
+  const { hasPrivilege } = useAuth();
+
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [newCode, setNewCode] = useState<string | null>(null);
 
   const [employee, setEmployee] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -233,6 +239,32 @@ export default function EmployeeProfile() {
     }
   };
 
+  const generatePortalCode = async () => {
+    if (!(await confirm({
+      title: employee?.portal_access_enabled ? 'Reset staff portal code?' : 'Generate staff portal code?',
+      description: 'A new one-time access code will be created. The employee uses it once to log in and set their own PIN — it will only be shown here once.',
+    }))) return;
+    setGeneratingCode(true);
+    try {
+      const res = await authFetch(`/api/hr/employees/${id}/portal-access/generate`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setNewCode(data.code);
+        fetchEmployee();
+      } else {
+        toast.error('Failed to generate portal access code.');
+      }
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
+  const disablePortalAccess = async () => {
+    if (!(await confirm({ title: 'Disable staff portal access?', description: 'This employee will no longer be able to log into the mobile portal.', destructive: true }))) return;
+    const res = await authFetch(`/api/hr/employees/${id}/portal-access/disable`, { method: 'POST' });
+    if (res.ok) { toast.success('Portal access disabled.'); fetchEmployee(); } else { toast.error('Failed to disable portal access.'); }
+  };
+
   if (loading) {
     return (<AppLayout><div className="p-6"><LoadingState /></div></AppLayout>);
   }
@@ -260,6 +292,26 @@ export default function EmployeeProfile() {
   return (
     <AppLayout>
       {confirmDialog}
+      <Dialog open={!!newCode} onOpenChange={(v) => !v && setNewCode(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Staff portal access code</DialogTitle>
+            <DialogDescription>
+              Share this code with {employee?.first_name} now — it will not be shown again. They will use their
+              employee number and this code to log into the staff portal for the first time, then set their own PIN.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center gap-3 py-4">
+            <span className="text-3xl font-mono font-bold tracking-widest">{newCode}</span>
+            <Button size="sm" variant="outline" onClick={() => { if (newCode) { navigator.clipboard.writeText(newCode); toast.success('Copied.'); } }}>
+              <Copy className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setNewCode(null)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)]">
         <div className="max-w-[1700px] mx-auto space-y-4">
           <PageHeader
@@ -322,6 +374,28 @@ export default function EmployeeProfile() {
                   </div>
                 )}
               </div>
+
+              {hasPrivilege('portal.manage_access') && (
+                <div className="bg-card rounded-lg border shadow-sm p-5 space-y-3">
+                  <h3 className="font-medium flex items-center gap-2"><Smartphone className="w-4 h-4" /> Staff Portal Access</h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Status</span>
+                      <StatusBadge status={employee.portal_access_enabled ? 'enabled' : 'disabled'} map={{ enabled: 'success', disabled: 'neutral' }} label={employee.portal_access_enabled ? 'Enabled' : 'Disabled'} />
+                    </div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">PIN set</span><span>{employee.portal_pin_set_at ? formatDate(employee.portal_pin_set_at) : 'Not yet'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Last login</span><span>{employee.portal_last_login_at ? formatDate(employee.portal_last_login_at) : 'Never'}</span></div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" onClick={generatePortalCode} disabled={generatingCode}>
+                      {generatingCode ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                      {employee.portal_access_enabled ? 'Reset code' : 'Generate code'}
+                    </Button>
+                    {employee.portal_access_enabled && (
+                      <Button size="sm" variant="outline" className="text-destructive" onClick={disablePortalAccess}>Disable</Button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 min-w-0">

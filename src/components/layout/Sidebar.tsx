@@ -136,6 +136,9 @@ const hrDropdown: NavDropdown = {
     { label: 'Salary Advances', href: '/hr/salary-advances', icon: HandCoins, privilege: 'hr.salary_advances.read' },
     { label: 'Leave', href: '/hr/leave', icon: CalendarDays, privilege: 'hr.leave.read' },
     { label: 'Payroll', href: '/hr/payroll', icon: Wallet, privilege: 'hr.payroll.read' },
+    { label: 'Requests', href: '/hr/requests', icon: ClipboardCheck, privilege: 'hr.leave.read' },
+    { label: 'Attendance Sites', href: '/hr/attendance/sites', icon: MapPin, privilege: 'attendance.manage_sites' },
+    { label: 'Attendance', href: '/hr/attendance', icon: Clock, privilege: 'attendance.view' },
   ]
 };
 
