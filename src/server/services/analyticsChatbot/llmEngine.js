@@ -87,9 +87,16 @@ function closeObjectSchemas(schema) {
 }
 
 function toAnthropicTools() {
+  // strict mode is capped at 20 tools by the API ("Too many strict tools
+  // (N). The maximum number of strict tools supported is 20." — confirmed
+  // live, this tool set is now well past that at 31) and this code never
+  // actually depended on strict validation — every executeTool case already
+  // reads input fields defensively (optional chaining, fallbacks). Dropping
+  // `strict: true` removes the cap with no functional loss; the
+  // additionalProperties:false closing still runs since it's harmless and
+  // tightens what a non-strict call is allowed to send regardless.
   return TOOLS.map((t) => ({
     ...t,
-    strict: true,
     input_schema: closeObjectSchemas(t.input_schema),
   }));
 }
