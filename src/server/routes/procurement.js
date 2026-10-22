@@ -1956,6 +1956,34 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
         if (itemRows[0].inventory_account_id) glAccountId = itemRows[0].inventory_account_id;
         else if (itemRows[0].item_category === 'drugs') glAccountCode = '1310';
       }
+
+      // inventory_items.average_unit_cost/current_unit_cost/cost_currency
+      // are cross-batch blended figures — every reader (the valuation
+      // report, stock transfers, etc.) treats cost_currency as the single
+      // currency the whole item is costed in and never converts on its
+      // own, so these three columns must always agree. Writing the GRN's
+      // raw, native-PO-currency unitCost straight into them while leaving
+      // cost_currency at whatever it already was (the column defaults to
+      // 'SSP', and a freshly auto-created item's INSERT above never sets
+      // it) silently mislabeled AND left unconverted every foreign-
+      // currency receipt — confirmed live: a $950 USD laptop showed as
+      // "SSP 950.00" in the Storage Stock view. Always normalize to the
+      // tenant's base currency here — "the system is using SSP" is the
+      // whole point of a base currency, and every other cross-batch/
+      // cross-PO aggregate in this codebase (purchase_orders.
+      // base_currency_total, general_ledger's base_total_debit/credit)
+      // already follows the same convention.
+      const [[baseCurrencyRowForItem]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`, { transaction: t });
+      const itemBaseCurrency = baseCurrencyRowForItem?.code || 'SSP';
+      let itemUnitCost = unitCost;
+      if (itemBaseCurrency !== grnCostCurrency) {
+        try {
+          const fxRate = await AccountingService.getExchangeRate(grn.clinic_id, grnCostCurrency, itemBaseCurrency, grn.receipt_date || new Date());
+          itemUnitCost = AccountingService.convertAmount(unitCost, fxRate || 1);
+        } catch (e) {
+          console.error(`Could not resolve ${grnCostCurrency}->${itemBaseCurrency} rate for GRN ${grn.grn_number}; leaving item cost unconverted:`, e.message);
+        }
+      }
       const lineValue = (line.quantity_received || 0) * unitCost;
       if (lineValue > 0) {
         const glKey = glAccountId ? `id:${glAccountId}` : `code:${glAccountCode}`;
@@ -1985,7 +2013,11 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
         transaction: t
       });
 
-      // Update global inventory item stock and weighted average cost
+      // Update global inventory item stock and weighted average cost — in
+      // itemBaseCurrency (see above), not the GRN's raw native unitCost,
+      // and cost_currency is set explicitly on every GRN so it can never
+      // again drift out of sync with what average_unit_cost/
+      // current_unit_cost actually mean.
       await sequelize.query(`
         UPDATE inventory_items SET
           quantity_on_hand = quantity_on_hand + :qty,
@@ -1994,9 +2026,10 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
             ELSE ((average_unit_cost * quantity_on_hand) + (:unit_cost * :qty)) / (quantity_on_hand + :qty)
           END,
           current_unit_cost = :unit_cost,
+          cost_currency = :cost_currency,
           updated_at = NOW()
         WHERE id = :item_id
-      `, { replacements: { qty: line.quantity_received, unit_cost: unitCost, item_id: inventoryItemId }, transaction: t });
+      `, { replacements: { qty: line.quantity_received, unit_cost: itemUnitCost, cost_currency: itemBaseCurrency, item_id: inventoryItemId }, transaction: t });
 
       // Upsert stock_by_location for the received storage location
       if (locationId) {
