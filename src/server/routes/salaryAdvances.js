@@ -266,10 +266,13 @@ router.post('/:id/reject-hod', authorize('hr.salary_advances.read'), async (req,
 router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const settings = await getWorkflowSettings(sequelize, clinicId);
-    const requiredStatus = settings.advance_require_hod ? 'approved_by_hod' : 'pending';
-    const conditions = ['id = :id', 'clinic_id = :clinicId', 'status = :requiredStatus'];
-    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, requiredStatus };
+    // Same reasoning as leave.js's /requests/:id/approve — accept either
+    // starting status (HOD step taken or not) rather than gating on the
+    // CURRENT advance_require_hod value, which breaks a request already
+    // sitting at the other status (e.g. stuck at approved_by_hod from when
+    // the frontend forced that step even though the setting was off).
+    const conditions = ["id = :id", "clinic_id = :clinicId", "status IN ('pending', 'approved_by_hod')"];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
@@ -278,7 +281,7 @@ router.post('/:id/approve', requireApprovalPermission('salary_advance_approve'),
       { replacements }
     );
     if (meta.rowCount === 0) {
-      return res.status(409).json({ error: settings.advance_require_hod ? 'Advance not found, or still awaiting HOD approval' : 'Advance not found or not pending' });
+      return res.status(409).json({ error: 'Advance not found, already decided, or cancelled' });
     }
     const [[advance]] = await sequelize.query(`SELECT employee_id FROM salary_advances WHERE id = :id`, { replacements: { id: req.params.id } });
     const [[employee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: advance.employee_id } });

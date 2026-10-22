@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
@@ -410,6 +410,11 @@ export default function TheatreOperationDetail() {
   }
 
   const checklistForPhase = operation.checklist.filter((c) => c.phase === activePhase);
+  // A completed/cancelled operation's checklist is a historical record —
+  // the backend already rejects a toggle on one with a 409 ("This operation
+  // is completed and can no longer be updated"); this just stops the UI
+  // from offering an action that will always fail.
+  const canEditOperation = canWrite && ['scheduled', 'in_progress'].includes(operation.status);
   const vitalsForPhase = operation.vitals.filter((v) => v.phase === activePhase);
 
   return (
@@ -538,6 +543,7 @@ export default function TheatreOperationDetail() {
               <DialogContent className="max-w-3xl mx-6 max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Results — {viewResultsFor?.visitDate ? formatDate(viewResultsFor.visitDate) : ''}</DialogTitle>
+                  <DialogDescription>Approved lab results from this visit.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 px-1">
                   {viewResultsFor?.tests.map(({ test, results }: any) => (
@@ -625,7 +631,7 @@ export default function TheatreOperationDetail() {
                 {checklistForPhase.map((item) => (
                   <button
                     key={item.id}
-                    disabled={!canWrite}
+                    disabled={!canEditOperation}
                     onClick={() => toggleChecklistItem(item.id, !item.is_checked)}
                     className="w-full flex items-start gap-2.5 text-left px-2 py-1.5 rounded-md hover:bg-muted/40 transition-colors disabled:cursor-default"
                   >
@@ -633,7 +639,7 @@ export default function TheatreOperationDetail() {
                     <span className={`text-sm ${item.is_checked ? 'line-through text-muted-foreground' : ''}`}>{item.item_text}</span>
                   </button>
                 ))}
-                {canWrite && (
+                {canEditOperation && (
                   <div className="flex gap-2 pt-2">
                     <Input value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder="Add a custom checklist item..." className="h-8 text-sm" />
                     <Button size="sm" variant="outline" className="h-8 px-2.5" onClick={addChecklistItem}><Plus className="h-3.5 w-3.5" /></Button>
@@ -780,6 +786,7 @@ export default function TheatreOperationDetail() {
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Confirm administered — {administerTarget?.item_name}</DialogTitle>
+                  <DialogDescription>Record what was actually given to the patient.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div>

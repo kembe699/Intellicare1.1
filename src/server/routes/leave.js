@@ -333,10 +333,16 @@ router.post('/requests/:id/reject-hod', authorize('hr.leave.read'), async (req, 
 router.post('/requests/:id/approve', requireApprovalPermission('leave_request_approve'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
-    const settings = await getWorkflowSettings(sequelize, clinicId);
-    const requiredStatus = settings.leave_require_hod ? 'approved_by_hod' : 'pending';
-    const conditions = ['id = :id', 'clinic_id = :clinicId', 'status = :requiredStatus'];
-    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, requiredStatus };
+    // Final sign-off accepts either starting state — 'pending' (no HOD step
+    // taken, the normal case when leave_require_hod is off) or
+    // 'approved_by_hod' (the HOD step was taken, whether because the
+    // setting was on at the time or the request got that far before this
+    // flow was fixed). Gating this on the CURRENT setting value broke any
+    // request already sitting at the other status — e.g. one that reached
+    // approved_by_hod while leave_require_hod was on, then the setting (or
+    // this endpoint's own logic) changed, permanently 409ing on approve.
+    const conditions = ["id = :id", "clinic_id = :clinicId", "status IN ('pending', 'approved_by_hod')"];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
@@ -345,7 +351,7 @@ router.post('/requests/:id/approve', requireApprovalPermission('leave_request_ap
       { replacements }
     );
     if (meta.rowCount === 0) {
-      return res.status(409).json({ error: settings.leave_require_hod ? 'Request not found, or still awaiting HOD approval' : 'Request not found or not pending' });
+      return res.status(409).json({ error: 'Request not found, already decided, or cancelled' });
     }
     const [[request]] = await sequelize.query(`SELECT employee_id FROM leave_requests WHERE id = :id`, { replacements: { id: req.params.id } });
     const [[employee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: request.employee_id } });
@@ -363,10 +369,10 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { reason } = req.body || {};
-    const settings = await getWorkflowSettings(sequelize, clinicId);
-    const requiredStatus = settings.leave_require_hod ? 'approved_by_hod' : 'pending';
-    const conditions = ['id = :id', 'clinic_id = :clinicId', 'status = :requiredStatus'];
-    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, reason: reason || null, requiredStatus };
+    // Same reasoning as /approve above — accept either starting status
+    // rather than gating on the current leave_require_hod value.
+    const conditions = ["id = :id", "clinic_id = :clinicId", "status IN ('pending', 'approved_by_hod')"];
+    const replacements = { id: req.params.id, clinicId, userId: req.user?.id || null, reason: reason || null };
     const branchId = nonAdminBranchId(req);
     if (branchId) { conditions.push('branch_id = :branchId'); replacements.branchId = branchId; }
     const [, meta] = await sequelize.query(
@@ -374,7 +380,7 @@ router.post('/requests/:id/reject', requireApprovalPermission('leave_request_app
        WHERE ${conditions.join(' AND ')}`,
       { replacements }
     );
-    if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found or not awaiting HR review' });
+    if (meta.rowCount === 0) return res.status(409).json({ error: 'Request not found, already decided, or cancelled' });
     const [[request]] = await sequelize.query(`SELECT employee_id FROM leave_requests WHERE id = :id`, { replacements: { id: req.params.id } });
     const [[employee]] = await sequelize.query(`SELECT user_id FROM employees WHERE id = :id`, { replacements: { id: request.employee_id } });
     if (employee?.user_id) {
