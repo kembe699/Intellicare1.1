@@ -1,7 +1,81 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useStaffAuth } from '@/contexts/StaffAuthContext';
-import { Clock, CalendarDays, HandCoins, ClipboardCheck, Loader2 } from 'lucide-react';
+import { staffFetch } from '@/api/apiClient';
+import { formatDateTime } from '@/lib/format';
+import { Clock, CalendarDays, HandCoins, ClipboardCheck, Loader2, Bell } from 'lucide-react';
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const load = async () => {
+    try {
+      const res = await staffFetch('/api/employee-portal/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (e) { /* non-blocking */ }
+  };
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const markRead = async (id: string) => {
+    await staffFetch(`/api/employee-portal/notifications/${id}/read`, { method: 'POST' });
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    setUnreadCount((c) => Math.max(0, c - 1));
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen((o) => !o); if (!open) load(); }}
+        className="relative p-2"
+        style={{ minWidth: 44, minHeight: 44 }}
+        aria-label="Notifications"
+      >
+        <Bell className="w-5 h-5" style={{ color: '#14363C' }} />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 bg-destructive text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 w-72 max-h-96 overflow-y-auto bg-white border rounded-lg shadow-lg z-30">
+            {notifications.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-4 text-center">No notifications yet.</p>
+            ) : (
+              notifications.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => !n.is_read && markRead(n.id)}
+                  className="w-full text-left p-3 border-b last:border-b-0 block"
+                  style={{ backgroundColor: n.is_read ? 'white' : '#F0FDFA' }}
+                >
+                  <p className="text-sm font-medium">{n.title}</p>
+                  {n.message && <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">{formatDateTime(n.created_at)}</p>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /**
  * The Employee Portal's own shell — deliberately NOT AppLayout. No HMIS
@@ -58,6 +132,7 @@ export default function StaffLayout() {
           <p className="font-semibold truncate" style={{ color: '#14363C' }}>{employee.firstName} {employee.lastName}</p>
           <p className="text-xs text-muted-foreground truncate">{employee.employeeNumber}</p>
         </div>
+        <NotificationBell />
         <button
           type="button"
           className="text-sm text-muted-foreground px-2 py-1"
