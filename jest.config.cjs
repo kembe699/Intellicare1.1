@@ -40,6 +40,11 @@ module.exports = {
       displayName: 'integration',
       testMatch: ['<rootDir>/tests/integration/**/*.test.js'],
       testEnvironment: 'node',
+      // See tests/setup/allowDbEnvOverride.js — a true no-op for a normal
+      // run against the configured tenant_test database; it only matters
+      // when DB_* env vars are already set before jest starts (e.g.
+      // pointing a one-off local run at a different Postgres instance).
+      setupFiles: ['<rootDir>/tests/setup/allowDbEnvOverride.js'],
     },
     {
       displayName: 'e2e',
