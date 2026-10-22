@@ -124,7 +124,20 @@ export default function BillDetails() {
   const { billId } = useParams<{ billId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currency: baseCurrency } = useCurrency();
+  const { currency: baseCurrency, secondaryCurrency, secondaryRate } = useCurrency();
+  // Display-only "what would this be in the other configured currency"
+  // suffix — only meaningful when the amount is actually denominated in the
+  // base currency (the secondary rate is base->secondary); a bill raised in
+  // a scheme's own non-base currency would get a wrong conversion if this
+  // applied blindly, so it's gated on that match. Billing always still
+  // posts in bill.bill_currency / the base currency — this never changes
+  // what's actually charged.
+  const dualSuffix = (amountInBillCurrency: number) => {
+    const billCcy = bill?.bill_currency || baseCurrency.code;
+    if (billCcy !== baseCurrency.code || !secondaryCurrency || secondaryRate == null) return '';
+    const converted = (amountInBillCurrency * secondaryRate).toFixed(secondaryCurrency.decimal_places);
+    return ` (≈ ${secondaryCurrency.symbol || secondaryCurrency.code} ${converted})`;
+  };
   const facilityInfo = useFacilityInfo();
   const { facilityName, branchName } = facilityInfo;
   const [buildingBillSummary, setBuildingBillSummary] = useState(false);
@@ -925,6 +938,7 @@ export default function BillDetails() {
             <div>
               <p className="text-xs text-muted-foreground">Total</p>
               <p className="text-lg font-bold">{bill.bill_currency || baseCurrency.code} {amt(bill.total_amount).toFixed(2)}</p>
+              {dualSuffix(amt(bill.total_amount)) && <p className="text-xs text-muted-foreground">{dualSuffix(amt(bill.total_amount)).trim()}</p>}
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Paid</p>
@@ -933,6 +947,7 @@ export default function BillDetails() {
             <div>
               <p className="text-xs text-muted-foreground">Balance</p>
               <p className={`text-lg font-bold ${amt(bill.balance_amount) <= 0 ? 'text-success' : payableBalance > 0 ? 'text-destructive' : 'text-indigo-600'}`}>{bill.bill_currency || baseCurrency.code} {amt(bill.balance_amount).toFixed(2)}</p>
+              {dualSuffix(amt(bill.balance_amount)) && <p className="text-xs text-muted-foreground">{dualSuffix(amt(bill.balance_amount)).trim()}</p>}
               {amt(bill.balance_amount) > 0 && payableBalance <= 0 && (
                 <p className="text-xs text-indigo-600 mt-0.5">awaiting invoice payment</p>
               )}
@@ -1241,6 +1256,9 @@ export default function BillDetails() {
                     <p className="text-xs text-warning mt-1">
                       Deposit covers {amt(paymentForm.amount).toFixed(2)} of {payableBalance.toFixed(2)} — the remaining {(payableBalance - amt(paymentForm.amount)).toFixed(2)} will need another payment.
                     </p>
+                  )}
+                  {dualSuffix(amt(paymentForm.amount)) && paymentForm.amount && (
+                    <p className="text-xs text-muted-foreground mt-1">If paying in {secondaryCurrency?.code}: {secondaryCurrency?.symbol || secondaryCurrency?.code} {(amt(paymentForm.amount) * (secondaryRate || 0)).toFixed(secondaryCurrency?.decimal_places ?? 2)}</p>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">

@@ -69,7 +69,7 @@ const toLocalDateStr = (d: Date) => {
 export default function DispensingWorkflow() {
   const { user } = useAuth();
   const { facilityName, branchName } = useFacilityInfo();
-  const { fmt, currency } = useCurrency();
+  const { fmt, fmtDual, currency } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
   const clinicId = user?.clinic || 1;
@@ -1584,14 +1584,14 @@ export default function DispensingWorkflow() {
                           <div className="rounded-lg border divide-y">
                             <div className="px-3.5 py-2.5 flex items-center justify-between">
                               <span className="text-sm font-medium text-muted-foreground">Order Total</span>
-                              <span className="text-base font-semibold">{fmt(orderTotal)}</span>
+                              <span className="text-base font-semibold">{fmtDual(orderTotal)}</span>
                             </div>
                             <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
                               <div>
                                 <span className={cn("text-sm font-semibold", billBalance > 0 ? "text-destructive" : "text-success")}>
                                   {billBalance > 0 ? 'Balance Due' : 'Bill Settled'}
                                 </span>
-                                <span className={cn("block text-base font-bold", billBalance > 0 ? "text-destructive" : "text-success")}>{fmt(billBalance)}</span>
+                                <span className={cn("block text-base font-bold", billBalance > 0 ? "text-destructive" : "text-success")}>{fmtDual(billBalance)}</span>
                               </div>
                               <Button size="sm" variant="outline" className="shrink-0" onClick={() => navigate(`/patients-bill/${activeBill.id}`)} title="Open this bill on Patient Bills to invoice or review it in full">
                                 <FileText className="w-3.5 h-3.5 mr-1.5" /> View Bill
