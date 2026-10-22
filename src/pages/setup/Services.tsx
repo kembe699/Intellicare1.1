@@ -114,6 +114,7 @@ const serviceCategories = [
   'Nursing',
   'Surgery',
   'Diagnostic',
+  'Examination',
   'Therapy',
   'Emergency',
   'Other'
@@ -147,6 +148,9 @@ const normalizeCategory = (input: string): string | null => {
       normalized.includes('imaging') || normalized.includes('x-ray') || normalized.includes('ultrasound') ||
       normalized.includes('lab') || normalized.includes('blood')) {
     return 'Diagnostic';
+  }
+  if (normalized.includes('exam') || normalized.includes('radiology')) {
+    return 'Examination';
   }
   if (normalized.includes('therapy') || normalized.includes('rehab') || normalized.includes('physiotherapy') ||
       normalized.includes('counseling')) {
