@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { authFetch } from '@/api/apiClient';
 import { toast } from '@/lib/notify';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
 import { FREQUENCY_OPTIONS, calculateQuantity, describeDosage, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
@@ -132,6 +133,7 @@ const DPOC_TENANT = 'dpoc';
 export default function LISTestOrders() {
   const { confirm, confirmDialog } = useConfirmDialog();
   const { user, hasPrivilege } = useAuth();
+  const { currency: baseCurrency } = useCurrency();
   const navigate = useNavigate();
   const facilityInfo = useFacilityInfo();
   const [queuedPatients, setQueuedPatients] = useState<any[]>([]);
@@ -1499,7 +1501,7 @@ export default function LISTestOrders() {
       const byName: Record<string, { price: number; currency: string; serviceId: string }> = {};
       const byServiceId: Record<string, { price: number; currency: string; serviceId: string }> = {};
       rows.forEach((r: any) => {
-        const entry = { price: parseFloat(r.scheme_price) || 0, currency: schemeCurrency || r.scheme_currency || 'SSP', serviceId: r.service_id };
+        const entry = { price: parseFloat(r.scheme_price) || 0, currency: schemeCurrency || r.scheme_currency || baseCurrency.code, serviceId: r.service_id };
         const key = (r.service_name || '').toLowerCase().trim();
         if (key) byName[key] = entry;
         if (r.service_id) byServiceId[r.service_id] = entry;
@@ -1610,7 +1612,7 @@ export default function LISTestOrders() {
     const task = billingQueueRef.current.then(async () => {
       try {
         const totalPrice = price * quantity;
-        const lineItem = { serviceId, serviceName: label, quantity, unitPrice: price, totalPrice, currency: currency || 'SSP' };
+        const lineItem = { serviceId, serviceName: label, quantity, unitPrice: price, totalPrice, currency: currency || baseCurrency.code };
         const branchClinicId = user?.clinic || 1;
         const schemeIdToSend = billingMode === 'scheme' ? selectedSchemeId : undefined;
 
@@ -1686,11 +1688,11 @@ export default function LISTestOrders() {
 
     const testLines = tests.map(t => {
       const unitPrice = parseFloat(t.price) || 0;
-      return { serviceId: t.scheme_service_id, serviceName: t.test_name, quantity: 1, unitPrice, totalPrice: unitPrice, currency: t.currency || 'SSP' };
+      return { serviceId: t.scheme_service_id, serviceName: t.test_name, quantity: 1, unitPrice, totalPrice: unitPrice, currency: t.currency || baseCurrency.code };
     });
     const serviceLines = serviceIds.map(id => visibleServices.find(s => s.id === id)).filter(Boolean).map((s: any) => {
       const unitPrice = parseFloat(s.price) || 0;
-      return { serviceId: s.id, serviceName: s.service_name || s.name, quantity: 1, unitPrice, totalPrice: unitPrice, currency: s.currency || 'SSP' };
+      return { serviceId: s.id, serviceName: s.service_name || s.name, quantity: 1, unitPrice, totalPrice: unitPrice, currency: s.currency || baseCurrency.code };
     });
     // A test/service priced at exactly 0 (deliberately free — e.g. dpoc's zero-priced
     // schemes) used to get filtered out here entirely, so no bill line was ever created
@@ -1912,7 +1914,7 @@ export default function LISTestOrders() {
   const selectedParticipant = queuedPatients.find(p => p.participant_id === orderForm.participant_id);
 
   const selectedServiceObjs = selectedServiceIds.map(id => visibleServices.find((s: any) => s.id === id)).filter(Boolean) as any[];
-  const orderCurrency = selectedTests[0]?.currency || selectedServiceObjs[0]?.currency || 'SSP';
+  const orderCurrency = selectedTests[0]?.currency || selectedServiceObjs[0]?.currency || baseCurrency.code;
   const orderTotal = [...selectedTests, ...selectedServiceObjs].reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
 
   // Combined test+service picker for "Request Another Service" in Visit Summary — plain
@@ -1921,10 +1923,10 @@ export default function LISTestOrders() {
   const reqServiceOptions = [
     ...labTests
       .filter((t: any) => t.test_name?.toLowerCase().includes(reqServiceQuery.toLowerCase()) || t.test_code?.toLowerCase().includes(reqServiceQuery.toLowerCase()))
-      .map((t: any) => ({ key: `test-${t.id}`, type: 'test' as const, code: t.test_code, name: t.test_name, department: t.category, price: parseFloat(t.price) || 0, currency: t.currency || 'SSP', is_available: t.is_available !== false })),
+      .map((t: any) => ({ key: `test-${t.id}`, type: 'test' as const, code: t.test_code, name: t.test_name, department: t.category, price: parseFloat(t.price) || 0, currency: t.currency || baseCurrency.code, is_available: t.is_available !== false })),
     ...services
       .filter((s: any) => (s.service_name || s.name || '').toLowerCase().includes(reqServiceQuery.toLowerCase()))
-      .map((s: any) => ({ key: `svc-${s.id}`, type: 'service' as const, serviceId: s.id, name: s.service_name || s.name, price: parseFloat(s.price) || 0, currency: s.currency || 'SSP' })),
+      .map((s: any) => ({ key: `svc-${s.id}`, type: 'service' as const, serviceId: s.id, name: s.service_name || s.name, price: parseFloat(s.price) || 0, currency: s.currency || baseCurrency.code })),
   ];
 
   // Searching a patient shows their full visit history across all fetched dates; otherwise
@@ -2424,7 +2426,7 @@ export default function LISTestOrders() {
                                           <span className="text-xs text-destructive font-medium shrink-0">Out of stock</span>
                                         ) : (
                                           <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
-                                            {parseFloat(test.price || 0).toFixed(2)} {test.currency || 'SSP'}
+                                            {parseFloat(test.price || 0).toFixed(2)} {test.currency || baseCurrency.code}
                                           </span>
                                         )}
                                       </div>
@@ -2443,7 +2445,7 @@ export default function LISTestOrders() {
                                       <div className="flex items-center justify-between gap-2 min-w-0 flex-1">
                                         <span className="truncate">{service.service_name || service.name}</span>
                                         <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
-                                          {parseFloat(service.price || 0).toFixed(2)} {service.currency || 'SSP'}
+                                          {parseFloat(service.price || 0).toFixed(2)} {service.currency || baseCurrency.code}
                                         </span>
                                       </div>
                                     </CommandItem>
@@ -2594,7 +2596,7 @@ export default function LISTestOrders() {
                       <div key={test.test_code} className="flex justify-between items-center gap-2 p-2 border rounded-md text-sm bg-card">
                         <span className="truncate">{test.test_name}</span>
                         <span className="text-xs text-muted-foreground font-mono shrink-0">
-                          {parseFloat(test.price || 0).toFixed(2)} {test.currency || 'SSP'}
+                          {parseFloat(test.price || 0).toFixed(2)} {test.currency || baseCurrency.code}
                         </span>
                       </div>
                     ))}
@@ -2616,7 +2618,7 @@ export default function LISTestOrders() {
                         <div key={service.id} className="flex justify-between items-center gap-2 p-2 border rounded-md text-sm bg-card">
                           <span className="truncate">{service.service_name || service.name}</span>
                           <span className="text-xs text-muted-foreground font-mono shrink-0">
-                            {parseFloat(service.price || 0).toFixed(2)} {service.currency || 'SSP'}
+                            {parseFloat(service.price || 0).toFixed(2)} {service.currency || baseCurrency.code}
                           </span>
                         </div>
                       ))}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -50,6 +51,7 @@ const statusBadge = (status: string) => {
 export default function PrescriptionManagement() {
   const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuth();
+  const { currency: baseCurrency } = useCurrency();
   const navigate = useNavigate();
   const clinicId = user?.clinic || 1;
   const facilityInfo = useFacilityInfo();
@@ -326,7 +328,7 @@ export default function PrescriptionManagement() {
         quantity_prescribed: qty, dose_strength: rxDose, frequency: rxFrequency,
         dose_amount: rxDoseAmount ? parseFloat(rxDoseAmount) : null, is_external: false,
         duration_days: parseInt(rxDuration, 10) || 0, notes: rxNotes.trim(),
-        selling_price: parseFloat(drug.scheme_price) || 0, currency: drug.scheme_currency || 'SSP',
+        selling_price: parseFloat(drug.scheme_price) || 0, currency: drug.scheme_currency || baseCurrency.code,
       }]);
     } else {
       setRxLines(prev => [...prev, {
@@ -351,7 +353,7 @@ export default function PrescriptionManagement() {
     try {
       const lineItems = lines
         .filter(l => l.selling_price > 0)
-        .map(l => ({ serviceId: l.drug_id, serviceName: l.drug_name, quantity: l.quantity_prescribed, unitPrice: l.selling_price, totalPrice: l.selling_price * l.quantity_prescribed, currency: l.currency || 'SSP' }));
+        .map(l => ({ serviceId: l.drug_id, serviceName: l.drug_name, quantity: l.quantity_prescribed, unitPrice: l.selling_price, totalPrice: l.selling_price * l.quantity_prescribed, currency: l.currency || baseCurrency.code }));
       const schemeIdToSend = billingMode === 'scheme' ? selectedSchemeId : undefined;
       if (lineItems.length === 0 && lines.every(l => l.is_external)) {
         // Everything was prescribed for outside purchase, so there is genuinely
@@ -672,7 +674,7 @@ export default function PrescriptionManagement() {
                     options={billingMode === 'scheme' ? (
                       drugCatalog.map((d: any) => ({
                         value: d.id,
-                        label: `${d.product_name} — ${d.unit_of_measure || 'unit'} — stock ${d.stock_on_hand ?? 0} — ${parseFloat(d.scheme_price || 0).toFixed(2)} ${d.scheme_currency || 'SSP'}`,
+                        label: `${d.product_name} — ${d.unit_of_measure || 'unit'} — stock ${d.stock_on_hand ?? 0} — ${parseFloat(d.scheme_price || 0).toFixed(2)} ${d.scheme_currency || baseCurrency.code}`,
                       }))
                     ) : drugs.map((d: any) => ({
                       value: d.id,

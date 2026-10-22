@@ -270,7 +270,7 @@ export default function ProformaInvoicePage() {
       if (existing) {
         return prev.map(l => l === existing ? { ...l, quantity: l.quantity + quantity } : l);
       }
-      return [...prev, { type, refId, name, quantity, unitPrice, currency: quoteCurrency || item.currency || baseCurrency.code || 'SSP' }];
+      return [...prev, { type, refId, name, quantity, unitPrice, currency: quoteCurrency || item.currency || baseCurrency.code }];
     });
   };
 
@@ -343,7 +343,7 @@ export default function ProformaInvoicePage() {
         body: JSON.stringify({
           patient_id: selectedPatient.id,
           patient_name: selectedPatient.label,
-          items, notes, currency: quoteCurrency || baseCurrency.code || 'SSP', clinic_id: clinicId,
+          items, notes, currency: quoteCurrency || baseCurrency.code, clinic_id: clinicId,
         }),
       });
       if (res.ok) {

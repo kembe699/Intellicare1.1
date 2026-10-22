@@ -5,10 +5,21 @@ export const apiFetch = _authFetch;
 
 export type CurrencyCode = string;
 
-// Matches the live base currency (currencies.is_base_currency=1, see CurrencyContext.tsx).
-// This is a static fallback for accounting pages that don't already consume useCurrency() —
-// if the base currency is ever changed via /setup, update this to match.
-export const BASE_CURRENCY: CurrencyCode = 'SSP';
+// Was a hardcoded 'SSP' constant with a comment asking whoever changes the
+// tenant's base currency to also update this file and redeploy — which
+// obviously never happened per-tenant, since this is one shared frontend
+// bundle serving every tenant. Confirmed live: a USD-based tenant still
+// saw "Amount (SSP)"/"Opening Balance (SSP)" labels. CurrencyContext.tsx
+// now updates this the moment it resolves the tenant's real base currency
+// (currencies.is_base_currency=1) — see setCurrentBaseCurrency below. A
+// plain `let`, not React state, so it only reflects correctly once
+// CurrencyContext's fetch has completed; in practice that's already true
+// by the time a user navigates to an Accounting page, same timing
+// CurrencyContext's own fmt()/currency already rely on elsewhere.
+export let BASE_CURRENCY: CurrencyCode = '';
+export function setCurrentBaseCurrency(code: string) {
+  if (code) BASE_CURRENCY = code;
+}
 
 export const formatCurrency = (amount: number, currency: CurrencyCode = '') => {
   const n = parseFloat(String(amount || 0)).toFixed(2);

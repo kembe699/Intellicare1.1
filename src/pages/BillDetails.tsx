@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { toast } from '@/lib/notify';
@@ -123,6 +124,7 @@ export default function BillDetails() {
   const { billId } = useParams<{ billId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currency: baseCurrency } = useCurrency();
   const facilityInfo = useFacilityInfo();
   const { facilityName, branchName } = facilityInfo;
   const [buildingBillSummary, setBuildingBillSummary] = useState(false);
@@ -542,7 +544,7 @@ export default function BillDetails() {
         credentials: 'include',
         body: JSON.stringify({
           bill_id: bill.id, patient_id: bill.patient_id, patient_name: bill.patient_name,
-          clinic_id: bill.clinic_id, amount, currency: bill.bill_currency || 'SSP', payment_terms: parseInt(paymentForm.paymentTerms) || 30,
+          clinic_id: bill.clinic_id, amount, currency: bill.bill_currency || baseCurrency.code, payment_terms: parseInt(paymentForm.paymentTerms) || 30,
           notes, services: invoiceableServices,
           scheme_id: paymentForm.schemeId || bill.scheme_id || null, scheme_name: schemeName || bill.scheme_name,
         }),
@@ -550,7 +552,7 @@ export default function BillDetails() {
       if (res.ok) {
         const result = await res.json();
         toast.success(`Invoice ${result.data.invoice_number} created`);
-        setInvoiceData({ ...result.data, patient_name: bill.patient_name, bill_number: bill.bill_number, currency: bill.bill_currency || 'SSP' });
+        setInvoiceData({ ...result.data, patient_name: bill.patient_name, bill_number: bill.bill_number, currency: bill.bill_currency || baseCurrency.code });
         setPaymentForm({ amount: '', method: 'cash', date: toLocalDateStr(new Date()), reference: '', notes: '', paymentTerms: '30', schemeId: '' });
         fetchBill(true);
       } else {
@@ -737,15 +739,15 @@ export default function BillDetails() {
         i + 1,
         s.serviceName,
         s.quantity,
-        isUnbilledInsuranceLine(s) ? `${s.schemeCurrency} ${amt(s.schemePrice).toFixed(2)}` : `${s.currency || bill.bill_currency || 'SSP'} ${amt(s.unitPrice).toFixed(2)}`,
-        isUnbilledInsuranceLine(s) ? `${s.schemeCurrency} ${(amt(s.schemePrice) * s.quantity).toFixed(2)}` : `${s.currency || bill.bill_currency || 'SSP'} ${amt(s.totalPrice).toFixed(2)}`,
+        isUnbilledInsuranceLine(s) ? `${s.schemeCurrency} ${amt(s.schemePrice).toFixed(2)}` : `${s.currency || bill.bill_currency || baseCurrency.code} ${amt(s.unitPrice).toFixed(2)}`,
+        isUnbilledInsuranceLine(s) ? `${s.schemeCurrency} ${(amt(s.schemePrice) * s.quantity).toFixed(2)}` : `${s.currency || bill.bill_currency || baseCurrency.code} ${amt(s.totalPrice).toFixed(2)}`,
         statusLabel(s),
       ],
       isSubRow: s.isVoided,
     }));
 
     const paymentRows: docTemplate.TableRow[] = paymentHistory.map(p => ({
-      cells: [p.receipt_number, formatDate(p.payment_date), p.payment_method, `${bill.bill_currency || 'SSP'} ${amt(p.payment_amount).toFixed(2)}`],
+      cells: [p.receipt_number, formatDate(p.payment_date), p.payment_method, `${bill.bill_currency || baseCurrency.code} ${amt(p.payment_amount).toFixed(2)}`],
     }));
 
     const bodyHTML = [
@@ -754,7 +756,7 @@ export default function BillDetails() {
           { label: 'Bill No.', value: bill.bill_number, bold: true },
           { label: 'Bill Date', value: docTemplate.formatDate(bill.bill_date) },
           { label: 'Status', value: bill.status === 'active' ? 'Invoiced' : bill.status, bold: true },
-          { label: 'Currency', value: bill.bill_currency || 'SSP' },
+          { label: 'Currency', value: bill.bill_currency || baseCurrency.code },
           ...(bill.scheme_name ? [{ label: 'Scheme', value: bill.scheme_name }] : []),
         ]},
         { title: 'Patient', rows: [
@@ -775,9 +777,9 @@ export default function BillDetails() {
         serviceRows,
       ),
       docTemplate.buildSummary([
-        { label: 'Total', value: `${bill.bill_currency || 'SSP'} ${amt(bill.total_amount).toFixed(2)}` },
-        { label: 'Paid', value: `${bill.bill_currency || 'SSP'} ${amt(bill.paid_amount).toFixed(2)}` },
-        { label: 'Balance Due', value: `${bill.bill_currency || 'SSP'} ${amt(bill.balance_amount).toFixed(2)}`, isTotal: true },
+        { label: 'Total', value: `${bill.bill_currency || baseCurrency.code} ${amt(bill.total_amount).toFixed(2)}` },
+        { label: 'Paid', value: `${bill.bill_currency || baseCurrency.code} ${amt(bill.paid_amount).toFixed(2)}` },
+        { label: 'Balance Due', value: `${bill.bill_currency || baseCurrency.code} ${amt(bill.balance_amount).toFixed(2)}`, isTotal: true },
       ]),
       paymentRows.length > 0 ? [
         `<div class="ic-section-title">Payment History</div>`,
@@ -922,15 +924,15 @@ export default function BillDetails() {
           <div className="ml-auto grid grid-cols-3 gap-6 text-right">
             <div>
               <p className="text-xs text-muted-foreground">Total</p>
-              <p className="text-lg font-bold">{bill.bill_currency || 'SSP'} {amt(bill.total_amount).toFixed(2)}</p>
+              <p className="text-lg font-bold">{bill.bill_currency || baseCurrency.code} {amt(bill.total_amount).toFixed(2)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Paid</p>
-              <p className="text-lg font-bold text-success">{bill.bill_currency || 'SSP'} {amt(bill.paid_amount).toFixed(2)}</p>
+              <p className="text-lg font-bold text-success">{bill.bill_currency || baseCurrency.code} {amt(bill.paid_amount).toFixed(2)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Balance</p>
-              <p className={`text-lg font-bold ${amt(bill.balance_amount) <= 0 ? 'text-success' : payableBalance > 0 ? 'text-destructive' : 'text-indigo-600'}`}>{bill.bill_currency || 'SSP'} {amt(bill.balance_amount).toFixed(2)}</p>
+              <p className={`text-lg font-bold ${amt(bill.balance_amount) <= 0 ? 'text-success' : payableBalance > 0 ? 'text-destructive' : 'text-indigo-600'}`}>{bill.bill_currency || baseCurrency.code} {amt(bill.balance_amount).toFixed(2)}</p>
               {amt(bill.balance_amount) > 0 && payableBalance <= 0 && (
                 <p className="text-xs text-indigo-600 mt-0.5">awaiting invoice payment</p>
               )}
@@ -1185,7 +1187,7 @@ export default function BillDetails() {
               return (
                 <div className="bg-card rounded-lg border border-info-border shadow-sm p-4">
                   <h3 className="font-medium mb-2 text-lg border-b pb-2 flex items-center gap-2 text-info"><Shield className="w-4 h-4" /> Insurance Claim</h3>
-                  <p className="text-xs text-muted-foreground mb-3">These items are billed at 0 in {bill.bill_currency || 'SSP'} — they're claimed from the insurer separately, in their own currency.</p>
+                  <p className="text-xs text-muted-foreground mb-3">These items are billed at 0 in {bill.bill_currency || baseCurrency.code} — they're claimed from the insurer separately, in their own currency.</p>
                   <div className="flex justify-between items-center text-sm mb-3">
                     <span className="text-muted-foreground">Scheme Total</span>
                     <span className="font-bold text-info">{schemeCurrency} {schemeTotal.toFixed(2)}</span>
@@ -1247,7 +1249,7 @@ export default function BillDetails() {
                     <Combobox
                       options={[
                         ...PAYMENT_METHODS,
-                        ...(depositBalance && depositBalance.balance > 0 && (bill?.bill_currency || 'SSP').trim().toUpperCase() === (depositBalance.currency || '').trim().toUpperCase()
+                        ...(depositBalance && depositBalance.balance > 0 && (bill?.bill_currency || baseCurrency.code).trim().toUpperCase() === (depositBalance.currency || '').trim().toUpperCase()
                           ? [{ value: 'deposit', label: 'Offset from Deposit' }]
                           : []),
                       ]}
@@ -1361,13 +1363,13 @@ export default function BillDetails() {
                 key: 'unitPrice', header: 'Unit Price', align: 'right',
                 render: (_v, s) => isUnbilledInsuranceLine(s)
                   ? <span className="font-mono text-info">{s.schemeCurrency} {amt(s.schemePrice).toFixed(2)}</span>
-                  : <span className="font-mono">{s.currency || bill.bill_currency || 'SSP'} {amt(s.unitPrice).toFixed(2)}</span>,
+                  : <span className="font-mono">{s.currency || bill.bill_currency || baseCurrency.code} {amt(s.unitPrice).toFixed(2)}</span>,
               },
               {
                 key: 'totalPrice', header: 'Amount', align: 'right',
                 render: (_v, s) => isUnbilledInsuranceLine(s)
                   ? <span className="font-mono font-semibold text-info">{s.schemeCurrency} {(amt(s.schemePrice) * s.quantity).toFixed(2)}</span>
-                  : <span className="font-mono font-semibold">{s.currency || bill.bill_currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>,
+                  : <span className="font-mono font-semibold">{s.currency || bill.bill_currency || baseCurrency.code} {amt(s.totalPrice).toFixed(2)}</span>,
               },
               { key: 'discountLabel', header: 'Discount', align: 'center', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
               {
@@ -1377,7 +1379,7 @@ export default function BillDetails() {
               {
                 key: '__status', header: 'Status', align: 'center',
                 render: (_v, s) => isUnbilledInsuranceLine(s) ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-info-bg text-info border-info-border" title={`Not billed in ${bill?.bill_currency || 'SSP'} — claimed from the insurer separately, from the Dispensing screen`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold border bg-info-bg text-info border-info-border" title={`Not billed in ${bill?.bill_currency || baseCurrency.code} — claimed from the insurer separately, from the Dispensing screen`}>
                     <Shield className="w-3 h-3" /> Insurance
                   </span>
                 ) : s.isVoided ? (

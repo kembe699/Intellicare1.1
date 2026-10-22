@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { setCurrentBaseCurrencyCode } from '@/utils/reportUtils';
+import { setCurrentBaseCurrency } from '@/utils/accountingApi';
+import { setCurrentBaseCurrencyCode as setFormatBaseCurrencyCode } from '@/lib/format';
 
 interface CurrencyData {
   code: string;
@@ -54,6 +57,13 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               name: data.name || data.code,
               decimal_places: data.decimal_places ?? 2,
             });
+            // Keeps reportUtils.ts's fmtCurrency(), accountingApi.ts's
+            // BASE_CURRENCY, and format.ts's formatMoney() — all used in
+            // places that don't already consume useCurrency() — in sync
+            // with the tenant's real base currency.
+            setCurrentBaseCurrencyCode(data.code);
+            setCurrentBaseCurrency(data.code);
+            setFormatBaseCurrencyCode(data.code);
           }
         }
       } catch {

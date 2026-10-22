@@ -12,6 +12,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { authFetch } from '@/api/apiClient';
 import { fetchPatientDirectory } from '@/lib/patientDirectory';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { toast } from '@/lib/notify';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
@@ -69,6 +70,7 @@ const isPayableLine = (s: any) => !s.paid && !s.isVoided && !isUnbilledInsurance
 
 export default function PatientsBill() {
   const { user } = useAuth();
+  const { currency: baseCurrency } = useCurrency();
   const { facilityName, branchName } = useFacilityInfo();
   const navigate = useNavigate();
   const clinicId = user?.clinic || 1;
@@ -950,7 +952,7 @@ export default function PatientsBill() {
                         <label key={i} className="flex items-center gap-2 p-2 text-sm cursor-pointer hover:bg-muted/40">
                           <input type="checkbox" className="rounded border-input" checked={selectedItems.has(i)} onChange={() => toggleItemSelection(i)} />
                           <span className="flex-1 min-w-0 truncate">{s.serviceName || s.name || s.service_name}</span>
-                          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">{s.currency || selectedBill.bill_currency || 'SSP'} {amt(s.totalPrice).toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">{s.currency || selectedBill.bill_currency || baseCurrency.code} {amt(s.totalPrice).toFixed(2)}</span>
                         </label>
                       ))}
                     </div>
@@ -1258,7 +1260,7 @@ export default function PatientsBill() {
             <div className="p-6 space-y-4">
               <div className="p-2.5 rounded-lg border bg-muted/30 text-xs flex justify-between">
                 <span className="text-muted-foreground">Available balance</span>
-                <span className="font-semibold">{(depositBalance?.balance ?? 0).toFixed(2)} {depositBalance?.currency || 'SSP'}</span>
+                <span className="font-semibold">{(depositBalance?.balance ?? 0).toFixed(2)} {depositBalance?.currency || baseCurrency.code}</span>
               </div>
               {!hasActiveShift && (
                 <div className="p-2.5 rounded-lg border border-warning-border bg-warning-bg text-xs text-warning flex items-center gap-2">

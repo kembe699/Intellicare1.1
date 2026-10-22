@@ -35,8 +35,19 @@ export function formatDateTime(value: string | number | Date | null | undefined)
   return `${date}, ${time}`;
 }
 
+// Kept in sync by CurrencyContext.tsx the moment it resolves the tenant's
+// real base currency — same fix/reasoning as reportUtils.ts's
+// currentBaseCurrencyCode and accountingApi.ts's BASE_CURRENCY. No call
+// site currently omits the currency argument to formatMoney, but this
+// closes the loop so that stays true rather than silently reintroducing
+// the "defaults to SSP for a non-SSP tenant" bug if one ever does.
+let currentBaseCurrencyCode = '';
+export function setCurrentBaseCurrencyCode(code: string) {
+  if (code) currentBaseCurrencyCode = code;
+}
+
 /** "SSP 1,250,000.00" — thousand separators, 2 decimals, currency prefix, minus sign for negatives. */
-export function formatMoney(amount: number | string | null | undefined, currency = 'SSP'): string {
+export function formatMoney(amount: number | string | null | undefined, currency = currentBaseCurrencyCode): string {
   const n = typeof amount === 'number' ? amount : parseFloat(String(amount ?? ''));
   if (amount === null || amount === undefined || amount === '' || Number.isNaN(n)) return '—';
   const formatted = new Intl.NumberFormat(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(

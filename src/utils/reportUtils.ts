@@ -13,8 +13,26 @@ export function fmtDate(val?: string | null): string {
   return d ? d.toLocaleDateString() : '—';
 }
 
-/** Format a number as currency (SSP) */
-export function fmtCurrency(val?: number | string | null, currency = 'SSP'): string {
+// The dozens of fmtCurrency(val) call sites across the Reports pages never
+// pass a currency — they all relied on a hardcoded 'SSP' default, which
+// showed the wrong currency code for any tenant whose base currency isn't
+// SSP (confirmed live: lab-request pricing and report totals both showed
+// "SSP" for a USD-based tenant). Touching every one of those call sites
+// individually would be a huge, risky diff for what's really one root
+// cause — instead, CurrencyContext.tsx sets this module-level value the
+// moment it resolves the tenant's real base currency (see
+// setCurrentBaseCurrencyCode below), and fmtCurrency's default parameter —
+// evaluated fresh on every call, not memoized — picks up the current
+// value automatically. Starts as '' (not 'SSP') to match
+// CurrencyContext's own default: an unloaded currency should show as
+// blank, not confidently wrong.
+let currentBaseCurrencyCode = '';
+export function setCurrentBaseCurrencyCode(code: string) {
+  if (code) currentBaseCurrencyCode = code;
+}
+
+/** Format a number as currency — defaults to the tenant's real base currency. */
+export function fmtCurrency(val?: number | string | null, currency = currentBaseCurrencyCode): string {
   const n = parseFloat(String(val ?? 0)) || 0;
   return `${currency} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
 }

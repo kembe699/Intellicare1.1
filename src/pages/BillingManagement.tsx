@@ -351,6 +351,7 @@ const BillingManagement: React.FC = () => {
 // ════════════════════════════════════════
 
 function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh, onDiscount, onFollowUp, onWriteOff }: any) {
+  const { currency: baseCurrency } = useCurrency();
   // Bills aren't all in one currency (a scheme/insurance bill can be priced in USD while
   // most are SSP) — the backend now groups sums by bill_currency instead of blending every
   // bill into one number, so every total here is rendered per-currency rather than always
@@ -449,7 +450,7 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
             columns={[
               { key: 'bill_number', header: 'Bill #', render: (v) => <span className="font-mono text-primary text-xs">{v}</span> },
               { key: 'patient_name', header: 'Patient', sortable: true },
-              { key: 'balance_amount', header: 'Balance', align: 'right', sortable: true, render: (v, bill) => <span className="font-bold text-destructive">{formatCurrency(parseFloat(v), bill.bill_currency || 'SSP')}</span> },
+              { key: 'balance_amount', header: 'Balance', align: 'right', sortable: true, render: (v, bill) => <span className="font-bold text-destructive">{formatCurrency(parseFloat(v), bill.bill_currency || baseCurrency.code)}</span> },
               {
                 key: 'days_overdue', header: 'Days Overdue', align: 'right', sortable: true,
                 render: (v) => <Badge variant={v > 90 ? 'destructive' : 'secondary'}>{v}d</Badge>,
@@ -474,7 +475,7 @@ function ReceivablesTab({ agingData, overdueList, outstandingBalances, onRefresh
 
 function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any) {
   const navigate = useNavigate();
-  const { fmt } = useCurrency();
+  const { fmt, currency: baseCurrency } = useCurrency();
   const [batchClaims, setBatchClaims] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
   const [loading, setLoading] = useState(true);
@@ -642,7 +643,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
                     </>
                   ),
                 },
-                { key: 'claim_amount', header: 'Amount', align: 'right', sortable: true, render: (v, claim) => <span className="font-bold">{claim.currency || 'SSP'} {parseFloat(v || 0).toFixed(2)}</span> },
+                { key: 'claim_amount', header: 'Amount', align: 'right', sortable: true, render: (v, claim) => <span className="font-bold">{claim.currency || baseCurrency.code} {parseFloat(v || 0).toFixed(2)}</span> },
                 { key: 'invoice_count', header: '# Invoices', align: 'center', render: (v) => v || 0 },
                 { key: 'created_at', header: 'Date Created', sortable: true, render: (v) => <span className="text-xs">{formatDate(v)}</span> },
                 {
