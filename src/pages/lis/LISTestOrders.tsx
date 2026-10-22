@@ -2097,6 +2097,47 @@ export default function LISTestOrders() {
             <div className="flex-1 overflow-auto p-4">
               {middleStep === 1 ? (
                 <div className="space-y-4 w-full mt-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Blood Pressure (mmHg)</label>
+                      <Input placeholder="e.g. 120/80" value={vitals.blood_pressure} onChange={e => setVitals({...vitals, blood_pressure: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Pulse (bpm)</label>
+                      <Input placeholder="e.g. 75" type="number" value={vitals.pulse} onChange={e => setVitals({...vitals, pulse: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Temperature (°C)</label>
+                      <Input placeholder="e.g. 37.2" type="number" step="0.1" value={vitals.temperature} onChange={e => setVitals({...vitals, temperature: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Resp. Rate (bpm)</label>
+                      <Input placeholder="e.g. 16" type="number" value={vitals.respiratory_rate} onChange={e => setVitals({...vitals, respiratory_rate: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Weight (kg)</label>
+                      <Input placeholder="e.g. 70.5" type="number" step="0.1" value={vitals.weight} onChange={e => setVitals({...vitals, weight: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Height (cm)</label>
+                      <Input placeholder="e.g. 175" type="number" step="0.1" value={vitals.height} onChange={e => setVitals({...vitals, height: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">SpO2 (%)</label>
+                      <Input placeholder="e.g. 98" type="number" value={vitals.spo2} onChange={e => setVitals({...vitals, spo2: e.target.value})} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Fasting Status</label>
+                      <Combobox
+                        options={[{ value: 'No', label: 'No (Non-Fasting)' }, { value: 'Yes', label: 'Yes (Fasting)' }]}
+                        value={vitals.fasting_status}
+                        onChange={v => setVitals({...vitals, fasting_status: v})}
+                        searchPlaceholder="Search..."
+                        className="mt-1 h-9"
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground">Chief Complaint / Notes</label>
                     <Popover open={complaintPopoverOpen} onOpenChange={setComplaintPopoverOpen}>
@@ -2162,47 +2203,6 @@ export default function LISTestOrders() {
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Blood Pressure (mmHg)</label>
-                      <Input placeholder="e.g. 120/80" value={vitals.blood_pressure} onChange={e => setVitals({...vitals, blood_pressure: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Pulse (bpm)</label>
-                      <Input placeholder="e.g. 75" type="number" value={vitals.pulse} onChange={e => setVitals({...vitals, pulse: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Temperature (°C)</label>
-                      <Input placeholder="e.g. 37.2" type="number" step="0.1" value={vitals.temperature} onChange={e => setVitals({...vitals, temperature: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Resp. Rate (bpm)</label>
-                      <Input placeholder="e.g. 16" type="number" value={vitals.respiratory_rate} onChange={e => setVitals({...vitals, respiratory_rate: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Weight (kg)</label>
-                      <Input placeholder="e.g. 70.5" type="number" step="0.1" value={vitals.weight} onChange={e => setVitals({...vitals, weight: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Height (cm)</label>
-                      <Input placeholder="e.g. 175" type="number" step="0.1" value={vitals.height} onChange={e => setVitals({...vitals, height: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">SpO2 (%)</label>
-                      <Input placeholder="e.g. 98" type="number" value={vitals.spo2} onChange={e => setVitals({...vitals, spo2: e.target.value})} className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground">Fasting Status</label>
-                      <Combobox
-                        options={[{ value: 'No', label: 'No (Non-Fasting)' }, { value: 'Yes', label: 'Yes (Fasting)' }]}
-                        value={vitals.fasting_status}
-                        onChange={v => setVitals({...vitals, fasting_status: v})}
-                        searchPlaceholder="Search..."
-                        className="mt-1 h-9"
-                      />
-                    </div>
                   </div>
 
                   <div>
