@@ -69,6 +69,34 @@ export const publicFetch = async (url: string, options: RequestInit = {}): Promi
   });
 };
 
+// Employee-portal-aware fetch — a completely separate token
+// (staff_portal_token, never auth_token) for the /staff mobile portal,
+// which carries a different JWT scheme entirely (see
+// middleware/employeePortalAuth.js). A 401 here redirects to /staff/login,
+// never the HMIS /login — these are different login surfaces for
+// different kinds of sessions on the same device.
+export const staffFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  if (url.startsWith('/api') || url.startsWith('/health')) {
+    url = `${getProductionBase()}${url}`;
+  }
+  const token = localStorage.getItem('staff_portal_token');
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  if (response.status === 401) {
+    localStorage.removeItem('staff_portal_token');
+    if (!window.location.pathname.startsWith('/staff/login')) {
+      window.location.href = '/staff/login';
+    }
+  }
+  return response;
+};
+
 // ── Base class ───────────────────────────────────────────────────────────────
 class BaseApiClient<T> {
   protected readonly endpoint: string;

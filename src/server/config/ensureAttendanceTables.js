@@ -193,7 +193,13 @@ async function ensureAttendanceTables(sequelize) {
     FROM attendance_records ar
     LEFT JOIN employee_shift_assignments esa ON esa.employee_id = ar.employee_id
     LEFT JOIN shifts s ON s.id = esa.shift_id
-    WHERE ar.status = 'accepted'
+    -- 'corrected' counts too — it's HR's authoritative record of what
+    -- actually happened (a different time than what was auto-captured),
+    -- not a rejection. Only 'rejected' is excluded, since those never
+    -- happened as valid attendance in the first place. Found live: a
+    -- corrected clock-in silently vanished from every total because this
+    -- originally read status = 'accepted' only.
+    WHERE ar.status IN ('accepted', 'corrected')
     GROUP BY ar.clinic_id, ar.branch_id, ar.employee_id, ar.shift_date, s.id, s.name, s.start_time, s.end_time, s.grace_minutes
   `);
 }

@@ -187,8 +187,12 @@ router.get('/me', async (req, res) => {
 router.use(requirePortalPinSet);
 
 async function findOpenOrLastRecord(sequelize, employeeId) {
+  // 'corrected' counts as a real clock event too — same reasoning as the
+  // attendance_days view (see ensureAttendanceTables.js): a corrected
+  // record is HR's authoritative version of what happened, not a
+  // rejection, so the employee's current in/out status must reflect it.
   const [[last]] = await sequelize.query(
-    `SELECT * FROM attendance_records WHERE employee_id = :employeeId AND status = 'accepted'
+    `SELECT * FROM attendance_records WHERE employee_id = :employeeId AND status IN ('accepted', 'corrected')
      ORDER BY occurred_at DESC LIMIT 1`,
     { replacements: { employeeId } }
   );
