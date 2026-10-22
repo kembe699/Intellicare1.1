@@ -1405,8 +1405,10 @@ export default function LISTestOrders() {
   };
 
   // Everything except consultation (billed at queueing), lab/diagnostic services
-  // (billed via the lab test picker below), and radiology (its own picker below,
-  // dpoc-only) — so nothing is offered twice.
+  // (billed via the lab test picker below), and radiology/examination (its own
+  // picker below, see fetchRadiologyExamTypes — the backend pulls both
+  // category='Radiology' and category='Examination' into that list) — so
+  // nothing is offered twice.
   const fetchServices = async () => {
     try {
       const res = await authFetch('/api/services', { credentials: 'include' });
@@ -1414,7 +1416,7 @@ export default function LISTestOrders() {
         const data = await res.json();
         setServices((Array.isArray(data) ? data : []).filter((s: any) =>
           s.isActive !== false && s.is_active !== false &&
-          !/consult|diagnos|lab|radiology/i.test(s.category || '')
+          !/consult|diagnos|lab|radiology|examination/i.test(s.category || '')
         ));
       }
     } catch (e) {
@@ -1908,18 +1910,7 @@ export default function LISTestOrders() {
   }, {} as Record<string, any[]>);
 
   const filteredServices = visibleServices.filter(s =>
-    (s.service_name || s.name || '').toLowerCase().includes(searchTest.toLowerCase()) &&
-    (s.category || '').toLowerCase() !== 'examination'
-  );
-
-  // Examination-category services are billed the same way as any other
-  // service, but shown under a "Radiology" heading in the picker since
-  // that's where staff expect to find them — kept separate from the
-  // dpoc-only radiology exam-request picker below, which is a different
-  // workflow (creates a radiology request, not a billable service line).
-  const filteredExaminationServices = visibleServices.filter(s =>
-    (s.service_name || s.name || '').toLowerCase().includes(searchTest.toLowerCase()) &&
-    (s.category || '').toLowerCase() === 'examination'
+    (s.service_name || s.name || '').toLowerCase().includes(searchTest.toLowerCase())
   );
 
   const selectedParticipant = queuedPatients.find(p => p.participant_id === orderForm.participant_id);
@@ -2449,24 +2440,6 @@ export default function LISTestOrders() {
                             {filteredServices.length > 0 && (
                               <CommandGroup heading="Services">
                                 {filteredServices.map(service => {
-                                  const isSelected = selectedServiceIds.includes(service.id);
-                                  return (
-                                    <CommandItem key={service.id} value={service.service_name || service.name} onSelect={() => toggleService(service)} className="group">
-                                      <Check className={cn('mr-2 h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
-                                      <div className="flex items-center justify-between gap-2 min-w-0 flex-1">
-                                        <span className="truncate">{service.service_name || service.name}</span>
-                                        <span className="text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground font-mono shrink-0">
-                                          {parseFloat(service.price || 0).toFixed(2)} {service.currency || baseCurrency.code}
-                                        </span>
-                                      </div>
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            )}
-                            {filteredExaminationServices.length > 0 && (
-                              <CommandGroup heading="Radiology">
-                                {filteredExaminationServices.map(service => {
                                   const isSelected = selectedServiceIds.includes(service.id);
                                   return (
                                     <CommandItem key={service.id} value={service.service_name || service.name} onSelect={() => toggleService(service)} className="group">

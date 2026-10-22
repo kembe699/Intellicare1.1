@@ -20,10 +20,11 @@ function branchScope(req, replacements, alias = '') {
 }
 
 // Radiology exam catalog — plain slice of the generic `services` table
-// (category='Radiology'), same source the ward's own radiology tab already
-// prices imaging from (see PatientDetails.tsx). Gated on radiology.read (not
-// inventory/services privileges) so whoever can already see the LIS drug/test
-// pickers can see this too.
+// (category='Radiology' or 'Examination' — the latter is Setup > Services'
+// user-facing name for the same exam workflow), same source the ward's own
+// radiology tab already prices imaging from (see PatientDetails.tsx). Gated
+// on radiology.read (not inventory/services privileges) so whoever can
+// already see the LIS drug/test pickers can see this too.
 router.get('/exam-types', authorize('radiology.read'), async (req, res) => {
   try {
     const replacements = {};
@@ -31,7 +32,7 @@ router.get('/exam-types', authorize('radiology.read'), async (req, res) => {
     const [rows] = await sequelize.query(
       `SELECT id, service_name AS name, price
        FROM services
-       WHERE category = 'Radiology' AND is_active = true ${branchSQL}
+       WHERE category IN ('Radiology', 'Examination') AND is_active = true ${branchSQL}
        ORDER BY service_name`,
       { replacements }
     );
