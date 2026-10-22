@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
     }
     
     const [departments] = await sequelize.query(`
-      SELECT 
+      SELECT
         d.id,
         d.department_name,
         d.department_code,
@@ -31,9 +31,13 @@ router.get('/', async (req, res) => {
         d.is_active,
         d.clinic_id,
         d.branch_id,
+        d.head_employee_id,
+        e.first_name AS head_first_name,
+        e.last_name AS head_last_name,
         d.created_at,
         d.updated_at
       FROM departments d
+      LEFT JOIN employees e ON e.id = d.head_employee_id
       WHERE d.clinic_id = :clinicId
         ${branchSQL}
       ORDER BY d.department_name ASC
@@ -75,9 +79,13 @@ router.get('/:id', async (req, res) => {
         d.is_active,
         d.clinic_id,
         d.branch_id,
+        d.head_employee_id,
+        e.first_name AS head_first_name,
+        e.last_name AS head_last_name,
         d.created_at,
         d.updated_at
       FROM departments d
+      LEFT JOIN employees e ON e.id = d.head_employee_id
       WHERE d.id = :id
         ${branchSQL}
     `, {
@@ -173,12 +181,12 @@ router.post('/', authorize('setup.departments.manage'), async (req, res) => {
 router.put('/:id', authorize('setup.departments.manage'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { department_name, department_code, description, is_active } = req.body;
-    
+    const { department_name, department_code, description, is_active, head_employee_id } = req.body;
+
     if (!department_name || !department_code) {
       return res.status(400).json({ error: 'Department name and code are required' });
     }
-    
+
     // Check if department exists
     const [existing] = await sequelize.query(`
       SELECT id, clinic_id FROM departments WHERE id = :id
@@ -207,14 +215,23 @@ router.put('/:id', authorize('setup.departments.manage'), async (req, res) => {
     if (codeConflict.length > 0) {
       return res.status(409).json({ error: 'Department code already exists for this clinic' });
     }
-    
+
+    if (head_employee_id) {
+      const [[head]] = await sequelize.query(
+        `SELECT id FROM employees WHERE id = :headId AND clinic_id = :clinicId`,
+        { replacements: { headId: head_employee_id, clinicId: existing[0].clinic_id } }
+      );
+      if (!head) return res.status(400).json({ error: 'The selected head of department is not a valid employee in this clinic.' });
+    }
+
     await sequelize.query(`
-      UPDATE departments 
-      SET 
+      UPDATE departments
+      SET
         department_name = :department_name,
         department_code = :department_code,
         description = :description,
         is_active = :is_active,
+        head_employee_id = :head_employee_id,
         updated_at = NOW()
       WHERE id = :id
     `, {
@@ -223,7 +240,8 @@ router.put('/:id', authorize('setup.departments.manage'), async (req, res) => {
         department_name,
         department_code: department_code.toUpperCase(),
         description: description || null,
-        is_active: is_active !== false
+        is_active: is_active !== false,
+        head_employee_id: head_employee_id || null
       }
     });
     
@@ -235,6 +253,7 @@ router.put('/:id', authorize('setup.departments.manage'), async (req, res) => {
       department_code: department_code.toUpperCase(),
       description,
       is_active: is_active !== false,
+      head_employee_id: head_employee_id || null,
       message: 'Department updated successfully'
     });
   } catch (error) {

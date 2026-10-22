@@ -196,6 +196,22 @@ async function buildTenantConnection(schemaName) {
   const { grantReadOnlySelect } = require('./config/ensureAnalyticsReadOnlyRole');
   grantReadOnlySelect(sequelize, schema).catch(() => {});
 
+  // Geofenced QR attendance + employee portal tables, ensured per-tenant the
+  // same way. See ensureAttendanceTables.js for the schema and
+  // ensureEmployeePortalAccess.js/ensureDepartmentHeadColumn.js/
+  // ensureLeaveAdvanceWorkflowColumns.js for the additive columns on
+  // employees/departments/leave_requests/salary_advances this feature needs.
+  const { ensureAttendanceTables } = require('./config/ensureAttendanceTables');
+  ensureAttendanceTables(sequelize).catch(() => {});
+  const { ensureEmployeePortalAccess } = require('./config/ensureEmployeePortalAccess');
+  ensureEmployeePortalAccess(sequelize).catch(() => {});
+  const { ensureDepartmentHeadColumn } = require('./config/ensureDepartmentHeadColumn');
+  ensureDepartmentHeadColumn(sequelize).catch(() => {});
+  const { ensureLeaveAdvanceWorkflowColumns } = require('./config/ensureLeaveAdvanceWorkflowColumns');
+  ensureLeaveAdvanceWorkflowColumns(sequelize).catch(() => {});
+  const { ensureHrWorkflowSettings } = require('./config/ensureHrWorkflowSettings');
+  ensureHrWorkflowSettings(sequelize).catch(() => {});
+
   return { sequelize, models };
 }
 

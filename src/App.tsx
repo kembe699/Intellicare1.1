@@ -5,8 +5,9 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { StaffAuthProvider } from "@/contexts/StaffAuthContext";
 import { PlatformAuthProvider, usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { DatabaseProvider } from "@/contexts/DatabaseContext.browser";
@@ -31,6 +32,14 @@ const Login = lazyWithRetry(() => import('./pages/Login'));
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'));
 const PayrollSign = lazyWithRetry(() => import('./pages/public/PayrollSign'));
 const BookDemo = lazyWithRetry(() => import('./pages/public/BookDemo'));
+const StaffLogin = lazyWithRetry(() => import('./pages/staff/StaffLogin'));
+const StaffSetPin = lazyWithRetry(() => import('./pages/staff/StaffSetPin'));
+const StaffClock = lazyWithRetry(() => import('./pages/staff/StaffClock'));
+const StaffLayout = lazyWithRetry(() => import('./pages/staff/StaffLayout'));
+const StaffHome = lazyWithRetry(() => import('./pages/staff/StaffHome'));
+const StaffLeave = lazyWithRetry(() => import('./pages/staff/StaffLeave'));
+const StaffAdvances = lazyWithRetry(() => import('./pages/staff/StaffAdvances'));
+const StaffApprovals = lazyWithRetry(() => import('./pages/staff/StaffApprovals'));
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const AnalyticsAssistant = lazyWithRetry(() => import('./pages/AnalyticsAssistant'));
 const PatientVisitsHistory = lazyWithRetry(() => import('./pages/PatientVisitsHistory'));
@@ -87,6 +96,10 @@ const PayrollRunDetail = lazyWithRetry(() => import('./pages/hr/PayrollRunDetail
 const SalaryStructuresManagement = lazyWithRetry(() => import('./pages/hr/SalaryStructuresManagement'));
 const SalaryAdvancesManagement = lazyWithRetry(() => import('./pages/hr/SalaryAdvancesManagement'));
 const LeaveManagement = lazyWithRetry(() => import('./pages/hr/LeaveManagement'));
+const AttendanceSites = lazyWithRetry(() => import('./pages/hr/AttendanceSites'));
+const AttendanceDisplay = lazyWithRetry(() => import('./pages/hr/AttendanceDisplay'));
+const AttendanceDashboard = lazyWithRetry(() => import('./pages/hr/AttendanceDashboard'));
+const RequestsInbox = lazyWithRetry(() => import('./pages/hr/RequestsInbox'));
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
 const ProcurementReports = lazyWithRetry(() => import('./pages/procurement/ProcurementReports'));
@@ -311,6 +324,24 @@ const AppRoutes = () => {
           an already-logged-in staff member (e.g. opening it to show someone
           else) away to their dashboard instead of letting them see it. */}
       <Route path="/book-demo" element={<BookDemo />} />
+      {/* The mobile Employee Portal — a completely separate auth scheme
+          (StaffAuthProvider/staff_portal_token, see
+          contexts/StaffAuthContext.tsx), no HMIS chrome, no
+          ProtectedRoute/PublicRoute (those gate the HMIS user session,
+          which has nothing to do with an employee-portal session on the
+          same device). /staff/clock sits outside StaffLayout since it's a
+          full-screen scan/location flow, not a tabbed page. */}
+      <Route path="/staff" element={<StaffAuthProvider><Outlet /></StaffAuthProvider>}>
+        <Route path="login" element={<StaffLogin />} />
+        <Route path="set-pin" element={<StaffSetPin />} />
+        <Route path="clock" element={<StaffClock />} />
+        <Route element={<StaffLayout />}>
+          <Route index element={<StaffHome />} />
+          <Route path="leave" element={<StaffLeave />} />
+          <Route path="advances" element={<StaffAdvances />} />
+          <Route path="approvals" element={<StaffApprovals />} />
+        </Route>
+      </Route>
       <Route path="/dashboard" element={
         <ProtectedRoute requiredPrivilege="pages.dashboard.view">
           <Dashboard />
@@ -594,6 +625,26 @@ const AppRoutes = () => {
       <Route path="/hr/leave" element={
         <ProtectedRoute requiredPrivilege="hr.leave.read">
           <LeaveManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/attendance/sites" element={
+        <ProtectedRoute requiredPrivilege="attendance.manage_sites">
+          <AttendanceSites />
+        </ProtectedRoute>
+      } />
+      <Route path="/attendance/display/:siteId" element={
+        <ProtectedRoute requiredPrivilege="attendance.manage_sites">
+          <AttendanceDisplay />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/attendance" element={
+        <ProtectedRoute requiredPrivilege="attendance.view">
+          <AttendanceDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/hr/requests" element={
+        <ProtectedRoute requiredPrivilege="hr.leave.read">
+          <RequestsInbox />
         </ProtectedRoute>
       } />
       <Route path="/procurement/requisitions" element={

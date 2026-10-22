@@ -160,6 +160,15 @@ const CATALOG = [
   ['hr.leave.read', 'View leave', 'hr', 'Leave types, requests, and employee leave balances', ['admin']],
   ['hr.leave.write', 'Manage leave', 'hr', 'Create, approve, and reject leave requests', ['admin']],
 
+  // Geofenced QR attendance + employee portal — see ensureAttendanceTables.js.
+  ['attendance.view', 'View attendance', 'attendance', 'View attendance records, the Today board, and reports', ['admin']],
+  ['attendance.manage_sites', 'Manage attendance sites', 'attendance', 'Create/edit/deactivate geofenced attendance sites and their QR codes', ['admin']],
+  ['attendance.correct', 'Correct attendance records', 'attendance', 'Manually correct a clock-in/out record (reason required, audited)', ['admin']],
+  ['portal.manage_access', 'Manage employee portal access', 'hr', 'Generate/reset/disable an employee\'s staff portal login code', ['admin']],
+  ['leave.manage_settings', 'Manage leave settings', 'hr', 'Leave types, entitlements, carry-over rules, and the approval workflow toggle', ['admin']],
+  ['advance.manage_settings', 'Manage salary advance settings', 'hr', 'Advance limits, max open advances, and the approval workflow toggle', ['admin']],
+  ['advance.mark_paid', 'Mark salary advances as paid', 'hr', 'Record the payout date/method on an approved advance', ['admin']],
+
   ['setup.facilities.manage', 'Manage facilities & branches', 'setup', 'Create/edit/delete facilities and branches', ['admin']],
   ['setup.clinics.manage', 'Manage clinics', 'setup', 'Create/edit/delete clinics', ['admin']],
   ['setup.departments.manage', 'Manage departments', 'setup', 'Create/edit/delete departments', ['admin']],

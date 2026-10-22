@@ -1,0 +1,16 @@
+{
+  "name": "IntelliCare Staff Portal",
+  "short_name": "Staff Portal",
+  "start_url": "/staff",
+  "scope": "/staff",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#077A84",
+  "icons": [
+    {
+      "src": "/hjd-icon.png",
+      "sizes": "358x358",
+      "type": "image/png"
+    }
+  ]
+}
