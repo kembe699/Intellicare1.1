@@ -43,8 +43,32 @@ function RejectDialog({ open, onOpenChange, onConfirm }: { open: boolean; onOpen
   );
 }
 
+/**
+ * Whether a clinic requires the HOD approve-first step, per
+ * hr_workflow_settings (defaults to false server-side — see
+ * ensureHrWorkflowSettings.js). The leave/:id/approve and
+ * salary-advances/:id/approve endpoints require status='approved_by_hod'
+ * ONLY when this is true, and 'pending' directly otherwise — so the UI's
+ * two-step vs. one-step approve flow has to match this setting, not always
+ * show the HOD step. Mismatching it is exactly what produced a 409 "Request
+ * not found or not pending" on every approve when the setting is off (the
+ * default): the HOD-approve step moved the row to 'approved_by_hod', but
+ * the final approve endpoint was still looking for 'pending'.
+ */
+function useRequireHod(key: 'leave_require_hod' | 'advance_require_hod') {
+  const [requireHod, setRequireHod] = useState(false);
+  useEffect(() => {
+    authFetch('/api/hr/workflow-settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setRequireHod(!!data?.[key]))
+      .catch(() => setRequireHod(false));
+  }, [key]);
+  return requireHod;
+}
+
 function LeaveTab() {
   const { confirm, confirmDialog } = useConfirmDialog();
+  const requireHod = useRequireHod('leave_require_hod');
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -101,7 +125,8 @@ function LeaveTab() {
           {
             key: 'actions', header: '', render: (_v, r) => (
               <div className="flex gap-1 justify-end">
-                {r.status === 'pending' && <Button size="sm" variant="outline" onClick={() => approveHod(r)}>Approve (HOD)</Button>}
+                {r.status === 'pending' && requireHod && <Button size="sm" variant="outline" onClick={() => approveHod(r)}>Approve (HOD)</Button>}
+                {r.status === 'pending' && !requireHod && <Button size="sm" variant="outline" onClick={() => approveHr(r)}>Approve</Button>}
                 {r.status === 'approved_by_hod' && <Button size="sm" variant="outline" onClick={() => approveHr(r)}>Approve (HR)</Button>}
                 {['pending', 'approved_by_hod'].includes(r.status) && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setRejectTarget(r)}>Reject</Button>}
               </div>
@@ -117,6 +142,7 @@ function LeaveTab() {
 
 function AdvancesTab() {
   const { confirm, confirmDialog } = useConfirmDialog();
+  const requireHod = useRequireHod('advance_require_hod');
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -172,7 +198,8 @@ function AdvancesTab() {
           {
             key: 'actions', header: '', render: (_v, r) => (
               <div className="flex gap-1 justify-end">
-                {r.status === 'pending' && <Button size="sm" variant="outline" onClick={() => approveHod(r)}>Approve (HOD)</Button>}
+                {r.status === 'pending' && requireHod && <Button size="sm" variant="outline" onClick={() => approveHod(r)}>Approve (HOD)</Button>}
+                {r.status === 'pending' && !requireHod && <Button size="sm" variant="outline" onClick={() => approveHr(r)}>Approve</Button>}
                 {r.status === 'approved_by_hod' && <Button size="sm" variant="outline" onClick={() => approveHr(r)}>Approve (HR)</Button>}
                 {['pending', 'approved_by_hod'].includes(r.status) && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setRejectTarget(r)}>Reject</Button>}
               </div>
