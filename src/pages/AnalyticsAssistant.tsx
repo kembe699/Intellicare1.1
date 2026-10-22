@@ -234,7 +234,7 @@ const AnalyticsAssistant: React.FC = () => {
 
         {/* Thread */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-2 border-b border-border p-3">
+          <div className="flex items-center gap-2 border-b border-border p-3 shadow-sm">
             <button type="button" className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open conversation history">
               <Menu className="h-4 w-4" />
             </button>
@@ -247,7 +247,7 @@ const AnalyticsAssistant: React.FC = () => {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 md:px-6">
             {loadingMessages ? (
               <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
             ) : messages.length === 0 ? (
@@ -338,8 +338,8 @@ const AnalyticsAssistant: React.FC = () => {
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="border-t border-border p-3">
-            <div className="mx-auto flex max-w-2xl items-center gap-2">
+          <form onSubmit={handleSubmit} className="px-4 pb-6 pt-2 md:px-6">
+            <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-2xl border border-border bg-card p-1.5 shadow-lg">
               <input
                 ref={inputRef}
                 type="text"
@@ -347,13 +347,13 @@ const AnalyticsAssistant: React.FC = () => {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask a question, e.g. How many patients were registered today?"
                 disabled={sending}
-                className="h-11 flex-1 rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-60"
+                className="h-10 flex-1 rounded-xl border-0 bg-transparent px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
               />
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
                 aria-label="Send"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
               </button>

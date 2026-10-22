@@ -138,7 +138,7 @@ router.post('/ask', chatbotLimiter, chatbotLlmLimiter, async (req, res) => {
           { replacements: { id: conversationId } },
         );
         const llmResult = await llmEngine.answerQuestion({ sequelize: analyticsSequelize, req, question, history: historyRows, clinicId });
-        result = { text: llmResult.text, table: null, intentKey: llmResult.toolCalls.map((t) => t.name).join(',') || null, toolCalls: llmResult.toolCalls };
+        result = { text: llmResult.text, table: llmResult.table || null, intentKey: llmResult.toolCalls.map((t) => t.name).join(',') || null, toolCalls: llmResult.toolCalls };
         engineUsed = 'llm';
       } catch (e) {
         console.error('Analytics Assistant LLM engine failed, falling back to keyword engine:', e.message);

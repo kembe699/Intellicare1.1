@@ -37,8 +37,15 @@ const PERIOD_SCHEMA = {
 const TOOLS = [
   {
     name: 'get_patient_registrations',
-    description: 'Count of new patient registrations in a period.',
-    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+    description: 'Count of new patient registrations in a period. Set include_list to also get each patient\'s name, patient number, and (if the user has financial access) total billed amount for the period — use that for "list the patients registered today" / "what did they pay for" style questions, not just the count.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        period: PERIOD_SCHEMA,
+        include_list: { type: 'boolean', description: 'true to also return up to 50 individual patients (name, patient number, registration time, total billed), not just the count.' },
+      },
+      required: ['period'],
+    },
   },
   {
     name: 'get_total_patients',
@@ -89,8 +96,15 @@ const TOOLS = [
   },
   {
     name: 'get_expenses',
-    description: "Total cash expenses actually PAID OUT (from the daily expense voucher log, status='paid' only — not pending/unapproved requests, and not the full general-ledger expense view) in a period. Requires financial access.",
-    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+    description: "Total cash expenses actually PAID OUT (from the daily expense voucher log, status='paid' only — not pending/unapproved requests, and not the full general-ledger expense view) in a period. Set include_list to also get each individual payment voucher (date, description, category, amount, payment method, voucher number) — use that for 'what was paid today and what for' / 'payment vouchers' rather than just the total. Requires financial access.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        period: PERIOD_SCHEMA,
+        include_list: { type: 'boolean', description: 'true to also return up to 50 individual paid expense vouchers, not just the total.' },
+      },
+      required: ['period'],
+    },
   },
   {
     name: 'get_income_statement',
@@ -106,12 +120,13 @@ const TOOLS = [
   },
   {
     name: 'get_purchase_orders',
-    description: "Purchase orders in a period, by status (draft, check, approved, authorized, received, cancelled) — count and total value, overall and broken down per status. Use for 'any POs', 'purchase orders', 'pending purchase orders', procurement questions.",
+    description: "Purchase orders in a period, by status (draft, check, approved, authorized, received, cancelled) — count and total value, overall and broken down per status. Set include_list to also get each individual PO (number, supplier, status, approval stage/who signed it, amount) — use that for 'show me the POs done today, with their approval level/status' rather than just the aggregate. Use for 'any POs', 'purchase orders', 'pending purchase orders', procurement questions.",
     input_schema: {
       type: 'object',
       properties: {
         period: PERIOD_SCHEMA,
         status: { type: 'string', enum: ['draft', 'check', 'approved', 'authorized', 'received', 'cancelled'], description: 'Filter to just this status — omit for all statuses (the result still includes a full per-status breakdown either way).' },
+        include_list: { type: 'boolean', description: 'true to also return up to 50 individual purchase orders with their approval stage, not just the aggregate.' },
       },
       required: ['period'],
     },
@@ -188,6 +203,49 @@ const TOOLS = [
     description: "Inter-branch patient referrals in a period, by status (pending, accepted, rejected, cancelled). Use for 'referrals', 'patient referrals', 'how many patients were referred'.",
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
+  {
+    name: 'get_stock_movements',
+    description: "A table of individual stock movements in a period — every receipt, dispense, adjustment, transfer, waste, and damage event, each as its own row with item, quantity change, and reference. Use for 'stock movement', 'what moved in the pharmacy/store today', 'inventory transactions'. This is the detailed movement feed; use get_pharmacy_dispensing instead for just the aggregate dispensing total/value. Requires pharmacy access.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_currency_info',
+    description: "The currencies configured in this system (code, symbol, which one is the base currency) and the most recent exchange rate for each currency pair on record. A snapshot, not scoped to any period. Use for 'what currency are we using', 'what's the exchange rate', 'what's the base currency'. Requires financial rates access.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_patient_visit_summary',
+    description: "A single patient's most recent visit: chief complaint, tests ordered (with status), and what was billed (if the user has financial access) — the same information the Visit Summary screen shows. patient_query can be a patient/participant number (exact) or a name (fuzzy-matched). If more than one patient matches the name, the result comes back as a list of candidates to ask the user to pick from — don't guess which one. Use for 'visit summary for <name/number>', 'what happened on this patient's visit'.",
+    input_schema: {
+      type: 'object',
+      properties: { patient_query: { type: 'string', description: "A patient's name or participant/patient number." } },
+      required: ['patient_query'],
+    },
+  },
+  {
+    name: 'get_inpatient_report',
+    description: "Currently-admitted inpatients (name, ward, admission date, and — if the user has financial access — their accumulated bill so far), plus how many patients were discharged in the given period. Distinct from get_inpatient_occupancy (a bed/ward capacity snapshot) — use THIS tool for 'how many patients are currently admitted and what do they owe', 'discharges last month', 'inpatients report for a date range'.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_suppliers',
+    description: "The procurement supplier catalog (name, code, contact, phone, preferred/on-hold status, currency) — a current snapshot, not scoped to any period. active_only (default true) excludes suppliers on hold. Use for 'show me our suppliers', 'list of suppliers'. Requires procurement access.",
+    input_schema: {
+      type: 'object',
+      properties: { active_only: { type: 'boolean', description: 'Defaults to true (excludes on-hold suppliers). Set false to include every supplier.' } },
+      required: [],
+    },
+  },
+  {
+    name: 'get_grn_summary',
+    description: "Goods Receipt Notes (GRNs) in a period — each one's GRN number, the PO it came from, supplier, status (pending_inspection/inspected/accepted/rejected), items received, and date. This is the real record of what procurement actually received, distinct from a PO's own status. Use for 'GRNs done today', 'what did we receive from suppliers'. Requires procurement access.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
+  {
+    name: 'get_requisitions_by_department',
+    description: "Purchase requisitions in a period, grouped by requesting department: count and total value per department, ranked by count. Use for 'which department requisitions the most', 'consumption by department', 'procurement requests by department'. Requires procurement access.",
+    input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
+  },
 ];
 
 async function executeTool(name, input, { sequelize, req, clinicId }) {
@@ -197,8 +255,23 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
 
   switch (name) {
     case 'get_patient_registrations': {
-      const data = await analytics.getRegistrationsCount(sequelize, ctx);
-      return { period, count: data.count };
+      const data = await analytics.getRegistrationsCount(sequelize, { ...ctx, includeList: !!input?.include_list });
+      const result = { period, count: data.count };
+      if (data.patients) {
+        const canSeeRevenue = await hasPrivilege(req, 'accounting.read');
+        result.patients = canSeeRevenue
+          ? data.patients
+          : data.patients.map(({ totalBilled, ...rest }) => rest);
+        result.table = {
+          columns: canSeeRevenue ? ['Patient', 'Patient #', 'Registered', 'Total billed'] : ['Patient', 'Patient #', 'Registered'],
+          rows: result.patients.map((p) => {
+            const row = [p.name, p.participantNumber, new Date(p.registeredAt).toISOString().split('T')[0]];
+            if (canSeeRevenue) row.push((p.totalBilled || 0).toFixed(2));
+            return row;
+          }),
+        };
+      }
+      return result;
     }
     case 'get_total_patients': {
       const data = await analytics.getTotalPatientsCount(sequelize, { req });
@@ -284,8 +357,16 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
         return { error: 'permission_denied', message: 'This user does not have financial/accounting access.' };
       }
       const baseCurrency = await CurrencyService.getBaseCurrency();
-      const data = await analytics.getExpensesTotal(sequelize, ctx);
-      return { period, total: data.total, currency: baseCurrency.code, voucherCount: data.count };
+      const data = await analytics.getExpensesTotal(sequelize, { ...ctx, includeList: !!input?.include_list });
+      const result = { period, total: data.total, currency: baseCurrency.code, voucherCount: data.count };
+      if (data.vouchers) {
+        result.vouchers = data.vouchers;
+        result.table = {
+          columns: ['Date', 'Description', 'Category', 'Amount', 'Voucher #'],
+          rows: data.vouchers.map((v) => [new Date(v.expenseDate).toISOString().split('T')[0], v.description, v.category, v.amount.toFixed(2), v.voucherNumber || '']),
+        };
+      }
+      return result;
     }
     case 'get_income_statement': {
       if (!(await hasPrivilege(req, 'accounting.read'))) {
@@ -306,8 +387,16 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
       };
     }
     case 'get_purchase_orders': {
-      const data = await analytics.getPurchaseOrdersSummary(sequelize, { ...ctx, status: input?.status });
-      return { period, count: data.count, totalValue: data.totalValue, byStatus: data.byStatus };
+      const data = await analytics.getPurchaseOrdersSummary(sequelize, { ...ctx, status: input?.status, includeList: !!input?.include_list });
+      const result = { period, count: data.count, totalValue: data.totalValue, byStatus: data.byStatus };
+      if (data.pos) {
+        result.pos = data.pos;
+        result.table = {
+          columns: ['PO #', 'Supplier', 'Approval stage', 'Amount', 'Date'],
+          rows: data.pos.map((p) => [p.poNumber, p.supplierName, p.approvalStage, `${p.totalAmount.toFixed(2)} ${p.currency}`, new Date(p.orderDate).toISOString().split('T')[0]]),
+        };
+      }
+      return result;
     }
     case 'get_pharmacy_dispensing': {
       const data = await analytics.getPharmacyDispensingTotal(sequelize, ctx);
@@ -399,6 +488,54 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
     case 'get_referrals': {
       const rows = await analytics.getReferralsByStatus(sequelize, ctx);
       return { period, byStatus: rows };
+    }
+    case 'get_stock_movements': {
+      if (!(await hasPrivilege(req, 'pharmacy.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have pharmacy access.' };
+      }
+      const data = await analytics.getStockMovements(sequelize, { clinicId, start: periodResolved.start, end: periodResolved.end });
+      return { period, count: data.count, movements: data.movements, table: data.table };
+    }
+    case 'get_currency_info': {
+      if (!(await hasPrivilege(req, 'accounting.rates.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have access to currency/exchange rate configuration.' };
+      }
+      const data = await analytics.getCurrencyInfo(sequelize, { clinicId });
+      return { currencies: data.currencies, exchangeRates: data.exchangeRates, table: data.table, note: 'Current configuration — not scoped to any period.' };
+    }
+    case 'get_patient_visit_summary': {
+      if (!(await hasPrivilege(req, 'lis.clinical.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have clinical access.' };
+      }
+      const canSeeRevenue = await hasPrivilege(req, 'accounting.read');
+      const data = await analytics.getPatientVisitSummary(sequelize, { req, patientQuery: String(input?.patient_query || ''), canSeeRevenue });
+      return data;
+    }
+    case 'get_inpatient_report': {
+      const canSeeRevenue = await hasPrivilege(req, 'accounting.read');
+      const data = await analytics.getInpatientReport(sequelize, { req, clinicId, start: periodResolved.start, end: periodResolved.end, canSeeRevenue });
+      return { period, ...data, note: 'admittedPatients is a current snapshot (not scoped to the period); dischargedInPeriod is scoped to the given period.' };
+    }
+    case 'get_suppliers': {
+      if (!(await hasPrivilege(req, 'procurement.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have procurement access.' };
+      }
+      const data = await analytics.getSuppliers(sequelize, { clinicId, activeOnly: input?.active_only !== false });
+      return data;
+    }
+    case 'get_grn_summary': {
+      if (!(await hasPrivilege(req, 'procurement.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have procurement access.' };
+      }
+      const data = await analytics.getGrnSummary(sequelize, { req, clinicId, start: periodResolved.start, end: periodResolved.end });
+      return { period, ...data };
+    }
+    case 'get_requisitions_by_department': {
+      if (!(await hasPrivilege(req, 'procurement.read'))) {
+        return { error: 'permission_denied', message: 'This user does not have procurement access.' };
+      }
+      const data = await analytics.getRequisitionsByDepartment(sequelize, { req, clinicId, start: periodResolved.start, end: periodResolved.end });
+      return { period, ...data };
     }
     default:
       return { error: 'unknown_tool', message: `No such tool: ${name}` };

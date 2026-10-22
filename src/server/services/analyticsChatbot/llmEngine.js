@@ -136,6 +136,14 @@ async function answerQuestion({ sequelize, req, question, history, clinicId }) {
     { role: 'user', content: question },
   ];
   const toolCalls = [];
+  // The most recent tool result that carried a `{columns, rows}` table shape
+  // (same convention responseTemplates.js already uses for the keyword
+  // engine) — surfaced to the route so the UI's existing table renderer
+  // (AnalyticsAssistant.tsx) works for LLM-mode answers too, not just the
+  // keyword engine's. Overwritten on each sighting, so the LAST listing
+  // tool called in the turn wins — matches what the final text answer is
+  // actually about.
+  let lastTable = null;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await callAnthropic({
@@ -157,7 +165,7 @@ async function answerQuestion({ sequelize, req, question, history, clinicId }) {
     const toolUseBlocks = (response.content || []).filter((c) => c.type === 'tool_use');
     if (toolUseBlocks.length === 0) {
       const text = (response.content || []).find((c) => c.type === 'text')?.text || '';
-      return { text: text.trim() || "I wasn't able to put together an answer for that. Could you rephrase?", toolCalls };
+      return { text: text.trim() || "I wasn't able to put together an answer for that. Could you rephrase?", toolCalls, table: lastTable };
     }
 
     // Execute every tool call from this turn, then return ALL results in one
@@ -173,6 +181,7 @@ async function answerQuestion({ sequelize, req, question, history, clinicId }) {
       } catch (e) {
         result = { error: 'tool_execution_failed', message: e.message };
       }
+      if (result && result.table && Array.isArray(result.table.rows)) lastTable = result.table;
       // Row counts only, for the audit log (routes/analyticsChatbot.js) —
       // never the actual values, which can be hospital activity data.
       toolCalls.push({ name: block.name, input: block.input, resultSummary: summarizeToolResult(result) });
