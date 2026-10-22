@@ -175,6 +175,9 @@ router.get('/sites/:id/qr', authorize('attendance.manage_sites'), async (req, re
     res.json({ site_name: site.name, url, qr_data_url: qrDataUrl });
   } catch (error) {
     console.error('Error generating attendance site QR:', error);
+    if (String(error.message || '').includes('ATTENDANCE_QR_SECRET')) {
+      return res.status(503).json({ error: 'Attendance QR codes are not configured on this server yet — ATTENDANCE_QR_SECRET is not set. Ask your administrator to add it to the backend environment and restart the server.' });
+    }
     res.status(500).json({ error: 'Failed to generate QR code' });
   }
 });
@@ -197,6 +200,9 @@ router.get('/sites/:id/rotating-token', authorize('attendance.manage_sites'), as
     res.json({ site_name: site.name, url, qr_data_url: qrDataUrl, expiresInMs });
   } catch (error) {
     console.error('Error generating rotating attendance token:', error);
+    if (String(error.message || '').includes('ATTENDANCE_QR_SECRET')) {
+      return res.status(503).json({ error: 'Attendance QR codes are not configured on this server yet — ATTENDANCE_QR_SECRET is not set. Ask your administrator to add it to the backend environment and restart the server.' });
+    }
     res.status(500).json({ error: 'Failed to generate rotating QR code' });
   }
 });

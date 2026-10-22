@@ -301,6 +301,9 @@ router.post('/attendance/clock', portalClockLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error('Employee portal clock error:', error);
+    if (String(error.message || '').includes('ATTENDANCE_QR_SECRET')) {
+      return res.status(503).json({ error: 'Attendance is not configured on this server yet. Contact your administrator.' });
+    }
     res.status(500).json({ error: 'Could not record attendance. Please try again.' });
   }
 });
