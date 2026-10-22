@@ -198,6 +198,14 @@ async function migratePharmacyTables() {
   // Dose amount per administration, kept apart from dose_strength ("500mg"),
   // because the quantity arithmetic needs a number: qty = dose x perDay x days.
   try { await sequelize.query(`ALTER TABLE prescription_lines ADD COLUMN IF NOT EXISTS dose_amount NUMERIC(10,2)`); } catch(e){}
+  // Which stock_locations row this line is meant to be dispensed from —
+  // purely informational/validation at prescribing time (actual stock
+  // deduction still only happens at the separate dispensing step); lets
+  // POST /prescriptions check stock_by_location for this location instead
+  // of the global pool, and shows staff where a line is expected to come
+  // from right on the Visit Summary.
+  try { await sequelize.query(`ALTER TABLE prescription_lines ADD COLUMN IF NOT EXISTS location_id VARCHAR(36)`); } catch(e){}
+  try { await sequelize.query(`ALTER TABLE prescription_lines ADD COLUMN IF NOT EXISTS location_name VARCHAR(255)`); } catch(e){}
 
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_pl_prescription ON prescription_lines(prescription_id)`); } catch(e){}
   try { await sequelize.query(`CREATE INDEX IF NOT EXISTS idx_pl_drug ON prescription_lines(drug_id)`); } catch(e){}

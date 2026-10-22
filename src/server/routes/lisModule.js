@@ -1072,6 +1072,7 @@ router.get('/visit-summaries', authorize('lis.clinical.read'), async (req, res) 
         SELECT pp.id as prescription_id, pp.patient_id, pp.prescription_number, pp.prescription_date, pp.status as prescription_status,
                pl.id as line_id, pl.quantity_prescribed, pl.unit_of_measure, pl.dose_strength, pl.frequency, pl.duration_days, pl.status as line_status,
                pl.is_external, pl.external_drug_name, pl.dose_amount, pl.notes as line_notes,
+               pl.location_id, pl.location_name,
                -- An external line has no inventory row, so its name lives on
                -- the line itself; COALESCE keeps one column for both kinds.
                COALESCE(ii.item_name, pl.external_drug_name) as drug_name
@@ -1283,8 +1284,10 @@ router.get('/specimens/history', authorize('lis.results.read'), async (req, res)
     // otherwise fail both bounds and vanish from history entirely rather than
     // just sorting oddly.
     const params = [...branchFilter.params];
-    if (dateFrom) { sql += ` AND COALESCE(s.updated_at, s.created_at) >= ?`; params.push(`${dateFrom} 00:00:00`); }
-    if (dateTo) { sql += ` AND COALESCE(s.updated_at, s.created_at) <= ?`; params.push(`${dateTo} 23:59:59`); }
+    // Same local-vs-UTC-session fix as /results/history above — a real
+    // Date object instead of a naive string literal.
+    if (dateFrom) { sql += ` AND COALESCE(s.updated_at, s.created_at) >= ?`; params.push(new Date(`${dateFrom}T00:00:00`)); }
+    if (dateTo) { sql += ` AND COALESCE(s.updated_at, s.created_at) <= ?`; params.push(new Date(`${dateTo}T23:59:59`)); }
     sql += ` ORDER BY COALESCE(s.updated_at, s.created_at) DESC LIMIT 500`;
     const [specimens] = await db.query(sql, { replacements: params });
     res.json(specimens);
@@ -1637,8 +1640,17 @@ router.get('/results/history', authorize('lis.results.read'), async (req, res) =
       ${branchFilter.sql}
     `;
     const params = [...branchFilter.params];
-    if (dateFrom) { sql += ` AND r.updated_at >= ?`; params.push(`${dateFrom} 00:00:00`); }
-    if (dateTo) { sql += ` AND r.updated_at <= ?`; params.push(`${dateTo} 23:59:59`); }
+    // Real Date objects, not naive strings — this DB connection's session
+    // time zone is forced to UTC (dbConnectionOptions.js), so a bare
+    // '2026-10-23 00:00:00' string gets interpreted as UTC midnight, not
+    // the facility's local midnight the date picker means. A result
+    // approved in the first few hours of the local day then falls before
+    // this "lower bound" and silently vanishes from today's History. A
+    // Date built from a local (no 'Z') time string is serialized to the
+    // correct UTC instant regardless of session time zone — same principle
+    // dateParser.js's startOfDay() already uses elsewhere in this app.
+    if (dateFrom) { sql += ` AND r.updated_at >= ?`; params.push(new Date(`${dateFrom}T00:00:00`)); }
+    if (dateTo) { sql += ` AND r.updated_at <= ?`; params.push(new Date(`${dateTo}T23:59:59`)); }
     sql += ` ORDER BY r.updated_at DESC LIMIT 500`;
     const [results] = await db.query(sql, { replacements: params });
     res.json(results);

@@ -22,6 +22,7 @@ import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { PrescriptionReceipt } from '@/components/receipts/PrescriptionReceipt';
 import { printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { formatDate } from '@/lib/format';
+import * as docTemplate from '@/utils/documentTemplate';
 
 const API = '/api/pharmacy-module';
 
@@ -73,12 +74,14 @@ export default function PrescriptionManagement() {
     return cancel;
   }, [rxReceiptData]);
 
-  const handlePrintPrescription = (rx: any) => {
+  const handlePrintPrescription = async (rx: any) => {
+    const doctorSignature = await docTemplate.fetchUserSignature(rx.doctor_id);
     setRxReceiptData({
       prescriptionNumber: rx.prescription_number,
       patientName: rx.patient_name || 'Unknown patient',
       patientNumber: rx.patient_number,
       doctorName: rx.doctor_name,
+      doctorSignature,
       date: rx.prescription_date || new Date().toISOString(),
       notes: rx.prescription_notes,
       lines: (rx.lines || []).map((l: any) => ({

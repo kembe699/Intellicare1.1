@@ -7,6 +7,8 @@ interface PrescriptionLine {
   frequency?: string;
   quantity?: number | string;
   unit?: string;
+  /** Not available at this hospital's pharmacy — buy it outside. */
+  isExternal?: boolean;
 }
 
 interface PrescriptionReceiptProps {
@@ -19,6 +21,8 @@ interface PrescriptionReceiptProps {
   lines: PrescriptionLine[];
   facilityName?: string;
   branchName?: string;
+  /** Base64 signature image (users.signature, via docTemplate.fetchUserSignature) — falls back to a plain signature line when not on file. */
+  doctorSignature?: string | null;
 }
 
 const DIVIDER = '--------------------------------';
@@ -36,7 +40,7 @@ const row = (label: string, value: string, bold = false): React.ReactNode => (
 );
 
 export const PrescriptionReceipt: React.FC<PrescriptionReceiptProps> = ({
-  prescriptionNumber, patientName, patientNumber, doctorName, date, notes, lines, facilityName, branchName,
+  prescriptionNumber, patientName, patientNumber, doctorName, date, notes, lines, facilityName, branchName, doctorSignature,
 }) => {
   const displayName = facilityName || 'IntelliCare HMIS';
 
@@ -91,6 +95,9 @@ export const PrescriptionReceipt: React.FC<PrescriptionReceiptProps> = ({
             </span>
             {l.quantity != null && <span style={{ fontSize: '11px', fontWeight: 700 }}>Qty {l.quantity}{l.unit ? ` ${l.unit}` : ''}</span>}
           </div>
+          {l.isExternal && (
+            <div style={{ fontSize: '10px', fontWeight: 700 }}>⚠ Buy outside — not stocked here</div>
+          )}
         </div>
       )) : (
         <div style={{ fontSize: '10px', fontWeight: 600, color: '#000', fontStyle: 'italic' }}>No medications on this prescription</div>
@@ -102,6 +109,19 @@ export const PrescriptionReceipt: React.FC<PrescriptionReceiptProps> = ({
           <div style={{ fontSize: '10px', fontWeight: 600, fontStyle: 'italic' }}>Note: {notes}</div>
         </>
       )}
+
+      <div style={divStyle}>{DIVIDER}</div>
+
+      {/* ── Doctor signature — a prescription isn't valid without one ── */}
+      <div style={{ marginTop: '6px', textAlign: 'center' }}>
+        {doctorSignature ? (
+          <img src={doctorSignature} alt="Doctor's signature" style={{ maxHeight: '44px', maxWidth: '180px', margin: '0 auto', display: 'block' }} />
+        ) : (
+          <div style={{ height: '28px' }} />
+        )}
+        <div style={{ borderTop: '1px solid #000', width: '180px', margin: '2px auto 0' }} />
+        <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '2px' }}>{doctorName ? `Dr. ${doctorName}` : 'Prescribing Doctor'}</div>
+      </div>
 
       <div style={divStyle}>{THICK_DIVIDER}</div>
 

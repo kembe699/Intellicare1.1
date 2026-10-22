@@ -125,9 +125,16 @@ router.get('/locations', authorize('pharmacy.read'), async (req, res) => {
     const { sql: locBranchSQL, params: locBranchParams } = getBranchConditionSQL(req, 'sl');
     if (locBranchSQL) { where += ' AND sl.branch_id = :locBranchId'; replacements.locBranchId = locBranchParams[0]; }
 
+    // is_default lets the Visit Summary's Rx location picker default to
+    // whichever location pharmacy_settings.default_pharmacy_location_id
+    // names, without a second, more restrictively-gated call to
+    // GET /pharmacy-module/settings (pharmacy.admin — most prescribers
+    // calling THIS endpoint won't have that).
     const [rows] = await sequelize.query(`
-      SELECT sl.id, sl.location_name AS name, sl.location_type AS type, sl.location_code
+      SELECT sl.id, sl.location_name AS name, sl.location_type AS type, sl.location_code,
+             (sl.id = ps.default_pharmacy_location_id) AS is_default
       FROM stock_locations sl
+      LEFT JOIN pharmacy_settings ps ON ps.clinic_id = sl.clinic_id
       ${where}
       ORDER BY sl.location_name
     `, { replacements });
@@ -690,6 +697,7 @@ router.post('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) 
     if (lines && lines.length > 0) {
       const insufficient = await findInsufficientStockLine(sequelize, lines.map((l) => ({
         drugId: l.drug_id, quantity: l.quantity_prescribed, isExternal: !!l.is_external || (!l.drug_id && !!l.external_drug_name),
+        locationId: l.location_id || null,
       })));
       if (insufficient) {
         return res.status(400).json({
@@ -744,8 +752,10 @@ router.post('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) 
         await sequelize.query(`
           INSERT INTO prescription_lines (id, prescription_id, line_number, drug_id,
             quantity_prescribed, unit_of_measure, dose_strength, frequency, duration_days,
-            allow_generic_substitution, notes, is_external, external_drug_name, dose_amount)
-          VALUES (:id, :rxid, :ln, :did, :qty, :uom, :ds, :freq, :dur, :gen, :notes, :ext, :extname, :doseamt)
+            allow_generic_substitution, notes, is_external, external_drug_name, dose_amount,
+            location_id, location_name)
+          VALUES (:id, :rxid, :ln, :did, :qty, :uom, :ds, :freq, :dur, :gen, :notes, :ext, :extname, :doseamt,
+            :locationId, :locationName)
         `, {
           replacements: {
             id: uuidv4(), rxid: id, ln: i + 1, did: isExternal ? null : (line.drug_id || null),
@@ -754,7 +764,9 @@ router.post('/prescriptions', authorize('pharmacy.prescribe'), async (req, res) 
             qty: line.quantity_prescribed || 1, uom: line.unit_of_measure || 'tablet',
             ds: line.dose_strength || null, freq: line.frequency || null,
             dur: line.duration_days || null, gen: line.allow_generic_substitution !== false,
-            notes: line.notes || null
+            notes: line.notes || null,
+            locationId: isExternal ? null : (line.location_id || null),
+            locationName: isExternal ? null : (line.location_name || null),
           }
         });
       }

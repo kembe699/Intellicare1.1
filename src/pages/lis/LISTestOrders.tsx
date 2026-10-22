@@ -23,6 +23,8 @@ import { DiagnosisPicker } from '@/components/clinical/DiagnosisPicker';
 import GynaeFields, { EMPTY_GYNAE_INFO, GynaeInfo, GynaeFieldsReadOnly, hasGynaeInfo } from '@/components/clinical/GynaeFields';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate } from '@/lib/format';
+import { PrescriptionReceipt } from '@/components/receipts/PrescriptionReceipt';
+import { printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 
 const toLocalDateStr = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -272,11 +274,31 @@ export default function LISTestOrders() {
   const [rxExternalName, setRxExternalName] = useState('');
   const [rxExternalUnit, setRxExternalUnit] = useState('');
   const [rxNotes, setRxNotes] = useState('');
+  // Which stock_locations row this line is dispensed from — default to
+  // whichever one pharmacy_settings.default_pharmacy_location_id names
+  // (typically "Pharmacy"), changeable per line.
+  const [pharmacyLocations, setPharmacyLocations] = useState<any[]>([]);
+  const [rxLocationId, setRxLocationId] = useState('');
   // Quantity is derived (dose x per-day x days) until a prescriber types their
   // own, at which point their number wins — PRN and STAT have no derivable
   // total at all, so the field simply stays theirs.
   const [rxQtyTouched, setRxQtyTouched] = useState(false);
-  const [printingRx, setPrintingRx] = useState<string | null>(null);
+  const [printingRx, setPrintingRx] = useState(false);
+  // Printed on the same signed 80mm thermal template the Pharmacy module
+  // uses — an off-screen render + printReceiptWhenPainted.
+  const [rxReceiptData, setRxReceiptData] = useState<any | null>(null);
+  const rxReceiptRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!rxReceiptData) return;
+    const cancel = printReceiptWhenPainted(
+      () => rxReceiptRef.current,
+      (printed) => {
+        setRxReceiptData(null);
+        if (!printed) toast.error('Prescription receipt could not be prepared for printing');
+      }
+    );
+    return cancel;
+  }, [rxReceiptData]);
 
   const rxSuggestedQty = useMemo(
     () => calculateQuantity(parseFloat(rxDoseAmount), rxFrequency, parseInt(rxDuration, 10)),
@@ -293,6 +315,11 @@ export default function LISTestOrders() {
   const [reqServiceQuery, setReqServiceQuery] = useState('');
   const [reqServicePopoverOpen, setReqServicePopoverOpen] = useState(false);
   const [reqServiceSelected, setReqServiceSelected] = useState<any[]>([]);
+  // Switches the same combobox between the existing tests+services list and
+  // the radiology exam catalog (radiologyExamTypes, already fetched at page
+  // level for the Place Order screen's own picker) — rather than a second,
+  // separate radiology control.
+  const [reqServiceMode, setReqServiceMode] = useState<'other' | 'radiology'>('other');
   const [requestingService, setRequestingService] = useState(false);
 
   useEffect(() => {
@@ -302,6 +329,7 @@ export default function LISTestOrders() {
       fetchServices();
       fetchChiefComplaints();
       if (pharmacyDrugs.length === 0) fetchPharmacyDrugs();
+      if (pharmacyLocations.length === 0) fetchPharmacyLocations();
       fetchRadiologyExamTypes();
       const interval = setInterval(fetchQueue, 3000);
       return () => clearInterval(interval);
@@ -386,6 +414,7 @@ export default function LISTestOrders() {
     setEditingClinicalNotes(false);
     setClinicalNotesForm(buildClinicalNotesForm(summary.vitals));
     fetchPharmacyDrugs();
+    if (pharmacyLocations.length === 0) fetchPharmacyLocations();
     if (labTests.length === 0) fetchLabTests();
     if (services.length === 0) fetchServices();
     // Independent of the lab-results fetch below (and its early return when
@@ -423,6 +452,20 @@ export default function LISTestOrders() {
     }
   };
 
+  const fetchPharmacyLocations = async () => {
+    try {
+      const res = await authFetch('/api/pharmacy-module/locations', { credentials: 'include' });
+      if (res.ok) {
+        const locs = await res.json();
+        setPharmacyLocations(locs);
+        const def = locs.find((l: any) => l.is_default) || locs[0];
+        if (def) setRxLocationId((prev) => prev || def.id);
+      }
+    } catch (e) {
+      console.error('Failed to fetch pharmacy locations', e);
+    }
+  };
+
   const resetRxForm = () => {
     setRxDrugId(''); setRxQty('1'); setRxDose(''); setRxFrequency(''); setRxDuration('');
     setRxDoseAmount('1'); setRxExternalName(''); setRxExternalUnit(''); setRxNotes(''); setRxQtyTouched(false);
@@ -445,6 +488,9 @@ export default function LISTestOrders() {
         dose_amount: parseFloat(rxDoseAmount) || null, dose_strength: rxDose,
         frequency: rxFrequency, duration_days: duration,
         notes: rxNotes.trim(), selling_price: 0,
+        // External lines aren't supplied by this pharmacy at all, so a
+        // storage location means nothing for them.
+        location_id: null, location_name: null,
       }]);
       resetRxForm();
       return;
@@ -463,12 +509,14 @@ export default function LISTestOrders() {
       toast.error(`Only ${stockOnHand} ${drug.unit_of_measure || 'unit'}(s) of ${drug.drug_name} in stock (≈ ${Math.floor(stockOnHand * (Number(drug.units_per_pack) || 1))} ${doseUnitLabel(drug)}) — reduce the quantity, or tick "Not in stock" to prescribe it for purchase outside.`);
       return;
     }
+    const rxLocation = pharmacyLocations.find((l: any) => l.id === rxLocationId);
     setRxLines(prev => [...prev, {
       drug_id: drug.id, is_external: false, drug_name: drug.drug_name,
       unit_of_measure: doseUnitLabel(drug),
       quantity_prescribed: qty, dose_amount: parseFloat(rxDoseAmount) || null,
       dose_strength: rxDose, frequency: rxFrequency,
       duration_days: duration, notes: rxNotes.trim(), selling_price: parseFloat(drug.selling_price) || 0,
+      location_id: rxLocation?.id || null, location_name: rxLocation?.name || null,
     }]);
     resetRxForm();
   };
@@ -510,6 +558,7 @@ export default function LISTestOrders() {
             drug_id: l.drug_id, quantity_prescribed: l.quantity_prescribed, unit_of_measure: l.unit_of_measure,
             dose_strength: l.dose_strength, frequency: l.frequency, duration_days: l.duration_days, notes: l.notes,
             is_external: !!l.is_external, external_drug_name: l.external_drug_name || null, dose_amount: l.dose_amount ?? null,
+            location_id: l.location_id || null, location_name: l.location_name || null,
           })),
         }),
       });
@@ -661,6 +710,29 @@ export default function LISTestOrders() {
     try {
       const testItems = reqServiceSelected.filter(i => i.type === 'test');
       const serviceItems = reqServiceSelected.filter(i => i.type === 'service');
+      const radiologyItems = reqServiceSelected.filter(i => i.type === 'radiology');
+
+      if (radiologyItems.length > 0) {
+        // Radiology requests go through their own endpoint — kept separate
+        // from the generic bill-item path below, same as the Place Order
+        // screen's own radiology picker, since radiology isn't billed
+        // through that path yet (see that picker's own comment).
+        const res = await authFetch('/api/radiology/requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            participant_id: selectedSummary.participant_id,
+            order_id: selectedSummary.order_id,
+            doctor_id: selectedSummary.doctor_id || user?.id,
+            items: radiologyItems.map(i => ({ service_id: i.examId, exam_name: i.name })),
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || 'Failed to request radiology exam');
+        }
+      }
 
       if (testItems.length > 0) {
         const res = await authFetch(`/api/lis/orders/${selectedSummary.order_id}/add-tests`, {
@@ -682,7 +754,7 @@ export default function LISTestOrders() {
       }
 
       const patient = { id: selectedSummary.participant_id, name: `${selectedSummary.first_name} ${selectedSummary.last_name}` };
-      for (const item of reqServiceSelected) {
+      for (const item of [...testItems, ...serviceItems]) {
         await addBillItem(`req-${selectedSummary.order_id}-${item.key}-${Date.now()}`, item.name, item.price, patient, 1, item.serviceId, item.currency);
       }
 
@@ -868,8 +940,8 @@ export default function LISTestOrders() {
   };
 
   /**
-   * A standalone prescription the patient can take away — print it, or save it
-   * as a PDF from the browser's print dialog.
+   * A standalone prescription the patient can take away, printed on the same
+   * signed 80mm thermal template the Pharmacy module uses.
    *
    * Deliberately separate from the visit summary: a patient buying medicine at
    * an outside pharmacy needs the medicines, the prescriber and the hospital's
@@ -879,104 +951,40 @@ export default function LISTestOrders() {
    * Items the hospital could not supply are marked, so the dispensing pharmacy
    * can see at a glance which lines are theirs to fill.
    */
-  const handlePrintPrescription = async (mode: 'print' | 'pdf' = 'print') => {
+  const handlePrintPrescription = async () => {
     if (!selectedSummary) return;
     const s = selectedSummary;
     const lines: any[] = s.prescriptions || [];
     if (lines.length === 0) { toast.error('No medicines prescribed for this visit yet.'); return; }
 
-    setPrintingRx(mode);
+    setPrintingRx(true);
     try {
-      const signature = await docTemplate.fetchUserSignature(user?.uid);
+      const doctorSignature = await docTemplate.fetchUserSignature(s.doctor_id || user?.uid);
       const patientName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
-      const age = calculateAge(s.date_of_birth);
       const rxNumber = lines[0]?.prescription_number || '';
-      const externals = lines.filter((l) => l.is_external);
 
-      const infoHTML = docTemplate.buildInfoGrid(
-        {
-          title: 'Patient',
-          rows: [
-            { label: 'Name', value: patientName || '—', bold: true },
-            { label: 'Patient No.', value: s.participant_number || '—' },
-            { label: 'Age / Sex', value: `${age ?? '—'} / ${s.gender || '—'}` },
-            { label: 'Phone', value: s.phone || '—' },
-          ],
-        },
-        {
-          title: 'Prescription',
-          rows: [
-            { label: 'Rx No.', value: rxNumber || '—', bold: true },
-            { label: 'Date', value: docTemplate.formatDate(lines[0]?.prescription_date || new Date()) },
-            { label: 'Prescriber', value: s.doctor_name ? `Dr. ${s.doctor_name}` : (user?.displayName || '—') },
-            { label: 'Diagnosis', value: s.clinical_notes ? String(s.clinical_notes).slice(0, 80) : '—' },
-          ],
-        }
-      );
-
-      const medsHTML = docTemplate.buildTable(
-        [
-          { label: '#', width: '6%', align: 'center' },
-          { label: 'Medicine', width: '30%' },
-          { label: 'Dosage / Sig', width: '34%' },
-          { label: 'Qty', width: '10%', align: 'center' },
-          { label: 'Source', width: '20%', align: 'center' },
-        ],
-        lines.map((l, i) => ({
-          cells: [
-            String(i + 1),
-            `<strong>${l.drug_name || l.external_drug_name || '—'}</strong>${l.dose_strength ? `<br><span style="color:#666">${l.dose_strength}</span>` : ''}`,
-            describeDosage(l.dose_amount, l.unit_of_measure, l.frequency, l.duration_days) +
-              (l.line_notes || l.notes ? `<br><span style="color:#666">${l.line_notes || l.notes}</span>` : ''),
-            `${l.quantity_prescribed ?? '—'} ${l.unit_of_measure || ''}`.trim(),
-            l.is_external
-              ? '<span style="color:#b45309;font-weight:600">Buy outside</span>'
-              : 'Hospital pharmacy',
-          ],
-        }))
-      );
-
-      const externalNote = externals.length > 0
-        ? `<div class="ic-notes"><strong>Note to the patient:</strong> ${externals.length} item${externals.length === 1 ? ' is' : 's are'} not available at this hospital's pharmacy and should be purchased from an outside pharmacy. Present this prescription there.</div>`
-        : '';
-
-      const bodyHTML = [
-        infoHTML,
-        '<div class="ic-section-title">Medicines Prescribed</div>',
-        medsHTML,
-        externalNote,
-        docTemplate.buildSignatures([
-          {
-            label: 'Prescribing Doctor',
-            name: s.doctor_name ? `Dr. ${s.doctor_name}` : (user?.displayName || ''),
-            signature: signature || undefined,
-          },
-        ]),
-      ].join('\n');
-
-      const html = docTemplate.buildDocument({
-        title: 'Prescription',
-        docType: 'Prescription',
-        docNumber: rxNumber || `RX-${String(s.order_id).slice(-6).toUpperCase()}`,
-        date: new Date(),
-        bodyHTML,
-        autoPrint: mode === 'print',
-        logoUrl: facilityInfo.facilityLogo || `${window.location.origin}/hjd-icon.png`,
-        facilityInfo: { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo },
-        branchInfo: { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone },
+      setRxReceiptData({
+        prescriptionNumber: rxNumber || `RX-${String(s.order_id).slice(-6).toUpperCase()}`,
+        patientName: patientName || 'Unknown patient',
+        patientNumber: s.participant_number,
+        doctorName: s.doctor_name || user?.displayName,
+        doctorSignature,
+        date: lines[0]?.prescription_date || new Date().toISOString(),
+        notes: s.clinical_notes ? String(s.clinical_notes).slice(0, 120) : undefined,
+        lines: lines.map((l) => ({
+          drugName: l.drug_name || l.external_drug_name || 'Medicine',
+          doseStrength: l.dose_strength,
+          frequency: describeDosage(l.dose_amount, l.unit_of_measure, l.frequency, l.duration_days),
+          quantity: l.quantity_prescribed,
+          unit: l.unit_of_measure,
+          isExternal: !!l.is_external,
+        })),
       });
-
-      if (mode === 'pdf') {
-        docTemplate.downloadDocument(html, `Prescription-${rxNumber || patientName || 'patient'}.html`);
-        toast.success('Prescription saved — open it and choose "Save as PDF" to keep a PDF copy.');
-      } else {
-        docTemplate.openPrintWindow(html);
-      }
     } catch (e) {
       console.error('Prescription print failed', e);
-      toast.error('Could not build the prescription document');
+      toast.error('Could not build the prescription receipt');
     } finally {
-      setPrintingRx(null);
+      setPrintingRx(false);
     }
   };
 
@@ -1922,14 +1930,18 @@ export default function LISTestOrders() {
   // Combined test+service picker for "Request Another Service" in Visit Summary — plain
   // cash catalog price (this add-on flow has no scheme-mode context of its own to price
   // against, unlike the main order form).
-  const reqServiceOptions = [
-    ...labTests
-      .filter((t: any) => t.test_name?.toLowerCase().includes(reqServiceQuery.toLowerCase()) || t.test_code?.toLowerCase().includes(reqServiceQuery.toLowerCase()))
-      .map((t: any) => ({ key: `test-${t.id}`, type: 'test' as const, code: t.test_code, name: t.test_name, department: t.category, price: parseFloat(t.price) || 0, currency: t.currency || baseCurrency.code, is_available: t.is_available !== false })),
-    ...services
-      .filter((s: any) => (s.service_name || s.name || '').toLowerCase().includes(reqServiceQuery.toLowerCase()))
-      .map((s: any) => ({ key: `svc-${s.id}`, type: 'service' as const, serviceId: s.id, name: s.service_name || s.name, price: parseFloat(s.price) || 0, currency: s.currency || baseCurrency.code })),
-  ];
+  const reqServiceOptions = reqServiceMode === 'radiology'
+    ? radiologyExamTypes
+        .filter((e: any) => (e.name || '').toLowerCase().includes(reqServiceQuery.toLowerCase()))
+        .map((e: any) => ({ key: `rad-${e.id}`, type: 'radiology' as const, examId: e.id, name: e.name, price: parseFloat(e.price) || 0, currency: baseCurrency.code }))
+    : [
+        ...labTests
+          .filter((t: any) => t.test_name?.toLowerCase().includes(reqServiceQuery.toLowerCase()) || t.test_code?.toLowerCase().includes(reqServiceQuery.toLowerCase()))
+          .map((t: any) => ({ key: `test-${t.id}`, type: 'test' as const, code: t.test_code, name: t.test_name, department: t.category, price: parseFloat(t.price) || 0, currency: t.currency || baseCurrency.code, is_available: t.is_available !== false })),
+        ...services
+          .filter((s: any) => (s.service_name || s.name || '').toLowerCase().includes(reqServiceQuery.toLowerCase()))
+          .map((s: any) => ({ key: `svc-${s.id}`, type: 'service' as const, serviceId: s.id, name: s.service_name || s.name, price: parseFloat(s.price) || 0, currency: s.currency || baseCurrency.code })),
+      ];
 
   // Searching a patient shows their full visit history across all fetched dates; otherwise
   // it's the selected date range. created_at is UTC, so day-matching goes through a local
@@ -2696,6 +2708,20 @@ export default function LISTestOrders() {
                         />
                       )}
                     </div>
+
+                    {!rxIsExternal && pharmacyLocations.length > 0 && (
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground">Storage Location</label>
+                        <Combobox
+                          options={pharmacyLocations.map((l: any) => ({ value: l.id, label: l.name }))}
+                          value={rxLocationId}
+                          onChange={v => setRxLocationId(v)}
+                          placeholder="Select location..."
+                          searchPlaceholder="Search locations..."
+                          className="mt-1 h-9"
+                        />
+                      </div>
+                    )}
 
                     {/* Reads as the Rx itself, in order: dose + unit, strength, frequency,
                         duration — e.g. "2 tabs, 200mg, twice a day, for 5 days". Total
@@ -3487,6 +3513,20 @@ export default function LISTestOrders() {
                           )}
                         </div>
 
+                        {!rxIsExternal && pharmacyLocations.length > 0 && (
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Storage Location</label>
+                            <Combobox
+                              options={pharmacyLocations.map((l: any) => ({ value: l.id, label: l.name }))}
+                              value={rxLocationId}
+                              onChange={v => setRxLocationId(v)}
+                              placeholder="Select location..."
+                              searchPlaceholder="Search locations..."
+                              className="mt-1 h-9"
+                            />
+                          </div>
+                        )}
+
                         {/* Reads as the Rx itself, in order: dose + unit, strength,
                             frequency, duration — e.g. "2 tabs, 200mg, twice a day, for
                             5 days". Total quantity to dispense (for stock/billing) is a
@@ -3627,16 +3667,11 @@ export default function LISTestOrders() {
                       )}
 
                       {(selectedSummary?.prescriptions?.length ?? 0) > 0 && (
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                          <Button type="button" variant="outline" size="sm"
-                            onClick={() => handlePrintPrescription('print')} disabled={!!printingRx}>
-                            {printingRx === 'print' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1.5" />}
+                        <div className="pt-2 border-t">
+                          <Button type="button" variant="outline" size="sm" className="w-full"
+                            onClick={() => handlePrintPrescription()} disabled={printingRx}>
+                            {printingRx ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1.5" />}
                             Print Rx
-                          </Button>
-                          <Button type="button" variant="outline" size="sm"
-                            onClick={() => handlePrintPrescription('pdf')} disabled={!!printingRx}>
-                            {printingRx === 'pdf' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
-                            Save Rx
                           </Button>
                         </div>
                       )}
@@ -3649,20 +3684,36 @@ export default function LISTestOrders() {
                           <FlaskConical className="w-3.5 h-3.5" /> Request Another Service
                         </p>
                         <div className="border rounded-lg p-3 space-y-2.5 bg-card">
+                          <div className="flex gap-1.5 p-0.5 bg-muted rounded-md w-fit">
+                            <button
+                              type="button"
+                              className={cn('px-2.5 py-1 text-xs font-medium rounded', reqServiceMode === 'other' ? 'bg-card shadow-sm' : 'text-muted-foreground')}
+                              onClick={() => { setReqServiceMode('other'); setReqServiceQuery(''); }}
+                            >
+                              Other Services
+                            </button>
+                            <button
+                              type="button"
+                              className={cn('px-2.5 py-1 text-xs font-medium rounded', reqServiceMode === 'radiology' ? 'bg-card shadow-sm' : 'text-muted-foreground')}
+                              onClick={() => { setReqServiceMode('radiology'); setReqServiceQuery(''); }}
+                            >
+                              Radiology
+                            </button>
+                          </div>
                           <Popover open={reqServicePopoverOpen} onOpenChange={setReqServicePopoverOpen}>
                             <PopoverTrigger asChild>
                               <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal h-auto min-h-9 py-2 text-left">
                                 <span className="text-muted-foreground">
-                                  {reqServiceSelected.length > 0 ? `${reqServiceSelected.length} selected` : 'Search tests/services...'}
+                                  {reqServiceSelected.length > 0 ? `${reqServiceSelected.length} selected` : reqServiceMode === 'radiology' ? 'Search radiology exams...' : 'Search tests/services...'}
                                 </span>
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                               <Command shouldFilter={false}>
-                                <CommandInput placeholder="Search tests or services..." value={reqServiceQuery} onValueChange={setReqServiceQuery} />
+                                <CommandInput placeholder={reqServiceMode === 'radiology' ? 'Search radiology exams...' : 'Search tests or services...'} value={reqServiceQuery} onValueChange={setReqServiceQuery} />
                                 <CommandList className="max-h-64">
-                                  <CommandEmpty>No matching tests or services.</CommandEmpty>
+                                  <CommandEmpty>{reqServiceMode === 'radiology' ? 'No matching radiology exams.' : 'No matching tests or services.'}</CommandEmpty>
                                   <CommandGroup>
                                     {reqServiceOptions.map(item => {
                                       const isSelected = reqServiceSelected.some(x => x.key === item.key);
@@ -3677,7 +3728,7 @@ export default function LISTestOrders() {
                                           <div className="min-w-0 flex-1">
                                             <div className="truncate">{item.name}</div>
                                             <div className="text-xs text-muted-foreground">
-                                              {isUnavailable ? <span className="text-destructive font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
+                                              {isUnavailable ? <span className="text-destructive font-medium">Out of stock</span> : <>{item.type === 'test' ? 'Lab Test' : item.type === 'radiology' ? 'Radiology' : 'Service'} · {item.currency} {item.price.toFixed(2)}</>}
                                             </div>
                                           </div>
                                         </CommandItem>
@@ -4010,6 +4061,16 @@ export default function LISTestOrders() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Off-screen only so printReceiptWhenPainted has a DOM node with real
+          content to read from — same pattern as the Pharmacy module's receipt. */}
+      {rxReceiptData && (
+        <div className="fixed -left-[9999px] top-0">
+          <div ref={rxReceiptRef}>
+            <PrescriptionReceipt {...rxReceiptData} facilityName={facilityInfo.facilityName} branchName={facilityInfo.branchName} />
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
