@@ -240,6 +240,12 @@ async function migrateTheatreTables(db = sequelize) {
   const theatreOperationItemAdministerColumns = [
     'ADD COLUMN IF NOT EXISTS administered_at TIMESTAMPTZ',
     'ADD COLUMN IF NOT EXISTS administered_by VARCHAR(36)',
+    // Captured on confirm, not at Add time — route/dose/notes are a clinical
+    // record of what was actually given (e.g. "IV", "5ml"), not an inventory
+    // fact, and are only meaningful once administration is actually confirmed.
+    'ADD COLUMN IF NOT EXISTS administered_route VARCHAR(50)',
+    'ADD COLUMN IF NOT EXISTS administered_dose VARCHAR(100)',
+    'ADD COLUMN IF NOT EXISTS administered_notes TEXT',
   ];
   for (const clause of theatreOperationItemAdministerColumns) {
     try { await db.query(`ALTER TABLE theatre_operation_items ${clause}`); } catch (err) { console.error(`Could not add theatre_operation_items column (${clause}):`, err.message); }

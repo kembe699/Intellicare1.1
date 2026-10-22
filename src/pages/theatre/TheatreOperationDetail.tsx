@@ -96,7 +96,7 @@ export default function TheatreOperationDetail() {
 
   const [patientVisits, setPatientVisits] = useState<any[] | null>(null);
   const [labResultsBySpecimen, setLabResultsBySpecimen] = useState<Record<string, any[]>>({});
-  const [viewResultsFor, setViewResultsFor] = useState<{ test: any; results: any[] } | null>(null);
+  const [viewResultsFor, setViewResultsFor] = useState<{ visitDate: string; tests: Array<{ test: any; results: any[] }> } | null>(null);
 
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [locationId, setLocationId] = useState('');
@@ -106,6 +106,10 @@ export default function TheatreOperationDetail() {
   const [itemNotes, setItemNotes] = useState('');
   const [recordingItem, setRecordingItem] = useState(false);
   const [administeringId, setAdministeringId] = useState<string | null>(null);
+  const [administerTarget, setAdministerTarget] = useState<{ id: string; item_name: string } | null>(null);
+  const [administerRoute, setAdministerRoute] = useState('');
+  const [administerDose, setAdministerDose] = useState('');
+  const [administerNotes, setAdministerNotes] = useState('');
 
   const [employees, setEmployees] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
 
@@ -287,12 +291,22 @@ export default function TheatreOperationDetail() {
     }
   };
 
-  const administerItem = async (itemId: string) => {
-    setAdministeringId(itemId);
+  const confirmAdminister = async () => {
+    if (!administerTarget) return;
+    setAdministeringId(administerTarget.id);
     try {
-      const res = await authFetch(`/api/theatre/operations/${id}/items/${itemId}/administer`, { method: 'PUT' });
-      if (res.ok) { toast.success('Marked as administered'); fetchOperation(); }
-      else { const err = await res.json().catch(() => ({})); toast.error(err.error || 'Failed to confirm administered'); }
+      const res = await authFetch(`/api/theatre/operations/${id}/items/${administerTarget.id}/administer`, {
+        method: 'PUT',
+        body: JSON.stringify({ route: administerRoute || null, dose: administerDose || null, notes: administerNotes || null }),
+      });
+      if (res.ok) {
+        toast.success('Marked as administered');
+        setAdministerTarget(null); setAdministerRoute(''); setAdministerDose(''); setAdministerNotes('');
+        fetchOperation();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to confirm administered');
+      }
     } catch {
       toast.error('Network error');
     } finally {
@@ -494,20 +508,25 @@ export default function TheatreOperationDetail() {
                           </table>
                         )}
                         {hasGynaeInfo(v.vitals?.gynae) && <GynaeFieldsReadOnly value={v.vitals.gynae} />}
-                        {v.tests?.map((t: any) => {
-                          const results = labResultsBySpecimen[t.id];
-                          const hasResults = t.status === 'approved' && Array.isArray(results) && results.length > 0;
+                        {v.tests?.map((t: any) => (
+                          <p key={t.id} className="pl-2 border-l-2 border-border/70 text-muted-foreground">
+                            {t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span>
+                          </p>
+                        ))}
+                        {(() => {
+                          const withResults = (v.tests || [])
+                            .map((t: any) => ({ test: t, results: labResultsBySpecimen[t.id] }))
+                            .filter((x: any) => x.test.status === 'approved' && Array.isArray(x.results) && x.results.length > 0);
+                          if (withResults.length === 0) return null;
                           return (
-                            <div key={t.id} className="pl-2 border-l-2 border-border/70 flex items-center justify-between gap-2">
-                              <p className="text-muted-foreground">{t.test_name || t.name} — <span className="capitalize">{(t.status || '').replace('_', ' ')}</span></p>
-                              {hasResults && (
-                                <Button variant="outline" size="sm" className="h-6 px-2 text-xs gap-1 shrink-0" onClick={() => setViewResultsFor({ test: t, results })}>
-                                  <Eye className="w-3 h-3" /> View Results
-                                </Button>
-                              )}
-                            </div>
+                            <Button
+                              variant="outline" size="sm" className="h-6 px-2 text-xs gap-1"
+                              onClick={() => setViewResultsFor({ visitDate: v.created_at, tests: withResults })}
+                            >
+                              <Eye className="w-3 h-3" /> View Results
+                            </Button>
                           );
-                        })}
+                        })()}
                       </div>
                     );
                   })}
@@ -516,28 +535,38 @@ export default function TheatreOperationDetail() {
             </div>
 
             <Dialog open={!!viewResultsFor} onOpenChange={(open) => !open && setViewResultsFor(null)}>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-3xl mx-6 max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>{viewResultsFor?.test.test_name || viewResultsFor?.test.name}</DialogTitle>
+                  <DialogTitle>Results — {viewResultsFor?.visitDate ? formatDate(viewResultsFor.visitDate) : ''}</DialogTitle>
                 </DialogHeader>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-left py-1.5 font-medium">Component</th>
-                      <th className="text-left py-1.5 font-medium">Value</th>
-                      <th className="text-left py-1.5 font-medium">Range</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewResultsFor?.results.map((r: any) => (
-                      <tr key={r.id} className={`border-b border-border/50 last:border-0 ${r.flag ? 'text-destructive' : ''}`}>
-                        <td className="py-1.5">{r.analyte}</td>
-                        <td className="py-1.5 font-mono font-medium">{r.value} {r.unit || ''}</td>
-                        <td className="py-1.5 text-muted-foreground">{r.reference_range || ''}{r.flag ? ` (${r.flag})` : ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="space-y-6 px-1">
+                  {viewResultsFor?.tests.map(({ test, results }: any) => (
+                    <div key={test.id}>
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        {test.test_name || test.name}
+                        <Badge variant="success" className="capitalize">{(test.status || '').replace('_', ' ')}</Badge>
+                      </h4>
+                      <table className="w-full text-sm border rounded-lg overflow-hidden">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
+                            <th className="text-left py-2.5 px-3 font-medium">Component</th>
+                            <th className="text-left py-2.5 px-3 font-medium">Value</th>
+                            <th className="text-left py-2.5 px-3 font-medium">Reference Range</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {results.map((r: any) => (
+                            <tr key={r.id} className={`border-b border-border/50 last:border-0 ${r.flag ? 'text-destructive' : ''}`}>
+                              <td className="py-2.5 px-3">{r.analyte}</td>
+                              <td className="py-2.5 px-3 font-mono font-medium">{r.value} {r.unit || ''}</td>
+                              <td className="py-2.5 px-3 text-muted-foreground">{r.reference_range || ''}{r.flag ? ` (${r.flag})` : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
               </DialogContent>
             </Dialog>
 
@@ -718,12 +747,21 @@ export default function TheatreOperationDetail() {
                           <td className="py-1.5">{it.location_name || '—'}</td>
                           <td className="py-1.5">
                             {it.administered_at ? (
-                              <span className="inline-flex items-center gap-1 text-success text-xs" title={new Date(it.administered_at).toLocaleString()}>
+                              <span
+                                className="inline-flex items-center gap-1 text-success text-xs"
+                                title={[
+                                  new Date(it.administered_at).toLocaleString(),
+                                  it.administered_route && `Route: ${it.administered_route}`,
+                                  it.administered_dose && `Dose: ${it.administered_dose}`,
+                                  it.administered_notes,
+                                ].filter(Boolean).join(' · ')}
+                              >
                                 <ClipboardCheck className="w-3.5 h-3.5" /> {new Date(it.administered_at).toLocaleTimeString()}
+                                {it.administered_route && <span className="text-muted-foreground">({it.administered_route})</span>}
                               </span>
                             ) : canWrite ? (
-                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs gap-1" onClick={() => administerItem(it.id)} disabled={administeringId === it.id}>
-                                {administeringId === it.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3 h-3" />} Administer
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs gap-1" onClick={() => setAdministerTarget(it)}>
+                                <ClipboardCheck className="w-3 h-3" /> Administer
                               </Button>
                             ) : (
                               <span className="text-xs text-muted-foreground">Not yet</span>
@@ -737,6 +775,46 @@ export default function TheatreOperationDetail() {
               </CardContent>
             </Card>
             </div>
+
+            <Dialog open={!!administerTarget} onOpenChange={(open) => !open && setAdministerTarget(null)}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Confirm administered — {administerTarget?.item_name}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Route</label>
+                    <Combobox
+                      options={[
+                        { value: 'IV', label: 'IV (Intravenous)' },
+                        { value: 'IM', label: 'IM (Intramuscular)' },
+                        { value: 'SC', label: 'SC (Subcutaneous)' },
+                        { value: 'Oral', label: 'Oral' },
+                        { value: 'Topical', label: 'Topical' },
+                        { value: 'Inhaled', label: 'Inhaled' },
+                        { value: 'Other', label: 'Other' },
+                      ]}
+                      value={administerRoute} onChange={setAdministerRoute}
+                      placeholder="Select route..." searchPlaceholder="Search..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Dose / Amount Given</label>
+                    <Input value={administerDose} onChange={(e) => setAdministerDose(e.target.value)} placeholder="e.g. 5ml, 2 tablets, 1 unit" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Notes (optional)</label>
+                    <Input value={administerNotes} onChange={(e) => setAdministerNotes(e.target.value)} placeholder="Anything else worth recording" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setAdministerTarget(null)} disabled={!!administeringId}>Cancel</Button>
+                  <Button onClick={confirmAdminister} disabled={!!administeringId} className="gap-1.5">
+                    {administeringId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />} Confirm Administered
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {completing && (
               <Card>

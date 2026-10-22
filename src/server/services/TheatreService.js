@@ -1,7 +1,6 @@
-const { sequelize, PatientBill } = require('../models');
+const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { CHECKLIST_TEMPLATE } = require('../scripts/migrateTheatreTables');
-const AccountingService = require('./AccountingService');
 const { addLineItemsToBill } = require('../utils/billingResolver');
 
 // patient_id is polymorphic across `patients` and `lis_participants` — the
@@ -239,6 +238,23 @@ class TheatreService {
         { replacements: { id: operationId, clinicId, branchId: branchId || null, requestId: requestId || null, patientId, roomId: roomId || null, procedureName: procedureName.trim(), surgeonId: primary.surgeon, anesthetistId: primary.anesthetist, nurseId: primary.scrub_nurse, scheduledAt: scheduledAt || null, userId: userId || null, procedureFee, feeCurrency, billId: billIdFromRequest, billedAt: billIdFromRequest ? new Date() : null }, transaction }
       );
 
+      // Anchors the request's own bill (if the request already billed the
+      // procedure fee) onto THIS operation's id as its visit scope, so every
+      // later charge against this operation — consumables used during it
+      // (recordItemUsage) and the completion-time procedure fee
+      // (completeOperation) — resolves the exact same bill via
+      // resolveActiveBill's visitId override, instead of each one
+      // separately guessing at "the patient's open visit" (which a theatre
+      // patient often doesn't have one of) and creating its own new bill.
+      // Only backfills a still-null visit_id — never reassigns a bill that
+      // was already anchored to something else.
+      if (billIdFromRequest) {
+        await sequelize.query(
+          `UPDATE patient_bills SET visit_id = :operationId WHERE id = :billId AND visit_id IS NULL`,
+          { replacements: { operationId, billId: billIdFromRequest }, transaction }
+        );
+      }
+
       for (const [role, ids] of Object.entries(roleMembers)) {
         for (const employeeId of ids) {
           await sequelize.query(
@@ -405,6 +421,8 @@ class TheatreService {
         await this._setRoomStatus(op.theatre_room_id, 'cleaning', transaction);
       }
 
+      await transaction.commit();
+
       // T1: bill the procedure fee once the operation actually happened — a
       // fee was captured at scheduling time (theatre_operations.procedure_fee,
       // set by whoever booked the case); nothing bills automatically if it
@@ -412,29 +430,33 @@ class TheatreService {
       // yet — someone can still add it to the bill manually from Billing).
       // Guarded by bill_id so a retried/duplicate completeOperation call
       // (which fails anyway on the status check above once this succeeds)
-      // can never double-bill. Kept deliberately simple — a single "Theatre
-      // procedure" line at base currency SSP, not scheme-priced — matching
-      // how a genuinely new bill is created elsewhere in this app
-      // (PatientBill.create + AccountingService.createGLFromPatientBill in
-      // one shared transaction), since no shared cross-module "bill this
-      // patient for X" helper exists yet to call into instead.
-      let billId = op.bill_id;
-      if (!billId && op.procedure_fee != null && parseFloat(op.procedure_fee) > 0) {
+      // can never double-bill. Routed through the shared addLineItemsToBill
+      // (same as recordItemUsage, and sequential/non-nested for the same
+      // reason — a billing failure here must never undo the operation
+      // having actually completed) with visitId: id, so this lands on the
+      // SAME bill any consumables used during the operation already created,
+      // instead of always starting a brand-new separate bill the way this
+      // used to hand-roll its own PatientBill.create.
+      if (!op.bill_id && op.procedure_fee != null && parseFloat(op.procedure_fee) > 0) {
         const fee = parseFloat(op.procedure_fee);
         const patientName = [op.patient_first_name, op.patient_last_name].filter(Boolean).join(' ') || 'Theatre Patient';
-        const bill = await PatientBill.create({
-          clinic_id: clinicId, branch_id: op.branch_id || null, patient_id: op.patient_id, patient_name: patientName,
-          bill_number: `THR-${Date.now().toString().slice(-8)}`, total_amount: fee, paid_amount: 0, balance_amount: fee,
-          status: 'pending', bill_date: endedAt.toISOString().split('T')[0], created_by: userId || 'system',
-          bill_currency: (op.fee_currency || 'SSP').toUpperCase(),
-          services: [{ line_id: uuidv4(), serviceName: `Theatre: ${op.procedure_name}`, quantity: 1, unitPrice: fee, totalPrice: fee, department: 'Theatre' }],
-        }, { transaction });
-        await AccountingService.createGLFromPatientBill(bill.toJSON(), userId || 'system', transaction);
-        billId = bill.id;
-        await sequelize.query(`UPDATE theatre_operations SET bill_id = :billId, billed_at = NOW() WHERE id = :id`, { replacements: { billId, id }, transaction });
+        try {
+          const bill = await addLineItemsToBill({
+            patientId: op.patient_id,
+            patientName,
+            clinicId,
+            branchId: op.branch_id,
+            lineItems: [{ serviceName: `Theatre: ${op.procedure_name}`, quantity: 1, unitPrice: fee, totalPrice: fee, revenueCategory: 'procedure', category: 'Theatre' }],
+            createdBy: userId ? String(userId) : 'system',
+            notes: `Theatre: ${op.procedure_name}`,
+            visitId: id,
+          });
+          await sequelize.query(`UPDATE theatre_operations SET bill_id = :billId, billed_at = NOW() WHERE id = :id`, { replacements: { billId: bill.id, id } });
+        } catch (billErr) {
+          console.error(`Theatre operation ${id}: completed, but billing the procedure fee failed —`, billErr.message);
+        }
       }
 
-      await transaction.commit();
       return this.getOperation(clinicId, id);
     } catch (error) {
       if (!transaction.finished) await transaction.rollback().catch(() => {});
@@ -664,6 +686,14 @@ class TheatreService {
             }],
             createdBy: userId ? String(userId) : 'system',
             notes: `Theatre: ${op.procedure_name}`,
+            // Anchors every consumable billed during THIS operation to the
+            // same bill (and the same one completeOperation's procedure-fee
+            // charge lands on too) — without this, a theatre patient with no
+            // "open visit" in the usual LIS/inpatient sense got a brand new
+            // separate bill for every single item added, per
+            // resolveActiveBill's documented fallback when no open visit is
+            // found but the patient has other (closed) visit history.
+            visitId: operationId,
           });
           billed = true;
         } catch (billErr) {
@@ -689,12 +719,14 @@ class TheatreService {
   // "administered" status (see migrateTheatreTables.js's comment on these
   // columns); idempotent WHERE guard means a second click is a harmless
   // no-op rather than overwriting who/when it was first confirmed.
-  async administerItem(clinicId, operationId, itemId, userId) {
+  async administerItem(clinicId, operationId, itemId, { route, dose, notes } = {}, userId) {
     await this._assertOperationEditable(operationId, clinicId);
     const [, meta] = await sequelize.query(
-      `UPDATE theatre_operation_items SET administered_at = NOW(), administered_by = :userId
+      `UPDATE theatre_operation_items
+       SET administered_at = NOW(), administered_by = :userId,
+           administered_route = :route, administered_dose = :dose, administered_notes = :notes
        WHERE id = :itemId AND operation_id = :operationId AND administered_at IS NULL`,
-      { replacements: { itemId, operationId, userId: userId || null } }
+      { replacements: { itemId, operationId, userId: userId || null, route: route || null, dose: dose || null, notes: notes || null } }
     );
     if (meta.rowCount === 0) {
       const [[existing]] = await sequelize.query(`SELECT id FROM theatre_operation_items WHERE id = :itemId AND operation_id = :operationId`, { replacements: { itemId, operationId } });

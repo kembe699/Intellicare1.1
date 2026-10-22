@@ -168,7 +168,7 @@ router.put('/operations/:id/items/:itemId/administer', authorize('theatre.write'
   try {
     if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
     const clinicId = req.body.clinic_id || req.user?.clinicId || 1;
-    const item = await TheatreService.administerItem(clinicId, req.params.id, req.params.itemId, req.user?.id);
+    const item = await TheatreService.administerItem(clinicId, req.params.id, req.params.itemId, req.body, req.user?.id);
     await logAudit(req, { action: 'ITEM_ADMINISTERED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Confirmed ${item.item_name} administered`, new_values: item });
     res.json(item);
   } catch (error) {

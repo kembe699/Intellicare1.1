@@ -246,6 +246,20 @@
     color: hsl(var(--accent-foreground));
   }
 
+  /* ── Plain custom hover-highlighted lists ──
+     Several pages build their own search-result/option lists as plain
+     buttons styled with Tailwind's hover:bg-accent utility instead of a
+     Radix/cmdk primitive (patient search, item search, the ICD-10
+     autocomplete, etc.) — those never got a matching hover text color, so
+     hovering showed default (dark) text against the accent (teal)
+     background. Targeting the compiled Tailwind class itself, the same
+     "cover every occurrence in one place" approach as the rule above,
+     rather than editing every page's button className individually. */
+  .hover\:bg-accent:hover,
+  .hover\:bg-accent:hover * {
+    color: hsl(var(--accent-foreground));
+  }
+
   /* ── Type scale — fixed px, independent of the html root font-size, so
      it hits the spec'd sizes exactly (1rem-based classes only land close).
      Page title 24/700, section/card title 18/600, body 15/400,
