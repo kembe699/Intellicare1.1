@@ -13,7 +13,8 @@ const { v4: uuidv4 } = require('uuid');
 const BillingIntegrationService = require('../services/BillingIntegrationService');
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
-const { adjustDepositBalance, BASE_CURRENCY } = require('./patientDeposits');
+const { adjustDepositBalance } = require('./patientDeposits');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { postJournalEntry } = require('../services/JournalPostingService');
 const { requireApprovalPermission, userHasApprovalPermission } = require('../middleware/requireApprovalPermission');
 
@@ -153,7 +154,7 @@ async function restoreDepositForVoidedReceipt(receipt, reason, processedBy, tran
   const amount = parseFloat(receipt.payment_amount) || 0;
   if (amount <= 0) return;
   const bill = receipt.bill_id ? await PatientBill.findByPk(receipt.bill_id, { transaction }) : null;
-  const currency = bill?.bill_currency || BASE_CURRENCY;
+  const currency = bill?.bill_currency || (await getBaseCurrencyCode(transaction));
 
   await adjustDepositBalance(transaction, {
     patientId: receipt.patient_id, patientName: receipt.patient_name, clinicId: receipt.clinic_id,

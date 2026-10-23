@@ -11,7 +11,7 @@ const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { normalizeServices, ensureLineIds } = require('../utils/normalizeServices');
 const AccountingService = require('../services/AccountingService');
 const { authorize } = require('../middleware/authorize');
-const { adjustDepositBalance, getDepositBalance, postDepositGL, BASE_CURRENCY } = require('./patientDeposits');
+const { adjustDepositBalance, getDepositBalance, postDepositGL } = require('./patientDeposits');
 const { postJournalEntry } = require('../services/JournalPostingService');
 
 // Read access is intentionally broad — every clinical/financial-facing role needs to look
@@ -1581,7 +1581,7 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     // overdraw it. Only the clinic (not branch) scopes the balance, per design: a deposit
     // taken at one branch is usable at any branch under the same clinic.
     if ((paymentData.payment_method || '').toLowerCase() === 'deposit') {
-      const billCurrency = currentBill.bill_currency || BASE_CURRENCY;
+      const billCurrency = currentBill.bill_currency || (await getBaseCurrencyCode(t));
       try {
         await adjustDepositBalance(t, {
           patientId: currentBill.patient_id,
