@@ -74,7 +74,7 @@ export default function ClaimDetails() {
         setEditPriority(json.data?.priority || 'normal');
       } else {
         toast.error('Claim not found');
-        navigate('/billing-management');
+        navigate('/accounting/receivables/claims');
       }
     } catch (err) { toast.error('Failed to load claim'); }
     setLoading(false);
@@ -141,7 +141,7 @@ export default function ClaimDetails() {
     setCancelling(true);
     try {
       const res = await authFetch(`/api/insurance-claims/${claimId}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Claim cancelled'); navigate('/billing-management'); }
+      if (res.ok) { toast.success('Claim cancelled'); navigate('/accounting/receivables/claims'); }
       else { const err = await res.json(); toast.error(err.error || 'Failed to cancel'); }
     } catch { toast.error('Failed to cancel'); }
     finally { setCancelling(false); }
@@ -200,7 +200,7 @@ export default function ClaimDetails() {
         <div className="flex flex-col items-center justify-center h-96">
           <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground">Claim not found</p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate('/billing-management')}>Back to Billing</Button>
+          <Button variant="outline" className="mt-4" onClick={() => navigate('/accounting/receivables/claims')}>Back to Insurance Claims</Button>
         </div>
       </AppLayout>
     );
@@ -222,7 +222,7 @@ export default function ClaimDetails() {
           title={claim.claim_number}
           actions={
             <div className="flex gap-2 flex-wrap items-center">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/billing-management')} className="gap-1.5">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/accounting/receivables/claims')} className="gap-1.5">
                 <ArrowLeft className="h-4 w-4" />Back
               </Button>
               {canEdit && (

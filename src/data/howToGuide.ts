@@ -360,9 +360,9 @@ export const HOW_TO_GUIDE: GuideEntry[] = [
   },
   {
     title: 'How to Run Financial Reports',
-    path: '/accounting/reports',
+    path: '/reports/dashboard/accounting',
     steps: [
-      'Open Accounting → Financial Reports.',
+      'Open Reports → Accounting Report.',
       'Choose the Income Statement or another standard report.',
       'Set the period, then view or export the result.',
     ],

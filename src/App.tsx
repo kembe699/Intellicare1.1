@@ -122,7 +122,7 @@ const ChartOfAccounts = lazyWithRetry(() => import('./pages/accounting/ChartOfAc
 const GeneralLedger = lazyWithRetry(() => import('./pages/accounting/GeneralLedger'));
 const JournalEntriesPage = lazyWithRetry(() => import('./pages/accounting/JournalEntries'));
 const ReceivablesPage = lazyWithRetry(() => import('./pages/accounting/Receivables'));
-const FinancialReports = lazyWithRetry(() => import('./pages/accounting/FinancialReports'));
+const InsuranceClaims = lazyWithRetry(() => import('./pages/accounting/InsuranceClaims'));
 const ExchangeRatesPage = lazyWithRetry(() => import('./pages/accounting/ExchangeRates'));
 const ItemMaster = lazyWithRetry(() => import('./pages/inventory/ItemMaster'));
 const StockLocations = lazyWithRetry(() => import('./pages/inventory/StockLocations'));
@@ -593,14 +593,11 @@ const AppRoutes = () => {
           (same privileges as their original routes); the original URLs keep working. */}
       <Route path="/accounting/receivables/claims" element={
         <ProtectedRoute requiredPrivilege="billing.write">
-          <BillingManagement key="ar-claims" initialTab="insurance" />
+          <InsuranceClaims />
         </ProtectedRoute>
       } />
-      <Route path="/accounting/receivables/adjustments" element={
-        <ProtectedRoute requiredPrivilege="billing.write">
-          <BillingManagement key="ar-adjustments" initialTab="receivables" />
-        </ProtectedRoute>
-      } />
+      {/* Discounts, follow-ups and write-offs now live on A/R & Aging's rows. */}
+      <Route path="/accounting/receivables/adjustments" element={<Navigate to="/accounting/receivables" replace />} />
       <Route path="/accounting/receivables/credit-notes" element={
         <ProtectedRoute requiredPrivilege="billing.write">
           <AccountingCreditNotes />
@@ -813,11 +810,8 @@ const AppRoutes = () => {
           <ReceivablesPage />
         </ProtectedRoute>
       } />
-      <Route path="/accounting/reports" element={
-        <ProtectedRoute requiredPrivilege="accounting.read">
-          <FinancialReports />
-        </ProtectedRoute>
-      } />
+      {/* Financial statements live in the Reports centre; the old URL forwards there. */}
+      <Route path="/accounting/reports" element={<Navigate to="/reports/dashboard/accounting" replace />} />
       <Route path="/accounting/fixed-assets" element={
         <ProtectedRoute requiredPrivilege="assets.view">
           <FixedAssetsLayout />

@@ -324,7 +324,7 @@ const Dashboard: React.FC = () => {
               ]}
               actions={
                 <>
-                  <Link to="/accounting/reports" className="inline-flex items-center gap-1.5 rounded-lg border border-white/40 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10">
+                  <Link to="/reports" className="inline-flex items-center gap-1.5 rounded-lg border border-white/40 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10">
                     <FileBarChart className="h-4 w-4" /> View Reports
                   </Link>
                   <Link to="/billing-management" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-white/90">
