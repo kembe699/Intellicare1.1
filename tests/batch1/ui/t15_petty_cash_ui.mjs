@@ -1,4 +1,4 @@
-// #15 Petty Cash: set up 1108 (explicit, confirmed), top up via cash transfer (from 1100 Cash), spend via an
+// #15 Petty Cash: set up 1108 (explicit, confirmed), top up via cash transfer, spend via an
 // expense paid from petty cash; balance and movements follow the ledger.
 // Leaves 1108 as it found it (inactive) at the end.
 import { chromium } from 'playwright';
@@ -9,6 +9,11 @@ const [pc] = await q("SELECT id, is_active FROM chart_of_accounts WHERE account_
 const [cash] = await q("SELECT id FROM chart_of_accounts WHERE account_code = '1105'");
 const balance = async () => (await q("SELECT COALESCE(SUM(debit_amount - credit_amount),0)::float b FROM account_ledger WHERE account_id::text = $1 AND COALESCE(is_posted, TRUE)", [pc.id]))[0].b;
 const wasActive = pc.is_active;
+// Top up from whichever active cash/bank account currently has the most money (test data
+// moves balances around between runs; cash transfers rightly refuse an overdrawn source).
+const [source] = await q(`SELECT c.account_code FROM chart_of_accounts c LEFT JOIN account_ledger l ON l.account_id::text = c.id::text
+  WHERE c.account_code LIKE '11%' AND c.account_code <> '1108' AND c.is_active GROUP BY c.account_code
+  ORDER BY COALESCE(SUM(l.debit_amount - l.credit_amount), 0) DESC LIMIT 1`);
 await q("UPDATE chart_of_accounts SET is_active = FALSE WHERE id = $1", [pc.id]);
 const start = await balance();
 
@@ -29,7 +34,7 @@ try {
   await page.getByRole('button', { name: 'Top up' }).click();
   const dlg = page.getByRole('dialog');
   await dlg.getByRole('combobox').first().click();
-  await page.getByRole('option', { name: /^1100/ }).click();
+  await page.getByRole('option', { name: new RegExp('^' + source.account_code) }).click();
   await dlg.locator('input[type=number]').fill('50000');
   await dlg.getByRole('button', { name: 'Top up' }).click();
   await page.waitForTimeout(2500);
