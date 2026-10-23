@@ -57,7 +57,7 @@ import {
   CalendarClock,
   Syringe,
   HeartPulse,
-  SlidersHorizontal
+  SlidersHorizontal, History, Landmark, RotateCcw, Coins, Users2, BadgePercent, FileMinus, Scale
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/notify';
@@ -76,6 +76,10 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   privilege: string | string[];
+  /** Sub-heading inside a dropdown (e.g. Accounting › Payments). */
+  group?: string;
+  /** Highlight this item for any path under this prefix (detail pages, sub-tabs). */
+  matchPrefix?: string;
 }
 
 interface NavDropdown {
@@ -88,7 +92,6 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, privilege: 'pages.dashboard.view' },
   { label: 'Patient Registry', href: '/lis/registration', icon: Users, privilege: 'pages.lis_registration.view' },
   { label: 'Appointments', href: '/appointments', icon: CalendarClock, privilege: 'appointments.write' },
-  { label: 'Clinical', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read' },
   { label: 'Radiology', href: '/radiology', icon: Scan, privilege: 'radiology.read' },
   { label: 'Queue Display', href: '/lis/queue', icon: Users, privilege: 'lis.queue.write' },
   { label: 'Patient Referral', href: '/patient-referrals', icon: ArrowLeftRight, privilege: 'pages.patient_referral.view' },
@@ -100,6 +103,17 @@ const navItems: NavItem[] = [
   { label: 'Reports', href: '/reports', icon: BarChart3, privilege: 'pages.reports.view' },
 ];
 
+
+// The doctor's encounter page plus the patient's visit history (a page that
+// existed with no menu entry at all).
+const clinicalDropdown: NavDropdown = {
+  label: 'Clinical',
+  icon: Stethoscope,
+  items: [
+    { label: 'Patient Encounters', href: '/lis/orders', icon: Stethoscope, privilege: 'lis.clinical.read', matchPrefix: '/lis/orders' },
+    { label: 'Visit History', href: '/clinical/visits-history', icon: History, privilege: 'pages.visits_history.view' },
+  ]
+};
 
 const pharmacyDropdown: NavDropdown = {
   label: 'Pharmacy',
@@ -119,7 +133,7 @@ const procurementDropdown: NavDropdown = {
     { label: 'Requisitions', href: '/procurement/requisitions', icon: ClipboardList, privilege: 'pages.procurement_requisitions.view' },
     { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ShoppingCart, privilege: 'procurement.purchase_orders.write' },
     { label: 'Goods Receipt', href: '/procurement/goods-receipt', icon: Truck, privilege: ['procurement.write', 'pharmacy.write'] },
-    { label: 'Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write' },
+    { label: 'Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write', matchPrefix: '/procurement/daily-expenses' },
     { label: 'Stock Transfers', href: '/procurement/stock-transfers', icon: ArrowRightLeft, privilege: 'stock_transfers.use' },
     { label: 'Reports', href: '/procurement/reports', icon: BarChart3, privilege: 'procurement.read' },
   ]
@@ -131,7 +145,6 @@ const hrDropdown: NavDropdown = {
   items: [
     { label: 'Employees', href: '/hr/employees', icon: Users, privilege: 'hr.employees.read' },
     { label: 'Consultants & Doctors', href: '/hr/consultants', icon: Stethoscope, privilege: 'hr.employees.read' },
-    { label: 'Departments', href: '/setup/departments', icon: Briefcase, privilege: 'pages.setup_departments.view' },
     { label: 'Salary Structures', href: '/hr/salary-structures', icon: Wallet, privilege: 'hr.employees.read' },
     { label: 'Salary Advances', href: '/hr/salary-advances', icon: HandCoins, privilege: 'hr.salary_advances.read' },
     { label: 'Leave', href: '/hr/leave', icon: CalendarDays, privilege: 'hr.leave.read' },
@@ -160,11 +173,12 @@ const accountingDropdown: NavDropdown = {
     { label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileSpreadsheet, privilege: 'accounting.write' },
     { label: 'General Ledger', href: '/accounting/general-ledger', icon: BookOpen, privilege: 'accounting.read' },
     { label: 'Journal Entries', href: '/accounting/journal-entries', icon: ClipboardList, privilege: 'accounting.write' },
+    { label: 'Financial Reports', href: '/accounting/reports', icon: BarChart3, privilege: 'accounting.read' },
     { label: 'Receivables', href: '/accounting/receivables', icon: PiggyBank, privilege: 'accounting.read' },
-    { label: 'Fixed Assets', href: '/accounting/fixed-assets/register', icon: Building2, privilege: 'assets.view' },
+    { label: 'Fixed Assets', href: '/accounting/fixed-assets/register', icon: Building2, privilege: 'assets.view', matchPrefix: '/accounting/fixed-assets' },
     { label: 'Exchange Rates', href: '/accounting/exchange-rates', icon: ArrowRightLeft, privilege: 'accounting.rates.write' },
     { label: 'Cash Transfer', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },
-    { label: 'Billing Management', href: '/billing-management', icon: FileSpreadsheet, privilege: 'billing.write' },
+    { label: 'Billing Management', href: '/billing-management', icon: FileSpreadsheet, privilege: 'billing.write', matchPrefix: '/billing-management' },
     { label: 'Schemes & Pricing', href: '/scheme-management', icon: Tag, privilege: 'schemes.write' },
     { label: 'Cashier Shift', href: '/cashier/shift', icon: Clock, privilege: 'cashier.write' },
   ]
@@ -234,6 +248,7 @@ const setupDropdown: NavDropdown = {
     { label: 'Lab Tests', href: '/setup/lab-tests', icon: TestTube, privilege: 'pages.setup_lab_tests.view' },
     { label: 'Services', href: '/setup/services', icon: Wrench, privilege: 'clinical.services.manage' },
     { label: 'Categories', href: '/setup/categories', icon: Tag, privilege: 'pages.setup_categories.view' },
+    { label: 'Departments', href: '/setup/departments', icon: Briefcase, privilege: 'pages.setup_departments.view' },
     { label: 'Clinics', href: '/setup/clinics', icon: Stethoscope, privilege: 'pages.setup_clinics.view' },
     { label: 'Facility', href: '/setup/facility', icon: Hospital, privilege: 'pages.setup_facility.view' },
     { label: 'Uncoded Diagnoses', href: '/setup/diagnosis-coding', icon: ClipboardList, privilege: 'clinical.diagnoses.write' },
@@ -267,7 +282,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const [pharmacyOpen, setPharmacyOpen] = useState(location.pathname.startsWith('/pharmacy'));
   const [procurementOpen, setProcurementOpen] = useState(location.pathname.startsWith('/procurement'));
   const [hrOpen, setHrOpen] = useState(location.pathname.startsWith('/hr'));
-  const [accountingOpen, setAccountingOpen] = useState(location.pathname.startsWith('/accounting') || location.pathname.startsWith('/scheme-management') || location.pathname.startsWith('/cashier/shift'));
+  const [accountingOpen, setAccountingOpen] = useState(
+    ['/accounting', '/scheme-management', '/cashier/shift', '/billing-management'].some((p) => location.pathname.startsWith(p))
+  );
+  const [clinicalOpen, setClinicalOpen] = useState(clinicalDropdown.items.some(item => location.pathname.startsWith(item.href)));
   const [inventoryOpen, setInventoryOpen] = useState(location.pathname.startsWith('/inventory'));
   const [lisOpen, setLisOpen] = useState(lisDropdown.items.some(item => location.pathname.startsWith(item.href)));
   const [theatreOpen, setTheatreOpen] = useState(theatreDropdown.items.some(item => location.pathname.startsWith(item.href)));
@@ -351,6 +369,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const dropdownVisible = (dropdown: NavDropdown) => dropdown.items.some(item => hasPrivilege(item.privilege));
 
   const showSetup = dropdownVisible(setupDropdown);
+  const showClinical = dropdownVisible(clinicalDropdown);
   const showPatientsBill = dropdownVisible(patientsBillDropdown);
   const showPharmacy = dropdownVisible(pharmacyDropdown);
   const showLIS = dropdownVisible(lisDropdown);
@@ -366,7 +385,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   // A section label (e.g. "CLINICAL WORKFLOW") should never render on its own with nothing
   // visible underneath it — that reads as "you almost have access" to a role that has none.
   // Each flag mirrors exactly the set of items rendered under that heading below.
-  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/appointments') || hasNavLink('/lis/queue') || hasNavLink('/lis/orders') || showNursingStation || showInpatient || showTheatre || showLIS || showPharmacy);
+  const showClinicalWorkflowSection = !!(hasNavLink('/lis/registration') || hasNavLink('/appointments') || hasNavLink('/lis/queue') || showClinical || hasNavLink('/radiology') || hasNavLink('/patient-referrals') || showNursingStation || showInpatient || showTheatre || showLIS || showPharmacy);
+
+  const itemActive = (item: NavItem) =>
+    location.pathname === item.href || (!!item.matchPrefix && location.pathname.startsWith(item.matchPrefix));
+
+  // One dropdown renderer for groups that need sub-headings or prefix-matched
+  // items (Clinical, Accounting). Headings render only above visible items.
+  const renderGroupedDropdown = (dropdown: NavDropdown, open: boolean, setOpen: (v: boolean) => void, headerActive: boolean) => {
+    const visible = dropdown.items.filter(item => hasPrivilege(item.privilege));
+    const Icon = dropdown.icon;
+    let lastGroup: string | undefined;
+    return (
+      <div className="pt-0.5">
+        <button
+          onClick={() => setOpen(!open)}
+          className={cn(
+            "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
+            headerActive
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <Icon className="w-4 h-4" />
+            <span className="font-medium leading-none">{dropdown.label}</span>
+          </div>
+          <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+        </button>
+        {open && (
+          <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
+            {visible.map((item) => {
+              const ItemIcon = item.icon;
+              const heading = item.group && item.group !== lastGroup ? item.group : null;
+              lastGroup = item.group;
+              return (
+                <React.Fragment key={item.href}>
+                  {heading && (
+                    <p className="px-3 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/45 select-none">{heading}</p>
+                  )}
+                  <Link to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
+                      itemActive(item) ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                    )}
+                  >
+                    <ItemIcon className="w-4 h-4" /><span>{item.label}</span>
+                  </Link>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
   const showBillingFinanceSection = !!(showPatientsBill || showAccounting);
   const showSupplyChainSection = !!(showInventory || showProcurement);
   const showAnalyticsAdminSection = !!(hasNavLink('/reports') || showSetup);
@@ -522,8 +594,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     </div>
                   )}
 
-                  {/* 3. Clinical (flat link) — the doctor's encounter */}
-                  {renderNavLink('/lis/orders')}
+                  {/* 3. Clinical — the doctor's encounter + visit history */}
+                  {showClinical && renderGroupedDropdown(clinicalDropdown, clinicalOpen, setClinicalOpen,
+                    clinicalDropdown.items.some(item => location.pathname.startsWith(item.href)))}
 
                   {/* 3.05 Radiology (flat link) */}
                   {renderNavLink('/radiology')}
@@ -553,7 +626,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {inpatientDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
@@ -674,7 +747,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {pharmacyDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
@@ -718,7 +791,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {patientsBillDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
@@ -735,42 +808,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   )}
 
                   {/* 7. Accounting */}
-                  {showAccounting && (
-                    <div className="pt-0.5">
-                      <button
-                        onClick={() => setAccountingOpen(!accountingOpen)}
-                        className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-sm transition-colors text-sm",
-                          (location.pathname.startsWith('/accounting') || location.pathname.startsWith('/billing-management') || location.pathname.startsWith('/scheme-management') || location.pathname.startsWith('/accounts') || location.pathname.startsWith('/cashier'))
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                            : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Calculator className="w-4 h-4" />
-                          <span className="font-medium leading-none">Accounting</span>
-                        </div>
-                        <ChevronDown className={cn("w-4 h-4 transition-transform", accountingOpen && "rotate-180")} />
-                      </button>
-                      {accountingOpen && (
-                        <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
-                          {accountingDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
-                            const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
-                            return (
-                              <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
-                                className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
-                                  isActive ? "bg-sidebar-accent text-sidebar-foreground font-medium" : "hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                                )}
-                              >
-                                <Icon className="w-4 h-4" /><span>{item.label}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {showAccounting && renderGroupedDropdown(accountingDropdown, accountingOpen, setAccountingOpen,
+                    ['/accounting', '/billing-management', '/scheme-management', '/accounts', '/cashier'].some((p) => location.pathname.startsWith(p)))}
 
                   {/* ══ SUPPLY CHAIN SECTION ══ */}
                   {showSupplyChainSection && sectionLabel('Supply Chain')}
@@ -797,7 +836,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {inventoryDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
@@ -835,7 +874,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {procurementDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
@@ -876,7 +915,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {hrDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
@@ -920,7 +959,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                         <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                           {setupDropdown.items.filter(item => hasPrivilege(item.privilege)).map((item) => {
                             const Icon = item.icon;
-                            const isActive = location.pathname === item.href;
+                            const isActive = itemActive(item);
                             return (
                               <Link key={item.href} to={item.href} onClick={() => window.innerWidth < 1024 && onToggle()}
                                 className={cn("flex items-center gap-3 px-3 py-2 rounded-sm transition-colors text-xs",
