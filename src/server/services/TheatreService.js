@@ -459,6 +459,9 @@ class TheatreService {
           description: `Theatre team payout — ${employeeLabel}`,
           reference_id: payout.id,
           reference_module: 'theatre_team_payout',
+          // The fee split is in the operation's fee currency (often USD): convert it,
+          // never book it 1:1 as base currency (createGLEntry refuses if no rate exists).
+          transaction_currency: payout.currency || undefined,
         }, [
           { account_id: doctorFeesAccount.id, debit_amount: amount, credit_amount: 0, description: `Theatre team payout — ${employeeLabel}` },
           { account_id: paymentAccountId, debit_amount: 0, credit_amount: amount, description: `Theatre team payout — ${employeeLabel}` },
