@@ -189,7 +189,7 @@ const accountingDropdown: NavDropdown = {
     { group: 'Payables', label: 'Supplier Bills', href: '/accounting/payables/supplier-bills', icon: Building2, privilege: 'expenses.write' },
     { group: 'Payments', label: 'Expenses', href: '/accounting/payments/expenses', icon: DollarSign, privilege: 'expenses.write', matchPrefix: '/accounting/payments/expenses' },
     { group: 'Payments', label: 'Supplier Payments', href: '/accounting/payments/suppliers', icon: Truck, privilege: 'expenses.write' },
-    { group: 'Payments', label: 'Consultant Payments', href: '/accounting/payments/consultants', icon: Stethoscope, privilege: 'expenses.write' },
+    { group: 'Payments', label: 'Consultant Payments', href: '/accounting/payments/consultants', icon: Stethoscope, privilege: ['expenses.write', 'theatre.payout'] },
     { group: 'Payments', label: 'Staff Payments', href: '/accounting/payments/staff', icon: Users2, privilege: ['hr.payroll.write', 'hr.salary_advances.write'] },
     { group: 'Payments', label: 'Refunds', href: '/accounting/payments/refunds', icon: RotateCcw, privilege: ['receipts.write', 'accounting.read'] },
     { group: 'Payments', label: 'Cash Transfers', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },

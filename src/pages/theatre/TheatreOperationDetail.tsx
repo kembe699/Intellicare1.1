@@ -118,10 +118,6 @@ export default function TheatreOperationDetail() {
   const [newFeePct, setNewFeePct] = useState<Record<TeamRole, string>>({ surgeon: '', anesthetist: '', scrub_nurse: '' });
   const [editingFeeFor, setEditingFeeFor] = useState<string | null>(null);
   const [editingFeeValue, setEditingFeeValue] = useState('');
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [showPayTeamDialog, setShowPayTeamDialog] = useState(false);
-  const [payAccountId, setPayAccountId] = useState('');
-  const [payingTeam, setPayingTeam] = useState(false);
 
   const timer = useElapsedTimer(operation?.started_at || null, operation?.status === 'in_progress');
 
@@ -202,20 +198,6 @@ export default function TheatreOperationDetail() {
   // completeOperation — so there's nothing meaningful to show before then.
   useEffect(() => { if (operation?.status === 'completed') fetchTeamPayouts(); }, [operation?.status, fetchTeamPayouts]);
 
-  useEffect(() => {
-    if (!canPayTeam) return;
-    (async () => {
-      try {
-        const res = await authFetch(`/api/accounting/chart-of-accounts?clinic_id=${operation?.clinic_id || 1}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length) { setAccounts(data); return; }
-        }
-        const r2 = await authFetch('/api/ledger-accounts');
-        if (r2.ok) setAccounts(await r2.json());
-      } catch { /* non-blocking */ }
-    })();
-  }, [canPayTeam, operation?.clinic_id]);
 
   const handleStart = async () => {
     setBusy(true);
@@ -388,29 +370,6 @@ export default function TheatreOperationDetail() {
     } catch { toast.error('Network error'); }
   };
 
-  const handlePayTeam = async () => {
-    if (!payAccountId) { toast.error('Select an account to pay from.'); return; }
-    setPayingTeam(true);
-    try {
-      const res = await authFetch(`/api/theatre/operations/${id}/team-payouts/pay`, {
-        method: 'POST',
-        body: JSON.stringify({ payment_account_id: payAccountId }),
-      });
-      if (res.ok) {
-        toast.success("The surgical team's fee split has been paid.");
-        setShowPayTeamDialog(false);
-        setPayAccountId('');
-        fetchTeamPayouts();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to pay team');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setPayingTeam(false);
-    }
-  };
 
   const fi = () => ({ name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo });
   const bi = () => ({ name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone });
@@ -739,30 +698,11 @@ export default function TheatreOperationDetail() {
                   </div>
                 </div>
                 {canPayTeam && teamPayouts.payouts.some((p: any) => p.status === 'unpaid') && (
-                  <Button size="sm" className="w-full mt-3" onClick={() => setShowPayTeamDialog(true)}>Pay Team</Button>
+                  <Button size="sm" className="w-full mt-3" onClick={() => navigate('/accounting/payments/consultants')} title="Team fee splits are paid in Accounting › Payments › Consultant Payments">Pay in Accounting</Button>
                 )}
               </div>
             )}
 
-            <Dialog open={showPayTeamDialog} onOpenChange={(open) => { setShowPayTeamDialog(open); if (!open) setPayAccountId(''); }}>
-              <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>Pay the surgical team</DialogTitle>
-                  <DialogDescription>Choose the account to deduct the team's unpaid fee split from.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <Combobox
-                    options={accounts.map((a: any) => ({ value: String(a.id), label: a.account_name }))}
-                    value={payAccountId} onChange={setPayAccountId}
-                    placeholder="Select account..." searchPlaceholder="Search accounts..." className="h-9"
-                  />
-                  <Button className="w-full" onClick={handlePayTeam} disabled={payingTeam || !payAccountId}>
-                    {payingTeam ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                    Confirm Payment
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
 
           {/* RIGHT: phase workflow — checklist + vitals */}

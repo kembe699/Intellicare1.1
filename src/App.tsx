@@ -88,6 +88,7 @@ const AccountingRefunds = lazyWithRetry(() => import('./pages/accounting/Refunds
 const AccountingCreditNotes = lazyWithRetry(() => import('./pages/accounting/CreditNotes'));
 const AccountingPayables = lazyWithRetry(() => import('./pages/accounting/Payables'));
 const AccountingStaffPayments = lazyWithRetry(() => import('./pages/accounting/StaffPayments'));
+const AccountingConsultantPayments = lazyWithRetry(() => import('./pages/accounting/ConsultantPayments'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
 const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpenses'));
@@ -630,8 +631,8 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/consultants" element={
-        <ProtectedRoute requiredPrivilege="expenses.write">
-          <DailyExpenses key="pay-consultants" mode="payments" initialTab="consultant-bills" />
+        <ProtectedRoute requiredPrivilege={['expenses.write', 'theatre.payout']}>
+          <AccountingConsultantPayments />
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/staff" element={

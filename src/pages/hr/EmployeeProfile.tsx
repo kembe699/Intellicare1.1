@@ -500,7 +500,12 @@ export default function EmployeeProfile() {
                   </div>
 
                   <div className="bg-card rounded-lg border shadow-sm p-5 space-y-3">
-                    <h3 className="font-medium flex items-center gap-2"><Receipt className="w-4 h-4 text-primary" /> Billing History</h3>
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-medium flex items-center gap-2"><Receipt className="w-4 h-4 text-primary" /> Billing History</h3>
+                      {consultantBills.some((b: any) => b.status === 'unpaid') && (
+                        <Link to="/accounting/payments/consultants" className="text-sm font-medium text-primary hover:underline">Pay in Accounting</Link>
+                      )}
+                    </div>
                     {consultantBills.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-4 text-center">No consultant bills yet.</p>
                     ) : (

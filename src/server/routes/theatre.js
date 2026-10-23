@@ -215,6 +215,32 @@ router.put('/operations/:id/team/:teamMemberId', authorize('theatre.write'), asy
 
 // ── Team fee split payouts — who did this operation, what each gets, and
 // (separately, later) the cashier paying it out from a chosen account. ───
+// Unpaid theatre team fee splits across all operations, for Accounting ›
+// Payments › Consultant Payments. Paying still goes through
+// POST /operations/:id/team-payouts/pay (pays every unpaid split on that operation).
+router.get('/team-payouts', authorize('theatre.payout'), async (req, res) => {
+  try {
+    const { sequelize } = req.models;
+    const clinicId = req.query.clinic_id || req.user?.clinicId || 1;
+    const status = req.query.status === 'paid' ? 'paid' : 'unpaid';
+    const [rows] = await sequelize.query(
+      `SELECT tp.id, tp.operation_id, tp.role, tp.fee_percentage, tp.amount::float AS amount, tp.currency, tp.status, tp.paid_at,
+              e.first_name, e.last_name, e.employee_number,
+              o.procedure_name, o.ended_at, o.scheduled_at, o.fee_currency
+         FROM theatre_team_payouts tp
+         JOIN theatre_operations o ON o.id = tp.operation_id AND o.clinic_id = :clinicId
+         JOIN employees e ON e.id = tp.employee_id
+        WHERE tp.status = :status
+        ORDER BY COALESCE(o.ended_at, o.scheduled_at) DESC, tp.role`,
+      { replacements: { clinicId, status } }
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing theatre team payouts:', error);
+    res.status(500).json({ error: 'Failed to list theatre team payouts' });
+  }
+});
+
 router.get('/operations/:id/team-payouts', authorize('theatre.view'), async (req, res) => {
   try {
     if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
