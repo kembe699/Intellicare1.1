@@ -4,7 +4,6 @@ const {
   GeneralLedger, 
   GLLineItems, 
   AccountLedger,
-  PatientReceivables,
   ExchangeRate,
   sequelize 
 } = require('../models');
@@ -433,37 +432,14 @@ class AccountingService {
         ...revenueLineItems
       ];
 
-      // GL entry and its PatientReceivables row must both exist or neither does — a bill
-      // whose GL entry committed but whose receivable record failed to write would show
-      // correctly in the ledger while silently vanishing from receivables/aging reports
-      // (and vice versa). Sharing one transaction makes that impossible.
-      //
-      // ownsTransaction is false when the caller (patientBills.js) supplied its own
-      // transaction — the one that also holds the PatientBill row itself. In that case
-      // this function neither commits/rolls back nor posts separately: createGLEntry
-      // already posts within the shared transaction (see its own docstring), and the
-      // caller commits everything together once this returns.
+      // patient_receivables is retired (no longer written): receivables come from
+      // patient_bills plus the ledger. ownsTransaction is false when the caller
+      // (patientBills.js) supplied the transaction that also holds the bill row.
       const ownsTransaction = !externalTransaction;
       const receivablesTransaction = externalTransaction || await sequelize.transaction();
       let glEntry;
       try {
         glEntry = await this.createGLEntry(glData, lineItems, userId, receivablesTransaction);
-
-        await PatientReceivables.create({
-          clinic_id: billData.clinic_id,
-          patient_id: billData.patient_id,
-          bill_id: billData.id,
-          bill_number: billData.bill_number,
-          service_date: billData.bill_date,
-          bill_date: billData.bill_date,
-          due_date: billData.due_date,
-          service_description: 'Patient services',
-          service_amount: billData.total_amount,
-          amount_due: billData.total_amount,
-          amount_paid: 0,
-          status: 'pending',
-          gl_entry_id: glEntry.id
-        }, { transaction: receivablesTransaction });
 
         if (ownsTransaction) await receivablesTransaction.commit();
       } catch (innerError) {
@@ -496,15 +472,8 @@ class AccountingService {
 
   /**
    * Post a GL entry for services added to an ALREADY-CREATED bill (add-services, or a
-   * duplicate-create-bill request merged into an existing bill). createGLFromPatientBill
-   * above posts the bill's full total_amount and creates a fresh PatientReceivables row —
-   * correct only once, at creation. Calling it again here for the whole (now-larger) total
-   * would double-count everything already posted at creation time, and a second .create()
-   * on PatientReceivables would duplicate that bill's row in the Aging report. This posts
-   * only the newly-added amount, and tops up the existing PatientReceivables row instead of
-   * creating another one — closing the gap where every add-services call previously posted
-   * nothing at all (see patientBills.js), silently under-stating receivables/revenue by the
-   * added amount forever.
+   * duplicate-create-bill request merged into an existing bill). Posts only the newly-added
+   * amount; calling createGLFromPatientBill again would double-count the total already posted.
    * @param {Object} bill - The bill row AFTER its total/balance were updated (needs id, clinic_id, scheme_id, bill_number, patient_name, bill_date, bill_currency)
    * @param {Array} addedServices - Just the newly-added service lines (not the whole bill)
    * @param {number} addedAmount - Sum of addedServices, in bill_currency — the exact delta being posted
@@ -587,22 +556,8 @@ class AccountingService {
     try {
       const glEntry = await this.createGLEntry(glData, lineItems, userId, txn);
 
-      // Top up the existing receivables row rather than creating a second one for the
-      // same bill_id. If none exists yet (e.g. the original creation-time GL posting
-      // failed — see the GL_POSTING_FAILED audit path in patientBills.js), there's
-      // nothing to top up; that bill already needs manual reconciliation regardless,
-      // so this is intentionally non-fatal rather than trying to reconstruct a row here.
-      const [affected] = await PatientReceivables.update({
-        amount_due: sequelize.literal(`amount_due + ${addedAmount}`),
-        service_amount: sequelize.literal(`service_amount + ${addedAmount}`),
-        status: sequelize.literal(`CASE WHEN status = 'paid' THEN 'partial' ELSE status END`),
-      }, { where: { bill_id: bill.id }, transaction: txn });
-
       if (ownsTransaction) {
         await txn.commit();
-        if (affected === 0) {
-          console.warn(`No PatientReceivables row found for bill ${bill.bill_number} — GL posted for the added ${addedAmount}, but the Receivables/Aging report won't reflect it until reconciled.`);
-        }
         // Legacy self-transacting path only — see createGLFromPatientBill's own
         // comment on why this is skipped when the caller supplies a transaction.
         try {
@@ -610,8 +565,6 @@ class AccountingService {
         } catch (postError) {
           console.error(`GL entry ${glEntry.id} for items added to bill ${bill.bill_number} was created but not posted:`, postError.message);
         }
-      } else if (affected === 0) {
-        console.warn(`No PatientReceivables row found for bill ${bill.bill_number} — GL will post for the added ${addedAmount} once the caller's transaction commits, but the Receivables/Aging report won't reflect it until reconciled.`);
       }
 
       return glEntry;

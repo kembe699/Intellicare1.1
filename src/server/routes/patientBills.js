@@ -1042,8 +1042,8 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     await t.commit();
 
     // Post the added amount to the GL/receivables — createGLFromPatientBill (used at bill
-    // creation) can't be called again here, it would double-count the total already posted
-    // and duplicate the PatientReceivables row. See createGLTopUpForPatientBill for why this
+    // creation) can't be called again here, it would double-count the total already posted.
+    // See createGLTopUpForPatientBill for why this
     // was previously skipped entirely (silently under-stating receivables/revenue forever).
     if (newServicesTotal > 0) {
       try {
@@ -2040,24 +2040,6 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
     // dispensing) is already-established best-effort/non-blocking side
     // effects that read the now-committed bill state.
     await t.commit();
-
-    // Sync the receivables ledger row for this bill so aging/receivables reports reflect the payment.
-    try {
-      const { PatientReceivables } = require('../models');
-      const payAmtForReceivable = parseFloat(paymentData.amount || 0);
-      if (payAmtForReceivable > 0) {
-        await PatientReceivables.update({
-          amount_paid: sequelize.literal(`amount_paid + ${payAmtForReceivable}`),
-          amount_due: sequelize.literal(`amount_due - ${payAmtForReceivable}`),
-          last_payment_date: paymentData.payment_date,
-          status: sequelize.literal(`CASE WHEN amount_due - ${payAmtForReceivable} <= 0 THEN 'paid' ELSE 'partial' END`),
-        }, {
-          where: { bill_id: billId },
-        });
-      }
-    } catch (receivableErr) {
-      console.warn('Non-fatal: receivables sync skipped:', receivableErr.message);
-    }
 
     const updatedBill = await PatientBill.findByPk(billId);
 

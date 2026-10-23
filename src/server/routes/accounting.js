@@ -6,7 +6,6 @@ const {
   GLLineItems,
   JournalEntries,
   JournalEntryLines,
-  PatientReceivables,
   SuppliersAccounting,
   ExpenseInvoices,
   ExchangeRate,
@@ -828,11 +827,7 @@ router.post('/journal-entries/:id/revert-to-draft', authorize('accounting.write'
 // GET /receivables — alias used by Receivables.tsx frontend
 // NOTE: This reads directly from `patient_bills` (the live billing table that
 // BillingManagement/PatientsBill/etc. actually write to) rather than the
-// `patient_receivables` side-table below. `patient_receivables` is only ever
-// populated by AccountingService.createGLFromPatientBill, which no route
-// currently calls for this side-table — so it silently drifts out of sync with
-// real bill balances (verified against live data: e.g. bills already fully
-// paid in patient_bills still showed as pending/unpaid in patient_receivables).
+// retired `patient_receivables` side-table, which is no longer written to.
 // due_date defaults to 30 days after bill_date when unset, since a NULL
 // due_date otherwise reads as epoch (1970) on the client and wrongly flags
 // the bill as overdue.
@@ -870,105 +865,6 @@ router.get('/receivables', authorize('accounting.read'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching receivables:', error);
     res.status(500).json({ error: 'Failed to fetch receivables', details: error.message });
-  }
-});
-
-// Get patient receivables
-router.get('/patient-receivables', authorize('accounting.read'), async (req, res) => {
-  try {
-    const { PatientReceivables, Patient } = req.models;
-    const { clinic_id, patient_id, status } = req.query;
-
-    if (!clinic_id) {
-      return res.status(400).json({ error: 'clinic_id is required' });
-    }
-
-    const whereClause = { clinic_id: parseInt(clinic_id), ...getBranchCondition(req) };
-    if (patient_id) whereClause.patient_id = patient_id;
-    if (status) whereClause.status = status;
-
-    const receivables = await PatientReceivables.findAll({
-      where: whereClause,
-      include: [{
-        model: Patient,
-        as: 'patient',
-        attributes: ['first_name', 'last_name', 'patient_id']
-      }],
-      order: [['bill_date', 'DESC']]
-    });
-
-    res.json(receivables);
-  } catch (error) {
-    console.error('Error fetching patient receivables:', error);
-    res.status(500).json({ error: 'Failed to fetch patient receivables' });
-  }
-});
-
-// Get receivables aging report
-router.get('/patient-receivables/aging', authorize('accounting.read'), async (req, res) => {
-  try {
-    const { clinic_id } = req.query;
-    
-    if (!clinic_id) {
-      return res.status(400).json({ error: 'clinic_id is required' });
-    }
-
-    const agingReplacements = { clinic_id: parseInt(clinic_id) };
-    const agingBranchScope = branchScope(req, agingReplacements, 'pr');
-    const [results] = await sequelize.query(`
-      SELECT
-        p.first_name,
-        p.last_name,
-        p.patient_id,
-        pr.bill_number,
-        pr.bill_date,
-        pr.due_date,
-        pr.amount_due,
-        pr.amount_paid,
-        pr.amount_due - pr.amount_paid as balance,
-        ((CURRENT_DATE)::date - (pr.due_date)::date) as days_overdue,
-        CASE
-          WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) <= 0 THEN 'Current'
-          WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) BETWEEN 1 AND 30 THEN '1-30 Days'
-          WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) BETWEEN 31 AND 60 THEN '31-60 Days'
-          WHEN ((CURRENT_DATE)::date - (pr.due_date)::date) BETWEEN 61 AND 90 THEN '61-90 Days'
-          ELSE 'Over 90 Days'
-        END as aging_bucket
-      FROM patient_receivables pr
-      LEFT JOIN patients p ON pr.patient_id = p.id
-      WHERE pr.clinic_id = :clinic_id
-        AND pr.status IN ('pending', 'partial', 'overdue')
-        AND (pr.amount_due - pr.amount_paid) > 0
-        ${agingBranchScope}
-      ORDER BY pr.due_date ASC
-    `, {
-      replacements: agingReplacements
-    });
-
-    // Group by aging buckets
-    const agingReport = {
-      current: { count: 0, amount: 0, items: [] },
-      '1_30_days': { count: 0, amount: 0, items: [] },
-      '31_60_days': { count: 0, amount: 0, items: [] },
-      '61_90_days': { count: 0, amount: 0, items: [] },
-      'over_90_days': { count: 0, amount: 0, items: [] }
-    };
-
-    results.forEach(item => {
-      const balance = parseFloat(item.balance);
-      const bucketKey = item.aging_bucket.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      
-      if (agingReport[bucketKey]) {
-        agingReport[bucketKey].count++;
-        agingReport[bucketKey].amount += balance;
-        agingReport[bucketKey].items.push(item);
-      }
-    });
-
-    res.json(agingReport);
-  } catch (error) {
-    console.error('Error generating aging report:', error);
-    res.status(500).json({ error: 'Failed to generate aging report' });
   }
 });
 
