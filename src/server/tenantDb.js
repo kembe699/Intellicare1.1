@@ -162,6 +162,11 @@ async function buildTenantConnection(schemaName) {
   const { ensureReceiptPendingVoidStatus } = require('./config/ensureReceiptPendingVoidStatus');
   ensureReceiptPendingVoidStatus(sequelize).catch(() => {});
 
+  // GRN acceptance (not creation) now updates PO received quantities — flags
+  // pre-existing GRNs as already applied. See ensureGrnPoQuantityFlag.js.
+  const { ensureGrnPoQuantityFlag } = require('./config/ensureGrnPoQuantityFlag');
+  ensureGrnPoQuantityFlag(sequelize).catch(() => {});
+
   // Database-level backstop against double-booking a bed — see
   // ensureInpatientBedUniqueness.js and the bed-claim comment in
   // routes/inpatient.js for why this didn't actually exist before.

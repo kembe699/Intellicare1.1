@@ -41,4 +41,30 @@ async function getNextDocumentNumber(docType, clinicId, transaction, options = {
   return `${prefix}-${period}-${String(seq).padStart(width, '0')}`;
 }
 
-module.exports = { getNextDocumentNumber };
+/**
+ * Next GRN number, `GRN-YYYY-####`, tenant-wide (grn_number is unique across the
+ * whole tenant, so the counter row uses clinic_id 0). Replaces a COUNT(*)+1
+ * that handed two concurrent receipts the same number. The first allocation of
+ * a year seeds the counter from the highest number already issued that year.
+ * Same locking rule as getNextDocumentNumber: call inside the transaction that
+ * inserts the GRN.
+ */
+async function getNextGrnNumber(transaction, date = new Date()) {
+  if (!transaction) throw new Error('getNextGrnNumber requires an open transaction');
+  const year = String(new Date(date).getFullYear());
+  const [rows] = await sequelize.query(
+    `INSERT INTO document_number_counters (clinic_id, doc_type, period, last_number, updated_at)
+     VALUES (0, 'GRN', :year,
+             (SELECT COALESCE(MAX((regexp_match(grn_number, '^GRN-\\d{4}-(\\d+)$'))[1]::int), 0) + 1
+                FROM goods_receipt_notes WHERE grn_number LIKE :like),
+             NOW())
+     ON CONFLICT (clinic_id, doc_type, period)
+     DO UPDATE SET last_number = document_number_counters.last_number + 1, updated_at = NOW()
+     RETURNING last_number`,
+    { replacements: { year, like: `GRN-${year}-%` }, transaction }
+  );
+  const seq = rows[0].last_number;
+  return `GRN-${year}-${String(seq).padStart(Math.max(4, String(seq).length), '0')}`;
+}
+
+module.exports = { getNextDocumentNumber, getNextGrnNumber };

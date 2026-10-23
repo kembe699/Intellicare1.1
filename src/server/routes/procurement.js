@@ -1636,6 +1636,7 @@ router.get('/goods-receipt-notes/:id', authorize('procurement.read'), async (req
 
 // Create GRN from PO
 router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, res) => {
+  let t;
   try {
     const { po_id, received_by, received_location, received_condition, notes, invoice_number, lines } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
@@ -1649,98 +1650,132 @@ router.post('/goods-receipt-notes', authorize('procurement.write'), async (req, 
     );
     if (po.length === 0) return res.status(404).json({ error: 'Purchase order not found' });
 
-    // Generate GRN number
-    const [countResult] = await sequelize.query('SELECT COUNT(*) as cnt FROM goods_receipt_notes');
-    const grnNumber = `GRN-${new Date().getFullYear()}-${String((countResult[0].cnt || 0) + 1).padStart(4, '0')}`;
+    // Goods can only be received against a PO that has been signed off.
+    if (!['approved', 'authorized'].includes(po[0].status)) {
+      return res.status(400).json({
+        error: `${po[0].po_number} is ${String(po[0].status || 'not approved').replace(/_/g, ' ')} — goods can only be received against an approved or authorized purchase order.`,
+      });
+    }
+
+    const requested = (Array.isArray(lines) ? lines : []).filter((l) => (parseFloat(l.quantity_received) || 0) !== 0);
+    if (requested.length === 0) {
+      return res.status(400).json({ error: 'Enter the quantity received for at least one item.' });
+    }
+
+    t = await sequelize.transaction();
+
+    // Lock the PO's lines so two receipts against the same PO are checked one after the other.
+    const [poLines] = await sequelize.query(
+      `SELECT id, item_name, description, quantity, COALESCE(quantity_received, 0) AS quantity_received
+         FROM purchase_order_items WHERE purchase_order_id = :po_id ORDER BY id FOR UPDATE`,
+      { replacements: { po_id }, transaction: t }
+    );
+    // Quantities on other receipts for this PO that are not accepted yet (and not yet applied).
+    const [pendingRows] = await sequelize.query(
+      `SELECT gli.po_line_item_id, COALESCE(SUM(gli.quantity_received), 0) AS qty
+         FROM grn_line_items gli
+         JOIN goods_receipt_notes g ON g.id = gli.grn_id
+        WHERE g.po_id::text = :po_id AND g.status IN ('pending_inspection', 'inspected')
+          AND COALESCE(g.po_quantities_applied, FALSE) = FALSE
+        GROUP BY gli.po_line_item_id`,
+      { replacements: { po_id: String(po_id) }, transaction: t }
+    );
+    const pendingByLine = new Map(pendingRows.map((r) => [String(r.po_line_item_id), parseFloat(r.qty) || 0]));
+
+    const norm = (v) => String(v || '').trim().toLowerCase();
+    const thisRequestByLine = new Map();
+    for (const line of requested) {
+      const qty = parseFloat(line.quantity_received) || 0;
+      const label = line.item_description || line.item_name || 'this item';
+      if (qty < 0) { await t.rollback(); return res.status(400).json({ error: `Quantity received for ${label} cannot be negative.` }); }
+      let poLine = line.po_line_item_id ? poLines.find((pl) => String(pl.id) === String(line.po_line_item_id)) : null;
+      if (!poLine && !line.po_line_item_id) poLine = poLines.find((pl) => norm(pl.item_name) === norm(label) || norm(pl.description) === norm(label));
+      if (!poLine) {
+        await t.rollback();
+        return res.status(400).json({ error: `${label} is not on ${po[0].po_number}. Only items on the purchase order can be received.` });
+      }
+      line.po_line_item_id = poLine.id;
+      const key = String(poLine.id);
+      const soFar = (thisRequestByLine.get(key) || 0) + qty;
+      thisRequestByLine.set(key, soFar);
+      const ordered = parseFloat(poLine.quantity) || 0;
+      const accepted = parseFloat(poLine.quantity_received) || 0;
+      const pending = pendingByLine.get(key) || 0;
+      const remaining = ordered - accepted - pending;
+      if (soFar > remaining + 1e-9) {
+        await t.rollback();
+        const parts = [`${accepted} already received`];
+        if (pending > 0) parts.push(`${pending} on receipts awaiting acceptance`);
+        return res.status(400).json({
+          error: `Over-receipt: ${soFar} of ${poLine.item_name} would exceed the ${ordered} ordered on ${po[0].po_number} (${parts.join(', ')}). At most ${Math.max(0, remaining)} more can be received.`,
+          po_line_item_id: poLine.id, remaining: Math.max(0, remaining),
+        });
+      }
+    }
+
+    const { getNextGrnNumber } = require('../services/DocumentNumberService');
+    const grnNumber = await getNextGrnNumber(t);
 
     const grnId = uuidv4();
-    let totalItemsReceived = 0;
     const grnBranchId = po[0].branch_id ?? getCreateBranchId(req);
+    const totalItemsReceived = requested.reduce((sum, l) => sum + (parseFloat(l.quantity_received) || 0), 0);
 
     await sequelize.query(`
       INSERT INTO goods_receipt_notes (id, clinic_id, grn_number, po_id, supplier_id, receipt_date,
-        received_by, received_location, received_condition, total_items_received, notes, invoice_number, status, created_at, updated_at, branch_id)
+        received_by, received_location, received_condition, total_items_received, notes, invoice_number, status,
+        po_quantities_applied, created_at, updated_at, branch_id)
       VALUES (:id, :clinic_id, :grn_number, :po_id, :supplier_id, CURRENT_DATE, :received_by,
-        :received_location, :received_condition, 0, :notes, :invoice_number, 'pending_inspection', NOW(), NOW(), :branch_id)
+        :received_location, :received_condition, :total_items, :notes, :invoice_number, 'pending_inspection',
+        FALSE, NOW(), NOW(), :branch_id)
     `, {
       replacements: {
         id: grnId, clinic_id: clinic_id || po[0].clinic_id || 1,
         grn_number: grnNumber, po_id, supplier_id: po[0].supplier_id,
         received_by, received_location: received_location || null,
         received_condition: received_condition || 'good', notes: notes || null,
-        invoice_number: invoice_number || null, branch_id: grnBranchId
-      }
+        invoice_number: invoice_number || null, branch_id: grnBranchId, total_items: totalItemsReceived,
+      },
+      transaction: t,
     });
 
-    // Insert line items
-    if (lines && lines.length > 0) {
-      for (const line of lines) {
-        const lineId = uuidv4();
-        totalItemsReceived += (line.quantity_received || 0);
-
-        await sequelize.query(`
-          INSERT INTO grn_line_items (id, grn_id, po_line_item_id, item_code, item_description,
-            quantity_expected, quantity_received, unit_of_measure, item_condition,
-            batch_number, expiry_date, serial_number, inspection_status, inspection_notes, created_at, branch_id)
-          VALUES (:id, :grn_id, :po_line_item_id, :item_code, :item_description,
-            :quantity_expected, :quantity_received, :unit_of_measure, :item_condition,
-            :batch_number, :expiry_date, :serial_number, 'pass', :inspection_notes, NOW(), :branch_id)
-        `, {
-          replacements: {
-            id: lineId, grn_id: grnId,
-            po_line_item_id: line.po_line_item_id || null,
-            item_code: line.item_code || null,
-            item_description: line.item_description || line.item_name || '',
-            quantity_expected: line.quantity_expected || line.quantity_ordered || 0,
-            quantity_received: line.quantity_received || 0,
-            unit_of_measure: line.unit_of_measure || 'Each',
-            item_condition: line.item_condition || 'good',
-            batch_number: line.batch_number || null,
-            expiry_date: line.expiry_date || null,
-            serial_number: line.serial_number || null,
-            inspection_notes: line.inspection_notes || null,
-            branch_id: grnBranchId
-          }
-        });
-
-        // Update PO line item received quantity
-        if (line.po_line_item_id) {
-          await sequelize.query(`
-            UPDATE purchase_order_items SET
-              quantity_received = COALESCE(quantity_received, 0) + :qty,
-              status = CASE WHEN COALESCE(quantity_received, 0) + :qty >= quantity THEN 'complete' ELSE 'partial' END,
-              updated_at = NOW()
-            WHERE id = :line_id
-          `, { replacements: { qty: line.quantity_received || 0, line_id: line.po_line_item_id } });
-        }
-      }
-
-      // Update total items received
-      await sequelize.query(
-        'UPDATE goods_receipt_notes SET total_items_received = :total WHERE id = :id',
-        { replacements: { total: totalItemsReceived, id: grnId } }
-      );
+    // PO received quantities and status are NOT touched here — they move when the
+    // receipt is accepted (see /accept), so an inspected-and-rejected delivery never
+    // counts as received.
+    for (const line of requested) {
+      await sequelize.query(`
+        INSERT INTO grn_line_items (id, grn_id, po_line_item_id, item_code, item_description,
+          quantity_expected, quantity_received, unit_of_measure, item_condition,
+          batch_number, expiry_date, serial_number, inspection_status, inspection_notes, created_at, branch_id)
+        VALUES (:id, :grn_id, :po_line_item_id, :item_code, :item_description,
+          :quantity_expected, :quantity_received, :unit_of_measure, :item_condition,
+          :batch_number, :expiry_date, :serial_number, 'pass', :inspection_notes, NOW(), :branch_id)
+      `, {
+        replacements: {
+          id: uuidv4(), grn_id: grnId,
+          po_line_item_id: line.po_line_item_id,
+          item_code: line.item_code || null,
+          item_description: line.item_description || line.item_name || '',
+          quantity_expected: line.quantity_expected || line.quantity_ordered || 0,
+          quantity_received: line.quantity_received || 0,
+          unit_of_measure: line.unit_of_measure || 'Each',
+          item_condition: line.item_condition || 'good',
+          batch_number: line.batch_number || null,
+          expiry_date: line.expiry_date || null,
+          serial_number: line.serial_number || null,
+          inspection_notes: line.inspection_notes || null,
+          branch_id: grnBranchId,
+        },
+        transaction: t,
+      });
     }
 
-    // Update PO status to partial_received or received
-    const [poItems] = await sequelize.query(
-      'SELECT SUM(quantity) as total_ordered, SUM(COALESCE(quantity_received, 0)) as total_received FROM purchase_order_items WHERE purchase_order_id = :po_id',
-      { replacements: { po_id } }
-    );
-    if (poItems[0]) {
-      const allReceived = poItems[0].total_received >= poItems[0].total_ordered;
-      const newStatus = allReceived ? 'received' : po[0].status;
-      if (newStatus !== po[0].status) {
-        await sequelize.query('UPDATE purchase_orders SET status = :status, updated_at = NOW() WHERE id = :po_id',
-          { replacements: { status: newStatus, po_id } });
-      }
-    }
-
+    await t.commit();
     const [newGRN] = await sequelize.query('SELECT * FROM goods_receipt_notes WHERE id = :id', { replacements: { id: grnId } });
     res.status(201).json(newGRN[0]);
   } catch (error) {
+    if (t && !t.finished) await t.rollback().catch(() => {});
     console.error('Error creating GRN:', error);
-    res.status(500).json({ error: 'Failed to create goods receipt note' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to create goods receipt note' });
   }
 });
 
@@ -1827,6 +1862,20 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
       { replacements: { id: req.params.id }, transaction: t }
     );
 
+    // PO received quantities move here, on acceptance. GRNs created before this
+    // change already applied theirs at creation (po_quantities_applied = TRUE).
+    const applyPoQuantities = grn.po_quantities_applied !== true;
+    const [acceptPoRows] = await sequelize.query(
+      'SELECT po_number FROM purchase_orders WHERE id = :id', { replacements: { id: grn.po_id }, transaction: t }
+    );
+    const acceptPoNumber = acceptPoRows[0]?.po_number || 'the purchase order';
+    const [acceptPoLines] = applyPoQuantities ? await sequelize.query(
+      `SELECT id, item_name, quantity, COALESCE(quantity_received, 0) AS quantity_received
+         FROM purchase_order_items WHERE purchase_order_id = :po_id FOR UPDATE`,
+      { replacements: { po_id: grn.po_id }, transaction: t }
+    ) : [[]];
+    const acceptPoLineById = new Map(acceptPoLines.map((pl) => [String(pl.id), pl]));
+
     // Batches/inventory transactions record cost in the PO's own currency (POs in this
     // system are frequently USD) — previously hardcoded to 'SSP' below regardless of the
     // actual PO currency, which silently mislabeled every foreign-currency receipt's cost
@@ -1862,6 +1911,28 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
 
     for (const line of lines) {
       if (!line.quantity_received || line.quantity_received <= 0) continue;
+
+      if (applyPoQuantities && line.po_line_item_id) {
+        const poLine = acceptPoLineById.get(String(line.po_line_item_id));
+        if (poLine) {
+          const ordered = parseFloat(poLine.quantity) || 0;
+          const already = parseFloat(poLine.quantity_received) || 0;
+          const qty = parseFloat(line.quantity_received) || 0;
+          if (already + qty > ordered + 1e-9) {
+            throw Object.assign(new Error(
+              `Over-receipt: accepting ${qty} of ${poLine.item_name} would exceed the ${ordered} ordered on ${acceptPoNumber} (${already} already received). Reject this receipt or correct the quantity.`
+            ), { statusCode: 400 });
+          }
+          poLine.quantity_received = already + qty;
+          await sequelize.query(`
+            UPDATE purchase_order_items SET
+              quantity_received = :received,
+              status = CASE WHEN :received >= quantity THEN 'complete' ELSE 'partial' END,
+              updated_at = NOW()
+            WHERE id = :line_id
+          `, { replacements: { received: poLine.quantity_received, line_id: poLine.id }, transaction: t });
+        }
+      }
 
       // 1. Try to find matching inventory item by inventory_item_id or item_code
       let inventoryItemId = line.inventory_item_id || null;
@@ -2092,88 +2163,73 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
       batchesCreated++;
     }
 
-    await t.commit();
-
-    // Post to the general ledger: Debit inventory (Medical Supplies / Pharmaceutical), Credit Accounts
-    // Payable - Suppliers for the total received value. This mirrors the standard point in the procurement
-    // workflow where a liability to the supplier is recognized. Never let a GL failure block GRN acceptance —
-    // same non-blocking pattern as BillingIntegrationService.handleBillCreation. Deliberately outside the
-    // transaction above: the inventory/batch/stock effects must stay committed even if this fails.
-    try {
-      const totalValue = Object.values(glValueByAccountCode).reduce((s, v) => s + v, 0);
-      if (totalValue > 0) {
-        const apAccount = await AccountingService.getAccountByCode(grn.clinic_id, '2100');
-        const debitLineItems = [];
-        for (const [key, amount] of Object.entries(glValueByAccountCode)) {
-          let acct = null;
-          if (key.startsWith('id:')) {
-            acct = await ChartOfAccounts.findByPk(key.slice(3));
-          } else {
-            acct = await AccountingService.getAccountByCode(grn.clinic_id, key.slice(5));
-          }
-          if (!acct) continue;
-          debitLineItems.push({
-            account_id: acct.id,
-            debit_amount: amount,
-            credit_amount: 0,
-            description: `Inventory received - GRN ${grn.grn_number}`
-          });
-        }
-
-        if (apAccount && debitLineItems.length > 0) {
-          const balancedDebitTotal = debitLineItems.reduce((s, li) => s + li.debit_amount, 0);
-          const lineItems = [
-            ...debitLineItems,
-            {
-              account_id: apAccount.id,
-              debit_amount: 0,
-              credit_amount: balancedDebitTotal,
-              description: `Accounts payable - GRN ${grn.grn_number}`
-            }
-          ];
-
-          // debitLineItems/balancedDebitTotal are in the PO's own currency (unitCost comes
-          // straight from purchase_order_items.unit_price, unconverted) — mostly USD in this
-          // system. Telling createGLEntry the real transaction_currency lets its existing,
-          // already-correct multi-currency machinery convert to the SSP base at today's rate
-          // instead of the amount being posted to the ledger as if it were already SSP (was
-          // silently understating USD GRNs by ~6000x — the live PO-2026-0001 entry is a real
-          // example of this, left uncorrected pending explicit sign-off, see chat).
-          const [poRows] = await sequelize.query('SELECT po_currency FROM purchase_orders WHERE id = :id', { replacements: { id: grn.po_id } });
-          const poCurrency = poRows[0]?.po_currency || (await getBaseCurrencyCode());
-
-          const glData = {
-            clinic_id: grn.clinic_id,
-            transaction_date: grn.receipt_date || new Date(),
-            transaction_type: 'goods_receipt',
-            description: `Goods Receipt Note ${grn.grn_number} accepted`,
-            reference_id: grn.id,
-            reference_module: 'procurement_grn',
-            transaction_currency: poCurrency,
-          };
-
-          const glEntry = await AccountingService.createGLEntry(glData, lineItems, grn.received_by);
-          await AccountingService.postGLEntry(glEntry.id, grn.received_by);
-          console.log(`GL entry ${glEntry.gl_number} created and posted for GRN ${grn.grn_number} (${poCurrency} ${balancedDebitTotal} -> SSP ${glEntry.base_total_credit})`);
-
-          // Remember the SSP-equivalent liability actually booked for this PO (accumulated
-          // across however many GRNs it takes to fully receive it) so settlement can compare
-          // it against the SSP-equivalent of what's actually paid and post any FX difference —
-          // see POST /supplier-bill-payment in daily-expenses.js.
-          if (grn.po_id) {
-            await sequelize.query(
-              'UPDATE purchase_orders SET ap_base_currency_amount = COALESCE(ap_base_currency_amount, 0) + :amt WHERE id = :id',
-              { replacements: { amt: glEntry.base_total_credit, id: grn.po_id } }
-            );
-          }
-        } else if (!apAccount) {
-          console.warn(`GL posting skipped for GRN ${grn.grn_number}: Accounts Payable account (2100) not found for clinic ${grn.clinic_id}`);
-        }
+    if (applyPoQuantities) {
+      await sequelize.query(
+        'UPDATE goods_receipt_notes SET po_quantities_applied = TRUE WHERE id = :id',
+        { replacements: { id: grn.id }, transaction: t }
+      );
+      const [[poTotals]] = await sequelize.query(
+        `SELECT COALESCE(SUM(quantity), 0) AS ordered, COALESCE(SUM(COALESCE(quantity_received, 0)), 0) AS received
+           FROM purchase_order_items WHERE purchase_order_id = :po_id`,
+        { replacements: { po_id: grn.po_id }, transaction: t }
+      );
+      if (parseFloat(poTotals.ordered) > 0 && parseFloat(poTotals.received) >= parseFloat(poTotals.ordered)) {
+        await sequelize.query(
+          "UPDATE purchase_orders SET status = 'received', updated_at = NOW() WHERE id = :po_id AND status <> 'received'",
+          { replacements: { po_id: grn.po_id }, transaction: t }
+        );
       }
-    } catch (glError) {
-      console.error('Error posting GL entry for GRN acceptance:', glError);
-      // Don't throw — GL posting failure must never block GRN acceptance
     }
+
+    // Dr inventory (per item/category account) / Cr 2100 Accounts Payable, posted in the
+    // SAME transaction as the stock: if the posting fails, nothing is received and the
+    // user gets the reason — stock and the supplier liability can no longer drift apart.
+    const totalValue = Object.values(glValueByAccountCode).reduce((sum, v) => sum + v, 0);
+    if (totalValue > 0) {
+      const ledgerError = (msg) => Object.assign(new Error(
+        `${grn.grn_number} was not accepted: ${msg} Nothing was received into stock — fix this and accept again.`
+      ), { statusCode: 422 });
+      const apAccount = await AccountingService.getAccountByCode(grn.clinic_id, '2100');
+      if (!apAccount) throw ledgerError('the Accounts Payable - Suppliers account (2100) is missing or inactive in the Chart of Accounts.');
+      const debitLineItems = [];
+      for (const [key, amount] of Object.entries(glValueByAccountCode)) {
+        const acct = await ChartOfAccounts.findByPk(key.slice(3), { transaction: t });
+        if (!acct) throw ledgerError(`the inventory account for one of the items (${key.slice(3)}) could not be found.`);
+        debitLineItems.push({ account_id: acct.id, debit_amount: amount, credit_amount: 0, description: `Inventory received - GRN ${grn.grn_number}` });
+      }
+      const balancedDebitTotal = debitLineItems.reduce((sum, li) => sum + li.debit_amount, 0);
+      const lineItems = [
+        ...debitLineItems,
+        { account_id: apAccount.id, debit_amount: 0, credit_amount: balancedDebitTotal, description: `Accounts payable - GRN ${grn.grn_number}` },
+      ];
+      // Amounts are in the PO's own currency; createGLEntry converts to the base currency.
+      const glData = {
+        clinic_id: grn.clinic_id,
+        branch_id: grn.branch_id || null,
+        transaction_date: grn.receipt_date || new Date(),
+        transaction_type: 'goods_receipt',
+        description: `Goods Receipt Note ${grn.grn_number} accepted`,
+        reference_id: grn.id,
+        reference_module: 'procurement_grn',
+        transaction_currency: grnCostCurrency,
+      };
+      let glEntry;
+      try {
+        glEntry = await AccountingService.createGLEntry(glData, lineItems, grn.received_by || req.user?.id || 'system', t);
+      } catch (glErr) {
+        if (glErr.statusCode) throw glErr;
+        throw ledgerError(`posting to the ledger failed (${glErr.message}).`);
+      }
+      // SSP-equivalent liability booked for this PO, used at payment time for the FX difference.
+      if (grn.po_id) {
+        await sequelize.query(
+          'UPDATE purchase_orders SET ap_base_currency_amount = COALESCE(ap_base_currency_amount, 0) + :amt WHERE id = :id',
+          { replacements: { amt: glEntry.base_total_credit, id: grn.po_id }, transaction: t }
+        );
+      }
+    }
+
+    await t.commit();
 
     res.json({ message: 'GRN accepted', batches_created: batchesCreated, location_id: locationId });
   } catch (error) {
