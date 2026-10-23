@@ -96,7 +96,9 @@ export default function SalaryAdvancesManagement() {
     const found = advances.find((a) => a.id === deepLinkedId);
     if (found && ['approved', 'disbursed', 'repaying'].includes(found.status)) {
       autoOpenedRef.current = true;
-      openAction(found, found.status === 'approved' ? 'disburse' : 'repay');
+      // Disbursing (paying out) happens in Accounting › Payments; repayments are recorded here.
+      if (found.status === 'approved') navigate('/accounting/payments/staff');
+      else openAction(found, 'repay');
     }
   }, [deepLinkedId, loading, advances]);
 
@@ -222,7 +224,7 @@ export default function SalaryAdvancesManagement() {
                       )}
                       {a.status === 'approved' && (
                         <>
-                          <Button size="sm" className="h-7 text-xs" onClick={() => openAction(a, 'disburse')}>Disburse</Button>
+                          <Button size="sm" className="h-7 text-xs" onClick={() => navigate('/accounting/payments/staff')} title="Advances are disbursed in Accounting › Payments › Staff Payments">Disburse in Accounting</Button>
                           <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleCancel(a)}>Cancel</Button>
                         </>
                       )}
