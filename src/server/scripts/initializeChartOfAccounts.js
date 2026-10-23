@@ -40,6 +40,7 @@ const ESSENTIAL_ACCOUNT_CODES = new Set([
   '5700', // Bad Debt Expense
   '5800', // Travel and Transport — the Transport category posts here
   '5900', // Miscellaneous Expenses
+  '9999', // Suspense - Unclassified — AccountResolver.js's last-resort posting target
 ]);
 
 const healthcareChartOfAccounts = [
@@ -542,6 +543,20 @@ const healthcareChartOfAccounts = [
     sub_account_type: 'operating_expense',
     balance_type: 'debit',
     description: 'Other miscellaneous expenses'
+  },
+  // Central Categories feature (AccountResolver.js): posted to when nothing —
+  // not an item/service/expense's own override, not its category, not a
+  // clinic default — resolves an account at all. An expense type (not a
+  // suspense/equity type) so an unclassified cost still shows as a real cost
+  // on the income statement instead of vanishing into a balance-sheet-only
+  // bucket; debit balance side, same shape as every other expense account.
+  {
+    account_code: '9999',
+    account_name: 'Suspense - Unclassified',
+    account_type: 'expense',
+    sub_account_type: 'operating_expense',
+    balance_type: 'debit',
+    description: 'Accounting Exceptions — posted to only when AccountResolver could not find any real account, so the entry stays balanced and visible instead of being silently skipped'
   }
 ];
 

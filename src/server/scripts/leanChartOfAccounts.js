@@ -82,6 +82,7 @@ const ESSENTIAL = {
   '5700': 'Bad Debt Expense — write-offs',
   '5800': 'Travel and Transport — the Transport expense category posts here',
   '5900': 'Miscellaneous Expenses — catch-all for daily expenses',
+  '9999': 'Suspense - Unclassified — AccountResolver.js posts here when no account can be resolved at all',
 };
 
 const args = process.argv.slice(2);

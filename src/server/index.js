@@ -908,6 +908,16 @@ async function runBackgroundMigrations() {
     ['Departments',       () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/migrateDepartments'), 'Departments'
     )],
+    // Central Categories module — must run after Departments (categories.
+    // department_id) and after the accounting tables (its account FK
+    // columns reference chart_of_accounts, already created earlier in this
+    // same list). See docs/accounting-map/REPORT.md for why this exists.
+    ['Categories',        () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./config/ensureCategoriesTable').ensureCategoriesTable, 'Categories'
+    )],
+    ['SuspenseAccount',   () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./scripts/ensureSuspenseAccount').ensureSuspenseAccount, 'Suspense Account'
+    )],
     // Was default-connection-only (so tenant_template only) — these never
     // reached any already-provisioned real tenant. Same self-heal pattern as
     // FixedAssets/Theatre above.
