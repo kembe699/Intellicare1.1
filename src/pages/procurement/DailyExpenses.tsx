@@ -1136,15 +1136,15 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                         <div className="grid grid-cols-3 gap-3">
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Billed</p>
-                            <p className="font-mono font-bold text-xl leading-tight">{docTemplate.formatCurrency(c.total_billed, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight">{formatMoney(c.total_billed, c.currency)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Total Paid</p>
-                            <p className="font-mono font-bold text-xl leading-tight text-success">{docTemplate.formatCurrency(c.total_paid, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-success">{formatMoney(c.total_paid, c.currency)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-0.5">Outstanding</p>
-                            <p className="font-mono font-bold text-xl leading-tight text-warning">{docTemplate.formatCurrency(c.total_outstanding, c.currency)}</p>
+                            <p className="font-mono font-bold text-xl leading-tight text-warning">{formatMoney(c.total_outstanding, c.currency)}</p>
                           </div>
                         </div>
                       </div>
@@ -1659,11 +1659,11 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                         </div>
                       </div>
 
-                      <div className="flex gap-2 pt-1">
-                        <Button size="sm" type="submit" className="h-8 px-4 text-xs" disabled={submittingApproval}>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button type="button" variant="outline" onClick={() => setShowApproveModal(false)}>Cancel</Button>
+                        <Button type="submit" disabled={submittingApproval}>
                           {submittingApproval ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Approving...</> : <><ShieldCheck className="w-3 h-3 mr-2" />Approve ({nextLevel}/3)</>}
                         </Button>
-                        <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => setShowApproveModal(false)}>Cancel</Button>
                       </div>
                     </>
                   ) : (
