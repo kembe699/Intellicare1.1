@@ -37,11 +37,11 @@ function getMonthStart() {
 }
 function getToday() { return new Date().toISOString().split('T')[0]; }
 
-const BillingManagement: React.FC = () => {
+const BillingManagement: React.FC<{ initialTab?: TabType }> = ({ initialTab = 'receivables' }) => {
   const { user } = useAuth();
   const { currency } = useCurrency();
   const clinicId = user?.clinic || '1';
-  const [activeTab, setActiveTab] = useState<TabType>('receivables');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [loading, setLoading] = useState(false);
 
   // Receivables

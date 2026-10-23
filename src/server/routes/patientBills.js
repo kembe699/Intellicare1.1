@@ -501,7 +501,7 @@ router.get('/clinic/:clinicId', authorize('bills.read'), async (req, res) => {
       SELECT pb.id, pb.bill_number, pb.patient_name, pb.clinic_id, pb.branch_id,
         pb.total_amount, pb.paid_amount, pb.balance_amount, pb.status, pb.bill_date,
         pb.due_date, pb.services, pb.invoice_id, pb.billing_type, pb.scheme_id,
-        pb.scheme_name, pb.created_at, pb.updated_at,
+        pb.scheme_name, pb.bill_currency, pb.created_at, pb.updated_at,
         COALESCE(p.patient_id, CAST(pb.patient_id AS CHAR)) as patient_id
       FROM patient_bills pb
       LEFT JOIN patients p ON pb.patient_id = p.id

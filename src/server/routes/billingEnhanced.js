@@ -746,7 +746,7 @@ router.get('/credit-notes', async (req, res) => {
     const [notes] = await sequelize.query(`
       SELECT cn.*, pb.bill_number AS original_bill_number
       FROM credit_notes cn
-      LEFT JOIN patient_bills pb ON cn.original_bill_id = pb.id
+      LEFT JOIN patient_bills pb ON pb.id::text = cn.original_bill_id::text
       ${where}
       ORDER BY cn.created_at DESC
     `, { replacements });
@@ -765,7 +765,7 @@ router.get('/credit-notes/:id', async (req, res) => {
     const [notes] = await sequelize.query(`
       SELECT cn.*, pb.bill_number AS original_bill_number
       FROM credit_notes cn
-      LEFT JOIN patient_bills pb ON cn.original_bill_id = pb.id
+      LEFT JOIN patient_bills pb ON pb.id::text = cn.original_bill_id::text
       WHERE cn.id = :id ${singleBranchScope}
     `, { replacements: singleReplacements });
     if (notes.length === 0) return res.status(404).json({ error: 'Credit note not found' });

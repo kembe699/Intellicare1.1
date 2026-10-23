@@ -133,7 +133,7 @@ const procurementDropdown: NavDropdown = {
     { label: 'Requisitions', href: '/procurement/requisitions', icon: ClipboardList, privilege: 'pages.procurement_requisitions.view' },
     { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ShoppingCart, privilege: 'procurement.purchase_orders.write' },
     { label: 'Goods Receipt', href: '/procurement/goods-receipt', icon: Truck, privilege: ['procurement.write', 'pharmacy.write'] },
-    { label: 'Expenses', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write', matchPrefix: '/procurement/daily-expenses' },
+    { label: 'Expense Requests', href: '/procurement/daily-expenses', icon: DollarSign, privilege: 'expenses.write', matchPrefix: '/procurement/daily-expenses' },
     { label: 'Stock Transfers', href: '/procurement/stock-transfers', icon: ArrowRightLeft, privilege: 'stock_transfers.use' },
     { label: 'Reports', href: '/procurement/reports', icon: BarChart3, privilege: 'procurement.read' },
   ]
@@ -166,21 +166,32 @@ const patientsBillDropdown: NavDropdown = {
   ]
 };
 
+// Every payment action lives here, grouped. Preparing/requesting stays in the
+// owning module (Procurement raises expenses, HR prepares payroll and advances,
+// Theatre computes team fees) — paying them happens under Accounting › Payments.
 const accountingDropdown: NavDropdown = {
   label: 'Accounting',
   icon: Calculator,
   items: [
-    { label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileSpreadsheet, privilege: 'accounting.write' },
-    { label: 'General Ledger', href: '/accounting/general-ledger', icon: BookOpen, privilege: 'accounting.read' },
-    { label: 'Journal Entries', href: '/accounting/journal-entries', icon: ClipboardList, privilege: 'accounting.write' },
-    { label: 'Financial Reports', href: '/accounting/reports', icon: BarChart3, privilege: 'accounting.read' },
-    { label: 'Receivables', href: '/accounting/receivables', icon: PiggyBank, privilege: 'accounting.read' },
-    { label: 'Fixed Assets', href: '/accounting/fixed-assets/register', icon: Building2, privilege: 'assets.view', matchPrefix: '/accounting/fixed-assets' },
-    { label: 'Exchange Rates', href: '/accounting/exchange-rates', icon: ArrowRightLeft, privilege: 'accounting.rates.write' },
-    { label: 'Cash Transfer', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },
-    { label: 'Billing Management', href: '/billing-management', icon: FileSpreadsheet, privilege: 'billing.write', matchPrefix: '/billing-management' },
-    { label: 'Schemes & Pricing', href: '/scheme-management', icon: Tag, privilege: 'schemes.write' },
-    { label: 'Cashier Shift', href: '/cashier/shift', icon: Clock, privilege: 'cashier.write' },
+    { group: 'General', label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileSpreadsheet, privilege: 'accounting.write' },
+    { group: 'General', label: 'General Ledger', href: '/accounting/general-ledger', icon: BookOpen, privilege: 'accounting.read' },
+    { group: 'General', label: 'Journal Entries', href: '/accounting/journal-entries', icon: ClipboardList, privilege: 'accounting.write' },
+    { group: 'General', label: 'Financial Reports', href: '/accounting/reports', icon: BarChart3, privilege: 'accounting.read' },
+    { group: 'General', label: 'Fixed Assets', href: '/accounting/fixed-assets/register', icon: Building2, privilege: 'assets.view', matchPrefix: '/accounting/fixed-assets' },
+    { group: 'General', label: 'Exchange Rates', href: '/accounting/exchange-rates', icon: ArrowRightLeft, privilege: 'accounting.rates.write' },
+    { group: 'General', label: 'Schemes & Pricing', href: '/scheme-management', icon: Tag, privilege: 'schemes.write' },
+    { group: 'General', label: 'Cashier Shift', href: '/cashier/shift', icon: Clock, privilege: 'cashier.write' },
+    { group: 'Receivables', label: 'A/R & Aging', href: '/accounting/receivables', icon: PiggyBank, privilege: 'accounting.read' },
+    { group: 'Receivables', label: 'Insurance Claims', href: '/accounting/receivables/claims', icon: Shield, privilege: 'billing.write', matchPrefix: '/billing-management/claims' },
+    { group: 'Receivables', label: 'Discounts & Write-offs', href: '/accounting/receivables/adjustments', icon: BadgePercent, privilege: 'billing.write' },
+    { group: 'Receivables', label: 'Credit Notes', href: '/accounting/receivables/credit-notes', icon: FileMinus, privilege: 'billing.write' },
+    { group: 'Payables', label: 'A/P & Aging', href: '/accounting/payables', icon: Scale, privilege: 'pages.reports.view' },
+    { group: 'Payables', label: 'Supplier Bills', href: '/accounting/payables/supplier-bills', icon: Building2, privilege: 'expenses.write' },
+    { group: 'Payments', label: 'Expenses', href: '/accounting/payments/expenses', icon: DollarSign, privilege: 'expenses.write', matchPrefix: '/accounting/payments/expenses' },
+    { group: 'Payments', label: 'Supplier Payments', href: '/accounting/payments/suppliers', icon: Truck, privilege: 'expenses.write' },
+    { group: 'Payments', label: 'Consultant Payments', href: '/accounting/payments/consultants', icon: Stethoscope, privilege: 'expenses.write' },
+    { group: 'Payments', label: 'Refunds', href: '/accounting/payments/refunds', icon: RotateCcw, privilege: ['receipts.write', 'accounting.read'] },
+    { group: 'Payments', label: 'Cash Transfers', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },
   ]
 };
 
@@ -807,7 +818,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     </div>
                   )}
 
-                  {/* 7. Accounting */}
+                  {/* 7. Accounting — General / Receivables / Payables / Payments */}
                   {showAccounting && renderGroupedDropdown(accountingDropdown, accountingOpen, setAccountingOpen,
                     ['/accounting', '/billing-management', '/scheme-management', '/accounts', '/cashier'].some((p) => location.pathname.startsWith(p)))}
 

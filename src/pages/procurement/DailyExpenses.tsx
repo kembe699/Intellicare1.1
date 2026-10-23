@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { expenseVoucherStatus } from '@/lib/expenseStatus';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from '@/lib/notify';
@@ -48,7 +48,16 @@ const PO_APPROVAL_LEVELS = ['Checked By', 'Reviewed By', 'Approved By'];
 const EXPENSE_CATEGORIES = ['Doctor Fees','Allowance','Office Supplies','Administrative Expenses','Utilities','Maintenance','Transport','Catering','Medical Supplies','Cleaning','Security','Other'];
 const PAYMENT_METHODS = ['Cash','Bank Transfer','Cheque','Mobile Money'];
 
-const DailyExpenses: React.FC = () => {
+interface DailyExpensesProps {
+  /** requests: Procurement › Expense Requests (raise/approve, no paying).
+   *  payments: Accounting (pay only — one list per menu entry). */
+  mode?: 'requests' | 'payments';
+  initialTab?: 'expenses' | 'bills' | 'consultant-bills';
+  /** bills list: everything (approve + pay) or only fully approved, unpaid bills */
+  billsView?: 'all' | 'ready';
+}
+
+const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initialTab = 'expenses', billsView = 'all' }) => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const { fmt, currency } = useCurrency();
   const { user } = useAuth();
@@ -63,7 +72,8 @@ const DailyExpenses: React.FC = () => {
   // expenses were saved against clinic 1 too.
   const clinicId = user?.clinic || 1;
 
-  const [tab, setTab] = useState('expenses');
+  const [tab, setTab] = useState<string>(mode === 'requests' ? 'expenses' : initialTab);
+  const [expView, setExpView] = useState<'awaiting' | 'all'>(mode === 'payments' ? 'awaiting' : 'all');
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [bills, setBills] = useState<SupplierBill[]>([]);
   const [coaAccounts, setCoaAccounts] = useState<CoAAccount[]>([]);
@@ -195,6 +205,20 @@ const DailyExpenses: React.FC = () => {
       fetchExpenses();
     } catch (e: any) {
       toast.error(e.message || 'Failed to save changes');
+    } finally { setBusyExpId(null); }
+  };
+
+  const payExpense = async (exp: DailyExpense) => {
+    if (!(await confirm({ title: 'Pay this expense?', description: `Pay "${exp.description}" — ${fmt(parseFloat(String(exp.amount || 0)))} from ${exp.account_name || 'the selected account'}. This posts to the ledger.` }))) return;
+    setBusyExpId(exp.id);
+    try {
+      const r = await authFetch(`/api/daily-expenses/${exp.id}/pay`, { method: 'POST' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Failed to pay expense');
+      toast.success(`Paid — ${exp.description}`);
+      fetchExpenses();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to pay expense');
     } finally { setBusyExpId(null); }
   };
 
@@ -561,14 +585,22 @@ const DailyExpenses: React.FC = () => {
     toast.error('Could not load the chart of accounts — expenses cannot be recorded until this is resolved.');
   };
 
-  const filteredExpenses = useMemo(() => expenses.filter(e => !searchExp || e.description?.toLowerCase().includes(searchExp.toLowerCase()) || e.category?.toLowerCase().includes(searchExp.toLowerCase())), [expenses, searchExp]);
+  const filteredExpenses = useMemo(() => expenses.filter(e => {
+    if (expView === 'awaiting' && e.status !== 'approved') return false;
+    return !searchExp || e.description?.toLowerCase().includes(searchExp.toLowerCase()) || e.category?.toLowerCase().includes(searchExp.toLowerCase());
+  }), [expenses, searchExp, expView]);
   const filteredBills = useMemo(() => bills.filter(b => {
+    if (billsView === 'ready') {
+      const fullyApproved = (billApprovals[b.id] || []).length >= 3;
+      const owed = b.payment_status !== 'paid' && parseFloat(String(b.balance_due ?? 0)) > 0.01;
+      if (!fullyApproved || !owed) return false;
+    }
     if (searchBills && !b.po_number?.toLowerCase().includes(searchBills.toLowerCase()) && !b.supplier_name?.toLowerCase().includes(searchBills.toLowerCase())) return false;
     if (supplierFilter !== 'all' && b.supplier_name !== supplierFilter) return false;
     if (billFrom && b.order_date < billFrom) return false;
     if (billTo && b.order_date > billTo) return false;
     return true;
-  }), [bills, searchBills, supplierFilter, billFrom, billTo]);
+  }), [bills, searchBills, supplierFilter, billFrom, billTo, billsView, billApprovals]);
 
   const supplierOptions = useMemo(() => {
     const names = Array.from(new Set(bills.map(b => b.supplier_name).filter(Boolean))).sort();
@@ -872,28 +904,22 @@ const DailyExpenses: React.FC = () => {
       <div className="space-y-6 w-full">
         <PageHeader
           icon={<DollarSign />}
-          title="Payments & Expenses"
+          title={mode === 'requests' ? 'Expense Requests'
+            : tab === 'bills' ? (billsView === 'ready' ? 'Supplier Payments' : 'Supplier Bills')
+            : tab === 'consultant-bills' ? 'Consultant Payments' : 'Expense Payments'}
+          subtitle={mode === 'requests' ? 'Raise and approve expenses — approved expenses are paid in Accounting › Payments'
+            : tab === 'bills' ? (billsView === 'ready' ? 'Supplier bills with all 3 approvals, ready to pay' : 'Approve supplier bills (3 levels) and pay them')
+            : tab === 'consultant-bills' ? 'Pay consultant bills generated from their profiles' : 'Approved expenses waiting to be paid'}
           actions={
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => { fetchExpenses(); fetchBills(); fetchConsultantBills(); }}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button>
-              {tab === 'expenses' && <Button onClick={() => setShowExpModal(true)}><Plus className="w-4 h-4 mr-2" />Add Expense</Button>}
+              <Button variant="outline" onClick={() => { fetchExpenses(); fetchBills(); fetchConsultantBills(); }}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button>
+              {mode === 'requests' && tab === 'expenses' && <Button onClick={() => setShowExpModal(true)}><Plus className="w-4 h-4 mr-2" />Add Expense</Button>}
             </div>
           }
         />
 
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="expenses" className="gap-2"><Receipt className="w-4 h-4" />Expenses{pendingCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{pendingCount}</Badge>}</TabsTrigger>
-            <TabsTrigger value="bills" className="gap-2">
-              <Building2 className="w-4 h-4" />Supplier Bills
-              {unpaidBillsCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{unpaidBillsCount}</Badge>}
-            </TabsTrigger>
-            <TabsTrigger value="consultant-bills" className="gap-2">
-              <Stethoscope className="w-4 h-4" />Consultant Bills
-              {unpaidConsultantBillsCount > 0 && <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">{unpaidConsultantBillsCount}</Badge>}
-            </TabsTrigger>
-          </TabsList>
 
           {/* ── EXPENSES TAB ── */}
           <TabsContent value="expenses" className="mt-4">
@@ -915,6 +941,12 @@ const DailyExpenses: React.FC = () => {
                     onChange={e => setExpTo(e.target.value)} title="To date" />
                   <Button variant="outline" size="sm" className="h-8 text-xs"
                     onClick={() => { const t = todayStr(); setExpFrom(t); setExpTo(t); }}>Today</Button>
+                  {mode === 'payments' && (
+                    <div className="flex rounded-md border overflow-hidden text-xs">
+                      <button className={`px-3 h-8 ${expView === 'awaiting' ? 'bg-primary text-primary-foreground' : 'bg-card'}`} onClick={() => setExpView('awaiting')}>Awaiting payment</button>
+                      <button className={`px-3 h-8 ${expView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card'}`} onClick={() => setExpView('all')}>All</button>
+                    </div>
+                  )}
                   <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportExpensesCSV}>
                     <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />CSV
                   </Button>
@@ -926,8 +958,8 @@ const DailyExpenses: React.FC = () => {
                   data={filteredExpenses}
                   keyExtractor={(exp) => exp.id}
                   loading={loadingExp}
-                  emptyMessage="No expenses found"
-                  onRowClick={(exp) => navigate(`/procurement/daily-expenses/${exp.id}`)}
+                  emptyMessage={mode === 'payments' && expView === 'awaiting' ? 'No approved expenses waiting to be paid' : 'No expenses found'}
+                  onRowClick={(exp) => navigate(mode === 'payments' ? `/accounting/payments/expenses/${exp.id}` : `/procurement/daily-expenses/${exp.id}`)}
                   rowClassName={(exp) => exp.status === 'pending_approval' ? 'bg-warning-bg/40' : ''}
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
@@ -982,6 +1014,11 @@ const DailyExpenses: React.FC = () => {
                                   <Ban className="w-3 h-3 mr-1" />Reject
                                 </Button>
                               </>
+                            )}
+                            {mode === 'payments' && exp.status === 'approved' && (
+                              <Button size="sm" disabled={busy} onClick={(e) => { e.stopPropagation(); payExpense(exp); }}>
+                                <DollarSign className="w-3.5 h-3.5 mr-1" />Pay
+                              </Button>
                             )}
                             {!isPending && exp.status !== 'rejected' && (
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); printExpVoucher(exp); }} title="Print Voucher"><Printer className="w-3.5 h-3.5" /></Button>

@@ -68,7 +68,7 @@ export function ReceiptApprovals() {
   };
 
   const columns = [
-    { key: 'receipt_number', header: 'Receipt', sortable: true, render: (v: string) => <span className="font-mono text-sm">{v}</span> },
+    { key: 'receipt_number', header: 'Receipt', sortable: true, render: (v: string) => <span className="font-mono text-sm whitespace-nowrap">{v}</span> },
     { key: 'updated_at', header: 'Requested', sortable: true, render: (v: string) => formatDateTime(v) },
     {
       key: 'patient_name', header: 'Patient', sortable: true,
@@ -81,7 +81,7 @@ export function ReceiptApprovals() {
     },
     {
       key: 'payment_amount', header: 'Amount', align: 'right' as const, sortable: true,
-      render: (v: string, r: PendingReceipt) => <span className="font-mono tabular-nums">{formatMoney(v, r.receipt_currency || undefined)}</span>,
+      render: (v: string, r: PendingReceipt) => <span className="font-mono tabular-nums whitespace-nowrap">{formatMoney(v, r.receipt_currency || undefined)}</span>,
     },
     { key: 'status', header: 'Request', render: (v: PendingReceipt['status']) => <StatusBadge status={v} map={REQUEST_MAP} label={REQUEST_LABEL[v]} /> },
     { key: 'cashier_name', header: 'Cashier', render: (v: string) => v || '—' },

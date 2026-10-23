@@ -37,7 +37,9 @@ interface UserProfile { id: string; displayName: string; email: string; role: st
 
 const APPROVAL_LEVELS = ['Approval 1', 'Authorization'];
 
-export default function ExpenseDetail() {
+/** payments: opened from Accounting › Payments (can pay); requests: from Procurement (view/approve only). */
+export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests' | 'payments' }) {
+  const listPath = mode === 'payments' ? '/accounting/payments/expenses' : '/procurement/daily-expenses';
   const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -198,7 +200,7 @@ export default function ExpenseDetail() {
 
         {/* ── Header ── */}
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => navigate('/procurement/daily-expenses')}>
+          <Button variant="outline" onClick={() => navigate(listPath)}>
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div className="flex-1">
@@ -388,12 +390,20 @@ export default function ExpenseDetail() {
                       Voucher: <span className="font-mono font-semibold">{expense.voucher_number}</span>
                     </p>
                   </div>
-                  <Button className="gap-2 mt-2 bg-success hover:bg-success" size="lg" onClick={handlePay} disabled={paying}>
-                    {paying
-                      ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing Payment...</>
-                      : <><CreditCard className="w-5 h-5" /> Pay Now</>}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">This will deduct {fmt(amount)} from <strong>{expense.account_name}</strong></p>
+                  {mode === 'payments' ? (
+                    <>
+                      <Button className="gap-2 mt-2 bg-success hover:bg-success" size="lg" onClick={handlePay} disabled={paying}>
+                        {paying
+                          ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing Payment...</>
+                          : <><CreditCard className="w-5 h-5" /> Pay Now</>}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">This will deduct {fmt(amount)} from <strong>{expense.account_name}</strong></p>
+                    </>
+                  ) : (
+                    <Button variant="outline" className="gap-2 mt-2" onClick={() => navigate(`/accounting/payments/expenses/${expense.id}`)}>
+                      <CreditCard className="w-4 h-4" /> Pay in Accounting
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : isPaid ? (

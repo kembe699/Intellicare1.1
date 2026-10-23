@@ -85,6 +85,8 @@ const FixedAssetsDepreciation = lazyWithRetry(() => import('./pages/accounting/F
 const FixedAssetsReports = lazyWithRetry(() => import('./pages/accounting/FixedAssetsReports'));
 const AccountingCashTransfer = lazyWithRetry(() => import('./pages/accounting/CashTransfer'));
 const AccountingRefunds = lazyWithRetry(() => import('./pages/accounting/Refunds'));
+const AccountingCreditNotes = lazyWithRetry(() => import('./pages/accounting/CreditNotes'));
+const AccountingPayables = lazyWithRetry(() => import('./pages/accounting/Payables'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
 const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpenses'));
@@ -584,6 +586,53 @@ const AppRoutes = () => {
           <Approvals />
         </ProtectedRoute>
       } />
+      {/* Accounting › Receivables / Payables / Payments — aliases onto existing pages
+          (same privileges as their original routes); the original URLs keep working. */}
+      <Route path="/accounting/receivables/claims" element={
+        <ProtectedRoute requiredPrivilege="billing.write">
+          <BillingManagement key="ar-claims" initialTab="insurance" />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/receivables/adjustments" element={
+        <ProtectedRoute requiredPrivilege="billing.write">
+          <BillingManagement key="ar-adjustments" initialTab="receivables" />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/receivables/credit-notes" element={
+        <ProtectedRoute requiredPrivilege="billing.write">
+          <AccountingCreditNotes />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payables" element={
+        <ProtectedRoute requiredPrivilege="pages.reports.view">
+          <AccountingPayables />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payables/supplier-bills" element={
+        <ProtectedRoute requiredPrivilege="expenses.write">
+          <DailyExpenses key="ap-bills" mode="payments" initialTab="bills" billsView="all" />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payments/expenses" element={
+        <ProtectedRoute requiredPrivilege="expenses.write">
+          <DailyExpenses key="pay-expenses" mode="payments" initialTab="expenses" />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payments/expenses/:id" element={
+        <ProtectedRoute requiredPrivilege="expenses.read">
+          <ExpenseDetail key="pay-expense-detail" mode="payments" />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payments/suppliers" element={
+        <ProtectedRoute requiredPrivilege="expenses.write">
+          <DailyExpenses key="pay-suppliers" mode="payments" initialTab="bills" billsView="ready" />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payments/consultants" element={
+        <ProtectedRoute requiredPrivilege="expenses.write">
+          <DailyExpenses key="pay-consultants" mode="payments" initialTab="consultant-bills" />
+        </ProtectedRoute>
+      } />
       <Route path="/accounting/payments/refunds" element={
         <ProtectedRoute requiredPrivilege={['receipts.write', 'accounting.read']}>
           <AccountingRefunds />
@@ -692,7 +741,7 @@ const AppRoutes = () => {
       } />
       <Route path="/procurement/daily-expenses" element={
         <ProtectedRoute requiredPrivilege="expenses.write">
-          <DailyExpenses />
+          <DailyExpenses key="expense-requests" mode="requests" />
         </ProtectedRoute>
       } />
       <Route path="/procurement/daily-expenses/:id" element={
