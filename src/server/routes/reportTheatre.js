@@ -95,6 +95,36 @@ router.get('/', async (req, res) => {
       { replacements: baseParams }
     );
 
+    // ── Team fee payouts (surgeon/anesthetist/scrub nurse splits) — a
+    //    separate query rather than folding into the summary query above,
+    //    since a 1:many join against theatre_team_payouts would multiply
+    //    (double-count) the operation rows there. ───────────────────────
+    const [[payoutSummaryRow]] = await sequelize.query(
+      `SELECT
+         COALESCE(SUM(tp.amount), 0) AS total_team_payouts,
+         COALESCE(SUM(tp.amount) FILTER (WHERE tp.status = 'unpaid'), 0) AS unpaid_team_payouts
+       FROM theatre_team_payouts tp
+       JOIN theatre_operations o ON o.id = tp.operation_id
+       WHERE ${dateSQL} ${clinicSQL} ${branch.sql}`,
+      { replacements: baseParams }
+    );
+    const [byTeamPayout] = await sequelize.query(
+      `SELECT
+         tp.employee_id, tp.role,
+         COALESCE(e.first_name || ' ' || e.last_name, 'Unknown') AS employee_name,
+         COUNT(*) AS payout_count,
+         COALESCE(SUM(tp.amount), 0) AS total_amount,
+         COALESCE(SUM(tp.amount) FILTER (WHERE tp.status = 'paid'), 0) AS paid_amount,
+         COALESCE(SUM(tp.amount) FILTER (WHERE tp.status = 'unpaid'), 0) AS unpaid_amount
+       FROM theatre_team_payouts tp
+       JOIN theatre_operations o ON o.id = tp.operation_id
+       LEFT JOIN employees e ON e.id = tp.employee_id
+       WHERE ${dateSQL} ${clinicSQL} ${branch.sql}
+       GROUP BY tp.employee_id, tp.role, e.first_name, e.last_name
+       ORDER BY total_amount DESC`,
+      { replacements: baseParams }
+    );
+
     res.json({
       period: { dateFrom, dateTo },
       summary: {
@@ -104,6 +134,8 @@ router.get('/', async (req, res) => {
         deaths: parseInt(summaryRow.deaths, 10) || 0,
         totalRevenue: parseFloat(summaryRow.total_revenue) || 0,
         avgDurationMinutes: Math.round(parseFloat(summaryRow.avg_duration_minutes) || 0),
+        totalTeamPayouts: parseFloat(payoutSummaryRow.total_team_payouts) || 0,
+        unpaidTeamPayouts: parseFloat(payoutSummaryRow.unpaid_team_payouts) || 0,
       },
       byProcedure: byProcedure.map((r) => ({
         procedureName: r.procedure_name || 'Unspecified',
@@ -115,6 +147,15 @@ router.get('/', async (req, res) => {
         surgeonName: r.surgeon_name,
         operationCount: parseInt(r.operation_count, 10) || 0,
         totalRevenue: parseFloat(r.total_revenue) || 0,
+      })),
+      byTeamPayout: byTeamPayout.map((r) => ({
+        employeeId: r.employee_id,
+        employeeName: r.employee_name,
+        role: r.role,
+        payoutCount: parseInt(r.payout_count, 10) || 0,
+        totalAmount: parseFloat(r.total_amount) || 0,
+        paidAmount: parseFloat(r.paid_amount) || 0,
+        unpaidAmount: parseFloat(r.unpaid_amount) || 0,
       })),
     });
   } catch (err) {

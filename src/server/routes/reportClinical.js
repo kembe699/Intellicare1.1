@@ -412,7 +412,8 @@ router.get('/radiology-register', async (req, res) => {
     const outpatient = await sequelize.query(
       `SELECT rr.id, rr.exam_name AS "examName", rr.status, rr.request_date AS "requestDate",
               COALESCE(lp.first_name || ' ' || lp.last_name, 'Unknown') AS "patientName",
-              b.name AS "branchName", 'Outpatient' AS setting
+              b.name AS "branchName", 'Outpatient' AS setting,
+              COALESCE(rr.category, 'Radiology') AS "category"
        FROM radiology_requests rr
        LEFT JOIN lis_participants lp ON lp.id = rr.participant_id
        LEFT JOIN branches b ON b.id = rr.branch_id
@@ -426,7 +427,8 @@ router.get('/radiology-register', async (req, res) => {
     const inpatient = await sequelize.query(
       `SELECT irr.id, irr.imaging_type AS "examName", irr.status, irr.request_date AS "requestDate",
               NULLIF(TRIM(COALESCE(p.first_name, lp.first_name, '') || ' ' || COALESCE(p.last_name, lp.last_name, '')), '') AS "rawPatientName",
-              b.name AS "branchName", 'Inpatient' AS setting
+              b.name AS "branchName", 'Inpatient' AS setting,
+              'Radiology' AS "category"
        FROM inpatient_radiology_requests irr
        LEFT JOIN patients p ON p.id = irr.patient_id
        LEFT JOIN lis_participants lp ON lp.id = irr.patient_id
@@ -468,7 +470,8 @@ router.get('/prescription-register', async (req, res) => {
               COALESCE(ii.item_name, pl.external_drug_name, 'Unknown drug') AS "drugName",
               pl.dose_strength AS "doseStrength", pl.frequency, pl.duration_days AS "durationDays",
               NULLIF(TRIM(COALESCE(lp.first_name, p.first_name, '') || ' ' || COALESCE(lp.last_name, p.last_name, '')), '') AS "rawPatientName",
-              b.name AS "branchName"
+              b.name AS "branchName",
+              pl.location_name AS "locationName", COALESCE(pl.is_external, false) AS "isExternal"
        FROM pharmacy_prescriptions pp
        JOIN prescription_lines pl ON pl.prescription_id = pp.id
        LEFT JOIN inventory_items ii ON ii.id = pl.drug_id
@@ -491,7 +494,8 @@ router.get('/prescription-register', async (req, res) => {
               COALESCE(rx.medication_name, rx.drug_name, 'Unknown drug') AS "drugName",
               rx.dosage AS "doseStrength", rx.frequency, NULL AS "durationDays",
               NULLIF(TRIM(rx.patient_name), '') AS "rawPatientName",
-              b.name AS "branchName"
+              b.name AS "branchName",
+              NULL AS "locationName", false AS "isExternal"
        FROM prescriptions rx
        LEFT JOIN users u ON u.id = rx.prescribed_by
        LEFT JOIN branches b ON b.id = rx.branch_id

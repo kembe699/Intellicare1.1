@@ -141,6 +141,8 @@ const RptOverview = lazyWithRetry(() => import('./pages/reports/DashboardOvervie
 const RptDhis2 = lazyWithRetry(() => import('./pages/reports/Dhis2Report'));
 const RptCancelledTransactions = lazyWithRetry(() => import('./pages/reports/CancelledTransactionsReport'));
 const RptAuditSummary = lazyWithRetry(() => import('./pages/reports/AuditSummaryReport'));
+const RptTheatre = lazyWithRetry(() => import('./pages/reports/TheatreReport'));
+const RptWorkforce = lazyWithRetry(() => import('./pages/reports/WorkforceReport'));
 const WardsManagement = lazyWithRetry(() => import('./pages/inpatient/WardsManagement'));
 const RoomsManagement = lazyWithRetry(() => import('./pages/inpatient/RoomsManagement'));
 const FacilityConfigurations = lazyWithRetry(() => import('./pages/setup/FacilityConfigurations'));
@@ -518,8 +520,10 @@ const AppRoutes = () => {
         <Route path="inventory" element={<RptInventory />} />
         <Route path="revenue" element={<RptRevenue />} />
         <Route path="clinical" element={<RptClinical />} />
+        <Route path="theatre" element={<RptTheatre />} />
         <Route path="procurement" element={<RptProcurementNew />} />
         <Route path="accounting" element={<RptAccounting />} />
+        <Route path="workforce" element={<RptWorkforce />} />
         <Route path="dhis2" element={<RptDhis2 />} />
         <Route path="cancelled-transactions" element={<RptCancelledTransactions />} />
         <Route path="audit-summary" element={<RptAuditSummary />} />

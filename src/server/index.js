@@ -657,6 +657,7 @@ app.use('/api/reports-v2/dhis2', require('./routes/reportDhis2'));
 app.use('/api/reports-v2/clinical', require('./routes/reportClinical'));
 app.use('/api/reports-v2/procurement', require('./routes/reportProcurement'));
 app.use('/api/reports-v2/accounting', require('./routes/reportAccounting'));
+app.use('/api/reports-v2/workforce', require('./routes/reportWorkforce'));
 app.use('/api/fixed-assets', require('./routes/fixedAssets'));
 app.use('/api/theatre', require('./routes/theatre'));
 app.use('/api/reports-v2/cancelled-transactions', require('./routes/reportCancelledTransactions'));
