@@ -57,7 +57,7 @@ import {
   CalendarClock,
   Syringe,
   HeartPulse,
-  SlidersHorizontal, History, Landmark, RotateCcw, Coins, Users2, BadgePercent, FileMinus, Scale
+  SlidersHorizontal, History, Landmark, RotateCcw, Coins, Users2, BadgePercent, FileMinus, Scale, CalendarRange
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/notify';
@@ -152,6 +152,7 @@ const hrDropdown: NavDropdown = {
     { label: 'Requests', href: '/hr/requests', icon: ClipboardCheck, privilege: 'hr.leave.read' },
     { label: 'Attendance Sites', href: '/hr/attendance/sites', icon: MapPin, privilege: 'attendance.manage_sites' },
     { label: 'Attendance', href: '/hr/attendance', icon: Clock, privilege: 'attendance.view' },
+    { label: 'Duty Rosters', href: '/hr/rosters', icon: CalendarRange, privilege: ['roster.view', 'roster.manage', 'roster.approve'] },
   ]
 };
 

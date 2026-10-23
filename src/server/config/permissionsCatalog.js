@@ -176,6 +176,11 @@ const CATALOG = [
   ['attendance.view', 'View attendance', 'attendance', 'View attendance records, the Today board, and reports', ['admin']],
   ['attendance.manage_sites', 'Manage attendance sites', 'attendance', 'Create/edit/deactivate geofenced attendance sites and their QR codes', ['admin']],
   ['attendance.correct', 'Correct attendance records', 'attendance', 'Manually correct a clock-in/out record (reason required, audited)', ['admin']],
+  // Duty rosters — see ensureRosterTables.js. A department head can always
+  // see and prepare their own department's roster without these.
+  ['roster.view', 'View duty rosters', 'attendance', 'View every department\'s monthly duty roster and roster reports', ['admin']],
+  ['roster.manage', 'Prepare duty rosters', 'attendance', 'Upload, edit and submit any department\'s monthly duty roster', ['admin']],
+  ['roster.approve', 'Approve duty rosters', 'attendance', 'Approve or return submitted rosters, reopen approved ones, and set the roster clock-in rule', ['admin']],
   ['portal.manage_access', 'Manage employee portal access', 'hr', 'Generate/reset/disable an employee\'s staff portal login code', ['admin']],
   ['leave.manage_settings', 'Manage leave settings', 'hr', 'Leave types, entitlements, carry-over rules, and the approval workflow toggle', ['admin']],
   ['advance.manage_settings', 'Manage salary advance settings', 'hr', 'Advance limits, max open advances, and the approval workflow toggle', ['admin']],

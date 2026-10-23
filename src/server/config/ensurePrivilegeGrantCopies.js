@@ -16,6 +16,10 @@ const COPIES = [
   { key: 'consultant_bills.pay', from: ['expenses.write'] },
   { key: 'payroll.pay', from: ['hr.payroll.write'] },
   { key: 'salary_advances.disburse', from: ['hr.salary_advances.write'] },
+  // Rosters are new HR/attendance work: whoever runs HR or attendance today.
+  { key: 'roster.view', from: ['attendance.view', 'hr.employees.read'] },
+  { key: 'roster.manage', from: ['attendance.manage_sites', 'hr.employees.write'] },
+  { key: 'roster.approve', from: ['hr.employees.write'] },
   // Refund approval was a per-USER right (approval_permissions); the roles of
   // everyone holding it get the new role privilege, and the per-user check stays.
   { key: 'refunds.approve', from: [], fromApprovalTypes: ['receipt_void_approve', 'deposit_refund_approve'] },

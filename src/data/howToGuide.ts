@@ -368,6 +368,17 @@ export const HOW_TO_GUIDE: GuideEntry[] = [
     ],
   },
   {
+    title: 'How to Prepare a Duty Roster',
+    path: '/hr/rosters',
+    steps: [
+      'Open HR → Duty Rosters and pick the month.',
+      'First time only: under Shift codes give each shift a short code (e.g. D, N).',
+      'Open the department, download the Excel template, fill in one shift code per person per day (blank = off) and upload it — or click shifts straight into the grid.',
+      'Fix any shifts that fall on approved leave, then Submit for approval.',
+      'HR approves (or returns it with a reason). Staff then see their shifts under My Roster in the staff portal.',
+    ],
+  },
+  {
     title: 'How to Manage Exchange Rates',
     path: '/accounting/exchange-rates',
     steps: [

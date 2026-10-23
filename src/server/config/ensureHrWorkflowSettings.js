@@ -30,6 +30,10 @@ async function ensureHrWorkflowSettings(sequelize) {
   // columns were added — CREATE TABLE IF NOT EXISTS above is a no-op there.
   await addColumnIfMissing(sequelize, 'hr_workflow_settings', 'advance_deduction_cap_percent', 'NUMERIC(5,2) NOT NULL DEFAULT 50');
   await addColumnIfMissing(sequelize, 'hr_workflow_settings', 'advance_deduct_same_period', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  // Duty rosters (ensureRosterTables.js): once on, staff in a department whose
+  // roster for the month is approved can clock in only when rostered. Off by
+  // default, so nothing changes until HR turns it on.
+  await addColumnIfMissing(sequelize, 'hr_workflow_settings', 'roster_enforce_clock_in', 'BOOLEAN NOT NULL DEFAULT FALSE');
 
   // A per-employee override of who approves their requests, instead of
   // their department's head — kept as its own table rather than a new
@@ -83,6 +87,7 @@ async function getWorkflowSettings(sequelize, clinicId) {
     advance_min_months_of_service: 0,
     advance_deduction_cap_percent: 50,
     advance_deduct_same_period: false,
+    roster_enforce_clock_in: false,
   };
 }
 

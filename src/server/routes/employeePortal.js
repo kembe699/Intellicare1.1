@@ -28,6 +28,7 @@ const { resolveApprover, isApproverFor } = require('../utils/approverResolution'
 const { notifyRole, notifyUser } = require('../services/notificationService');
 const { notifyEmployee } = require('../utils/portalNotify');
 const { completePayrollLineReceipt } = require('../services/PayrollPayment');
+const { checkRosterForClockIn } = require('../utils/rosterCheck');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const PORTAL_TOKEN_EXPIRY = '30d';
@@ -281,8 +282,19 @@ router.post('/attendance/clock', portalClockLimiter, async (req, res) => {
         await storeRecord(sequelize, { ...baseFields, distanceM: geo.distance_m, shiftDate: new Date().toISOString().slice(0, 10), status: 'rejected', rejectReason: `You're already clocked in since ${new Date(last.occurred_at).toLocaleTimeString()}. Clock out first.` });
         return res.status(400).json({ error: "You're already clocked in. Clock out first." });
       }
-      const [[today]] = await sequelize.query(`SELECT CURRENT_DATE AS d`);
-      shiftDate = today.d;
+      // Duty roster rule (off unless HR turned it on and the department's
+      // roster for the month is approved) — see utils/rosterCheck.js.
+      const rosterCheck = await checkRosterForClockIn(sequelize, { clinicId: req.employee.clinicId, employeeId: req.employee.id });
+      if (!rosterCheck.ok) {
+        await storeRecord(sequelize, { ...baseFields, distanceM: geo.distance_m, shiftDate: new Date().toISOString().slice(0, 10), status: 'rejected', rejectReason: rosterCheck.reason });
+        return res.status(400).json({ error: rosterCheck.reason });
+      }
+      if (rosterCheck.shiftDate) {
+        shiftDate = rosterCheck.shiftDate;
+      } else {
+        const [[today]] = await sequelize.query(`SELECT CURRENT_DATE AS d`);
+        shiftDate = today.d;
+      }
     } else {
       if (!last || last.type === 'out') {
         await storeRecord(sequelize, { ...baseFields, distanceM: geo.distance_m, shiftDate: new Date().toISOString().slice(0, 10), status: 'rejected', rejectReason: "You're not clocked in." });
@@ -310,6 +322,41 @@ router.post('/attendance/clock', portalClockLimiter, async (req, res) => {
       return res.status(503).json({ error: 'Attendance is not configured on this server yet. Contact your administrator.' });
     }
     res.status(500).json({ error: 'Could not record attendance. Please try again.' });
+  }
+});
+
+// My Roster — the employee's own shifts for a month, from APPROVED rosters only.
+router.get('/roster', async (req, res) => {
+  try {
+    const { sequelize } = require('../models');
+    const period = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.period || '')) ? String(req.query.period) : null;
+    const [[cur]] = await sequelize.query(`SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM') AS p, CURRENT_DATE AS d`);
+    const month = period || cur.p;
+    const [[emp]] = await sequelize.query(`SELECT department FROM employees WHERE id = :id`, { replacements: { id: req.employee.id } });
+    const [[roster]] = await sequelize.query(
+      `SELECT status FROM duty_rosters WHERE clinic_id = :clinicId AND department = :department AND period = :period
+        ORDER BY CASE status WHEN 'approved' THEN 0 ELSE 1 END LIMIT 1`,
+      { replacements: { clinicId: req.employee.clinicId, department: emp?.department || '', period: month } }
+    );
+    const [entries] = await sequelize.query(
+      `SELECT dre.duty_date, s.name, s.code, s.kind, s.color, s.start_time, s.end_time
+         FROM duty_roster_entries dre
+         JOIN duty_rosters dr ON dr.id = dre.roster_id AND dr.status = 'approved' AND dr.period = :period
+         JOIN shifts s ON s.id = dre.shift_id
+        WHERE dre.employee_id = :employeeId
+        ORDER BY dre.duty_date`,
+      { replacements: { employeeId: req.employee.id, period: month } }
+    );
+    res.json({
+      period: month,
+      today: String(cur.d instanceof Date ? cur.d.toISOString() : cur.d).slice(0, 10),
+      department: emp?.department || null,
+      status: roster?.status || null,
+      entries: entries.map((e) => ({ ...e, duty_date: String(e.duty_date instanceof Date ? e.duty_date.toISOString() : e.duty_date).slice(0, 10) })),
+    });
+  } catch (error) {
+    console.error('Employee portal roster error:', error);
+    res.status(500).json({ error: 'Could not load your roster.' });
   }
 });
 

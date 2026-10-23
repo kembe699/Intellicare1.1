@@ -638,6 +638,7 @@ app.use('/api/hr', require('./routes/hr'));
 app.use('/api/hr/salary-advances', require('./routes/salaryAdvances'));
 app.use('/api/hr/leave', require('./routes/leave'));
 app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/rosters', require('./routes/rosters'));
 app.use('/api/hr/workflow-settings', require('./routes/hrWorkflowSettings'));
 app.use('/api/facilities', facilitiesRouter);
 app.use('/api/facility-settings', facilitySettingsRouter);

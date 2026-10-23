@@ -163,6 +163,10 @@ async function ensureAttendanceTables(sequelize) {
   `);
   await sequelize.query(`CREATE INDEX IF NOT EXISTS portal_login_attempts_employee_idx ON portal_login_attempts (employee_id, created_at)`);
 
+  // Duty rosters — must exist before the view below reads them.
+  const { ensureRosterTables } = require('./ensureRosterTables');
+  await ensureRosterTables(sequelize);
+
   // Per-employee per-date summary, computed on read. late_minutes/
   // early_leave_minutes are NULL whenever the employee has no shift
   // assignment at all (nothing to be late/early against).
@@ -192,7 +196,16 @@ async function ensureAttendanceTables(sequelize) {
         AND ar.shift_date < CURRENT_DATE) AS missing_clock_out
     FROM attendance_records ar
     LEFT JOIN employee_shift_assignments esa ON esa.employee_id = ar.employee_id
-    LEFT JOIN shifts s ON s.id = esa.shift_id
+    -- The shift someone was ROSTERED on that day (approved roster) wins over
+    -- their standing assignment, so lateness is measured against the right
+    -- shift and a later change of assignment doesn't rewrite history.
+    LEFT JOIN LATERAL (
+      SELECT dre.shift_id FROM duty_roster_entries dre
+      JOIN duty_rosters dr ON dr.id = dre.roster_id AND dr.status = 'approved'
+      WHERE dre.employee_id = ar.employee_id AND dre.duty_date = ar.shift_date
+      LIMIT 1
+    ) rost ON TRUE
+    LEFT JOIN shifts s ON s.id = COALESCE(rost.shift_id, esa.shift_id)
     -- 'corrected' counts too — it's HR's authoritative record of what
     -- actually happened (a different time than what was auto-captured),
     -- not a rejection. Only 'rejected' is excluded, since those never

@@ -107,6 +107,8 @@ const LeaveManagement = lazyWithRetry(() => import('./pages/hr/LeaveManagement')
 const AttendanceSites = lazyWithRetry(() => import('./pages/hr/AttendanceSites'));
 const AttendanceDisplay = lazyWithRetry(() => import('./pages/hr/AttendanceDisplay'));
 const AttendanceDashboard = lazyWithRetry(() => import('./pages/hr/AttendanceDashboard'));
+const DutyRosters = lazyWithRetry(() => import('./pages/hr/DutyRosters'));
+const StaffRoster = lazyWithRetry(() => import('./pages/staff/StaffRoster'));
 const RequestsInbox = lazyWithRetry(() => import('./pages/hr/RequestsInbox'));
 const PurchaseRequisitions = lazyWithRetry(() => import('./pages/procurement/PurchaseRequisitions'));
 const GoodsReceiptNotes = lazyWithRetry(() => import('./pages/procurement/GoodsReceiptNotes'));
@@ -351,6 +353,7 @@ const AppRoutes = () => {
           <Route path="advances" element={<StaffAdvances />} />
           <Route path="payroll" element={<StaffPayroll />} />
           <Route path="approvals" element={<StaffApprovals />} />
+          <Route path="roster" element={<StaffRoster />} />
         </Route>
       </Route>
       <Route path="/dashboard" element={
@@ -727,6 +730,13 @@ const AppRoutes = () => {
       <Route path="/hr/attendance" element={
         <ProtectedRoute requiredPrivilege="attendance.view">
           <AttendanceDashboard />
+        </ProtectedRoute>
+      } />
+      {/* No route-level privilege: a department head may prepare their own
+          department's roster without roster privileges — the API decides. */}
+      <Route path="/hr/rosters" element={
+        <ProtectedRoute>
+          <DutyRosters />
         </ProtectedRoute>
       } />
       <Route path="/hr/requests" element={
