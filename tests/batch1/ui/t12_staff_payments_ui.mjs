@@ -1,6 +1,7 @@
 // #12 Staff Payments: an approved payroll line is paid from Accounting › Payments › Staff Payments
 // (existing pay endpoint), approved advances are listed for disbursement, and HR shows
 // "Pay in Accounting" instead of pay buttons.
+import { randomUUID } from 'crypto';
 import { chromium } from 'playwright';
 import { AFTER, call, q, done, tokenFor, check, summary } from '../lib.mjs';
 
@@ -13,6 +14,10 @@ for (;;) { y = 2140 + Math.floor(Math.random() * 50); m = 1 + Math.floor(Math.ra
 const run = await call(AFTER, 'POST', '/hr/payroll/runs', { period_month: m, period_year: y, employee_ids: [emp.id], payment_account_id: cash.id });
 await call(AFTER, 'POST', `/hr/payroll/runs/${run.body.id}/approve`, {});
 const [line] = await q('SELECT id FROM payroll_run_lines WHERE payroll_run_id = $1', [run.body.id]);
+// Our own approved, not-yet-disbursed advance (earlier runs' payroll deductions repay any shared one).
+const advNo = `ADV-T12-${randomUUID().slice(0, 4).toUpperCase()}`;
+await q(`INSERT INTO salary_advances (id, clinic_id, branch_id, employee_id, advance_number, amount, currency, reason, request_date, status, balance_remaining, exchange_rate, base_currency_amount, created_by, approved_by, approved_at, created_at, updated_at)
+         VALUES ($1, 1, 1, $2, $3, 100, 'SSP', 'T12 fixture', CURRENT_DATE, 'approved', 100, 1, 100, 1, 1, NOW(), NOW(), NOW())`, [randomUUID(), emp.id, advNo]);
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -31,7 +36,7 @@ check('clicking Pay pays the line with a ledger entry (existing pay logic)', pai
 
 await page.getByRole('tab', { name: /Salary advances/ }).click();
 await page.waitForTimeout(500);
-check('approved advance ADV-0001 listed for disbursement', await page.locator('tr', { hasText: 'ADV-0001' }).count() === 1);
+check(`approved advance ${advNo} listed for disbursement`, await page.locator('tr', { hasText: advNo }).count() === 1);
 await page.screenshot({ path: 'tests/batch1/screenshots/admin-staff-payments-advances.png', fullPage: true });
 
 await page.goto(`${BASE}/hr/payroll/${run.body.id}`, { waitUntil: 'networkidle' });
@@ -44,6 +49,7 @@ await page.waitForTimeout(1200);
 check('HR salary advances shows "Disburse in Accounting" for approved advances', await page.getByRole('button', { name: 'Disburse in Accounting' }).count() >= 1);
 await page.screenshot({ path: 'tests/batch1/screenshots/admin-hr-salary-advances.png', fullPage: true });
 
+await q("DELETE FROM salary_advances WHERE advance_number = $1", [advNo]);
 await browser.close();
 await done();
 process.exit(summary() ? 1 : 0);
