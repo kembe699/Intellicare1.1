@@ -77,6 +77,10 @@ async function ensurePrivilegesCatalog(sequelize) {
       );
     }
   }
+
+  // New privileges split out of existing ones keep working for the same roles.
+  const { ensurePrivilegeGrantCopies } = require('./ensurePrivilegeGrantCopies');
+  await ensurePrivilegeGrantCopies(sequelize);
 }
 
 module.exports = { ensurePrivilegesCatalog };

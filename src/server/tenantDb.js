@@ -167,6 +167,10 @@ async function buildTenantConnection(schemaName) {
   const { ensureGrnPoQuantityFlag } = require('./config/ensureGrnPoQuantityFlag');
   ensureGrnPoQuantityFlag(sequelize).catch(() => {});
 
+  // Cancel-bill support (status labels + who/when/why columns) — see ensureBillCancellation.js.
+  const { ensureBillCancellation } = require('./config/ensureBillCancellation');
+  ensureBillCancellation(sequelize).catch(() => {});
+
   // Database-level backstop against double-booking a bed — see
   // ensureInpatientBedUniqueness.js and the bed-claim comment in
   // routes/inpatient.js for why this didn't actually exist before.

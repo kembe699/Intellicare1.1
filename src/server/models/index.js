@@ -436,7 +436,7 @@ const PatientBill = sequelize.define('PatientBill', {
     defaultValue: 0.00,
   },
   status: {
-    type: DataTypes.ENUM('pending', 'partial', 'paid', 'overdue', 'active'),
+    type: DataTypes.ENUM('pending', 'partial', 'paid', 'overdue', 'active', 'written_off', 'cancelled'),
     defaultValue: 'pending',
   },
   bill_date: {

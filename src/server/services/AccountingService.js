@@ -618,11 +618,12 @@ class AccountingService {
     if (!billId) return 0;
 
     const [[bill]] = await sequelize.query(
-      `SELECT id, clinic_id, branch_id, scheme_id, bill_number, bill_date,
+      `SELECT id, clinic_id, branch_id, scheme_id, bill_number, bill_date, status,
               COALESCE(NULLIF(base_currency_total, 0), total_amount) AS worth
          FROM patient_bills WHERE id = :id LIMIT 1`,
       { replacements: { id: billId } });
-    if (!bill) return 0;
+    // A cancelled bill's postings were fully reversed on purpose — never re-post them.
+    if (!bill || bill.status === 'cancelled') return 0;
 
     // Credit notes lower the bill's total AND reverse revenue under their own
     // reference (the note's id); counting them here keeps the two in step, so

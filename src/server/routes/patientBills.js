@@ -540,6 +540,15 @@ router.get('/:billId', authorize('bills.read'), async (req, res) => {
     // Parse services JSON string to array
     const billData = bill.toJSON();
     billData.services = normalizeServices(billData.services);
+    if (billData.status === 'cancelled') {
+      // Read raw (not via the model) so a tenant whose cancellation columns
+      // haven't been added yet can still load every other bill.
+      const [[c]] = await sequelize.query(
+        'SELECT cancelled_at, cancelled_by, cancellation_reason FROM patient_bills WHERE id = :id',
+        { replacements: { id: billId } }
+      ).catch(() => [[null]]);
+      if (c) Object.assign(billData, c);
+    }
 
     res.json(billData);
   } catch (error) {
@@ -958,6 +967,10 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     if (!bill) {
       await t.rollback();
       return res.status(404).json({ error: 'Bill not found' });
+    }
+    if (bill.status === 'cancelled') {
+      await t.rollback();
+      return res.status(409).json({ error: `${bill.bill_number} is cancelled — start a new bill instead.` });
     }
     if (!BranchQueryFilter.canAccessRecord(bill, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
       await t.rollback();
@@ -1456,13 +1469,144 @@ router.delete('/:billId', authorize('bills.delete'), async (req, res) => {
     if (!BranchQueryFilter.canAccessRecord(bill, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
       return res.status(403).json({ error: 'Access denied to this patient bill' });
     }
-    
+
+    // A bill that has reached the ledger or taken a payment is never deleted —
+    // deleting it orphaned its receivable/revenue entries forever. It is
+    // cancelled instead (POST /:billId/cancel), which reverses those entries.
+    const [[posted]] = await sequelize.query(
+      `SELECT
+         EXISTS (SELECT 1 FROM general_ledger WHERE reference_id::text = :id) AS has_gl,
+         EXISTS (SELECT 1 FROM receipts WHERE bill_id::text = :id) AS has_receipts,
+         EXISTS (SELECT 1 FROM journal_entries WHERE description LIKE :like) AS has_je`,
+      { replacements: { id: String(billId), like: `%${billId}%` } }
+    );
+    if (posted.has_gl || posted.has_receipts || posted.has_je || parseFloat(bill.paid_amount) > 0) {
+      return res.status(409).json({
+        error: `${bill.bill_number} has ledger postings or payments, so it can't be deleted. Cancel it instead — cancelling reverses its postings and keeps the record.`,
+        canCancel: true,
+      });
+    }
+
     await bill.destroy();
-    
+
     res.json({ message: 'Patient bill deleted successfully' });
   } catch (error) {
     console.error('Error deleting patient bill:', error);
     res.status(500).json({ error: 'Failed to delete patient bill' });
+  }
+});
+
+// Cancel a bill: one full reversing entry per original currency/rate for every
+// ledger posting tied to the bill (billing, item voids, revenue adjustments,
+// COGS-on-bill, credit notes, discounts, write-offs), then mark it cancelled.
+// Refused while the bill still holds payments — void/refund those first, so the
+// receivable nets to zero instead of leaving an unexplained credit behind.
+router.post('/:billId/cancel', authorize('bills.cancel'), async (req, res) => {
+  let t;
+  try {
+    const { billId } = req.params;
+    const reason = String(req.body?.reason || '').trim();
+    if (reason.length < 3) return res.status(400).json({ error: 'Give a reason for cancelling this bill.' });
+
+    t = await sequelize.transaction();
+    const [[bill]] = await sequelize.query('SELECT * FROM patient_bills WHERE id = :id FOR UPDATE', { replacements: { id: billId }, transaction: t });
+    if (!bill) { await t.rollback(); return res.status(404).json({ error: 'Patient bill not found' }); }
+    if (!BranchQueryFilter.canAccessRecord(bill, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
+      await t.rollback(); return res.status(403).json({ error: 'Access denied to this patient bill' });
+    }
+    if (bill.status === 'cancelled') { await t.rollback(); return res.status(409).json({ error: `${bill.bill_number} is already cancelled.` }); }
+
+    const [[liveReceipts]] = await sequelize.query(
+      `SELECT COUNT(*)::int AS n FROM receipts WHERE bill_id::text = :id AND status IN ('active', 'pending_void', 'pending_refund')`,
+      { replacements: { id: String(billId) }, transaction: t }
+    );
+    if (parseFloat(bill.paid_amount) > 0.01 || liveReceipts.n > 0) {
+      await t.rollback();
+      return res.status(409).json({
+        error: `${bill.bill_number} still has payments recorded. Void or refund its receipts first (Receipts, or Accounting › Payments › Refunds), then cancel the bill.`,
+      });
+    }
+    if (bill.invoice_id) {
+      const [[inv]] = await sequelize.query('SELECT invoice_number, status FROM invoices WHERE id = :id', { replacements: { id: bill.invoice_id }, transaction: t });
+      if (inv && inv.status !== 'cancelled') {
+        await t.rollback();
+        return res.status(409).json({ error: `${bill.bill_number} is on invoice ${inv.invoice_number}. Cancel the invoice first, then cancel the bill.` });
+      }
+    }
+
+    const [lines] = await sequelize.query(
+      `SELECT gl.transaction_currency, gl.exchange_rate, li.account_id,
+              SUM(li.debit_amount) AS debit, SUM(li.credit_amount) AS credit
+         FROM general_ledger gl
+         JOIN gl_line_items li ON li.gl_id::text = gl.id::text
+        WHERE COALESCE(gl.is_posted, TRUE) = TRUE
+          AND ((gl.reference_id::text = :id
+                AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment', 'pharmacy_bill_cogs'))
+            OR (gl.reference_module = 'credit_note'
+                AND gl.reference_id::text IN (SELECT id::text FROM credit_notes WHERE applied_to_bill_id::text = :id))
+            OR (gl.reference_module = 'billing_discount'
+                AND gl.reference_id::text IN (SELECT id::text FROM bill_discounts WHERE bill_id::text = :id))
+            OR (gl.reference_module = 'bill_write_off'
+                AND gl.reference_id::text IN (SELECT id::text FROM bill_write_offs WHERE bill_id::text = :id)))
+        GROUP BY gl.transaction_currency, gl.exchange_rate, li.account_id`,
+      { replacements: { id: String(billId) }, transaction: t }
+    );
+
+    const groups = new Map();
+    for (const l of lines) {
+      const key = `${l.transaction_currency || ''}|${l.exchange_rate || 1}`;
+      if (!groups.has(key)) groups.set(key, { currency: l.transaction_currency, rate: l.exchange_rate, lines: [] });
+      const net = Math.round(((parseFloat(l.debit) || 0) - (parseFloat(l.credit) || 0)) * 100) / 100;
+      if (Math.abs(net) < 0.005) continue;
+      groups.get(key).lines.push({
+        account_id: l.account_id,
+        debit_amount: net < 0 ? -net : 0,
+        credit_amount: net > 0 ? net : 0,
+        description: `Reversal — ${bill.bill_number} cancelled: ${reason}`,
+      });
+    }
+
+    const reversalIds = [];
+    for (const g of groups.values()) {
+      if (g.lines.length === 0) continue;
+      const entry = await AccountingService.createGLEntry({
+        clinic_id: bill.clinic_id,
+        branch_id: bill.branch_id || null,
+        transaction_date: new Date(),
+        transaction_type: 'bill_cancellation',
+        description: `Bill ${bill.bill_number} cancelled — ${reason}`,
+        reference_id: bill.id,
+        reference_module: 'bill_cancellation',
+        transaction_currency: g.currency || undefined,
+        exchange_rate: g.rate || undefined,
+      }, g.lines, req.user?.displayName || req.user?.id || 'system', t);
+      reversalIds.push(entry.id);
+    }
+
+    await sequelize.query(
+      `UPDATE patient_bills SET status = 'cancelled', balance_amount = 0, cancelled_at = NOW(),
+              cancelled_by = :by, cancellation_reason = :reason, updated_at = NOW()
+        WHERE id = :id`,
+      { replacements: { id: billId, by: req.user?.displayName || req.user?.email || String(req.user?.id || ''), reason }, transaction: t }
+    );
+    await t.commit();
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        clinic_id: bill.clinic_id, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Billing', action: 'BILL_CANCELLED', entity_type: 'PatientBill', entity_id: bill.id,
+        description: `Bill ${bill.bill_number} (${bill.total_amount}) cancelled — ${reason}`,
+        old_values: { status: bill.status }, new_values: { status: 'cancelled', reason, reversal_entries: reversalIds },
+        ip_address: req.ip, status: 'success',
+      });
+    } catch (e) {}
+
+    res.json({ message: `${bill.bill_number} cancelled`, reversal_entries: reversalIds.length });
+  } catch (error) {
+    if (t && !t.finished) await t.rollback().catch(() => {});
+    console.error('Error cancelling bill:', error);
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : `Could not cancel the bill: ${error.message}` });
   }
 });
 
@@ -1539,6 +1683,10 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
       console.log('Validation failed: Bill not found:', billId);
       await t.rollback();
       return res.status(404).json({ error: 'Patient bill not found' });
+    }
+    if (currentBill.status === 'cancelled') {
+      await t.rollback();
+      return res.status(409).json({ error: `${currentBill.bill_number} is cancelled — payments can't be taken against it.` });
     }
     if (!BranchQueryFilter.canAccessRecord(currentBill, req.branchContext || { branchId: req.user?.branchId || null, isAdmin: req.user?.role === 'admin' })) {
       await t.rollback();

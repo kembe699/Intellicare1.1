@@ -21,7 +21,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 interface ServiceLine {
   // Stable per-line id, assigned server-side once and never regenerated — lets
@@ -53,6 +54,9 @@ interface ServiceLine {
 
 interface Bill {
   id: string;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancellation_reason?: string | null;
   bill_number: string;
   patient_id: string;
   patient_name: string;
@@ -110,8 +114,10 @@ const statusBadge = (status: string) => {
     // on its own reads as meaningless, when what it actually means is "invoiced, awaiting
     // payment on the invoice, not on this bill directly".
     active: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    cancelled: 'bg-destructive-bg text-destructive border-destructive-border',
+    written_off: 'bg-muted text-muted-foreground border-border',
   };
-  const label = status === 'active' ? 'Invoiced' : (status || 'pending');
+  const label = status === 'active' ? 'Invoiced' : status === 'written_off' ? 'Written off' : (status || 'pending');
   return (
     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${map[status] || 'bg-muted text-muted-foreground border-border'}`}>
       {label}
@@ -123,8 +129,9 @@ export default function BillDetails() {
   const { confirmDialog } = useConfirmDialog();
   const { billId } = useParams<{ billId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
   const { currency: baseCurrency, secondaryCurrency, secondaryRate } = useCurrency();
+  const [cancelOpen, setCancelOpen] = useState(false);
   // Display-only "what would this be in the other configured currency"
   // suffix — only meaningful when the amount is actually denominated in the
   // base currency (the secondary rate is base->secondary); a bill raised in
@@ -914,9 +921,24 @@ export default function BillDetails() {
               <Button variant="outline" onClick={handlePrintBillSummary} disabled={buildingBillSummary}>
                 {buildingBillSummary ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />} Bill Summary
               </Button>
+              {bill.status !== 'cancelled' && hasPrivilege('bills.cancel') && (
+                <Button variant="outline" className="text-destructive border-destructive-border hover:bg-destructive-bg" onClick={() => setCancelOpen(true)}>
+                  <Ban className="w-4 h-4 mr-2" /> Cancel bill
+                </Button>
+              )}
             </div>
           }
         />
+
+        {bill.status === 'cancelled' && (
+          <div className="rounded-lg border border-destructive-border bg-destructive-bg text-destructive px-4 py-3 mb-3 text-sm flex items-start gap-2">
+            <Ban className="w-4 h-4 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold">This bill was cancelled{bill.cancelled_at ? ` on ${formatDateTime(bill.cancelled_at)}` : ''}{bill.cancelled_by ? ` by ${bill.cancelled_by}` : ''}.</p>
+              <p>Its ledger postings were reversed. {bill.cancellation_reason ? `Reason: ${bill.cancellation_reason}` : ''}</p>
+            </div>
+          </div>
+        )}
 
         {/* Summary strip */}
         <div className="bg-card rounded-lg border shadow-sm p-4 flex flex-wrap items-center gap-6">
@@ -1479,6 +1501,29 @@ export default function BillDetails() {
           </div>
         </div>
       )}
+          <ConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title={`Cancel ${bill?.bill_number || 'this bill'}?`}
+        description="Every ledger posting for this bill (revenue, receivable, cost of goods, discounts, credits) is reversed at its original rate and the bill is marked cancelled. The record is kept. Bills with payments must have their receipts voided or refunded first."
+        confirmLabel="Cancel bill"
+        tone="danger"
+        icon={Ban}
+        reason={{ label: 'Reason for cancelling', placeholder: 'e.g. Billed to the wrong patient' }}
+        onConfirm={async (reason) => {
+          const res = await authFetch(`/api/patient-bills/${billId}/cancel`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            toast.error(body.error || 'Could not cancel this bill');
+            throw new Error(body.error || 'cancel failed');
+          }
+          toast.success(body.message || 'Bill cancelled');
+          setCancelOpen(false);
+          fetchBill(true);
+        }}
+      />
     </AppLayout>
   );
 }
