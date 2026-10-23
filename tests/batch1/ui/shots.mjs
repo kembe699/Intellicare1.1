@@ -21,7 +21,7 @@ const USERS = {
 
 // Endpoints that 500 on the baseline too, because the local preview DB has no LIS tables
 // (lis_participants, lis_specimens) — a sandbox gap, not something these pages broke.
-const KNOWN_PREVIEW_GAPS = /pharmacy-module\/(clinical-)?prescriptions|clinical\/patient-visits-history/;
+const KNOWN_PREVIEW_GAPS = /pharmacy-module\/((clinical-)?prescriptions|returns)|clinical\/patient-visits-history/;
 
 const [role, ...pages] = process.argv.slice(2);
 const token = tokenFor(USERS[role]);

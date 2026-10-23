@@ -252,6 +252,29 @@ async function requireOpenShift(req, res) {
 
 // ─── Routes ────────────────────────────────────────────────────────────────
 
+// Everyone currently holding a deposit (balance > 0), for Accounting › Payments ›
+// Refunds. Read-only; refunds still go through POST /:patientId/refund.
+router.get('/balances', authorize('deposits.read'), async (req, res) => {
+  try {
+    const clinicId = parseInt(req.query.clinic_id) || req.user?.clinic || 1;
+    const [rows] = await sequelize.query(
+      `SELECT b.patient_id, b.currency, b.balance::float AS balance, b.updated_at,
+              COALESCE(NULLIF(TRIM(CONCAT(p.first_name, ' ', p.last_name)), ''), d.patient_name) AS patient_name,
+              p.patient_id AS patient_ref
+         FROM patient_deposit_balances b
+         LEFT JOIN patients p ON p.id::text = b.patient_id
+         LEFT JOIN LATERAL (SELECT patient_name FROM patient_deposits pd WHERE pd.patient_id = b.patient_id ORDER BY created_at DESC LIMIT 1) d ON TRUE
+        WHERE b.clinic_id = :clinicId AND b.balance > 0
+        ORDER BY b.updated_at DESC`,
+      { replacements: { clinicId } }
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing deposit balances:', error);
+    res.status(500).json({ error: 'Failed to list deposit balances' });
+  }
+});
+
 router.get('/:patientId/balance', authorize('deposits.read'), async (req, res) => {
   try {
     const clinicId = parseInt(req.query.clinic_id) || req.user?.clinic || 1;
