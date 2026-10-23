@@ -456,9 +456,25 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
     }
 
     const payAmt = parseFloat(amount_paid);
-    const newPaid = parseFloat(po.paid_amount || 0) + payAmt;
+    const alreadyPaid = parseFloat(po.paid_amount || 0);
     const total = parseFloat(po.total_amount || 0);
-    const payStatus = newPaid >= total ? 'paid' : 'partial';
+    const outstanding = Math.round((total - alreadyPaid) * 100) / 100;
+    const cur = po.po_currency || '';
+    const money = (n) => `${cur} ${Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
+    if (!(payAmt > 0)) {
+      return res.status(400).json({ error: 'Enter a payment amount greater than zero.' });
+    }
+    if (outstanding <= 0.01) {
+      return res.status(400).json({ error: `${po.po_number} is already fully paid — nothing is outstanding.` });
+    }
+    if (payAmt > outstanding + 0.01) {
+      return res.status(400).json({
+        error: `This payment (${money(payAmt)}) is more than the ${money(outstanding)} still outstanding on ${po.po_number}. Pay ${money(outstanding)} or less.`,
+        outstanding,
+      });
+    }
+    const newPaid = alreadyPaid + payAmt;
+    const payStatus = newPaid >= total - 0.01 ? 'paid' : 'partial';
     const voucherNo = `PV-${Date.now().toString().slice(-8)}`;
     const paymentId = uuidv4();
 
