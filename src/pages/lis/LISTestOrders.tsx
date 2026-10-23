@@ -448,19 +448,38 @@ export default function LISTestOrders() {
     }
   };
 
-  // Restores the selected visit summary from the URL so a refresh (or a
-  // bookmarked/shared link) lands back on the same patient's summary instead
-  // of bouncing to Place Order — /lis/orders/summary/:participantId/:orderId
-  // is the only state this page persists outside memory.
+  // Keeps activeMode/selectedSummary in sync with the URL on EVERY route
+  // change, not just the initial mount. /lis/orders and /lis/orders/summary(/...)
+  // are sibling <Route>s rendering this exact same component — React Router
+  // does not remount/recreate the component instance when navigating between
+  // sibling routes that render the same element type at the same tree
+  // position, so a plain `useState(() => ...)` initializer (which only runs
+  // once, at first mount) never re-fires on a later in-app navigation. That
+  // was the actual bug: the address bar changed, but nothing re-ran to make
+  // the page follow it — only a hard refresh (a real remount) picked it up.
+  // This effect is what makes every navigation (tab click or URL/back-button
+  // change) actually re-render the right view, with no refresh needed.
   useEffect(() => {
-    if (!urlParticipantId || !urlOrderId) return;
+    if (!location.pathname.startsWith('/lis/orders/summary')) {
+      setActiveMode('order');
+      return;
+    }
+    if (!urlParticipantId || !urlOrderId) {
+      // Bare /lis/orders/summary — the list-to-pick-from view, no specific
+      // visit selected yet.
+      setActiveMode('summary');
+      setSelectedSummary(null);
+      return;
+    }
+
     const alreadySelected = selectedSummary
       && String(selectedSummary.participant_id) === urlParticipantId
       && String(selectedSummary.order_id) === urlOrderId;
     if (alreadySelected) {
-      if (activeMode !== 'summary') setActiveMode('summary');
+      setActiveMode('summary');
       return;
     }
+
     setActiveMode('summary');
     const cached = allVisitSummaries.find((s) => String(s.order_id) === urlOrderId && String(s.participant_id) === urlParticipantId);
     if (cached) {
@@ -487,7 +506,7 @@ export default function LISTestOrders() {
     // Only the URL identifies which visit to restore — re-running this on
     // every selectedSummary/allVisitSummaries change would refetch in a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlParticipantId, urlOrderId]);
+  }, [location.pathname, urlParticipantId, urlOrderId]);
 
   const fetchPharmacyDrugs = async () => {
     try {
