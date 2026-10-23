@@ -60,12 +60,18 @@ export async function serviceByName(name) {
 
 export async function newBill(base, patient, lines) {
   const total = lines.reduce((s, l) => s + l.totalPrice, 0);
-  const r = await call(base, 'POST', '/patient-bills', {
-    patient_id: patient.id, patient_name: `${patient.first_name} ${patient.last_name}`, clinic_id: 1,
-    created_by: 'Preview Admin', bill_date: today, services: lines, total_amount: total, paid_amount: 0, status: 'pending',
-  });
-  if (!r.ok) throw new Error('bill: ' + JSON.stringify(r.body));
-  return r.body;
+  // Bill numbers come from the clock (last 6 ms digits) and can collide when tests
+  // create bills back to back — a known, separate defect; retry that case only.
+  for (let attempt = 0; ; attempt++) {
+    const r = await call(base, 'POST', '/patient-bills', {
+      patient_id: patient.id, patient_name: `${patient.first_name} ${patient.last_name}`, clinic_id: 1,
+      created_by: 'Preview Admin', bill_date: today, services: lines, total_amount: total, paid_amount: 0, status: 'pending',
+    });
+    if (r.ok) return r.body;
+    const collided = JSON.stringify(r.body).includes('bill_number must be unique');
+    if (!collided || attempt >= 4) throw new Error('bill: ' + JSON.stringify(r.body));
+    await new Promise((res) => setTimeout(res, 25));
+  }
 }
 
 export function line(svc, qty = 1, price) {

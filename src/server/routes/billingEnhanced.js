@@ -378,56 +378,49 @@ router.post('/bills/:billId/discounts', authorize('billing.write'), async (req, 
       transaction: t
     });
 
-    // Create GL entry for discount (Dr. Discount Expense, Cr. Accounts Receivable)
-    try {
-      const AccountingService = require('../services/AccountingService');
-      // 5300 is "Rent Expense" in this chart of accounts — posting discounts there was
-      // silently miscoding every patient discount as rent, corrupting the P&L. Patient
-      // discounts need their own contra-revenue expense line.
-      let discountAccount = await AccountingService.getAccountByCode(bills[0].clinic_id, '5230');
-      if (!discountAccount) {
-        const { ChartOfAccounts } = require('../models');
-        discountAccount = await ChartOfAccounts.create({
-          clinic_id: bills[0].clinic_id, account_code: '5230',
-          account_name: 'Patient Discounts & Allowances', account_type: 'expense',
-          balance_type: 'debit', is_active: true
-        });
-      }
-      // Must match whichever account (1210 Insurance Receivables vs 1200 Accounts
-      // Receivable) the bill's own receivable was originally booked to at creation
-      // time (AccountingService.createGLFromPatientBill) — crediting the wrong one
-      // here leaves the actual receivable un-reduced while a different, unrelated
-      // account absorbs the credit.
-      const receivablesAccount = await AccountingService.getReceivableAccount(bills[0].clinic_id, bills[0].scheme_id);
-
-      if (discountAccount && receivablesAccount) {
-        const glEntry = await AccountingService.createGLEntry({
-          clinic_id: bills[0].clinic_id,
-          transaction_date: new Date(),
-          transaction_type: 'bill_discount',
-          description: `Discount on Bill ${bills[0].bill_number} - ${reason || 'No reason'}`,
-          reference_id: id,
-          reference_module: 'billing_discount',
-          transaction_currency: bills[0].bill_currency,
-        }, [
-          { account_id: discountAccount.id, debit_amount: calcAmount, credit_amount: 0, description: `Discount: ${reason || 'Applied'}` },
-          { account_id: receivablesAccount.id, debit_amount: 0, credit_amount: calcAmount, description: `AR reduction: Discount on ${bills[0].bill_number}` }
-        ], req.user?.id || 'system');
-
-        await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
-        await sequelize.query('UPDATE bill_discounts SET discount_gl_entry_id = :glId WHERE id = :id',
-          { replacements: { glId: glEntry.id, id }, transaction: t });
-      }
-    } catch (glErr) {
-      console.error('GL entry for discount failed:', glErr.message);
+    // Dr 5230 Patient Discounts & Allowances / Cr the bill's receivable — in the SAME
+    // transaction as the bill change: a discount that can't be posted isn't applied.
+    const AccountingService = require('../services/AccountingService');
+    const ledgerFail = (msg) => Object.assign(new Error(`Discount not applied: ${msg} Nothing was changed.`), { statusCode: 422 });
+    let discountAccount = await AccountingService.getAccountByCode(bills[0].clinic_id, '5230');
+    if (!discountAccount) {
+      const { ChartOfAccounts } = require('../models');
+      discountAccount = await ChartOfAccounts.create({
+        clinic_id: bills[0].clinic_id, account_code: '5230',
+        account_name: 'Patient Discounts & Allowances', account_type: 'expense',
+        balance_type: 'debit', is_active: true
+      }, { transaction: t });
     }
+    const receivablesAccount = await AccountingService.getReceivableAccount(bills[0].clinic_id, bills[0].scheme_id);
+    if (!receivablesAccount) throw ledgerFail('the receivable account (1200/1210) is missing or inactive in the Chart of Accounts.');
+    let discountGl;
+    try {
+      discountGl = await AccountingService.createGLEntry({
+        clinic_id: bills[0].clinic_id,
+        branch_id: bills[0].branch_id || null,
+        transaction_date: new Date(),
+        transaction_type: 'bill_discount',
+        description: `Discount on Bill ${bills[0].bill_number} - ${reason || 'No reason'}`,
+        reference_id: id,
+        reference_module: 'billing_discount',
+        transaction_currency: bills[0].bill_currency,
+      }, [
+        { account_id: discountAccount.id, debit_amount: calcAmount, credit_amount: 0, description: `Discount: ${reason || 'Applied'}` },
+        { account_id: receivablesAccount.id, debit_amount: 0, credit_amount: calcAmount, description: `AR reduction: Discount on ${bills[0].bill_number}` }
+      ], req.user?.id || 'system', t);
+    } catch (glErr) {
+      if (glErr.statusCode) throw glErr;
+      throw ledgerFail(`posting to the ledger failed (${glErr.message}).`);
+    }
+    await sequelize.query('UPDATE bill_discounts SET discount_gl_entry_id = :glId WHERE id = :id',
+      { replacements: { glId: discountGl.id, id }, transaction: t });
 
     await t.commit();
     res.json({ id, discount_number: discountNumber, discount_amount: calcAmount });
   } catch (error) {
-    await t.rollback();
+    if (!t.finished) await t.rollback().catch(() => {});
     console.error('Error applying discount:', error);
-    res.status(500).json({ error: 'Failed to apply discount' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to apply discount' });
   }
 });
 
@@ -470,42 +463,41 @@ router.post('/bills/:billId/write-off', authorize('billing.write'), async (req, 
       UPDATE patient_bills SET balance_amount = 0, status = 'written_off' WHERE id = :billId
     `, { replacements: { billId }, transaction: t });
 
-    // Dr. Bad Debt Expense, Cr. Accounts Receivable
+    // Dr 5700 Bad Debt / Cr the bill's receivable, in the same transaction as the write-off.
+    const AccountingService = require('../services/AccountingService');
+    const woFail = (msg) => Object.assign(new Error(`Write-off not recorded: ${msg} Nothing was changed.`), { statusCode: 422 });
+    const badDebtAccount = await AccountingService.getAccountByCode(bill.clinic_id, '5700');
+    const receivablesAccount = await AccountingService.getReceivableAccount(bill.clinic_id, bill.scheme_id);
+    if (!badDebtAccount) throw woFail('the Bad Debt Expense account (5700) is missing or inactive in the Chart of Accounts.');
+    if (!receivablesAccount) throw woFail('the receivable account (1200/1210) is missing or inactive in the Chart of Accounts.');
+    let woGl;
     try {
-      const AccountingService = require('../services/AccountingService');
-      const badDebtAccount = await AccountingService.getAccountByCode(bill.clinic_id, '5700');
-      // Same receivable the bill was originally booked to (1210 for insurance-scheme
-      // bills, 1200 otherwise) — see the matching comment in the discount handler above.
-      const receivablesAccount = await AccountingService.getReceivableAccount(bill.clinic_id, bill.scheme_id);
-
-      if (badDebtAccount && receivablesAccount) {
-        const glEntry = await AccountingService.createGLEntry({
-          clinic_id: bill.clinic_id,
-          transaction_date: new Date(),
-          transaction_type: 'bad_debt_write_off',
-          description: `Write-off Bill ${bill.bill_number} - ${reason || 'No reason'}`,
-          reference_id: id,
-          reference_module: 'bill_write_off',
-          transaction_currency: bill.bill_currency,
-        }, [
-          { account_id: badDebtAccount.id, debit_amount: writeOffAmount, credit_amount: 0, description: `Bad debt: ${reason || 'Write-off'}` },
-          { account_id: receivablesAccount.id, debit_amount: 0, credit_amount: writeOffAmount, description: `AR write-off: ${bill.bill_number}` }
-        ], req.user?.id || 'system');
-
-        await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
-        await sequelize.query('UPDATE bill_write_offs SET write_off_gl_entry_id = :glId WHERE id = :id',
-          { replacements: { glId: glEntry.id, id }, transaction: t });
-      }
+      woGl = await AccountingService.createGLEntry({
+        clinic_id: bill.clinic_id,
+        branch_id: bill.branch_id || null,
+        transaction_date: new Date(),
+        transaction_type: 'bad_debt_write_off',
+        description: `Write-off Bill ${bill.bill_number} - ${reason || 'No reason'}`,
+        reference_id: id,
+        reference_module: 'bill_write_off',
+        transaction_currency: bill.bill_currency,
+      }, [
+        { account_id: badDebtAccount.id, debit_amount: writeOffAmount, credit_amount: 0, description: `Bad debt: ${reason || 'Write-off'}` },
+        { account_id: receivablesAccount.id, debit_amount: 0, credit_amount: writeOffAmount, description: `AR write-off: ${bill.bill_number}` }
+      ], req.user?.id || 'system', t);
     } catch (glErr) {
-      console.error('GL entry for write-off failed:', glErr.message);
+      if (glErr.statusCode) throw glErr;
+      throw woFail(`posting to the ledger failed (${glErr.message}).`);
     }
+    await sequelize.query('UPDATE bill_write_offs SET write_off_gl_entry_id = :glId WHERE id = :id',
+      { replacements: { glId: woGl.id, id }, transaction: t });
 
     await t.commit();
     res.json({ id, write_off_number: writeOffNumber, write_off_amount: writeOffAmount });
   } catch (error) {
-    await t.rollback();
+    if (!t.finished) await t.rollback().catch(() => {});
     console.error('Error writing off bill:', error);
-    res.status(500).json({ error: 'Failed to write off bill' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to write off bill' });
   }
 });
 
@@ -654,8 +646,8 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
       WHERE id = :id
     `, { replacements: { billId: targetBillId, amount: note.credit_amount, id }, transaction: t });
 
-    // Create GL reversal (Cr. Revenue, Dr. AR)
-    try {
+    // Revenue reversal (Dr revenue / Cr receivable) in the same transaction as the bill change.
+    {
       const AccountingService = require('../services/AccountingService');
       // credit_notes doesn't carry scheme_id/currency itself — look them up from the
       // bill this note is actually being applied against, same as discount/write-off above.
@@ -723,16 +715,12 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
         }, [
           ...revenueLines.map((r) => ({ account_id: r.account_id, debit_amount: r.amount, credit_amount: 0, description: `Revenue reversal: ${note.credit_note_number}` })),
           { account_id: receivablesAccount.id, debit_amount: 0, credit_amount: note.credit_amount, description: `AR credit: ${note.credit_note_number}` }
-        ], req.user?.id || 'system');
-
-        await AccountingService.postGLEntry(glEntry.id, req.user?.id || 'system');
+        ], req.user?.id || 'system', t);
         await sequelize.query('UPDATE credit_notes SET credit_gl_entry_id = :glId WHERE id = :id',
           { replacements: { glId: glEntry.id, id }, transaction: t });
       } else {
-        console.error(`Credit note ${note.credit_note_number}: could not post GL entry — no revenue or receivable account resolved`);
+        throw Object.assign(new Error(`Credit note not applied: no revenue or receivable account could be resolved for this bill. Nothing was changed.`), { statusCode: 422 });
       }
-    } catch (glErr) {
-      console.error('GL entry for credit note failed:', glErr.message);
     }
 
     await t.commit();
@@ -740,7 +728,7 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
   } catch (error) {
     if (!t.finished) await t.rollback().catch(() => {});
     console.error('Error applying credit note:', error);
-    res.status(500).json({ error: 'Failed to apply credit note' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : `Credit note not applied: ${error.message}. Nothing was changed.` });
   }
 });
 

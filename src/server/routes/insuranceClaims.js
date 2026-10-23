@@ -481,42 +481,34 @@ router.put('/:id/status', authorize('claims.write'), async (req, res) => {
         }
       }
 
-      // Post the actual cash/bank receipt against the Insurance Receivable this
-      // claim's bills were originally booked to (see AccountingService.createGLFromPatientBill).
+      // Post the cash/bank receipt against the receivable the claim's bills were booked to,
+      // in the SAME transaction as the claim/invoice/bill updates: money recorded as received
+      // must reach the ledger, or nothing is recorded at all.
+      const AccountingService = require('../services/AccountingService');
+      const clinicId = claims[0].clinic_id;
+      const bankAccount = await AccountingService.getAccountByCode(clinicId, '1110')
+        || await AccountingService.getAccountByCode(clinicId, '1100');
+      const receivableAccount = await AccountingService.getReceivableAccount(clinicId, claims[0].scheme_id);
+      if (!bankAccount || !receivableAccount) {
+        throw Object.assign(new Error(`Payment not recorded: the ${!bankAccount ? 'bank (1110) / cash (1100)' : 'receivable (1210/1200)'} account is missing or inactive in the Chart of Accounts. Nothing was changed.`), { statusCode: 422 });
+      }
       try {
-        const AccountingService = require('../services/AccountingService');
-        const clinicId = claims[0].clinic_id;
-        const bankAccount = await AccountingService.getAccountByCode(clinicId, '1110')
-          || await AccountingService.getAccountByCode(clinicId, '1100');
-        const receivableAccount = await AccountingService.getReceivableAccount(clinicId, claims[0].scheme_id);
-
-        if (bankAccount && receivableAccount) {
-          const glEntry = await AccountingService.createGLEntry({
-            clinic_id: clinicId,
-            transaction_date: new Date(),
-            transaction_type: 'insurance_claim_payment',
-            description: `Insurance claim payment - ${claims[0].claim_number}`,
-            reference_id: req.params.id,
-            reference_module: 'insurance_claims',
-            // The claim (and actualPaidAmount) is in whatever currency the scheme bills in —
-            // "New Sudan" and others bill in USD — not necessarily the base currency (SSP).
-            // Without this, createGLEntry defaults to base currency and posts the raw USD
-            // number straight into the SSP ledger with no conversion at all (e.g. a real
-            // $175 payment landing as "175.00 SSP" instead of ~1.3M SSP at the going rate).
-            transaction_currency: claims[0].currency,
-          }, [
-            { account_id: bankAccount.id, debit_amount: actualPaidAmount, credit_amount: 0, description: `Insurer payment received - claim ${claims[0].claim_number}` },
-            { account_id: receivableAccount.id, debit_amount: 0, credit_amount: actualPaidAmount, description: `Insurance receivable cleared - claim ${claims[0].claim_number}` }
-          ], req.user?.userId || 'system');
-          await AccountingService.postGLEntry(glEntry.id, req.user?.userId || 'system');
-        } else {
-          console.error(`Insurance claim ${claims[0].claim_number}: could not post GL entry — missing bank or receivable account for clinic ${clinicId}`);
-        }
+        await AccountingService.createGLEntry({
+          clinic_id: clinicId,
+          transaction_date: new Date(),
+          transaction_type: 'insurance_claim_payment',
+          description: `Insurance claim payment - ${claims[0].claim_number}`,
+          reference_id: req.params.id,
+          reference_module: 'insurance_claims',
+          // The claim is in the scheme's own currency (often USD) — convert, never post raw.
+          transaction_currency: claims[0].currency,
+        }, [
+          { account_id: bankAccount.id, debit_amount: actualPaidAmount, credit_amount: 0, description: `Insurer payment received - claim ${claims[0].claim_number}` },
+          { account_id: receivableAccount.id, debit_amount: 0, credit_amount: actualPaidAmount, description: `Insurance receivable cleared - claim ${claims[0].claim_number}` }
+        ], req.user?.userId || req.user?.id || 'system', t);
       } catch (glErr) {
-        // Don't let a GL posting failure undo the claim/invoice status update that
-        // already committed — but this must not vanish silently either, since it
-        // means real money moved with nothing recorded in the ledger for it.
-        console.error(`Insurance claim ${claims[0].claim_number}: GL posting failed after status update:`, glErr.message);
+        if (glErr.statusCode) throw glErr;
+        throw Object.assign(new Error(`Payment not recorded: posting to the ledger failed (${glErr.message}). Nothing was changed.`), { statusCode: 422 });
       }
     }
 
@@ -524,9 +516,9 @@ router.put('/:id/status', authorize('claims.write'), async (req, res) => {
     const [updated] = await sequelize.query(`SELECT * FROM insurance_batch_claims WHERE id = ?`, { replacements: [req.params.id] });
     res.json({ success: true, data: updated[0] });
   } catch (err) {
-    await t.rollback();
+    if (!t.finished) await t.rollback().catch(() => {});
     console.error('Update claim status error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
