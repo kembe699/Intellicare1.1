@@ -968,8 +968,13 @@ router.post('/purchase-orders', authorize('procurement.purchase_orders.write'), 
         const AccountingService = require('../services/AccountingService');
         xRate = await AccountingService.getExchangeRate(clinic_id, resolvedCurrency, baseCurrency, order_date ? new Date(order_date) : new Date());
       } catch (rateErr) {
-        console.warn(`No ${resolvedCurrency}->${baseCurrency} rate available, using client-supplied/1:1 fallback:`, rateErr.message);
-        xRate = exchange_rate || 1;
+        // An explicit rate typed on the PO is a deliberate choice, not a silent
+        // fallback; with neither, refuse rather than total the PO at 1:1.
+        if (parseFloat(exchange_rate) > 0) {
+          xRate = parseFloat(exchange_rate);
+        } else {
+          return res.status(400).json({ error: `Cannot create this ${resolvedCurrency} purchase order — there is no ${resolvedCurrency}→${baseCurrency} exchange rate for ${order_date || new Date().toISOString().split('T')[0]}. Add it in Accounting › Exchange Rates (or enter the rate on the PO), then try again.` });
+        }
       }
     }
     const baseCurrencyTotal = Math.round(totalAmount * xRate * 100) / 100;
@@ -1093,9 +1098,9 @@ router.post('/purchase-orders/quick-bill', authorize('procurement.purchase_order
     let xRate = 1;
     if (poCurrency !== baseCurrency) {
       try {
-        xRate = await AccountingService.getExchangeRate(clinic_id, poCurrency, baseCurrency, new Date());
+        xRate = await AccountingService.requireExchangeRate(clinic_id, poCurrency, baseCurrency, new Date(), `record this ${poCurrency} supplier bill`);
       } catch (rateErr) {
-        console.warn(`No ${poCurrency}->${baseCurrency} rate available for quick-bill, using 1:1 fallback:`, rateErr.message);
+        return res.status(400).json({ error: rateErr.message });
       }
     }
     const baseCurrencyTotal = Math.round(amt * xRate * 100) / 100;
@@ -1982,12 +1987,8 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
       const itemBaseCurrency = baseCurrencyRowForItem?.code || 'SSP';
       let itemUnitCost = unitCost;
       if (itemBaseCurrency !== grnCostCurrency) {
-        try {
-          const fxRate = await AccountingService.getExchangeRate(grn.clinic_id, grnCostCurrency, itemBaseCurrency, grn.receipt_date || new Date());
-          itemUnitCost = AccountingService.convertAmount(unitCost, fxRate || 1);
-        } catch (e) {
-          console.error(`Could not resolve ${grnCostCurrency}->${itemBaseCurrency} rate for GRN ${grn.grn_number}; leaving item cost unconverted:`, e.message);
-        }
+        const fxRate = await AccountingService.requireExchangeRate(grn.clinic_id, grnCostCurrency, itemBaseCurrency, grn.receipt_date || new Date(), `accept ${grn.grn_number}`);
+        itemUnitCost = AccountingService.convertAmount(unitCost, fxRate);
       }
       const lineValue = (line.quantity_received || 0) * unitCost;
       if (lineValue > 0) {
@@ -2177,7 +2178,7 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
   } catch (error) {
     if (t && !t.finished) await t.rollback().catch(() => {});
     console.error('Error accepting GRN:', error);
-    res.status(500).json({ error: 'Failed to accept GRN' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to accept GRN' });
   }
 });
 

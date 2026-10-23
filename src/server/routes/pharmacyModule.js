@@ -1529,9 +1529,13 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
     if (unit_price === undefined && curr !== (item.cost_currency || 'SSP')) {
       try {
         const AccountingService = require('../services/AccountingService');
-        const rate = await AccountingService.getExchangeRate(cid, item.cost_currency || 'SSP', curr, new Date());
+        const rate = await AccountingService.requireExchangeRate(cid, item.cost_currency || 'SSP', curr, new Date(), `price ${item.item_name || 'this item'} in ${curr}`);
         price = (item.selling_price || 0) * rate;
-      } catch (rateErr) { /* use base price if rate not available */ }
+      } catch (rateErr) {
+        // Charging the unconverted price in another currency is the same silent 1:1 bug.
+        if (t && !t.finished) await t.rollback().catch(() => {});
+        return res.status(400).json({ error: rateErr.message });
+      }
     }
     // selling_price (and any unit_price override) has always meant "price per
     // unit_of_measure pack" — the item form has never had a separate per-

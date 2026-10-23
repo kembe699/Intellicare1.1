@@ -1205,8 +1205,9 @@ async function computeAdvanceDeductionsForEmployee({ clinicId, employee, runDate
     const advanceCurrency = advance.currency || 'USD';
     let amount = installment;
     if (advanceCurrency !== payrollCurrency) {
-      const rate = await AccountingService.getExchangeRate(clinicId, advanceCurrency, payrollCurrency, runDate).catch(() => 1);
-      amount = AccountingService.convertAmount(installment, rate || 1);
+      const rate = await AccountingService.requireExchangeRate(clinicId, advanceCurrency, payrollCurrency, runDate,
+        `deduct ${employee.first_name || ''} ${employee.last_name || ''}'s salary advance`.replace(/\s+/g, ' '));
+      amount = AccountingService.convertAmount(installment, rate);
     }
 
     // The % cap applies across this employee's advances together, oldest
@@ -1346,7 +1347,7 @@ router.post('/payroll/runs', authorize('hr.payroll.write'), async (req, res) => 
   } catch (error) {
     await t.rollback();
     console.error('Error creating payroll run:', error);
-    res.status(500).json({ error: 'Failed to create payroll run' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to create payroll run' });
   }
 });
 

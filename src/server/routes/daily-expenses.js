@@ -473,6 +473,19 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
         outstanding,
       });
     }
+    // Resolve the posting rate before anything is written, so a missing rate
+    // refuses the payment outright instead of recording it without a ledger entry.
+    const [[baseCurrencyRowEarly]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
+    const payDateEarly = payment_date || new Date().toISOString().split('T')[0];
+    let rateNowEarly;
+    try {
+      rateNowEarly = await AccountingService.requireExchangeRate(
+        parseInt(clinic_id || po.clinic_id || 1), po.po_currency || baseCurrencyRowEarly?.code, baseCurrencyRowEarly?.code || po.po_currency,
+        payDateEarly, `pay ${po.po_number}`
+      );
+    } catch (rateErr) {
+      return res.status(rateErr.statusCode || 400).json({ error: rateErr.message });
+    }
     const newPaid = alreadyPaid + payAmt;
     const payStatus = newPaid >= total - 0.01 ? 'paid' : 'partial';
     const voucherNo = `PV-${Date.now().toString().slice(-8)}`;
@@ -533,12 +546,7 @@ router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, r
       const poCurrency = po.po_currency || baseCurrency;
       const payDate = payment_date || new Date().toISOString().split('T')[0];
 
-      let rateNow = 1.0;
-      try {
-        rateNow = await AccountingService.getExchangeRate(clinicIdNum, poCurrency, baseCurrency, payDate);
-      } catch (rateErr) {
-        console.warn(`No ${poCurrency}->${baseCurrency} rate for ${payDate}, posting at 1:1 — FX gain/loss will be understated:`, rateErr.message);
-      }
+      const rateNow = rateNowEarly;
       const paymentBaseAmount = AccountingService.convertAmount(payAmt, rateNow);
 
       // apBaseAmount is the SSP-equivalent booked to AP when this PO's goods were accepted
@@ -677,11 +685,7 @@ router.post('/consultant-bill-payment', authorize('expenses.write'), async (req,
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'USD';
     const billCurrency = bill.currency || baseCurrency;
-    let rate = 1;
-    if (billCurrency !== baseCurrency) {
-      try { rate = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrency, payDate) || 1; }
-      catch (e) { rate = 1; }
-    }
+    const rate = await AccountingService.requireExchangeRate(clinicId, billCurrency, baseCurrency, payDate, `pay consultant bill ${bill.bill_number}`);
     const baseAmount = AccountingService.convertAmount(parseFloat(bill.bill_amount) || 0, rate);
 
     const doctorFeesAccount = await AccountingService.getAccountByCode(clinicId, '5110');
@@ -729,7 +733,7 @@ router.post('/consultant-bill-payment', authorize('expenses.write'), async (req,
     res.json({ success: true, gl_entry_id: glEntry?.id || null, gl_number: glEntry?.gl_number || null });
   } catch (error) {
     console.error('Error paying consultant bill:', error);
-    res.status(500).json({ error: error.message || 'Failed to pay consultant bill' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Failed to pay consultant bill' });
   }
 });
 

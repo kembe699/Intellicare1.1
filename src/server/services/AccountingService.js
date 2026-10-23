@@ -79,6 +79,29 @@ class AccountingService {
   }
 
   /**
+   * Like getExchangeRate, but for money that is about to be paid, posted or
+   * charged: never falls back to 1:1. Throws a 400-tagged error naming the
+   * exact rate and date to add, for the caller to return as-is.
+   * @param {string} [action] - what is being blocked, e.g. "pay Akol Deng's salary"
+   */
+  async requireExchangeRate(clinicId, fromCurrency, toCurrency, date = new Date(), action = '') {
+    if (!fromCurrency || !toCurrency || fromCurrency === toCurrency) return 1;
+    try {
+      const rate = parseFloat(await this.getExchangeRate(clinicId, fromCurrency, toCurrency, date));
+      if (rate > 0) return rate;
+    } catch (e) { /* fall through to the clear refusal below */ }
+    const d = date instanceof Date ? date : new Date(date);
+    const day = Number.isNaN(d.getTime()) ? String(date) : d.toISOString().split('T')[0];
+    const err = new Error(
+      `Cannot ${action || 'record this'} — there is no ${fromCurrency}→${toCurrency} exchange rate for ${day}. ` +
+      `Add the ${fromCurrency}→${toCurrency} rate for ${day} in Accounting › Exchange Rates, then try again.`
+    );
+    err.statusCode = 400;
+    err.isExchangeRateError = true;
+    throw err;
+  }
+
+  /**
    * Convert amount from one currency to another
    */
   convertAmount(amount, exchangeRate) {

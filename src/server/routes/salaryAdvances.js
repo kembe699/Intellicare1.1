@@ -347,11 +347,7 @@ router.post('/:id/disburse', authorize('hr.salary_advances.write'), async (req, 
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'USD';
     const advanceCurrency = advance.currency || baseCurrency;
-    let rate = 1;
-    if (advanceCurrency !== baseCurrency) {
-      try { rate = await AccountingService.getExchangeRate(clinicId, advanceCurrency, baseCurrency, payDate) || 1; }
-      catch (e) { rate = 1; }
-    }
+    const rate = await AccountingService.requireExchangeRate(clinicId, advanceCurrency, baseCurrency, payDate, 'disburse this salary advance');
     const baseAmount = AccountingService.convertAmount(parseFloat(advance.amount) || 0, rate);
     const employeeLabel = `${advance.first_name} ${advance.last_name} (${advance.employee_number})`;
 
@@ -385,7 +381,7 @@ router.post('/:id/disburse', authorize('hr.salary_advances.write'), async (req, 
     res.json({ success: true, gl_entry_id: glEntry.id, gl_number: glEntry.gl_number });
   } catch (error) {
     console.error('Error disbursing salary advance:', error);
-    res.status(500).json({ error: error.message || 'Failed to disburse advance' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Failed to disburse advance' });
   }
 });
 
@@ -424,11 +420,7 @@ router.post('/:id/repay', authorize('hr.salary_advances.write'), async (req, res
     const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
     const baseCurrency = baseCurrencyRow?.code || 'USD';
     const advanceCurrency = advance.currency || baseCurrency;
-    let rate = 1;
-    if (advanceCurrency !== baseCurrency) {
-      try { rate = await AccountingService.getExchangeRate(clinicId, advanceCurrency, baseCurrency, payDate) || 1; }
-      catch (e) { rate = 1; }
-    }
+    const rate = await AccountingService.requireExchangeRate(clinicId, advanceCurrency, baseCurrency, payDate, 'record this advance repayment');
     const baseAmount = AccountingService.convertAmount(repayAmount, rate);
     const employeeLabel = `${advance.first_name} ${advance.last_name} (${advance.employee_number})`;
 
@@ -469,7 +461,7 @@ router.post('/:id/repay', authorize('hr.salary_advances.write'), async (req, res
     res.json({ success: true, balance_remaining: Math.max(newBalance, 0), status: newStatus, gl_entry_id: glEntry?.id || null });
   } catch (error) {
     console.error('Error recording advance repayment:', error);
-    res.status(500).json({ error: error.message || 'Failed to record repayment' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Failed to record repayment' });
   }
 });
 

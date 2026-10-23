@@ -1140,14 +1140,34 @@ router.post('/transactions', authorize('inventory.write'), async (req, res) => {
     const {
       item_id, transaction_type, quantity_change,
       from_location_id, to_location_id, batch_id,
-      unit_cost, cost_currency, exchange_rate,
-      reference_type, reference_id,
+      unit_cost, cost_currency, reference_type, reference_id,
       transaction_date, notes, created_by
     } = req.body;
+    let { exchange_rate } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
 
     if (!item_id || !transaction_type || !quantity_change) {
       return res.status(400).json({ error: 'item_id, transaction_type, and quantity_change required' });
+    }
+
+    // A foreign-currency cost needs a real rate before anything is written —
+    // its ledger entry is posted after the stock row, so refusing later would
+    // leave a stock movement with no matching posting.
+    {
+      const [[baseRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1`);
+      const base = baseRow?.code || 'SSP';
+      if (cost_currency && cost_currency !== base) {
+        if (!(parseFloat(exchange_rate) > 0)) {
+          const AccountingService = require('../services/AccountingService');
+          try {
+            exchange_rate = await AccountingService.requireExchangeRate(clinic_id, cost_currency, base, transaction_date || new Date(), 'record this stock transaction');
+          } catch (rateErr) {
+            return res.status(400).json({ error: rateErr.message });
+          }
+        }
+      } else {
+        exchange_rate = 1;
+      }
     }
 
     // Validated up front, before any row is written — a rejected transfer
@@ -2090,13 +2110,8 @@ async function createInventoryGLEntry(clinicId, transaction, createdBy) {
     if (txnCurrency !== baseCurrency) {
       rate = parseFloat(transaction.exchange_rate) || 0;
       if (!rate) {
-        try {
-          const AccountingService = require('../services/AccountingService');
-          rate = await AccountingService.getExchangeRate(clinicId, txnCurrency, baseCurrency, new Date());
-        } catch (rateErr) {
-          console.warn(`No ${txnCurrency}->${baseCurrency} rate available for inventory GL entry, posting at 1:1 — base-currency total will be understated:`, rateErr.message);
-          rate = 1;
-        }
+        const AccountingService = require('../services/AccountingService');
+        rate = await AccountingService.requireExchangeRate(clinicId, txnCurrency, baseCurrency, new Date(), `post ${transaction.transaction_number || 'this stock transaction'}`);
       }
     }
     const baseTotalCost = Math.round(totalCost * rate * 100) / 100;
@@ -2185,6 +2200,7 @@ async function createInventoryGLEntry(clinicId, transaction, createdBy) {
     console.log(`GL entry ${jeNumber} created for inventory ${txType} (${totalCost} ${txnCurrency} / ${baseTotalCost} ${baseCurrency})`);
     return jeNumber;
   } catch (error) {
+    if (error.isExchangeRateError) throw error;
     console.error('Error creating inventory GL entry:', error);
     return null; // Non-blocking — don't fail the inventory transaction
   }
@@ -2215,7 +2231,7 @@ router.post('/gl-entry', authorize('inventory.write'), async (req, res) => {
     }
   } catch (error) {
     console.error('Error creating GL entry:', error);
-    res.status(500).json({ error: 'Failed to create GL entry' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Failed to create GL entry' });
   }
 });
 

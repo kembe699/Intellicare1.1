@@ -29,11 +29,11 @@ async function resolvePayrollAccounts(clinicId) {
 async function payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseCurrency, paymentAccountId, userId) {
   const { salariesAccount, doctorFeesAccount, payrollLiabilitiesAccount } = accounts;
   const cur = line.currency || baseCurrency;
-  let rate = 1;
-  if (cur !== baseCurrency) {
-    try { rate = await AccountingService.getExchangeRate(clinicId, cur, baseCurrency, run.run_date) || 1; }
-    catch (e) { rate = 1; }
-  }
+  // Never 1:1 — paying a USD salary as the same number of SSP (or the reverse)
+  // misstates every account in the entry. Refuse with the exact rate to add.
+  const rate = await AccountingService.requireExchangeRate(
+    clinicId, cur, baseCurrency, run.run_date, `pay ${line.first_name} ${line.last_name} (${line.employee_number})`
+  );
   const conv = (amt) => AccountingService.convertAmount(parseFloat(amt) || 0, rate);
   const baseGross = conv(line.gross_pay);
   const baseNet = conv(line.net_pay);
@@ -127,8 +127,8 @@ async function payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseC
       const advanceCurrency = advance.currency || 'USD';
       let amountInAdvanceCurrency = parseFloat(d.amount) || 0;
       if (advanceCurrency !== cur) {
-        const backRate = await AccountingService.getExchangeRate(clinicId, cur, advanceCurrency, run.run_date).catch(() => 1);
-        amountInAdvanceCurrency = AccountingService.convertAmount(amountInAdvanceCurrency, backRate || 1);
+        const backRate = await AccountingService.requireExchangeRate(clinicId, cur, advanceCurrency, run.run_date, 'apply this salary-advance deduction');
+        amountInAdvanceCurrency = AccountingService.convertAmount(amountInAdvanceCurrency, backRate);
       }
 
       const balance = parseFloat(advance.balance_remaining) || 0;
