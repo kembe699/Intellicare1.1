@@ -50,7 +50,9 @@ for (const spec of pages) {
   const text = await page.locator('body').innerText().catch(() => '');
   const notFound = /page not found|404/i.test(text.slice(0, 400));
   const denied = /access denied|don't have permission|not authorized/i.test(text);
-  if (name.startsWith('sidebar')) {
+  if (process.env.NOSHOT) {
+    // URL sweep only — no screenshot.
+  } else if (name.startsWith('sidebar')) {
     // The sidebar scrolls inside a fixed-height panel; unclip it so the whole menu is captured.
     await page.evaluate(() => {
       const aside = document.querySelector('aside');
