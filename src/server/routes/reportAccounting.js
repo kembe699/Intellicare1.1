@@ -110,6 +110,89 @@ router.get('/income-statement-by-branch', async (req, res) => {
   }
 });
 
+// ── GET /income-statement-by-department ──────────────────────────────────
+// Revenue and expenses per DEPARTMENT, account by account. The ledger itself
+// carries no department, so each account is attributed through the central
+// Categories setup: an account belongs to a department when the categories
+// that post to it (as revenue, cost-of-sale or expense account) are linked
+// to that one department. Accounts no department-linked category uses, or
+// that categories of several departments share, report under "General".
+// Because this is worked out at report time, past entries move to the right
+// department as soon as categories are linked — no ledger rows are rewritten.
+router.get('/income-statement-by-department', async (req, res) => {
+  try {
+    const dateFrom = asDateStr(req.query.dateFrom) || isoDaysAgo(29);
+    const dateTo = asDateStr(req.query.dateTo) || isoDaysAgo(0);
+    const clinicId = clinicIdFor(req);
+    const repl = { clinicId, dateFrom, dateTo };
+    const branchSql = branchScope(req, repl, 'al', boolParam(req.query.allBranches));
+    const [[hasCategories]] = await sequelize.query(
+      `SELECT bool_or(column_name = 'type') AS ok FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'categories'`
+    );
+    const deptCte = hasCategories?.ok ? `
+      cat_use AS (
+        -- How much each category is actually used (linked products, services
+        -- and expenses), so a shared account goes to its main department.
+        SELECT c.id, c.revenue_account_id, c.cogs_account_id, c.expense_account_id, d.department_name,
+               1 + COALESCE((SELECT COUNT(*) FROM inventory_items i WHERE i.category_id = c.id), 0)
+                 + COALESCE((SELECT COUNT(*) FROM services sv WHERE sv.category_id = c.id), 0)
+                 + COALESCE((SELECT COUNT(*) FROM daily_expenses de WHERE de.category_id = c.id), 0) AS weight
+          FROM categories c
+          JOIN departments d ON d.id::text = c.department_id::text
+         WHERE c.clinic_id = :clinicId AND c.is_active
+      ),
+      acct_dept AS (
+        SELECT DISTINCT ON (acct_id) acct_id, department_name AS dept
+          FROM (
+            SELECT x.acct_id, cu.department_name, SUM(cu.weight) AS w
+              FROM cat_use cu
+              CROSS JOIN LATERAL (VALUES (cu.revenue_account_id), (cu.cogs_account_id), (cu.expense_account_id)) AS x(acct_id)
+             WHERE x.acct_id IS NOT NULL
+             GROUP BY 1, 2
+          ) t
+         ORDER BY acct_id, w DESC, department_name
+      ),` : `acct_dept AS (SELECT NULL::varchar AS acct_id, NULL::varchar AS dept WHERE FALSE),`;
+    const rows = await sequelize.query(
+      `WITH ${deptCte}
+       lines AS (
+         SELECT coa.id, coa.account_code, coa.account_name, coa.account_type,
+                CASE WHEN coa.account_type = 'revenue'
+                     THEN CASE WHEN coa.balance_type = 'credit' THEN al.credit_amount - al.debit_amount ELSE al.debit_amount - al.credit_amount END
+                     ELSE CASE WHEN coa.balance_type = 'debit' THEN al.debit_amount - al.credit_amount ELSE al.credit_amount - al.debit_amount END
+                END AS amount
+           FROM account_ledger al
+           JOIN chart_of_accounts coa ON coa.id = al.account_id
+          WHERE al.clinic_id = :clinicId AND al.is_posted = true
+            AND al.transaction_date BETWEEN :dateFrom AND :dateTo
+            AND coa.account_type IN ('revenue', 'expense')${branchSql}
+       )
+       SELECT COALESCE(ad.dept, 'General') AS department, l.account_code AS "accountCode", l.account_name AS "accountName",
+              l.account_type AS "accountType", SUM(l.amount) AS amount
+         FROM lines l LEFT JOIN acct_dept ad ON ad.acct_id = l.id
+        GROUP BY 1, 2, 3, 4
+       HAVING ABS(SUM(l.amount)) > 0.004
+        ORDER BY 1, 2`,
+      { replacements: repl, type: QueryTypes.SELECT }
+    );
+    const byDept = new Map();
+    for (const r of rows) {
+      const d = byDept.get(r.department) || { department: r.department, totalRevenue: 0, totalExpenses: 0, revenue: [], expenses: [] };
+      const amount = parseFloat(r.amount) || 0;
+      const line = { accountCode: r.accountCode, accountName: r.accountName, amount };
+      if (r.accountType === 'revenue') { d.totalRevenue += amount; d.revenue.push(line); } else { d.totalExpenses += amount; d.expenses.push(line); }
+      byDept.set(r.department, d);
+    }
+    const departments = [...byDept.values()]
+      .map((d) => ({ ...d, netIncome: d.totalRevenue - d.totalExpenses }))
+      // Real departments by revenue, "General" last.
+      .sort((a, b) => (a.department === 'General') - (b.department === 'General') || b.totalRevenue - a.totalRevenue);
+    res.json({ period: { dateFrom, dateTo }, categoriesLinked: !!hasCategories?.ok, departments });
+  } catch (err) {
+    console.error('Accounting income-statement-by-department error:', err);
+    res.status(500).json({ error: 'Failed to generate income statement by department' });
+  }
+});
+
 // ── GET /cash-flow ───────────────────────────────────────────────────────
 // Direct method over the real cash/bank accounts (is_bank_account = true) —
 // a cash account is a debit-balance asset, so a DEBIT is cash IN and a

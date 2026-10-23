@@ -32,7 +32,7 @@ import { fmtCurrency, fmtCount, fmtDate, CsvColumn, getDatePresets, exportCSV, t
 // anywhere in this chart of accounts.
 
 type Mode =
-  | 'trial-balance' | 'income-statement' | 'income-statement-by-branch' | 'balance-sheet'
+  | 'trial-balance' | 'income-statement' | 'income-statement-by-branch' | 'income-statement-by-department' | 'balance-sheet'
   | 'cash-flow' | 'general-ledger' | 'account-history' | 'sub-account-history'
   | 'journal-vouchers' | 'expenses' | 'equity-statement';
 
@@ -53,7 +53,8 @@ const REPORT_OPTIONS: ReportOption[] = [
 
   { value: 'income_statement_detailed', label: 'Income Statement (Detailed)', group: 'Income Statement', mode: 'income-statement', detailed: true },
   { value: 'income_statement_summary', label: 'Income Statement (Summary)', group: 'Income Statement', mode: 'income-statement', detailed: false },
-  { value: 'income_statement_by_department', label: 'Income Statement (Detailed) By Department', group: 'Income Statement', mode: 'income-statement-by-branch' },
+  { value: 'income_statement_by_department', label: 'Income Statement (Detailed) By Department', group: 'Income Statement', mode: 'income-statement-by-department' },
+  { value: 'income_statement_by_branch', label: 'Income Statement By Branch', group: 'Income Statement', mode: 'income-statement-by-branch' },
   { value: 'comprehensive_income_statement', label: 'Comprehensive Income Statement', group: 'Income Statement', mode: 'income-statement', detailed: true, isComprehensive: true },
 
   { value: 'balance_sheet_detailed', label: 'Balance Sheet (Detailed)', group: 'Balance Sheet', mode: 'balance-sheet', detailed: true },
@@ -189,9 +190,15 @@ export default function AccountingReport() {
       } else if (option.mode === 'income-statement-by-branch') {
         const params = new URLSearchParams({ dateFrom, dateTo, clinic_id: clinicId });
         const res = await authFetch(`/api/reports-v2/accounting/income-statement-by-branch?${params}`);
-        if (!res.ok) throw new Error('Failed to load income statement by department');
+        if (!res.ok) throw new Error('Failed to load income statement by branch');
         const json = await res.json();
         setRows(json.rows || []);
+      } else if (option.mode === 'income-statement-by-department') {
+        const params = new URLSearchParams({ dateFrom, dateTo, clinic_id: clinicId });
+        const res = await authFetch(`/api/reports-v2/accounting/income-statement-by-department?${params}`);
+        if (!res.ok) throw new Error('Failed to load income statement by department');
+        const json = await res.json();
+        setRows(json.departments || []);
       } else if (option.mode === 'balance-sheet') {
         const res = await authFetch(`/api/accounting/reports/balance-sheet?clinic_id=${clinicId}&as_of_date=${dateTo}`);
         if (!res.ok) throw new Error('Failed to load balance sheet');
@@ -307,12 +314,21 @@ export default function AccountingReport() {
   } else if (option.mode === 'income-statement-by-branch') {
     keyExtractor = r => r.branchName;
     columns = [
-      { key: 'branchName', header: 'Department (Branch)', sortable: true },
+      { key: 'branchName', header: 'Branch', sortable: true },
       { key: 'totalRevenue', header: 'Revenue', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
       { key: 'totalExpenses', header: 'Expenses', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
       { key: 'netIncome', header: 'Net Income', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(v)}</span> },
     ];
-    csvColumns = [{ header: 'Department (Branch)', key: 'branchName' }, { header: 'Revenue', key: 'totalRevenue' }, { header: 'Expenses', key: 'totalExpenses' }, { header: 'Net Income', key: 'netIncome' }];
+    csvColumns = [{ header: 'Branch', key: 'branchName' }, { header: 'Revenue', key: 'totalRevenue' }, { header: 'Expenses', key: 'totalExpenses' }, { header: 'Net Income', key: 'netIncome' }];
+  } else if (option.mode === 'income-statement-by-department') {
+    keyExtractor = r => r.department;
+    columns = [
+      { key: 'department', header: 'Department', sortable: true },
+      { key: 'totalRevenue', header: 'Revenue', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
+      { key: 'totalExpenses', header: 'Expenses', align: 'right', sortable: true, render: v => <span className="font-mono text-muted-foreground">{fmtCurrency(v)}</span> },
+      { key: 'netIncome', header: 'Net Income', align: 'right', sortable: true, render: v => <span className={`font-mono font-medium ${v >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(v)}</span> },
+    ];
+    csvColumns = [{ header: 'Department', key: 'department' }, { header: 'Revenue', key: 'totalRevenue' }, { header: 'Expenses', key: 'totalExpenses' }, { header: 'Net Income', key: 'netIncome' }];
   } else if (option.mode === 'balance-sheet') {
     keyExtractor = (r, i) => r.account_code ?? r.section ?? i;
     columns = option.detailed
@@ -717,6 +733,100 @@ export default function AccountingReport() {
             </div>
           </div>
         </>
+      ) : option.mode === 'income-statement-by-department' ? (
+        <>
+          <div className="max-w-4xl flex justify-end gap-2 mb-3 print:hidden">
+            <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={triggerPrint} disabled={!hasLoaded} className="h-8 gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </Button>
+          </div>
+          <div className="max-w-4xl space-y-4 print:max-w-none">
+            {rows.length === 0 ? (
+              <div className="bg-card border rounded-lg shadow-sm px-4 py-6 text-sm text-muted-foreground">No activity in this period.</div>
+            ) : (
+              <>
+                {/* Summary across departments */}
+                <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-border">
+                    <h3 className="text-sm font-bold tracking-wide">Summary by Department</h3>
+                  </div>
+                  <div className="px-4 py-3">
+                    <table className="w-full table-fixed text-sm border-collapse">
+                      <colgroup><col /><col className="w-40" /><col className="w-40" /><col className="w-40" /></colgroup>
+                      <thead>
+                        <tr className="border-b-2 border-foreground/70 text-xs uppercase tracking-wide text-muted-foreground">
+                          <th scope="col" className="text-left font-semibold pb-1.5">Department</th>
+                          <th scope="col" className="text-right font-semibold pb-1.5">Revenue</th>
+                          <th scope="col" className="text-right font-semibold pb-1.5">Expenses</th>
+                          <th scope="col" className="text-right font-semibold pb-1.5">Net Income</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((d: any) => (
+                          <tr key={d.department} className="border-b border-border/70">
+                            <td className="py-1.5">{d.department}</td>
+                            <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(d.totalRevenue)}</td>
+                            <td className="py-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(d.totalExpenses)}</td>
+                            <td className={`py-1.5 text-right font-mono font-medium whitespace-nowrap ${d.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>{fmtCurrency(d.netIncome)}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t-2 border-foreground/70 font-semibold">
+                          <td className="pt-1.5">Total</td>
+                          <td className="pt-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(rows.reduce((s: number, d: any) => s + (d.totalRevenue || 0), 0))}</td>
+                          <td className="pt-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(rows.reduce((s: number, d: any) => s + (d.totalExpenses || 0), 0))}</td>
+                          <td className="pt-1.5 text-right font-mono whitespace-nowrap">{fmtCurrency(rows.reduce((s: number, d: any) => s + (d.netIncome || 0), 0))}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Detail per department, account by account */}
+                {rows.map((d: any) => (
+                  <div key={d.department} className="bg-card border rounded-lg shadow-sm overflow-hidden break-inside-avoid">
+                    <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-border flex justify-between">
+                      <h3 className="text-sm font-bold tracking-wide">{d.department}</h3>
+                      <span className={`text-sm font-mono font-semibold ${d.netIncome >= 0 ? 'text-success' : 'text-destructive'}`}>Net {fmtCurrency(d.netIncome)}</span>
+                    </div>
+                    <div className="px-4 py-3">
+                      <table className="w-full table-fixed text-sm border-collapse">
+                        <colgroup><col className="w-20" /><col /><col className="w-40" /></colgroup>
+                        <tbody>
+                          {[['Revenue', d.revenue, d.totalRevenue], ['Expenses', d.expenses, d.totalExpenses]].map(([label, lines, total]: any) => (
+                            <React.Fragment key={label}>
+                              <tr><td colSpan={3} className="pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</td></tr>
+                              {lines.length === 0 ? (
+                                <tr><td /><td className="py-1 text-muted-foreground">None</td><td /></tr>
+                              ) : lines.map((l: any) => (
+                                <tr key={l.accountCode} className="border-b border-border/50">
+                                  <td className="py-1 font-mono text-muted-foreground">{l.accountCode}</td>
+                                  <td className="py-1">{l.accountName}</td>
+                                  <td className="py-1 text-right font-mono whitespace-nowrap">{fmtCurrency(l.amount)}</td>
+                                </tr>
+                              ))}
+                              <tr className="font-semibold">
+                                <td /><td className="py-1">Total {String(label).toLowerCase()}</td>
+                                <td className="py-1 text-right font-mono whitespace-nowrap border-t border-foreground/40">{fmtCurrency(total)}</td>
+                              </tr>
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground print:hidden">
+                  Each account is placed in the department its categories are linked to (Setup › Categories); when several departments share an account it goes to the one with the most products/services on it. Accounts no department-linked category uses are shown under General.
+                </p>
+              </>
+            )}
+          </div>
+        </>
       ) : option.mode === 'income-statement-by-branch' ? (
         <>
           <div className="max-w-4xl flex justify-end gap-2 mb-3 print:hidden">
@@ -731,7 +841,7 @@ export default function AccountingReport() {
           </div>
           <div className="max-w-4xl bg-card border rounded-lg shadow-sm overflow-hidden print:max-w-none">
             <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-border">
-              <h3 className="text-sm font-bold tracking-wide">By Department (Branch)</h3>
+              <h3 className="text-sm font-bold tracking-wide">By Branch</h3>
             </div>
             <div className="px-4 py-3">
               {rows.length === 0 ? (

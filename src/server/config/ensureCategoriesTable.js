@@ -27,6 +27,26 @@ const { sequelize } = require('../models');
  * each column's actual foreign table, not a single blanket convention.
  */
 async function ensureCategoriesTable(db = sequelize) {
+  // Production tenants (found in every one, Oct 2026) already carry an
+  // unrelated, unused `categories` table from an old storefront template
+  // (id, name, parent_id, slug, image, banner, row_order, status, clicks —
+  // nothing in the codebase reads it, nothing references it). CREATE TABLE
+  // IF NOT EXISTS would silently keep that one and every category feature
+  // would then fail. Move it aside — renamed, never dropped, data kept —
+  // so the real table can be created. Only fires on that exact old shape.
+  try {
+    const [[legacy]] = await db.query(`
+      SELECT
+        bool_or(column_name = 'slug') AND bool_or(column_name = 'banner') AND NOT bool_or(column_name = 'type') AS is_legacy,
+        to_regclass(current_schema() || '.categories_legacy_storefront') IS NOT NULL AS target_taken
+      FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'categories'`);
+    if (legacy?.is_legacy && !legacy.target_taken) {
+      await db.query('ALTER TABLE categories RENAME TO categories_legacy_storefront');
+      console.log('[categories] moved the old storefront categories table aside to categories_legacy_storefront');
+    }
+  } catch (err) { console.error('categories legacy-table check failed:', err.message); }
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

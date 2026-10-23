@@ -126,6 +126,53 @@ const SEED_EXPENSE = [
   { name: 'Other', expenseCode: '5900' },
 ];
 
+// ── Category → department (for "Income Statement by Department") ─────────
+// Each seeded category is linked to the first of these department names the
+// clinic actually has (case-insensitive). Only fills an EMPTY department_id —
+// anything already set, by hand in Setup › Categories, is left alone. A
+// category with no match stays unassigned and reports as "General".
+const DEPT_CANDIDATES = {
+  'item:Drugs': ['Pharmacy'],
+  'item:Reagents': ['Laboratory', 'Lab'],
+  'service:Consultation': ['OPD', 'Outpatient Department', 'Outpatient', 'Consultation'],
+  'service:Procedure': ['Theatre', 'Surgery', 'Procedures', 'Procedure Room'],
+  'service:Surgery': ['Surgery', 'Theatre'],
+  'service:Theatre': ['Theatre', 'Surgery'],
+  'service:Nursing': ['Nursing', 'Inpatient Department', 'Inpatient'],
+  'service:Diagnostic': ['Laboratory', 'Lab'],
+  'service:Laboratory': ['Laboratory', 'Lab'],
+  'service:Examination': ['Radiology', 'Imaging'],
+  'service:Radiology': ['Radiology', 'Imaging'],
+  'service:Pharmacy': ['Pharmacy'],
+  'service:Inpatient': ['Inpatient Department', 'Inpatient', 'IPD', 'Ward'],
+  'service:Emergency': ['Emergency Department', 'Emergency', 'ER', 'Casualty'],
+  'service:Therapy': ['Physiotherapy', 'Therapy'],
+  'expense:Doctor Fees': ['Doctors', 'OPD'],
+};
+
+async function assignDepartments(db, schema, clinicId) {
+  const { rows: depts } = await db.query(
+    `SELECT id, department_name FROM "${schema}".departments WHERE (clinic_id = $1 OR clinic_id IS NULL) ORDER BY COALESCE(is_active, true) DESC, created_at`,
+    [clinicId]
+  );
+  const byName = new Map();
+  for (const d of depts) { const k = String(d.department_name).trim().toLowerCase(); if (!byName.has(k)) byName.set(k, d); }
+  const done = [];
+  for (const [key, names] of Object.entries(DEPT_CANDIDATES)) {
+    const [type, name] = key.split(':');
+    const dept = names.map((n) => byName.get(n.toLowerCase())).find(Boolean);
+    if (!dept) continue;
+    const { rows } = await db.query(
+      `SELECT id FROM "${schema}".categories WHERE clinic_id = $1 AND type = $2 AND name = $3 AND department_id IS NULL`,
+      [clinicId, type, name]
+    );
+    if (!rows.length) continue;
+    if (APPLY) await db.query(`UPDATE "${schema}".categories SET department_id = $1, updated_at = NOW() WHERE id = $2`, [dept.id, rows[0].id]);
+    done.push(`${type}/${name} → ${dept.department_name}`);
+  }
+  return done;
+}
+
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
 const ALL = args.includes('--all-tenants');
@@ -214,11 +261,18 @@ async function backfillOneTable(db, schema, table, textColumn, type, seedNames) 
       `SELECT id, clinic_id FROM "${schema}".categories WHERE type = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2))`,
       [type, val]
     );
+    // Some production tenants' tables (e.g. services) have no clinic_id
+    // column — one clinic per schema there. Match by clinic only when the
+    // column exists; otherwise only when exactly one clinic has the category.
+    const { rows: [hasClinic] } = await db.query(
+      `SELECT COUNT(*)::int AS n FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND column_name = 'clinic_id'`,
+      [schema, table]
+    );
+    if (!hasClinic.n && catRows.length !== 1) { unmatched.push(`${val} (several clinics — needs a manual decision)`); continue; }
     for (const cat of catRows) {
-      const { rowCount } = await db.query(
-        `UPDATE "${schema}".${table} SET category_id = $1 WHERE clinic_id = $2 AND ${textColumn} = $3 AND category_id IS NULL`,
-        [cat.id, cat.clinic_id, val]
-      );
+      const { rowCount } = hasClinic.n
+        ? await db.query(`UPDATE "${schema}".${table} SET category_id = $1 WHERE clinic_id = $2 AND ${textColumn} = $3 AND category_id IS NULL`, [cat.id, cat.clinic_id, val])
+        : await db.query(`UPDATE "${schema}".${table} SET category_id = $1 WHERE ${textColumn} = $2 AND category_id IS NULL`, [cat.id, val]);
       matched.push({ value: val, rows: rowCount });
     }
   }
@@ -251,6 +305,9 @@ async function runOne(db, schema) {
     const expenseResult = await seedOneType(db, schema, clinicId, 'expense', SEED_EXPENSE, EXPENSE_FIELDS);
     console.log(`    expense categories   — created ${expenseResult.created}, already existed ${expenseResult.skipped}`);
     expenseResult.missingAccounts.forEach((m) => console.log(`      ⚠ ${m}`));
+
+    const linked = await assignDepartments(db, schema, clinicId);
+    console.log(`    departments          — ${linked.length} categor${linked.length === 1 ? 'y' : 'ies'} ${APPLY ? 'linked' : 'would be linked'}${linked.length ? `: ${linked.join('; ')}` : ''}`);
   }
 
   // Backfill runs after seeding so this same invocation's newly-created
