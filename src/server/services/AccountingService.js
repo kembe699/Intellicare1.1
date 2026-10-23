@@ -624,13 +624,18 @@ class AccountingService {
       { replacements: { id: billId } });
     if (!bill) return 0;
 
+    // Credit notes lower the bill's total AND reverse revenue under their own
+    // reference (the note's id); counting them here keeps the two in step, so
+    // this sync never reverses an applied credit a second time.
     const [[postedRow]] = await sequelize.query(
       `SELECT COALESCE(SUM(al.credit_amount) - SUM(al.debit_amount), 0) AS revenue
          FROM account_ledger al
          JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
          JOIN general_ledger gl ON gl.id = al.transaction_id
-        WHERE gl.reference_id = :id
-          AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')`,
+        WHERE (gl.reference_id = :id
+               AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment'))
+           OR (gl.reference_module = 'credit_note'
+               AND gl.reference_id::text IN (SELECT id::text FROM credit_notes WHERE applied_to_bill_id::text = :id))`,
       { replacements: { id: billId } });
 
     const worth = parseFloat(bill.worth) || 0;

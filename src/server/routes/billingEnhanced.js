@@ -610,14 +610,42 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
     const note = notes[0];
     const targetBillId = applied_to_bill_id || note.original_bill_id;
 
-    // Reduce bill balance
+    // A credit note lowers what the patient owes — it is not money received, so it
+    // reduces the bill's total and balance and leaves paid_amount alone (otherwise
+    // every "collected" figure read from bills overstates cash by the credit).
+    const [[target]] = await sequelize.query(
+      'SELECT id, total_amount, paid_amount, balance_amount, base_currency_total, bill_currency FROM patient_bills WHERE id = :billId',
+      { replacements: { billId: targetBillId }, transaction: t }
+    );
+    if (!target) {
+      await t.rollback();
+      return res.status(404).json({ error: 'The bill this credit note applies to was not found' });
+    }
+    const fmtMoney = (n) => `${target.bill_currency || ''} ${Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
+    const creditAmt = Math.round(parseFloat(note.credit_amount) * 100) / 100;
+    const oldTotal = parseFloat(target.total_amount) || 0;
+    const paid = parseFloat(target.paid_amount) || 0;
+    const outstanding = Math.round((parseFloat(target.balance_amount) || 0) * 100) / 100;
+    if (creditAmt > outstanding + 0.01) {
+      await t.rollback();
+      return res.status(400).json({
+        error: `This credit (${fmtMoney(creditAmt)}) is more than the ${fmtMoney(outstanding)} still owed on the bill. Credit ${fmtMoney(outstanding)} or less, or refund the patient instead.`,
+      });
+    }
+    const newTotal = Math.round((oldTotal - creditAmt) * 100) / 100;
+    const newBalance = Math.max(0, Math.round((outstanding - creditAmt) * 100) / 100);
+    const oldBase = parseFloat(target.base_currency_total) || 0;
+    const newBase = oldBase > 0 && oldTotal > 0 ? Math.round(oldBase * (newTotal / oldTotal) * 100) / 100 : oldBase;
+    const newStatus = newBalance <= 0.01 ? 'paid' : (paid > 0 ? 'partial' : 'pending');
     await sequelize.query(`
       UPDATE patient_bills SET
-        paid_amount = paid_amount + :amount,
-        balance_amount = GREATEST(0, balance_amount - :amount),
-        status = CASE WHEN balance_amount - :amount <= 0 THEN 'paid' ELSE 'partial' END
+        total_amount = :newTotal,
+        base_currency_total = :newBase,
+        balance_amount = :newBalance,
+        status = :newStatus,
+        updated_at = NOW()
       WHERE id = :billId
-    `, { replacements: { amount: note.credit_amount, billId: targetBillId }, transaction: t });
+    `, { replacements: { newTotal, newBase, newBalance, newStatus, billId: targetBillId }, transaction: t });
 
     // Update credit note
     await sequelize.query(`
@@ -710,7 +738,7 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
     await t.commit();
     res.json({ message: 'Credit note applied', applied_amount: note.credit_amount });
   } catch (error) {
-    await t.rollback();
+    if (!t.finished) await t.rollback().catch(() => {});
     console.error('Error applying credit note:', error);
     res.status(500).json({ error: 'Failed to apply credit note' });
   }
