@@ -740,19 +740,16 @@ router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
     // prevent the payment itself from completing.
     try {
       const clinicIdNum = parseInt(exp.clinic_id || 1);
-      const expenseAccountCode = CATEGORY_EXPENSE_CODE[exp.category] || DEFAULT_EXPENSE_CODE;
-      const expenseAccount = await AccountingService.getAccountByCode(clinicIdNum, expenseAccountCode);
-      if (!expenseAccount) {
-        // getAccountByCode only returns active accounts, so a category mapped to
-        // a deactivated code silently posts nothing: the expense is paid and the
-        // ledger never hears about it. Say so rather than leaving the books to
-        // quietly drift.
-        console.error(
-          `Daily expense ${expenseId} paid but NOT posted: expense account ${expenseAccountCode} ` +
-          `for category "${exp.category}" is missing or inactive in clinic ${clinicIdNum}.`
-        );
-      }
-      if (expenseAccount && exp.account_id) {
+      // AccountResolver: category's own expense_account_id -> clinic default
+      // (5900 Misc. Expenses, the exact DEFAULT_EXPENSE_CODE this used to
+      // fall back to inline) -> suspense + accounting_exceptions row —
+      // replacing this file's own CATEGORY_EXPENSE_CODE map lookup.
+      const AccountResolver = require('../services/AccountResolver');
+      const expenseAccountId = await AccountResolver.resolveExpenseAccount(
+        { category_id: exp.category_id, category: exp.category },
+        { clinicId: clinicIdNum, branchId: exp.branch_id, sourceModule: 'daily-expenses.pay', referenceId: String(expenseId), amount: parseFloat(exp.amount), currency: exp.currency }
+      );
+      if (exp.account_id) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: clinicIdNum,
           transaction_date: new Date(),
@@ -762,12 +759,12 @@ router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
           reference_module: 'daily_expense',
           branch_id: exp.branch_id ?? null,
         }, [
-          { account_id: expenseAccount.id, debit_amount: parseFloat(exp.amount), credit_amount: 0, description: `${exp.category || 'Expense'} — ${exp.description}` },
+          { account_id: expenseAccountId, debit_amount: parseFloat(exp.amount), credit_amount: 0, description: `${exp.category || 'Expense'} — ${exp.description}` },
           { account_id: String(exp.account_id), debit_amount: 0, credit_amount: parseFloat(exp.amount), description: `Payment via ${exp.payment_method || 'cash'} — ${exp.description}` },
         ], req.user.id);
         await AccountingService.postGLEntry(glEntry.id, req.user.id);
       } else {
-        console.warn(`Daily expense ${expenseId}: skipped GL posting — expense account (${expenseAccountCode}) or deduct-from account not found for clinic ${clinicIdNum}`);
+        console.warn(`Daily expense ${expenseId}: skipped GL posting — no deduct-from account (account_id) set on this expense for clinic ${clinicIdNum}`);
       }
     } catch (glErr) {
       console.error('Non-blocking: failed to post GL entry for daily expense payment', expenseId, glErr.message);

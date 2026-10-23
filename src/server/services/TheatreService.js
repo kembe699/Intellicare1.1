@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { CHECKLIST_TEMPLATE } = require('../scripts/migrateTheatreTables');
 const { addLineItemsToBill } = require('../utils/billingResolver');
 const AccountingService = require('./AccountingService');
+const AccountResolver = require('./AccountResolver');
 
 // patient_id is polymorphic across `patients` and `lis_participants` — the
 // same dual-identity shape inpatient_admissions already uses. A random UUID
@@ -709,7 +710,7 @@ class TheatreService {
 
     await this._assertOperationEditable(operationId, clinicId);
 
-    const [[item]] = await sequelize.query(`SELECT id, item_name, unit_of_measure, selling_price, item_category FROM inventory_items WHERE id = :itemId AND clinic_id = :clinicId`, { replacements: { itemId, clinicId } });
+    const [[item]] = await sequelize.query(`SELECT id, item_name, unit_of_measure, selling_price, item_category, category_id, revenue_account_id FROM inventory_items WHERE id = :itemId AND clinic_id = :clinicId`, { replacements: { itemId, clinicId } });
     if (!item) throw httpError('Item not found', 404);
 
     const [[location]] = await sequelize.query(`SELECT id, location_name FROM stock_locations WHERE id = :locationId AND clinic_id = :clinicId`, { replacements: { locationId, clinicId } });
@@ -804,6 +805,10 @@ class TheatreService {
                FROM theatre_operations t ${PATIENT_JOIN} WHERE t.id = :operationId`,
             { replacements: { operationId } }
           );
+          const itemAccounts = await AccountResolver.resolveItemAccounts(item, {
+            clinicId, branchId: op.branch_id, sourceModule: 'TheatreService.recordItemUsage',
+            referenceId: usageId, amount: parseFloat(item.selling_price) * qty,
+          });
           await addLineItemsToBill({
             patientId: op.patient_id,
             patientName: [op.patient_first_name, op.patient_last_name].filter(Boolean).join(' ') || 'Theatre Patient',
@@ -815,12 +820,13 @@ class TheatreService {
               quantity: qty,
               unitPrice: parseFloat(item.selling_price),
               totalPrice: parseFloat(item.selling_price) * qty,
-              revenueCategory: item.item_category === 'drugs' ? 'pharma' : 'theatre',
-              // `revenueCategory` above is consumed for GL account resolution and then
-              // stripped before the line item is persisted (see billingResolver.js) — it
-              // never survives into stored data for reporting. `category` is the readable,
-              // persisted equivalent, known for certain here since we already know whether
-              // this item came off the shelf as a drug or theatre consumable.
+              // Resolved directly via AccountResolver (category → clinic
+              // default → suspense), replacing the ad-hoc 'pharma'/'theatre'
+              // label this used to pass as `revenueCategory` for
+              // billingResolver.js's own regex fallback to interpret.
+              // `category` is still the readable, persisted label for
+              // reporting — unrelated to GL account resolution.
+              revenue_account_id: itemAccounts.revenue,
               category: item.item_category === 'drugs' ? 'Pharmacy / Inventory' : 'Theatre',
             }],
             createdBy: userId ? String(userId) : 'system',

@@ -1944,18 +1944,23 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
         if (poLineRows.length > 0) unitCost = parseFloat(poLineRows[0].unit_price) || 0;
       }
 
-      // Classify the item for GL posting: prefer the item's configured inventory_account_id,
-      // otherwise fall back to pharmaceutical (1310) vs general medical supplies (1300) by category.
+      // Classify the item for GL posting via AccountResolver: the item's own
+      // override -> its category's inventory account -> clinic default
+      // (inventory_settings) -> suspense + accounting_exceptions row —
+      // replacing this route's own drugs-vs-everything-else binary
+      // (1310/1300) fallback. For an already-categorized item (Phase 2's
+      // seed gives every item category an inventory account matching that
+      // exact binary split), this resolves to the identical account.
       const [itemRows] = await sequelize.query(
-        'SELECT item_category, inventory_account_id FROM inventory_items WHERE id = :id',
+        'SELECT id, item_category, category_id, inventory_account_id FROM inventory_items WHERE id = :id',
         { replacements: { id: inventoryItemId }, transaction: t }
       );
-      let glAccountCode = '1300';
-      let glAccountId = null;
-      if (itemRows.length > 0) {
-        if (itemRows[0].inventory_account_id) glAccountId = itemRows[0].inventory_account_id;
-        else if (itemRows[0].item_category === 'drugs') glAccountCode = '1310';
-      }
+      const AccountResolver = require('../services/AccountResolver');
+      const resolvedGrnAccounts = await AccountResolver.resolveItemAccounts(itemRows[0] || { id: inventoryItemId }, {
+        clinicId: grn.clinic_id, branchId: grn.branch_id, need: ['inventory'],
+        sourceModule: 'procurement.grnAccept', referenceId: grn.id,
+      });
+      const glAccountId = resolvedGrnAccounts.inventory;
 
       // inventory_items.average_unit_cost/current_unit_cost/cost_currency
       // are cross-batch blended figures — every reader (the valuation
@@ -1986,7 +1991,7 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
       }
       const lineValue = (line.quantity_received || 0) * unitCost;
       if (lineValue > 0) {
-        const glKey = glAccountId ? `id:${glAccountId}` : `code:${glAccountCode}`;
+        const glKey = `id:${glAccountId}`;
         if (!glValueByAccountCode[glKey]) glValueByAccountCode[glKey] = 0;
         glValueByAccountCode[glKey] += lineValue;
       }

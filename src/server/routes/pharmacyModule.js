@@ -1747,6 +1747,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
     let cogsJE = null;
     try {
       const AccountingService = require('../services/AccountingService');
+      const AccountResolver = require('../services/AccountResolver');
 
       // Get pharmacy settings for GL accounts
       const [settings] = await sequelize.query(
@@ -1754,23 +1755,24 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         { replacements: { cid }, transaction: t }
       );
       const cfg = settings.length > 0 ? settings[0] : null;
-      const revenueAcct = drug.revenue_account_id || cfg?.pharmacy_revenue_account_id;
-      // COGS used to require pharmacy_settings.pharmacy_cogs_account_id to be
-      // explicitly configured, with no fallback — on any tenant where nobody
-      // had set that up, every dispense posted revenue but silently skipped
-      // COGS entirely (no entry, no warning), understating Cost of Goods Sold
-      // on the Income Statement with no visible trace of why. Falls back to
-      // the standard Pharmaceutical Cost of Sales account (5210) by code, the
-      // same account initializeChartOfAccounts.js seeds by default.
-      let cogsAcct = drug.cogs_account_id || cfg?.pharmacy_cogs_account_id;
-      if (!cogsAcct) {
-        const fallback = await AccountingService.getAccountByCode(cid, '5210');
-        cogsAcct = fallback?.id || null;
-      }
+
+      // AccountResolver: item's/drug's own override -> its category's
+      // account -> clinic default (pharmacy_settings) -> suspense +
+      // accounting_exceptions row. Previously, a missing revenueAcct
+      // silently skipped the whole revenue entry with no trace at all, and
+      // a missing cogsAcct fell back to hard-coded 5210 with no exception
+      // logged either — both now always resolve to a real (possibly
+      // suspense) account, so the entry still posts, balanced and visible.
+      const resolvedAccounts = await AccountResolver.resolveItemAccounts(
+        { ...item, revenue_account_id: drug.revenue_account_id, cogs_account_id: drug.cogs_account_id },
+        { clinicId: cid, branchId: item.branch_id, need: ['revenue', 'cogs', 'inventory'], sourceModule: 'pharmacyModule.dispensing', referenceId: dispId, amount: totalPrice, currency: curr }
+      );
+      const revenueAcct = resolvedAccounts.revenue;
+      const cogsAcct = resolvedAccounts.cogs;
       const receivablesAcct = cfg?.pharmacy_receivables_account_id;
 
       // Revenue GL entry
-      if (revenueAcct && totalPrice > 0) {
+      if (totalPrice > 0) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: cid,
           transaction_date: new Date(),
@@ -1801,57 +1803,38 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         : (drug.average_unit_cost > 0) ? parseFloat(drug.average_unit_cost)
         : (drug.current_unit_cost > 0) ? parseFloat(drug.current_unit_cost)
         : 0;
-      if (cogsAcct && unitCost > 0) {
+      if (unitCost > 0) {
         // unitCost (batch cost, or item average/current cost) is "cost per
         // pack" same as selling_price — costed by the pack-equivalent of
         // quantity_dispensed, not the raw dose count, same fix as totalPrice above.
         const cogsAmount = unitCost * packQty;
+        const invAcct = resolvedAccounts.inventory;
 
-        // Get inventory GL account — same fallback reasoning as cogsAcct
-        // above: default to Pharmaceutical Inventory (1310), the account
-        // BillingIntegrationService.js already credits for an analogous
-        // pharmacy sale, rather than silently skipping the whole entry.
-        const [invSettings] = await sequelize.query(
-          'SELECT inventory_account_id FROM inventory_settings WHERE clinic_id = :cid LIMIT 1',
-          { replacements: { cid }, transaction: t }
-        );
-        let invAcct = invSettings.length > 0 ? invSettings[0].inventory_account_id : null;
-        if (!invAcct) {
-          const fallback = await AccountingService.getAccountByCode(cid, '1310');
-          invAcct = fallback?.id || null;
-        }
+        const glEntry = await AccountingService.createGLEntry({
+          clinic_id: cid,
+          transaction_date: new Date(),
+          transaction_type: 'pharmacy_dispensing_cogs',
+          description: selectedBatch?.unit_cost > 0
+            ? `COGS: ${drug.drug_name} x${quantity_dispensed} (Batch ${selectedBatch.batch_number})`
+            : `COGS: ${drug.drug_name} x${quantity_dispensed} (item average/current cost — dispensed batch has no recorded cost)`,
+          reference_id: dispId,
+          reference_module: 'pharmacy_dispensing',
+          // COGS is costed in the batch's own cost currency, not the item's selling
+          // currency (curr) — they can legitimately differ (e.g. sold in SSP, bought in USD).
+          // Falls back to the item's selling currency when costed off the item-level
+          // average/current cost instead of a specific batch.
+          transaction_currency: selectedBatch?.cost_currency || curr,
+        }, [
+          // Debit: COGS
+          { account_id: cogsAcct, debit_amount: cogsAmount, credit_amount: 0, description: `COGS: ${drug.drug_name}` },
+          // Credit: Inventory
+          { account_id: invAcct, debit_amount: 0, credit_amount: cogsAmount, description: `Inventory issued: ${drug.drug_name}` },
+        ], pharmacist_id || 'system');
+        await AccountingService.postGLEntry(glEntry.id, pharmacist_id || 'system');
 
-        if (invAcct) {
-          const glEntry = await AccountingService.createGLEntry({
-            clinic_id: cid,
-            transaction_date: new Date(),
-            transaction_type: 'pharmacy_dispensing_cogs',
-            description: selectedBatch?.unit_cost > 0
-              ? `COGS: ${drug.drug_name} x${quantity_dispensed} (Batch ${selectedBatch.batch_number})`
-              : `COGS: ${drug.drug_name} x${quantity_dispensed} (item average/current cost — dispensed batch has no recorded cost)`,
-            reference_id: dispId,
-            reference_module: 'pharmacy_dispensing',
-            // COGS is costed in the batch's own cost currency, not the item's selling
-            // currency (curr) — they can legitimately differ (e.g. sold in SSP, bought in USD).
-            // Falls back to the item's selling currency when costed off the item-level
-            // average/current cost instead of a specific batch.
-            transaction_currency: selectedBatch?.cost_currency || curr,
-          }, [
-            // Debit: COGS
-            { account_id: cogsAcct, debit_amount: cogsAmount, credit_amount: 0, description: `COGS: ${drug.drug_name}` },
-            // Credit: Inventory
-            { account_id: invAcct, debit_amount: 0, credit_amount: cogsAmount, description: `Inventory issued: ${drug.drug_name}` },
-          ], pharmacist_id || 'system');
-          await AccountingService.postGLEntry(glEntry.id, pharmacist_id || 'system');
-
-          cogsJE = glEntry.gl_number;
-          await sequelize.query('UPDATE dispensing_records SET cogs_gl_entry_id = :je WHERE id = :id', { replacements: { je: glEntry.id, id: dispId }, transaction: t });
-        } else {
-          console.warn(`Dispensing ${dispId}: COGS not posted — Pharmaceutical Inventory account (1310) not found/active for clinic ${cid}.`);
-        }
-      } else if (!cogsAcct) {
-        console.warn(`Dispensing ${dispId}: COGS not posted — Pharmaceutical Cost of Sales account (5210) not found/active for clinic ${cid}.`);
-      } else if (unitCost <= 0) {
+        cogsJE = glEntry.gl_number;
+        await sequelize.query('UPDATE dispensing_records SET cogs_gl_entry_id = :je WHERE id = :id', { replacements: { je: glEntry.id, id: dispId }, transaction: t });
+      } else {
         console.warn(`Dispensing ${dispId}: COGS not posted — dispensed batch has no unit_cost, and item ${drug.id} has no average_unit_cost/current_unit_cost recorded either.`);
       }
     } catch (glError) {
