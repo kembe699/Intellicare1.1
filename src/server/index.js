@@ -467,48 +467,12 @@ app.use('/api', redisCacheMiddleware());
   } catch (e) { console.warn('inpatient_prescriptions.pharmacy_line_id migration warning:', e.message); }
 })();
 
-// Startup: auto-link services to Chart of Accounts revenue accounts by category
-(async () => {
-  try {
-    const { sequelize: _sq } = require('./models');
-    // Map service categories to account codes
-    const categoryMap = [
-      { pattern: 'lab',        code: '4110' },
-      { pattern: 'laboratory', code: '4110' },
-      { pattern: 'diagnostic', code: '4110' },
-      { pattern: 'pharmacy',   code: '4120' },
-      { pattern: 'drug',       code: '4120' },
-      { pattern: 'medication', code: '4120' },
-      { pattern: 'radiology',  code: '4130' },
-      { pattern: 'imaging',    code: '4130' },
-      { pattern: 'xray',       code: '4130' },
-      { pattern: 'scan',       code: '4130' },
-      { pattern: 'procedure',  code: '4140' },
-      { pattern: 'surgery',    code: '4140' },
-      { pattern: 'theater',    code: '4140' },
-      { pattern: 'theatre',    code: '4140' },
-    ];
-    // Apply specific category mappings (overrides any previous default mapping)
-    for (const { pattern, code } of categoryMap) {
-      await _sq.query(`
-        UPDATE services s
-        SET revenue_account_id = coa.id::text
-        FROM chart_of_accounts coa
-        WHERE coa.account_code = '${code}'
-          AND (LOWER(s.category) LIKE '%${pattern}%' OR LOWER(s.service_category) LIKE '%${pattern}%')
-      `).catch(() => {});
-    }
-    // Default: link any still-unlinked services to Patient Services Revenue (4100)
-    await _sq.query(`
-      UPDATE services s
-      SET revenue_account_id = coa.id::text
-      FROM chart_of_accounts coa
-      WHERE coa.account_code = '4100'
-        AND (s.revenue_account_id IS NULL OR s.revenue_account_id = '')
-    `).catch(() => {});
-    console.log('✅ Services linked to Chart of Accounts revenue accounts');
-  } catch(e) { console.warn('Service-CoA link warning:', e.message); }
-})();
+// (Removed) A startup block here used to rewrite services.revenue_account_id on
+// every boot — by name pattern, and 4100 for anything unlinked. Under central
+// Categories a non-null revenue_account_id is an explicit per-service override,
+// so that stamping silently overrode each new service's category on the next
+// restart. A service's revenue account now comes from its category unless an
+// override is set deliberately in Setup › Services.
 
 // Global mutation cache-buster: after any successful POST/PUT/PATCH/DELETE,
 // wipe every cached GET response for the whole tenant.
