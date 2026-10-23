@@ -317,7 +317,7 @@ router.post('/:id/cancel', authorize('hr.salary_advances.write'), async (req, re
 // Disbursement: the actual cash-out. Debit the Employee Advances
 // Receivable account (an asset — the employee owes this back), credit the
 // payment account. Mirrors the payroll/consultant-bill payment pattern.
-router.post('/:id/disburse', authorize('hr.salary_advances.write'), async (req, res) => {
+router.post('/:id/disburse', authorize('salary_advances.disburse'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const { payment_account_id, account_name, disbursement_date } = req.body || {};

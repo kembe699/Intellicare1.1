@@ -43,7 +43,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
   const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
   const { fmt } = useCurrency();
   const facilityInfo = useFacilityInfo();
 
@@ -390,7 +390,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
                       Voucher: <span className="font-mono font-semibold">{expense.voucher_number}</span>
                     </p>
                   </div>
-                  {mode === 'payments' ? (
+                  {mode === 'payments' && hasPrivilege('expenses.pay') ? (
                     <>
                       <Button className="gap-2 mt-2 bg-success hover:bg-success" size="lg" onClick={handlePay} disabled={paying}>
                         {paying

@@ -434,7 +434,7 @@ router.get('/supplier-bills/:po_id/payments', authorize('expenses.read'), async 
 });
 
 // Record supplier bill payment
-router.post('/supplier-bill-payment', authorize('expenses.write'), async (req, res) => {
+router.post('/supplier-bill-payment', authorize('supplier_bills.pay'), async (req, res) => {
   try {
     const { po_id, po_number, supplier_id, supplier_name,
       payment_date, amount_paid, payment_method, account_id, account_name,
@@ -663,7 +663,7 @@ router.get('/consultant-bills', authorize('expenses.read'), async (req, res) => 
   }
 });
 
-router.post('/consultant-bill-payment', authorize('expenses.write'), async (req, res) => {
+router.post('/consultant-bill-payment', authorize('consultant_bills.pay'), async (req, res) => {
   try {
     const { consultant_bill_id, payment_date, account_id, account_name, payment_method, reference_number, notes } = req.body || {};
     const clinicId = BranchQueryFilter.resolveClinicId(req);
@@ -738,7 +738,7 @@ router.post('/consultant-bill-payment', authorize('expenses.write'), async (req,
 });
 
 
-router.post('/:id/pay', authorize('expenses.write'), async (req, res) => {
+router.post('/:id/pay', authorize('expenses.pay'), async (req, res) => {
   try {
     const expenseId = parseInt(req.params.id);
     const payClinicId = BranchQueryFilter.resolveClinicId(req);

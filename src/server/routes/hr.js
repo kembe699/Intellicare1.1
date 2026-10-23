@@ -1429,7 +1429,7 @@ router.post('/payroll/runs/:id/cancel', authorize('hr.payroll.write'), async (re
 // confirms their employee number, reviews their pay, and signs; that
 // submission is what actually pays the line (same GL posting as the
 // admin-driven /pay routes) and stores the signature for the payroll sheet.
-router.post('/payroll/runs/:id/lines/:lineId/signing-link', authorize('hr.payroll.write'), async (req, res) => {
+router.post('/payroll/runs/:id/lines/:lineId/signing-link', authorize('payroll.pay'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const runReplacements = { id: req.params.id, clinicId };
@@ -1477,7 +1477,7 @@ router.post('/payroll/runs/:id/lines/:lineId/signing-link', authorize('hr.payrol
   }
 });
 
-router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write'), async (req, res) => {
+router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('payroll.pay'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const runReplacements = { id: req.params.id, clinicId };
@@ -1530,7 +1530,7 @@ router.post('/payroll/runs/:id/lines/:lineId/pay', authorize('hr.payroll.write')
 // -employee route above, just looped over everyone not yet paid, so a run
 // can still be cleared in one action when there's no reason to pay people
 // one at a time.
-router.post('/payroll/runs/:id/pay', authorize('hr.payroll.write'), async (req, res) => {
+router.post('/payroll/runs/:id/pay', authorize('payroll.pay'), async (req, res) => {
   try {
     const clinicId = BranchQueryFilter.resolveClinicId(req);
     const runReplacements = { id: req.params.id, clinicId };

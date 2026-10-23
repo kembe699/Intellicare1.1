@@ -377,7 +377,7 @@ router.post('/', authorize('deposits.write'), async (req, res) => {
   }
 });
 
-router.post('/:patientId/refund', requireApprovalPermission('deposit_refund_approve'), async (req, res) => {
+router.post('/:patientId/refund', authorize('refunds.approve'), requireApprovalPermission('deposit_refund_approve'), async (req, res) => {
   let t;
   try {
     const shift = await requireOpenShift(req, res);

@@ -1,5 +1,14 @@
 const express = require('express');
-const { authorize } = require('../middleware/authorize');
+const { authorize, getRolePrivileges } = require('../middleware/authorize');
+
+// Same rule as authorize(key), as a boolean for in-handler decisions.
+async function roleHasPrivilege(req, key) {
+  if (req.user?.role === 'admin') return true;
+  try {
+    const grants = await getRolePrivileges(req.models?.sequelize, req.tenantSchema);
+    return [req.user?.role, ...(req.user?.additionalRoles || [])].some((r) => grants.get(r)?.has(key));
+  } catch (e) { return false; }
+}
 
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
@@ -660,7 +669,8 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     // everyone else, it does not remove the ability for an authorized person
     // to void/refund in one step.
     if (previousStatus === 'active' && ['voided', 'refunded'].includes(status)) {
-      const canActImmediately = await userHasApprovalPermission(req, 'receipt_void_approve');
+      const canActImmediately = (await userHasApprovalPermission(req, 'receipt_void_approve'))
+        && (await roleHasPrivilege(req, 'refunds.approve'));
       if (!canActImmediately) {
         const pendingStatus = PENDING_FOR[status];
         const updatedReceipt = await receipt.update({
@@ -743,7 +753,7 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
 // Runs the exact same reversal applyVoidReversal above runs for an
 // immediately-privileged requester, just triggered by whoever approves it
 // instead of whoever requested it.
-router.post('/:receiptId/approve-void', requireApprovalPermission('receipt_void_approve'), async (req, res) => {
+router.post('/:receiptId/approve-void', authorize('refunds.approve'), requireApprovalPermission('receipt_void_approve'), async (req, res) => {
   let t;
   try {
     const { receiptId } = req.params;
@@ -805,7 +815,7 @@ router.post('/:receiptId/approve-void', requireApprovalPermission('receipt_void_
 
 // B5: reject a pending void/refund request — back to active, no reversal
 // applied (none was ever applied while pending).
-router.post('/:receiptId/reject-void', requireApprovalPermission('receipt_void_approve'), async (req, res) => {
+router.post('/:receiptId/reject-void', authorize('refunds.approve'), requireApprovalPermission('receipt_void_approve'), async (req, res) => {
   let t;
   try {
     const { receiptId } = req.params;

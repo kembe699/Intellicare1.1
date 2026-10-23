@@ -617,7 +617,7 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/expenses" element={
-        <ProtectedRoute requiredPrivilege="expenses.write">
+        <ProtectedRoute requiredPrivilege="expenses.pay">
           <DailyExpenses key="pay-expenses" mode="payments" initialTab="expenses" />
         </ProtectedRoute>
       } />
@@ -627,17 +627,17 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/suppliers" element={
-        <ProtectedRoute requiredPrivilege="expenses.write">
+        <ProtectedRoute requiredPrivilege="supplier_bills.pay">
           <DailyExpenses key="pay-suppliers" mode="payments" initialTab="bills" billsView="ready" />
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/consultants" element={
-        <ProtectedRoute requiredPrivilege={['expenses.write', 'theatre.payout']}>
+        <ProtectedRoute requiredPrivilege={['consultant_bills.pay', 'theatre.payout']}>
           <AccountingConsultantPayments />
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/staff" element={
-        <ProtectedRoute requiredPrivilege={['hr.payroll.write', 'hr.salary_advances.write']}>
+        <ProtectedRoute requiredPrivilege={['payroll.pay', 'salary_advances.disburse']}>
           <AccountingStaffPayments />
         </ProtectedRoute>
       } />
@@ -647,7 +647,7 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/refunds" element={
-        <ProtectedRoute requiredPrivilege={['receipts.write', 'accounting.read']}>
+        <ProtectedRoute requiredPrivilege="refunds.approve">
           <AccountingRefunds />
         </ProtectedRoute>
       } />

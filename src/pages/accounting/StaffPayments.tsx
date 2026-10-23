@@ -29,7 +29,9 @@ interface Account { id: string; account_code: string; account_name: string; acco
 const today = () => new Date().toISOString().split('T')[0];
 
 export default function StaffPayments() {
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
+  const canPayPayroll = hasPrivilege('payroll.pay');
+  const canDisburse = hasPrivilege('salary_advances.disburse');
   const clinicId = user?.clinic || 1;
   const [lines, setLines] = useState<PayLine[]>([]);
   const [advances, setAdvances] = useState<Advance[]>([]);
@@ -157,7 +159,7 @@ export default function StaffPayments() {
             </TabsList>
 
             <TabsContent value="payroll" className="mt-4 space-y-3">
-              {runs.length > 0 && (
+              {canPayPayroll && runs.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {runs.map((r) => (
                     <Button key={r.id} variant="outline" onClick={() => setPayRun(r)}>
@@ -182,7 +184,7 @@ export default function StaffPayments() {
                     { key: 'payment_account_name', header: 'Paid from', render: (v) => v || '—' },
                     {
                       key: 'actions', header: '', align: 'right',
-                      render: (_v, l) => (
+                      render: (_v, l) => canPayPayroll && (
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" onClick={() => openQr(l)} title="Employee scans and signs to receive"><QrCode className="w-4 h-4 mr-1.5" />QR sign</Button>
                           <Button onClick={() => setPayLine(l)}><Banknote className="w-4 h-4 mr-1.5" />Pay</Button>
@@ -211,7 +213,7 @@ export default function StaffPayments() {
                     { key: 'amount', header: 'Amount', align: 'right', render: (v, a) => <span className="font-mono tabular-nums font-semibold whitespace-nowrap">{formatMoney(v, a.currency)}</span> },
                     {
                       key: 'actions', header: '', align: 'right',
-                      render: (_v, a) => <Button onClick={() => { setDisburse(a); setDisburseForm({ accountId: '', date: today() }); }}><HandCoins className="w-4 h-4 mr-1.5" />Disburse</Button>,
+                      render: (_v, a) => canDisburse && <Button onClick={() => { setDisburse(a); setDisburseForm({ accountId: '', date: today() }); }}><HandCoins className="w-4 h-4 mr-1.5" />Disburse</Button>,
                     },
                   ]}
                   empty={{ icon: HandCoins, title: 'No approved advances to disburse', message: 'Advances approved in HR › Salary Advances appear here.' }}

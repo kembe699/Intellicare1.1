@@ -72,7 +72,17 @@ const CATALOG = [
   ['cashier.write', 'Cashier shift actions', 'cashier', 'Start/close a shift, transfer cash', ['admin', 'reception', 'pharmacy', 'cashier']],
   ['cash_transfers.write', 'Record cash transfers', 'cashier', 'Create a cash transfer between accounts', ['admin', 'accountant', 'finance_manager', 'reception', 'pharmacy', 'cashier']],
   ['expenses.read', 'View daily expenses', 'cashier', 'View expenses, supplier bills, approvals', ['admin', 'cashier', 'finance_manager', 'accountant', 'procurement']],
-  ['expenses.write', 'Record daily expenses', 'cashier', 'Create/edit/pay expenses and supplier bills', ['admin', 'cashier', 'procurement']],
+  ['expenses.write', 'Record daily expenses', 'cashier', 'Create/edit expenses and supplier bills (paying needs the Accounting pay privileges)', ['admin', 'cashier', 'procurement']],
+  // Paying is split out of preparing (Accounting › Payments). No catalog defaults on
+  // purpose: each tenant's grants are copied from whoever holds the source privilege
+  // in THAT tenant (ensurePrivilegeGrantCopies), so a tenant that had narrowed, say,
+  // expenses.write is never widened by a default here.
+  ['expenses.pay', 'Pay expenses', 'accounting', 'Pay an approved daily expense (posts it to the ledger)', []],
+  ['supplier_bills.pay', 'Pay supplier bills', 'accounting', 'Pay a fully approved supplier bill', []],
+  ['consultant_bills.pay', 'Pay consultant bills', 'accounting', 'Pay a consultant bill generated from a consultant\'s profile', []],
+  ['payroll.pay', 'Pay payroll', 'accounting', 'Pay approved payroll lines (directly or by QR signature)', []],
+  ['salary_advances.disburse', 'Disburse salary advances', 'accounting', 'Pay out an approved salary advance', []],
+  ['refunds.approve', 'Approve refunds', 'accounting', 'Approve receipt voids/refunds and refund patient deposits (the per-user approval rights still apply)', []],
 
   ['clinical.chief_complaints.write', 'Record chief complaints', 'clinical', 'Add a patient chief complaint', ['admin', 'doctor', 'nurse', 'reception']],
   ['clinical.diagnoses.write', 'Record diagnoses', 'clinical', 'Add a clinical diagnosis', ['admin', 'doctor', 'nurse']],

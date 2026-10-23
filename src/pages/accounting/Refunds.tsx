@@ -35,7 +35,8 @@ const REQUEST_MAP = { pending_void: 'warning', pending_refund: 'info' } as const
 const REQUEST_LABEL: Record<PendingReceipt['status'], string> = { pending_void: 'Void', pending_refund: 'Refund' };
 
 export function ReceiptApprovals() {
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
+  const canApprove = hasPrivilege('refunds.approve');
   const clinicId = user?.clinic || 1;
   const [rows, setRows] = useState<PendingReceipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +96,7 @@ export function ReceiptApprovals() {
     { key: 'notes', header: 'Reason given', render: (v: string) => <span className="text-sm text-muted-foreground">{v || '—'}</span> },
     {
       key: 'actions', header: '', align: 'right' as const,
-      render: (_: unknown, r: PendingReceipt) => (
+      render: (_: unknown, r: PendingReceipt) => canApprove && (
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={(e) => { e.stopPropagation(); setAction({ kind: 'reject', receipt: r }); }}>
             <XCircle className="w-4 h-4 mr-1.5" />Reject
@@ -150,7 +151,8 @@ export function ReceiptApprovals() {
 interface DepositBalance { patient_id: string; patient_name: string | null; patient_ref: string | null; currency: string; balance: number; updated_at: string }
 
 function DepositRefunds() {
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
+  const canRefund = hasPrivilege('refunds.approve');
   const clinicId = user?.clinic || 1;
   const [rows, setRows] = useState<DepositBalance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,7 +205,7 @@ function DepositRefunds() {
           { key: 'patient_name', header: 'Patient', sortable: true, render: (v, r) => <div><div className="font-medium">{v || '—'}</div>{r.patient_ref && <div className="text-xs text-muted-foreground font-mono">{r.patient_ref}</div>}</div> },
           { key: 'balance', header: 'Deposit held', align: 'right', sortable: true, render: (v, r) => <span className="font-mono tabular-nums font-semibold whitespace-nowrap">{formatMoney(v, r.currency)}</span> },
           { key: 'updated_at', header: 'Last movement', render: (v) => <span className="whitespace-nowrap">{formatDate(v)}</span> },
-          { key: 'actions', header: '', align: 'right', render: (_v, r) => <Button onClick={() => { setTarget(r); setForm({ amount: String(r.balance), method: 'cash', notes: '' }); }}><Wallet className="w-4 h-4 mr-1.5" />Refund</Button> },
+          { key: 'actions', header: '', align: 'right', render: (_v, r) => canRefund && <Button onClick={() => { setTarget(r); setForm({ amount: String(r.balance), method: 'cash', notes: '' }); }}><Wallet className="w-4 h-4 mr-1.5" />Refund</Button> },
         ]}
         empty={{ icon: Wallet, title: 'No deposits held', message: 'Patients with an unused deposit balance appear here.' }}
       />

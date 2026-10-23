@@ -120,7 +120,7 @@ export default function ConsultantPayments() {
     }
   };
 
-  const canPay = (r: Payable) => (r.kind === 'theatre' ? hasPrivilege('theatre.payout') : true);
+  const canPay = (r: Payable) => hasPrivilege(r.kind === 'theatre' ? 'theatre.payout' : 'consultant_bills.pay');
 
   return (
     <AppLayout>
@@ -160,7 +160,7 @@ export default function ConsultantPayments() {
                   key: 'actions', header: '', align: 'right',
                   render: (_v, r) => canPay(r)
                     ? <Button onClick={() => { setTarget(r); setForm({ accountId: '', date: today() }); }}><Banknote className="w-4 h-4 mr-1.5" />Pay</Button>
-                    : <span className="text-xs text-muted-foreground">Needs theatre payout rights</span>,
+                    : <span className="text-xs text-muted-foreground">{r.kind === 'theatre' ? 'Needs theatre payout rights' : 'Needs consultant payment rights'}</span>,
                 },
               ]}
               empty={{ icon: Stethoscope, title: 'Nothing waiting to be paid', message: 'Consultant bills (from a consultant’s profile) and theatre team fee splits (from completed operations) appear here.' }}

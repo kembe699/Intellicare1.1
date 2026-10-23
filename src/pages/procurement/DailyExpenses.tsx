@@ -60,7 +60,7 @@ interface DailyExpensesProps {
 const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initialTab = 'expenses', billsView = 'all' }) => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const { fmt, currency } = useCurrency();
-  const { user } = useAuth();
+  const { user, hasPrivilege } = useAuth();
   const navigate = useNavigate();
   const facilityInfo = useFacilityInfo();
   // `clinic` is the field AuthContext's normalizeUser actually produces (see
@@ -1028,7 +1028,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                                 </Button>
                               </>
                             )}
-                            {mode === 'payments' && exp.status === 'approved' && (
+                            {mode === 'payments' && exp.status === 'approved' && hasPrivilege('expenses.pay') && (
                               <Button size="sm" disabled={busy} onClick={(e) => { e.stopPropagation(); payExpense(exp); }}>
                                 <DollarSign className="w-3.5 h-3.5 mr-1" />Pay
                               </Button>
@@ -1186,7 +1186,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                                 Approve
                               </Button>
                             )}
-                            {!isFullyPaid && (
+                            {!isFullyPaid && hasPrivilege('supplier_bills.pay') && (
                               <Button size="sm" variant={fullyApproved ? 'default' : 'ghost'} disabled={!fullyApproved}
                                 className={`h-7 text-xs px-2 ${!fullyApproved ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 onClick={() => fullyApproved && openPayBill(bill)}
@@ -1604,7 +1604,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                     <div className="text-center py-4">
                       <p className="text-success font-semibold">✓ All 3 approvals complete</p>
                       <p className="text-sm text-muted-foreground mt-1">This bill is ready for payment.</p>
-                      <Button className="mt-3" onClick={() => { setShowApproveModal(false); openPayBill(approveBill); }}>Proceed to Payment</Button>
+                      {hasPrivilege('supplier_bills.pay') && <Button className="mt-3" onClick={() => { setShowApproveModal(false); openPayBill(approveBill); }}>Proceed to Payment</Button>}
                     </div>
                   )}
                 </form>
