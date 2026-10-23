@@ -84,6 +84,7 @@ const FixedAssetDetail = lazyWithRetry(() => import('./pages/accounting/FixedAss
 const FixedAssetsDepreciation = lazyWithRetry(() => import('./pages/accounting/FixedAssetsDepreciation'));
 const FixedAssetsReports = lazyWithRetry(() => import('./pages/accounting/FixedAssetsReports'));
 const AccountingCashTransfer = lazyWithRetry(() => import('./pages/accounting/CashTransfer'));
+const AccountingRefunds = lazyWithRetry(() => import('./pages/accounting/Refunds'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
 const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpenses'));
@@ -581,6 +582,11 @@ const AppRoutes = () => {
       <Route path="/setup/approvals" element={
         <ProtectedRoute requiredPrivilege="approvals.manage">
           <Approvals />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payments/refunds" element={
+        <ProtectedRoute requiredPrivilege={['receipts.write', 'accounting.read']}>
+          <AccountingRefunds />
         </ProtectedRoute>
       } />
       <Route path="/accounting/cash-transfer" element={

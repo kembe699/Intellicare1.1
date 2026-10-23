@@ -88,7 +88,7 @@ export async function ledgerFor(referenceIds) {
       FROM account_ledger al
       JOIN chart_of_accounts c ON c.id = al.account_id
       LEFT JOIN general_ledger gl ON gl.id::text = al.transaction_id::text
-      LEFT JOIN journal_entries je ON je.id::text = al.transaction_id::text
+      LEFT JOIN journal_entries je ON je.je_number = al.reference_number
      WHERE gl.reference_id::text = ANY($1) OR je.reference::text = ANY($1) OR je.reference::text LIKE ANY($2)
         OR je.description LIKE ANY($2) OR gl.description LIKE ANY($2)
      GROUP BY 1 ORDER BY 1`, [referenceIds, referenceIds.map(r => `%${r}%`)]);

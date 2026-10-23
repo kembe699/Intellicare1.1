@@ -254,11 +254,16 @@ async function restoreInventoryForVoidedServices(bill, reversedServices, reason,
 router.get('/clinic/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params;
-    const { bill_id } = req.query;
-    
-    let whereClause = { 
+    const { bill_id, status } = req.query;
+
+    // Pending void/refund requests are real receipts awaiting a second person's
+    // sign-off — they were filtered out here, so no screen could ever show them.
+    const ALL_STATUSES = ['active', 'voided', 'refunded', 'pending_void', 'pending_refund'];
+    const requested = status ? String(status).split(',').map((s) => s.trim()).filter((s) => ALL_STATUSES.includes(s)) : ALL_STATUSES;
+
+    let whereClause = {
       clinic_id: parseInt(clinicId),
-      status: { [Op.in]: ['active', 'voided', 'refunded'] },
+      status: { [Op.in]: requested.length ? requested : ALL_STATUSES },
       ...getBranchCondition(req)
     };
     
