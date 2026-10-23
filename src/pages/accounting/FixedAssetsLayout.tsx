@@ -108,7 +108,11 @@ export default function FixedAssetsLayout() {
 // to Register/Add-Asset/Depreciation/Reports; categories stays a small
 // settings-style dialog reachable from any of the three pages.
 
-function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
+// Exported so the central Categories page (src/pages/setup/Categories.tsx)
+// can surface Fixed Asset categories as one of its tabs without duplicating
+// this dialog's logic — per the approved plan: "keep asset_categories as
+// is; just surface it as a tab... reuse the existing CategoriesDialog logic."
+export function CategoriesDialog({ categories, accounts, onClose, onChanged }: {
   categories: Category[]; accounts: ChartAccount[]; onClose: () => void; onChanged: () => void;
 }) {
   const { confirm, confirmDialog } = useConfirmDialog();

@@ -68,6 +68,7 @@ const LISCollection = lazyWithRetry(() => import('./pages/lis/LISCollection'));
 const LISResultsEntry = lazyWithRetry(() => import('./pages/lis/LISResultsEntry'));
 const LISManagerReview = lazyWithRetry(() => import('./pages/lis/LISManagerReview'));
 const LabTests = lazyWithRetry(() => import('./pages/setup/LabTests'));
+const Categories = lazyWithRetry(() => import('./pages/setup/Categories'));
 const Services = lazyWithRetry(() => import('./pages/setup/Services'));
 const Departments = lazyWithRetry(() => import('./pages/setup/Departments'));
 const Clinics = lazyWithRetry(() => import('./pages/setup/Clinics'));
@@ -535,6 +536,11 @@ const AppRoutes = () => {
       <Route path="/setup/lab-tests" element={
         <ProtectedRoute requiredPrivilege="pages.setup_lab_tests.view">
           <LabTests />
+        </ProtectedRoute>
+      } />
+      <Route path="/setup/categories" element={
+        <ProtectedRoute requiredPrivilege="pages.setup_categories.view">
+          <Categories />
         </ProtectedRoute>
       } />
       <Route path="/setup/services" element={

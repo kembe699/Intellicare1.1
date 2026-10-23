@@ -233,6 +233,7 @@ const setupDropdown: NavDropdown = {
   items: [
     { label: 'Lab Tests', href: '/setup/lab-tests', icon: TestTube, privilege: 'pages.setup_lab_tests.view' },
     { label: 'Services', href: '/setup/services', icon: Wrench, privilege: 'clinical.services.manage' },
+    { label: 'Categories', href: '/setup/categories', icon: Tag, privilege: 'pages.setup_categories.view' },
     { label: 'Clinics', href: '/setup/clinics', icon: Stethoscope, privilege: 'pages.setup_clinics.view' },
     { label: 'Facility', href: '/setup/facility', icon: Hospital, privilege: 'pages.setup_facility.view' },
     { label: 'Uncoded Diagnoses', href: '/setup/diagnosis-coding', icon: ClipboardList, privilege: 'clinical.diagnoses.write' },
