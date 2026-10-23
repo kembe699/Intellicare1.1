@@ -629,9 +629,6 @@ export default function ItemMaster() {
                       onChange={e => setFormData({ ...formData, dose_unit_label: e.target.value })}
                       className="h-10 text-sm bg-white"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      What one dose is called on the prescription/receipt
-                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">Unit Cost</label>
@@ -642,13 +639,8 @@ export default function ItemMaster() {
                     <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
                   </div>
 
-                  <div className="md:col-span-3 flex items-center justify-between bg-muted/30 rounded-md px-3 py-2 border border-dashed">
-                    <div className="text-xs text-muted-foreground">
-                      {categoryOverride
-                        ? 'This item uses its own accounts below instead of its category\'s.'
-                        : 'The three accounts below come from this item\'s category — they update automatically if the category\'s accounts change.'}
-                    </div>
-                    <label className="flex items-center gap-2 text-xs font-medium shrink-0 ml-3">
+                  <div className="md:col-span-3">
+                    <label className="flex items-center gap-2 text-xs font-medium w-fit">
                       <input
                         type="checkbox"
                         checked={categoryOverride}
@@ -769,10 +761,6 @@ export default function ItemMaster() {
                     <Input type="number" min="0" value={formData.reorder_quantity} onChange={e => setFormData({ ...formData, reorder_quantity: parseInt(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-foreground mb-1.5">Lead Time (days)</label>
-                    <Input type="number" min="0" value={formData.lead_time_days} onChange={e => setFormData({ ...formData, lead_time_days: parseInt(e.target.value) || 7 })} className="h-10 text-sm bg-white" />
-                  </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-semibold text-foreground mb-1.5">Tracking Flags</label>
                     <div className="flex flex-wrap gap-3">
@@ -794,13 +782,13 @@ export default function ItemMaster() {
                     </div>
                   </div>
 
-                  <div className="md:col-span-3">
+                  <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">Description</label>
                     <textarea
                       value={formData.item_description}
                       onChange={e => setFormData({ ...formData, item_description: e.target.value })}
                       placeholder="Strength, formulation, notes..."
-                      className="w-full p-3 border border-input rounded-lg resize-none h-20 text-sm bg-white shadow-sm"
+                      className="w-full px-3 py-2 border border-input rounded-lg resize-none h-10 text-sm bg-white shadow-sm"
                     />
                   </div>
                 </div>
