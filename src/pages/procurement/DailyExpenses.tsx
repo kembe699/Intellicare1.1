@@ -19,17 +19,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from '@/lib/notify';
 import { exportCSV } from '@/utils/reportUtils';
-import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Search, RefreshCw, ShieldCheck, Download, DollarSign, Pencil, Trash2, Ban, FileSpreadsheet, Stethoscope } from 'lucide-react';
+import { Receipt, Plus, Printer, ChevronsUpDown, Check, Building2, Loader2, Search, RefreshCw, ShieldCheck, Download, DollarSign, Pencil, Trash2, Ban, FileSpreadsheet, Stethoscope, Eye, CheckCircle2, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 
 interface CoAAccount { id: string | number; account_code: string; account_name: string; account_type: string; current_balance?: number; balance?: number; }
 interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; category_id?: string | null; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
 interface ExpApproval { id: string; expense_id: number; approval_level: number; approved_by: string; approved_by_title?: string; signature?: string | null; notes?: string; approved_at: string; }
-interface SupplierBill { id: string; po_number: string; order_date: string; total_amount: number; po_currency: string; payment_terms: string; status: string; supplier_name: string; contact_person: string; supplier_phone: string; paid_amount: number; payment_status: string; balance_due: number; }
+interface SupplierBill { id: string; po_number: string; order_date: string; total_amount: number; po_currency: string; payment_terms: string; status: string; supplier_name: string; contact_person: string; supplier_phone: string; paid_amount: number; payment_status: string; balance_due: number; approval_count?: number; }
 interface ConsultantBill { id: string; bill_number: string; first_name: string; last_name: string; employee_number: string; period_from: string; period_to: string; total_consultation_revenue: number; fee_percentage: number; bill_amount: number; currency: string; status: string; created_at: string; paid_at?: string; }
 interface BillApproval { id: string; po_id: string; approval_level: number; approved_by: string; approved_by_title?: string; signature?: string | null; notes?: string; approved_at: string; }
 interface POLineItem { line_number: number; item_name: string; description?: string; quantity: number; unit_of_measure?: string; unit_price: number; total_price: number; status?: string; }
@@ -130,6 +130,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
   // fetchPoCurrencyRates. Keyed by PO currency since the base side is always the clinic's own.
   const [poCurrencyRates, setPoCurrencyRates] = useState<Record<string, number>>({});
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [viewItemsBill, setViewItemsBill] = useState<SupplierBill | null>(null);
   const [approveBill, setApproveBill] = useState<SupplierBill | null>(null);
   const [approveForm, setApproveForm] = useState({ approved_by_title: '', notes: '' });
   const [submittingApproval, setSubmittingApproval] = useState(false);
@@ -560,6 +561,41 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
     finally { setSubmittingExpApproval(false); }
   };
 
+  // What a bill is for — its PO lines — shown when viewing, approving or paying it.
+  const renderBillItems = (bill: SupplierBill) => {
+    const items = billItems[bill.id] || [];
+    const cur = bill.po_currency || currency.code;
+    if (!items.length) return <p className="text-sm text-muted-foreground">No line items recorded on this purchase order.</p>;
+    return (
+      <div className="rounded-md border overflow-hidden">
+        <AdvancedDataTable<POLineItem>
+          data={items}
+          className="border-0 rounded-none"
+          keyExtractor={(item, i) => item.line_number ?? i}
+          columns={[
+            { key: 'line_number', header: '#', render: (v, _item, i) => <span className="text-muted-foreground">{v || i + 1}</span> },
+            {
+              key: 'item_name', header: 'Item',
+              render: (v, item) => (
+                <>
+                  <div className="font-medium">{v}</div>
+                  {item.description && <div className="text-muted-foreground text-xs">{item.description}</div>}
+                </>
+              ),
+            },
+            { key: 'quantity', header: 'Qty', align: 'right', render: (v, item) => <span className="whitespace-nowrap">{v} <span className="text-muted-foreground">{item.unit_of_measure || ''}</span></span> },
+            { key: 'unit_price', header: 'Unit price', align: 'right', render: (v) => <span className="font-mono tabular-nums whitespace-nowrap">{formatMoney(parseFloat(String(v || 0)), cur)}</span> },
+            { key: 'total_price', header: 'Total', align: 'right', render: (v) => <span className="font-mono tabular-nums font-medium whitespace-nowrap">{formatMoney(parseFloat(String(v || 0)), cur)}</span> },
+          ]}
+        />
+        <div className="bg-muted/40 border-t px-4 py-2 flex justify-between text-sm">
+          <span className="font-semibold">Total</span>
+          <span className="font-mono tabular-nums font-bold">{formatMoney(parseFloat(String(bill.total_amount || 0)), cur)}</span>
+        </div>
+      </div>
+    );
+  };
+
   const openApprove = (bill: SupplierBill) => {
     setApproveBill(bill);
     setApproveForm({ approved_by_title: '', notes: '' });
@@ -613,7 +649,15 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
     if (billFrom && b.order_date < billFrom) return false;
     if (billTo && b.order_date > billTo) return false;
     return true;
-  }), [bills, searchBills, supplierFilter, billFrom, billTo, billsView, billApprovals]);
+  })
+    // Bills that still need someone (approval or payment) come first, newest first
+    // within each group; fully paid bills sink to the bottom. approval_count is
+    // copied onto the row so the Approvals column can be sorted too.
+    .map(b => ({ ...b, approval_count: (billApprovals[b.id] || []).length }))
+    .sort((a, b) => {
+      const done = (x: SupplierBill) => (x.payment_status === 'paid' || parseFloat(String(x.balance_due ?? 0)) <= 0.01 ? 1 : 0);
+      return done(a) - done(b) || String(b.order_date || '').localeCompare(String(a.order_date || ''));
+    }), [bills, searchBills, supplierFilter, billFrom, billTo, billsView, billApprovals]);
 
   const supplierOptions = useMemo(() => {
     const names = Array.from(new Set(bills.map(b => b.supplier_name).filter(Boolean))).sort();
@@ -1115,19 +1159,18 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   emptyMessage="No supplier bills found"
                   pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
                   columns={[
-                    { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono font-medium text-xs">{v}</span> },
+                    { key: 'po_number', header: 'PO Number', sortable: true, render: (v) => <span className="font-mono font-medium text-xs whitespace-nowrap">{v}</span> },
                     { key: 'order_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap text-sm">{formatDate(v)}</span> },
                     { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v) => <span className="font-medium text-sm">{v}</span> },
                     {
                       key: 'total_amount', header: 'PO Total', align: 'right', sortable: true,
                       render: (v, bill) => {
                         const amt = parseFloat(String(v || 0));
-                        const cur = bill.po_currency || currency.code;
                         const base = toBaseCurrency(amt, bill.po_currency);
                         return (
-                          <div className="leading-tight">
-                            <span className="font-mono text-sm">{cur} {amt.toFixed(2)}</span>
-                            {base != null && <div className="text-xs text-muted-foreground font-mono">≈ {fmt(base)}</div>}
+                          <div className="leading-tight whitespace-nowrap">
+                            <span className="font-mono tabular-nums text-sm">{formatMoney(amt, bill.po_currency || currency.code)}</span>
+                            {base != null && <div className="text-xs text-muted-foreground font-mono tabular-nums">≈ {formatMoney(base, currency.code)}</div>}
                           </div>
                         );
                       },
@@ -1136,44 +1179,46 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                       key: 'balance_due', header: 'Balance Due', align: 'right', sortable: true,
                       render: (v, bill) => {
                         const amt = parseFloat(String(v || 0));
-                        const cur = bill.po_currency || currency.code;
                         const base = toBaseCurrency(amt, bill.po_currency);
+                        const tone = amt > 0.01 ? 'text-warning font-semibold' : amt < -0.01 ? 'text-destructive' : 'text-muted-foreground';
                         return (
-                          <div className="leading-tight">
-                            <span className="font-mono font-bold text-orange-600 text-sm">{cur} {amt.toFixed(2)}</span>
-                            {base != null && <div className="text-xs text-muted-foreground font-mono">≈ {fmt(base)} to post</div>}
+                          <div className="leading-tight whitespace-nowrap" title={amt < -0.01 ? 'More was paid than the bill total' : undefined}>
+                            <span className={`font-mono tabular-nums text-sm ${tone}`}>{formatMoney(amt, bill.po_currency || currency.code)}</span>
+                            {amt < -0.01 && <div className="text-xs text-destructive">overpaid</div>}
+                            {base != null && amt > 0.01 && <div className="text-xs text-muted-foreground font-mono tabular-nums">≈ {formatMoney(base, currency.code)}</div>}
                           </div>
                         );
                       },
                     },
                     {
-                      key: '__approvals', header: 'Approvals',
+                      // One compact pill instead of three numbered/ticked circles; who
+                      // approved at each level is in the tooltip and the Approve dialog.
+                      key: 'approval_count', header: 'Approvals', sortable: true, filterable: false,
+                      exportValue: (bill) => `${(billApprovals[bill.id] || []).length}/3`,
                       render: (_v, bill) => {
                         const approvals = billApprovals[bill.id] || [];
-                        const approvalCount = approvals.length;
-                        const fullyApproved = approvalCount >= 3;
-                        return (
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3].map(level => {
-                              const a = approvals.find(ap => ap.approval_level === level);
-                              return (
-                                <div key={level} title={a ? `${a.approved_by}${a.approved_by_title ? ' · ' + a.approved_by_title : ''}` : `Level ${level} pending`}
-                                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${a ? 'bg-success border-success-border text-white' : 'bg-muted border-muted-foreground/30 text-muted-foreground'}`}>
-                                  {a ? '✓' : level}
-                                </div>
-                              );
-                            })}
-                            <span className={`ml-1 text-xs font-medium ${fullyApproved ? 'text-success' : 'text-muted-foreground'}`}>{approvalCount}/3</span>
-                          </div>
+                        const n = approvals.length;
+                        const who = [1, 2, 3].map(level => {
+                          const a = approvals.find(ap => ap.approval_level === level);
+                          return `${PO_APPROVAL_LEVELS[level - 1]}: ${a ? `${a.approved_by}${a.approved_by_title ? ` (${a.approved_by_title})` : ''}` : 'pending'}`;
+                        }).join('\n');
+                        return n >= 3 ? (
+                          <span title={who} className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success border border-success-border px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                            <CheckCircle2 className="w-3 h-3" />Approved
+                          </span>
+                        ) : (
+                          <span title={who} className="inline-flex items-center gap-1 rounded-full bg-warning-bg text-warning border border-warning-border px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                            <Clock className="w-3 h-3" />{n} of 3
+                          </span>
                         );
                       },
                     },
                     {
-                      key: 'payment_status', header: 'Status',
-                      render: (v) => <Badge variant={v === 'partial' ? 'secondary' : 'outline'} className="text-xs capitalize">{v || 'unpaid'}</Badge>,
+                      key: 'payment_status', header: 'Status', sortable: true,
+                      render: (v) => <Badge variant={v === 'paid' ? 'success' : v === 'partial' ? 'secondary' : 'outline'} className="text-xs capitalize">{v || 'unpaid'}</Badge>,
                     },
                     {
-                      key: '__actions', header: 'Actions',
+                      key: '__actions', header: '', align: 'right',
                       render: (_v, bill) => {
                         const approvalCount = (billApprovals[bill.id] || []).length;
                         const fullyApproved = approvalCount >= 3;
@@ -1182,20 +1227,21 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                         // owed — balance_due backs it up.
                         const isFullyPaid = bill.payment_status === 'paid' || parseFloat(String(bill.balance_due ?? 0)) <= 0.01;
                         return (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-end gap-1">
                             {!fullyApproved && (
                               <Button size="sm" variant="outline" className="h-7 text-xs px-2 border-primary/40 text-primary hover:bg-primary/10" onClick={() => openApprove(bill)}>
                                 Approve
                               </Button>
                             )}
-                            {!isFullyPaid && hasPrivilege('supplier_bills.pay') && (
-                              <Button size="sm" variant={fullyApproved ? 'default' : 'ghost'} disabled={!fullyApproved}
-                                className={`h-7 text-xs px-2 ${!fullyApproved ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                onClick={() => fullyApproved && openPayBill(bill)}
-                                title={fullyApproved ? 'Pay this bill' : 'Requires 3 approvals before payment'}>
+                            {/* Pay only appears once all three approvals are in. */}
+                            {fullyApproved && !isFullyPaid && hasPrivilege('supplier_bills.pay') && (
+                              <Button size="sm" className="h-7 text-xs px-2" onClick={() => openPayBill(bill)} title="Pay this bill">
                                 Pay
                               </Button>
                             )}
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="View items" aria-label="View items" onClick={() => setViewItemsBill(bill)}>
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Download Voucher" onClick={() => downloadBillVoucher(bill)}>
                               <Download className="w-3.5 h-3.5" />
                             </Button>
@@ -1534,9 +1580,22 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
           </DialogContent>
         </Dialog>
 
+        {/* ── VIEW BILL ITEMS ── */}
+        <Dialog open={!!viewItemsBill} onOpenChange={(o) => !o && setViewItemsBill(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{viewItemsBill?.po_number} — items</DialogTitle>
+              <DialogDescription>
+                {viewItemsBill && `${viewItemsBill.supplier_name} · ordered ${formatDate(viewItemsBill.order_date)} · ${(billApprovals[viewItemsBill.id] || []).length} of 3 approvals · ${viewItemsBill.payment_status || 'unpaid'}`}
+              </DialogDescription>
+            </DialogHeader>
+            {viewItemsBill && renderBillItems(viewItemsBill)}
+          </DialogContent>
+        </Dialog>
+
         {/* ── APPROVE BILL MODAL ── */}
         <Dialog open={showApproveModal} onOpenChange={setShowApproveModal}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Approve Supplier Bill</DialogTitle>
               <DialogDescription>{approveBill && `${approveBill.po_number} — ${approveBill.supplier_name}`}</DialogDescription>
@@ -1546,6 +1605,10 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
               const nextLevel = approvals.length + 1;
               return (
                 <form onSubmit={handleApproveSubmit} className="space-y-4 px-6 pb-6 pt-2">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What you are approving</p>
+                    {renderBillItems(approveBill)}
+                  </div>
                   {/* Approval progress */}
                   <div className="rounded-md border p-3 bg-muted/30 space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approval Progress</p>
@@ -1632,44 +1695,11 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
             </DialogHeader>
             {selectedBill && (
               <form onSubmit={handlePaySubmit} className="space-y-3 px-6 pb-6 pt-2">
-                {/* PO Line Items — what is being paid for. These amounts are recorded in
-                    the PO's own currency (po_currency), not the clinic's base currency,
-                    so that must label them — falling back to the system currency only if
-                    the PO has none recorded. */}
-                {(() => {
-                  const items = billItems[selectedBill.id] || [];
-                  const payCur = selectedBill.po_currency || currency.code;
-                  if (!items.length) return null;
-                  return (
-                    <div className="rounded-md border overflow-hidden">
-                      <div className="bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Items Being Paid For ({payCur})</div>
-                      <AdvancedDataTable<POLineItem>
-                        data={items}
-                        keyExtractor={(item, i) => item.line_number ?? i}
-                        columns={[
-                          { key: 'line_number', header: '#', render: (v, item, i) => <span className="text-muted-foreground">{v || i + 1}</span> },
-                          {
-                            key: 'item_name', header: 'Item / Description',
-                            render: (v, item) => (
-                              <>
-                                <div className="font-medium">{v}</div>
-                                {item.description && <div className="text-muted-foreground text-xs">{item.description}</div>}
-                              </>
-                            ),
-                          },
-                          { key: 'quantity', header: 'Qty', align: 'center' },
-                          { key: 'unit_of_measure', header: 'UOM', render: (v) => <span className="text-muted-foreground">{v || 'Each'}</span> },
-                          { key: 'unit_price', header: `Unit Price (${payCur})`, align: 'right', render: (v) => <span className="font-mono">{payCur} {parseFloat(String(v || 0)).toFixed(2)}</span> },
-                          { key: 'total_price', header: `Total (${payCur})`, align: 'right', render: (v) => <span className="font-mono font-medium">{payCur} {parseFloat(String(v || 0)).toFixed(2)}</span> },
-                        ]}
-                      />
-                      <div className="bg-muted/40 border-t px-3 py-1.5 flex justify-between">
-                        <span className="font-semibold text-xs">TOTAL ({payCur})</span>
-                        <span className="font-mono font-bold text-sm">{payCur} {parseFloat(String(selectedBill.total_amount || 0)).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* PO line items — what is being paid for, in the PO's own currency. */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What you are paying for</p>
+                  {renderBillItems(selectedBill)}
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label className="text-xs">Payment Date *</Label><Input type="date" className="mt-1" value={payForm.payment_date} onChange={e => setPayForm(f => ({...f, payment_date: e.target.value}))} required /></div>
                   <div>
