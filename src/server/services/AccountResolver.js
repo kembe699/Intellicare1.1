@@ -259,8 +259,17 @@ async function resolveLineAccounts(line, ctx = {}) {
     const [[svc]] = await db.query('SELECT * FROM services WHERE LOWER(service_name) = LOWER(:name) LIMIT 1', { replacements: { name } });
     if (svc) return resolveServiceRevenue(svc, ctx);
 
-    const [[labHit]] = await db.query('SELECT 1 AS hit FROM lab_tests WHERE LOWER(test_name) = LOWER(:name) LIMIT 1', { replacements: { name } });
-    if (labHit) {
+    // lab_tests.revenue_account_id (per-test override) -> its category_id's
+    // account -> forced 'laboratory' regex bucket as the last resort — same
+    // precedence as everywhere else, just forcing a sensible category when
+    // the test has none of its own configured yet.
+    const [[labTest]] = await db.query('SELECT id, category_id, revenue_account_id FROM lab_tests WHERE LOWER(test_name) = LOWER(:name) LIMIT 1', { replacements: { name } });
+    if (labTest) {
+      if (labTest.revenue_account_id) return labTest.revenue_account_id;
+      if (labTest.category_id) {
+        const labCategory = await getCategoryById(db, labTest.category_id);
+        if (labCategory?.revenue_account_id) return labCategory.revenue_account_id;
+      }
       const { resolveRevenueAccount } = require('../utils/resolveRevenueAccount');
       const id2 = await resolveRevenueAccount('laboratory', clinicId);
       if (id2) return id2;

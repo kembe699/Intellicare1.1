@@ -917,7 +917,7 @@ router.put('/:id', authorize('expenses.write'), async (req, res) => {
     const { expense, id, error } = await loadEditableExpense(req);
     if (error) return res.status(error.code).json(error.body);
 
-    const { account_id, amount, description, expense_date, category, notes, payment_method } = req.body;
+    const { account_id, amount, description, expense_date, category, category_id, notes, payment_method } = req.body;
 
     if (amount !== undefined && !(parseFloat(amount) > 0)) {
       return res.status(400).json({ error: 'Amount must be greater than zero' });
@@ -946,6 +946,7 @@ router.put('/:id', authorize('expenses.write'), async (req, res) => {
       description: description ?? expense.description,
       expense_date: expense_date ?? expense.expense_date,
       category: category ?? expense.category,
+      category_id: category_id !== undefined ? category_id : expense.category_id,
       notes: notes ?? expense.notes,
       payment_method: payment_method ?? expense.payment_method,
     };
@@ -953,7 +954,7 @@ router.put('/:id', authorize('expenses.write'), async (req, res) => {
     await sequelize.query(
       `UPDATE daily_expenses SET account_id = :account_id, account_name = :account_name,
               amount = :amount, description = :description, expense_date = :expense_date,
-              category = :category, notes = :notes, payment_method = :payment_method,
+              category = :category, category_id = :category_id, notes = :notes, payment_method = :payment_method,
               updated_at = NOW()
         WHERE id = :id`,
       { replacements: { ...next, id } });
@@ -1076,7 +1077,7 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
     if (!req.body?.description || !(parseFloat(req.body?.amount) > 0) || !req.body?.account_id) {
       return res.status(400).json({ error: 'description, a positive amount and account_id are required' });
     }
-    const { account_id, amount, description, expense_date, category, notes, created_by, payment_method } = req.body;
+    const { account_id, amount, description, expense_date, category, category_id, notes, created_by, payment_method } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
     let accountName = 'Unknown';
     try {
@@ -1095,7 +1096,7 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
     const expense = await DailyExpense.create({
       expense_date: expense_date || new Date(),
       description, amount, account_id,
-      account_name: accountName, category, notes, created_by,
+      account_name: accountName, category, category_id: category_id || null, notes, created_by,
       clinic_id: parseInt(clinic_id || 1),
       payment_method: payment_method || 'cash',
       status: 'pending_approval',

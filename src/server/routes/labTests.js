@@ -57,6 +57,8 @@ router.get('/', async (req, res) => {
         lt.test_name,
         lt.test_code,
         lt.category,
+        lt.category_id,
+        lt.revenue_account_id,
         lt.price,
         lt.service_id,
         lt.clinic_id,
@@ -136,6 +138,8 @@ router.get('/search', async (req, res) => {
         lt.test_name,
         lt.test_code,
         lt.category,
+        lt.category_id,
+        lt.revenue_account_id,
         lt.price,
         lt.service_id,
         lt.clinic_id,
@@ -197,6 +201,8 @@ router.get('/clinic/:clinicId', async (req, res) => {
         lt.test_name,
         lt.test_code,
         lt.category,
+        lt.category_id,
+        lt.revenue_account_id,
         lt.price,
         lt.service_id,
         lt.clinic_id,
@@ -398,16 +404,16 @@ router.post('/with-components', authorize('setup.lab_tests.manage'), async (req,
       testId = existingTest.id;
       console.log('Test code exists, updating existing test:', testId);
       await LabTest.sequelize.query(
-        `UPDATE lab_tests SET test_name = ?, category = ?, price = ?, service_id = ?, machine_integration = ?, updated_at = NOW() WHERE id = ?`,
-        { replacements: [test.test_name, test.category, price, serviceId, machineIntegration, testId], transaction }
+        `UPDATE lab_tests SET test_name = ?, category = ?, category_id = ?, revenue_account_id = ?, price = ?, service_id = ?, machine_integration = ?, updated_at = NOW() WHERE id = ?`,
+        { replacements: [test.test_name, test.category, test.category_id || null, test.revenue_account_id || null, price, serviceId, machineIntegration, testId], transaction }
       );
     } else {
       // Create new lab test
       testId = crypto.randomUUID();
       console.log('Creating new lab test with id:', testId);
       await LabTest.sequelize.query(
-        `INSERT INTO lab_tests (id, test_name, test_code, category, clinic_id, branch_id, price, service_id, machine_integration, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
-        { replacements: [testId, test.test_name, testCode, test.category, clinicId, branchId, price, serviceId, machineIntegration], transaction }
+        `INSERT INTO lab_tests (id, test_name, test_code, category, category_id, revenue_account_id, clinic_id, branch_id, price, service_id, machine_integration, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, NOW(), NOW())`,
+        { replacements: [testId, test.test_name, testCode, test.category, test.category_id || null, test.revenue_account_id || null, clinicId, branchId, price, serviceId, machineIntegration], transaction }
       );
     }
 
@@ -532,12 +538,14 @@ router.put('/:id/with-components', authorize('setup.lab_tests.manage'), async (r
 
     // Use raw SQL to avoid Sequelize model validation issues
     const [updateResult] = await LabTest.sequelize.query(
-      `UPDATE lab_tests SET test_name = ?, test_code = ?, category = ?, price = ?, service_id = ?, machine_integration = ?, updated_at = NOW() WHERE id = ?`,
+      `UPDATE lab_tests SET test_name = ?, test_code = ?, category = ?, category_id = ?, revenue_account_id = ?, price = ?, service_id = ?, machine_integration = ?, updated_at = NOW() WHERE id = ?`,
       {
         replacements: [
           test.test_name,
           test.test_code ? test.test_code.toUpperCase() : test.test_code,
           test.category,
+          test.category_id || null,
+          test.revenue_account_id || null,
           parseFloat(test.price) || 0,
           test.service_id || null,
           test.machine_integration || null,

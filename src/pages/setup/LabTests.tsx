@@ -57,6 +57,19 @@ const LabTests: React.FC = () => {
   const [testCode, setTestCode] = useState('');
   const [category, setCategory] = useState('');
   const [selectedService, setSelectedService] = useState('');
+
+  // Central Categories feature — same pattern as Services.tsx: revenue
+  // comes FROM the category by default (revenueOverride off keeps
+  // revenue_account_id null, so the test keeps following its category).
+  const [categoryId, setCategoryId] = useState('');
+  const [revenueAccountId, setRevenueAccountId] = useState('');
+  const [revenueOverride, setRevenueOverride] = useState(false);
+  const [testCategoryList, setTestCategoryList] = useState<{ id: string; name: string; parent_id: string | null; parent_name: string | null; revenue_account_id: string | null }[]>([]);
+  const [coaAccounts, setCoaAccounts] = useState<{ id: string; account_code: string; account_name: string; account_type: string }[]>([]);
+  const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({ name: '', revenue_account_id: '' });
+  const [savingNewCategory, setSavingNewCategory] = useState(false);
+  const NEW_CATEGORY_VALUE = '__new_category__';
   const [price, setPrice] = useState('');
   const [services, setServices] = useState<any[]>([]);
   const [serviceComboOpen, setServiceComboOpen] = useState(false);
@@ -73,12 +86,77 @@ const LabTests: React.FC = () => {
   // same test code (e.g. "CBC") can legitimately exist once per branch.
   const [branchNames, setBranchNames] = useState<Record<number, string>>({});
 
+  const fetchTestCategories = async () => {
+    try {
+      const res = await authFetch(`/api/categories?type=service&clinic_id=${user?.clinic || 1}`, { credentials: 'include' });
+      if (res.ok) setTestCategoryList(await res.json());
+    } catch (e) { console.error('Failed to fetch lab test categories', e); }
+  };
+  const fetchCoaAccounts = async () => {
+    try {
+      const res = await authFetch(`/api/accounting/chart-of-accounts?clinic_id=${user?.clinic || 1}`, { credentials: 'include' });
+      if (res.ok) setCoaAccounts(await res.json());
+    } catch (e) { console.error('Failed to fetch chart of accounts', e); }
+  };
+
+  const applyCategoryRevenue = (catId: string) => {
+    const cat = testCategoryList.find(c => c.id === catId);
+    setCategoryId(catId);
+    setRevenueAccountId(cat?.revenue_account_id || '');
+  };
+
+  const handleCategoryChange = async (value: string) => {
+    if (value === NEW_CATEGORY_VALUE) {
+      setNewCategoryForm({ name: '', revenue_account_id: '' });
+      setShowNewCategoryDialog(true);
+      return;
+    }
+    if (revenueOverride) {
+      const keepOverride = await confirm({
+        title: 'Switch to the new category\'s revenue account?',
+        description: 'This test is using its own revenue account instead of its category\'s. Keep the current override, or switch to the new category\'s account?',
+      });
+      if (keepOverride) { setCategoryId(value); return; }
+      setRevenueOverride(false);
+    }
+    applyCategoryRevenue(value);
+  };
+
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryForm.name.trim()) { toast.error('Name is required'); return; }
+    if (!newCategoryForm.revenue_account_id) { toast.error('Revenue account is required'); return; }
+    setSavingNewCategory(true);
+    try {
+      const res = await authFetch('/api/categories', {
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({ ...newCategoryForm, type: 'service', clinic_id: user?.clinic || 1 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Category created');
+        setShowNewCategoryDialog(false);
+        await fetchTestCategories();
+        setRevenueOverride(false);
+        setCategoryId(data.id);
+        setRevenueAccountId(data.revenue_account_id || '');
+      } else {
+        toast.error(data.error || 'Failed to create category');
+      }
+    } catch {
+      toast.error('Network error creating category');
+    } finally {
+      setSavingNewCategory(false);
+    }
+  };
+
   useEffect(() => {
     if (user?.clinic) {
       const loadData = async () => {
         await fetchServices();
         await fetchTests();
         await fetchBranches();
+        await fetchTestCategories();
+        await fetchCoaAccounts();
       };
       loadData();
     }
@@ -158,6 +236,8 @@ const LabTests: React.FC = () => {
         testName: test.test_name || test.testName,
         testCode: test.test_code || test.testCode,
         category: test.category,
+        category_id: test.category_id || null,
+        revenue_account_id: test.revenue_account_id || null,
         price: test.price,
         service_id: test.service_id,
         branch_id: test.branch_id ?? null,
@@ -190,6 +270,9 @@ const LabTests: React.FC = () => {
     setMachineIntegration('none');
     setComponents([{ name: '', unit: '', normalRangeMin: undefined, normalRangeMax: undefined, normalRangeText: '' }]);
     setEditingTest(null);
+    setCategoryId('');
+    setRevenueAccountId('');
+    setRevenueOverride(false);
   };
 
   const openEditDialog = (test: LabTest) => {
@@ -200,6 +283,12 @@ const LabTests: React.FC = () => {
     setSelectedService(test.service_id?.toString() || '');
     setPrice(test.price?.toString() || '');
     setMachineIntegration(test.machine_integration || 'none');
+    setCategoryId(test.category_id || '');
+    setRevenueAccountId(test.revenue_account_id || '');
+    {
+      const cat = testCategoryList.find(c => c.id === test.category_id);
+      setRevenueOverride(!!test.revenue_account_id && test.revenue_account_id !== (cat?.revenue_account_id || null));
+    }
     
     // Transform database components to frontend format, parsing reference_range into min/max
     const transformedComponents = test.components.length > 0 
@@ -275,11 +364,16 @@ const LabTests: React.FC = () => {
 
     setSaving(true);
     try {
+      const selectedCat = testCategoryList.find(c => c.id === categoryId);
+      const categoryName = selectedCat?.name || category;
+      const resolvedRevenueAccountId = revenueOverride ? (revenueAccountId || null) : null;
       // Transform data to match server expectations (snake_case)
       const testData = {
         test_name: testName,
         test_code: testCode.toUpperCase(),
-        category,
+        category: categoryName,
+        category_id: categoryId || null,
+        revenue_account_id: resolvedRevenueAccountId,
         clinic_id: user?.clinic,
         price: parseFloat(price) || 0,
         service_id: selectedService || null,
@@ -307,7 +401,9 @@ const LabTests: React.FC = () => {
         test: {
           test_name: testName,
           test_code: testCode.toUpperCase(),
-          category,
+          category: categoryName,
+          category_id: categoryId || null,
+          revenue_account_id: resolvedRevenueAccountId,
           price: parseFloat(price) || 0,
           service_id: selectedService || null,
           machine_integration: machineIntegration === 'none' ? null : (machineIntegration || null)
@@ -754,13 +850,45 @@ const handleBulkDelete = async () => {
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
                     <Combobox
-                      options={testCategories.map((cat) => ({ value: cat, label: cat }))}
-                      value={category}
-                      onChange={setCategory}
+                      options={[
+                        ...testCategoryList.map((c) => ({ value: c.id, label: c.parent_name ? `${c.parent_name} / ${c.name}` : c.name })),
+                        { value: NEW_CATEGORY_VALUE, label: '+ New Category' },
+                      ]}
+                      value={categoryId}
+                      onChange={handleCategoryChange}
                       placeholder="Select category"
                       searchPlaceholder="Search categories..."
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2 bg-muted/30 rounded-md px-3 py-2 border border-dashed">
+                  <div className="text-xs text-muted-foreground">
+                    {revenueOverride
+                      ? 'This test uses its own revenue account instead of its category\'s.'
+                      : 'The revenue account below comes from this test\'s category.'}
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-medium">
+                    <input
+                      type="checkbox"
+                      checked={revenueOverride}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setRevenueOverride(on);
+                        if (!on) applyCategoryRevenue(categoryId);
+                      }}
+                    />
+                    Use a different revenue account for this test
+                  </label>
+                  <Combobox
+                    options={coaAccounts.filter((a) => a.account_type === 'revenue').map((a) => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                    value={revenueAccountId}
+                    onChange={setRevenueAccountId}
+                    disabled={!revenueOverride}
+                    placeholder="None"
+                    searchPlaceholder="Search accounts..."
+                  />
+                  {!revenueOverride && revenueAccountId && <p className="text-xs text-muted-foreground">From category</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1127,6 +1255,35 @@ const handleBulkDelete = async () => {
                     Upload
                   </>
                 )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showNewCategoryDialog} onOpenChange={setShowNewCategoryDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>New Lab Test Category</DialogTitle>
+              <DialogDescription>Created and selected immediately — no need to leave this form.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={newCategoryForm.name} onChange={(e) => setNewCategoryForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Revenue account (revenue) <span className="text-destructive">*</span></Label>
+                <Combobox
+                  options={coaAccounts.filter((a) => a.account_type === 'revenue').map((a) => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                  value={newCategoryForm.revenue_account_id} onChange={(v) => setNewCategoryForm((f) => ({ ...f, revenue_account_id: v }))}
+                  placeholder="Select account..." searchPlaceholder="Search accounts..."
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowNewCategoryDialog(false)}>Cancel</Button>
+              <Button onClick={handleSaveNewCategory} disabled={savingNewCategory} className="gap-1.5">
+                {savingNewCategory && <Loader2 className="w-4 h-4 animate-spin" />} Save
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -27,7 +27,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate } from '@/lib/format';
 
 interface CoAAccount { id: string | number; account_code: string; account_name: string; account_type: string; current_balance?: number; balance?: number; }
-interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
+interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; category_id?: string | null; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
 interface ExpApproval { id: string; expense_id: number; approval_level: number; approved_by: string; approved_by_title?: string; signature?: string | null; notes?: string; approved_at: string; }
 interface SupplierBill { id: string; po_number: string; order_date: string; total_amount: number; po_currency: string; payment_terms: string; status: string; supplier_name: string; contact_person: string; supplier_phone: string; paid_amount: number; payment_status: string; balance_due: number; }
 interface ConsultantBill { id: string; bill_number: string; first_name: string; last_name: string; employee_number: string; period_from: string; period_to: string; total_consultation_revenue: number; fee_percentage: number; bill_amount: number; currency: string; status: string; created_at: string; paid_at?: string; }
@@ -67,6 +67,11 @@ const DailyExpenses: React.FC = () => {
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [bills, setBills] = useState<SupplierBill[]>([]);
   const [coaAccounts, setCoaAccounts] = useState<CoAAccount[]>([]);
+  // Central Categories feature: the expense account (debit side) now comes
+  // FROM the category, read by AccountResolver.resolveExpenseAccount at pay
+  // time — the "paid from" cash/bank account (expForm.account_id) stays a
+  // separate user choice, unchanged.
+  const [expenseCategoryList, setExpenseCategoryList] = useState<{ id: string; name: string; expense_account_id: string | null; expense_account_code: string | null; expense_account_name: string | null }[]>([]);
   const [loadingExp, setLoadingExp] = useState(false);
   const [loadingBills, setLoadingBills] = useState(false);
   const [searchExp, setSearchExp] = useState('');
@@ -89,7 +94,7 @@ const DailyExpenses: React.FC = () => {
   const [billTo, setBillTo] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [showExpModal, setShowExpModal] = useState(false);
-  const [expForm, setExpForm] = useState({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', notes: '', payment_method: 'Cash' });
+  const [expForm, setExpForm] = useState({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash' });
   const [openExpCombo, setOpenExpCombo] = useState(false);
   const [submittingExp, setSubmittingExp] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
@@ -121,7 +126,14 @@ const DailyExpenses: React.FC = () => {
   const [expApproveForm, setExpApproveForm] = useState({ approved_by_title: '', notes: '' });
   const [submittingExpApproval, setSubmittingExpApproval] = useState(false);
 
-  useEffect(() => { fetchExpenses(); fetchBills(); fetchCoA(); fetchUserProfile(); fetchConsultantBills(); }, []);
+  const fetchExpenseCategories = async () => {
+    try {
+      const r = await authFetch(`/api/categories?type=expense&clinic_id=${clinicId}`);
+      if (r.ok) setExpenseCategoryList(await r.json());
+    } catch (e) { console.error('Failed to fetch expense categories', e); }
+  };
+
+  useEffect(() => { fetchExpenses(); fetchBills(); fetchCoA(); fetchUserProfile(); fetchConsultantBills(); fetchExpenseCategories(); }, []);
   // Re-read whenever the window moves; skipped on the first render, which the
   // effect above already covers.
   const firstLoad = useRef(true);
@@ -601,7 +613,7 @@ const DailyExpenses: React.FC = () => {
       const data = await r.json();
       toast.success('Expense submitted — awaiting 3 approvals before voucher is issued');
       setShowExpModal(false);
-      setExpForm({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', notes: '', payment_method: 'Cash' });
+      setExpForm({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash' });
       fetchExpenses();
     } catch { toast.error('Failed to record expense'); }
     finally { setSubmittingExp(false); }
@@ -1233,13 +1245,22 @@ const DailyExpenses: React.FC = () => {
                 <div>
                   <Label className="text-xs">Category</Label>
                   <Combobox
-                    options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: c }))}
-                    value={expForm.category}
-                    onChange={v => setExpForm(f => ({...f, category: v}))}
+                    options={expenseCategoryList.map(c => ({ value: c.id, label: c.name }))}
+                    value={expForm.category_id}
+                    onChange={v => {
+                      const cat = expenseCategoryList.find(c => c.id === v);
+                      setExpForm(f => ({ ...f, category_id: v, category: cat?.name || f.category }));
+                    }}
                     placeholder="Select category"
                     searchPlaceholder="Search..."
                     className="mt-1 h-9"
                   />
+                  {expForm.category_id && (() => {
+                    const cat = expenseCategoryList.find(c => c.id === expForm.category_id);
+                    return cat?.expense_account_code ? (
+                      <p className="text-xs text-muted-foreground mt-1">Will post to: {cat.expense_account_code} · {cat.expense_account_name}</p>
+                    ) : null;
+                  })()}
                 </div>
               </div>
               <div><Label className="text-xs">Description *</Label><Input className="mt-1" value={expForm.description} onChange={e => setExpForm(f => ({...f, description: e.target.value}))} placeholder="What was purchased/paid for" required /></div>
@@ -1285,7 +1306,7 @@ const DailyExpenses: React.FC = () => {
                     if (!String(e.description || '').trim()) { toast.error('Description is required'); return; }
                     saveExpenseEdit({
                       expense_date: e.expense_date, description: e.description, amount: parseFloat(String(e.amount)),
-                      category: e.category, notes: e.notes, payment_method: e.payment_method,
+                      category: e.category, category_id: e.category_id, notes: e.notes, payment_method: e.payment_method,
                       account_id: e.account_id,
                     } as any);
                   }}
@@ -1296,9 +1317,20 @@ const DailyExpenses: React.FC = () => {
                         value={e.expense_date ? String(e.expense_date).slice(0, 10) : ''}
                         onChange={ev => set({ expense_date: ev.target.value } as any)} required /></div>
                     <div><Label className="text-xs">Category</Label>
-                      <Combobox options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: c }))}
-                        value={e.category || ''} onChange={v => set({ category: v } as any)}
-                        placeholder="Select category" searchPlaceholder="Search..." className="mt-1 h-9" /></div>
+                      <Combobox options={expenseCategoryList.map(c => ({ value: c.id, label: c.name }))}
+                        value={e.category_id || ''}
+                        onChange={v => {
+                          const cat = expenseCategoryList.find(c => c.id === v);
+                          set({ category_id: v, category: cat?.name || e.category } as any);
+                        }}
+                        placeholder="Select category" searchPlaceholder="Search..." className="mt-1 h-9" />
+                      {e.category_id && (() => {
+                        const cat = expenseCategoryList.find(c => c.id === e.category_id);
+                        return cat?.expense_account_code ? (
+                          <p className="text-xs text-muted-foreground mt-1">Will post to: {cat.expense_account_code} · {cat.expense_account_name}</p>
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
                   <div><Label className="text-xs">Description *</Label>
                     <Input className="mt-1" value={e.description || ''}

@@ -48,6 +48,8 @@ router.get('/', async (req, res) => {
       description: service.description,
       isActive: service.is_active,
       revenue_account_id: service.revenue_account_id || null,
+      category_id: service.category_id || null,
+      department_id: service.department_id || null,
       createdAt: service.created_at,
       updatedAt: service.updated_at
     }));
@@ -103,18 +105,21 @@ router.post('/', authorize('setup.services.manage'), async (req, res) => {
       return res.status(400).json({ error: 'Category is required' });
     }
 
-    const revenueAccountId = serviceData.revenue_account_id ||
-      await resolveRevenueAccount(serviceData.category, serviceData.clinic_id);
-
-    // Create service
+    // Central Categories feature: revenue_account_id is no longer
+    // auto-resolved from the category string at save time — the category
+    // (category_id) now decides, read by AccountResolver.resolveServiceRevenue
+    // at billing time. This column stays ONLY as a per-service override,
+    // sent explicitly by the UI's "Use a different account" toggle; left
+    // null otherwise so the service always follows its category.
     const service = await Service.create({
       service_name: serviceData.service_name.trim(),
       category: serviceData.category,
+      category_id: serviceData.category_id || null,
       price: serviceData.price || 0,
       description: serviceData.description?.trim() || null,
       is_active: serviceData.is_active !== undefined ? serviceData.is_active : true,
       created_by: serviceData.created_by || 'system',
-      revenue_account_id: revenueAccountId || null,
+      revenue_account_id: serviceData.revenue_account_id || null,
       branch_id: getCreateBranchId(req)
     });
 
@@ -166,21 +171,21 @@ router.put('/:id', authorize('setup.services.manage'), async (req, res) => {
       return res.status(400).json({ error: 'Service name cannot be empty' });
     }
 
-    const newCategory = updateData.category || service.category;
-    const revenueAccountId = updateData.revenue_account_id ||
-      (newCategory !== service.category
-        ? await resolveRevenueAccount(newCategory, updateData.clinic_id)
-        : service.revenue_account_id);
-
-    // Update service
+    // Central Categories feature: no more auto-resolve-on-category-change —
+    // the category (category_id) now decides at billing time via
+    // AccountResolver.resolveServiceRevenue. revenue_account_id only ever
+    // changes here when the request explicitly sends one (the UI's "Use a
+    // different account" override toggle); category_id is accepted the same
+    // way, defaulting to whatever this service already has.
     await service.update({
       service_name: updateData.service_name?.trim() || service.service_name,
-      category: newCategory,
+      category: updateData.category || service.category,
+      category_id: updateData.category_id !== undefined ? updateData.category_id : service.category_id,
       price: updateData.price !== undefined ? updateData.price : service.price,
       description: updateData.description?.trim() || service.description,
       is_active: updateData.is_active !== undefined ? updateData.is_active : service.is_active,
       updated_by: updateData.updated_by || 'system',
-      revenue_account_id: revenueAccountId || service.revenue_account_id
+      revenue_account_id: updateData.revenue_account_id !== undefined ? updateData.revenue_account_id : service.revenue_account_id
     });
 
     console.log('Service updated successfully:', service.id);

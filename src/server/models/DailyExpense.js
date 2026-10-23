@@ -31,6 +31,13 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true
     },
+    // Central Categories feature — declared here so DailyExpense.create()
+    // doesn't silently drop it (Sequelize ignores any attribute not in the
+    // model's schema).
+    category_id: {
+      type: DataTypes.UUID,
+      allowNull: true
+    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true

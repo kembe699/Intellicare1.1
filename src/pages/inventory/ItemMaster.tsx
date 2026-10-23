@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -26,6 +27,7 @@ interface InventoryItem {
   item_name: string;
   item_description: string;
   item_category: string;
+  category_id: string | null;
   item_type: string;
   unit_of_measure: string;
   units_per_pack: number;
@@ -100,7 +102,10 @@ const emptyForm = (currencyCode: string) => ({
   is_controlled_substance: false, preferred_supplier_id: '', notes: '',
   initial_quantity: 0, location_id: '', expiry_date: '',
   inventory_account_id: '', cogs_account_id: '', revenue_account_id: '',
+  category_id: '',
 });
+
+const NEW_CATEGORY_VALUE = '__new_category__';
 
 export default function ItemMaster() {
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -147,7 +152,29 @@ export default function ItemMaster() {
   // whole point of linking an item to its own accounts directly.
   const [accounts, setAccounts] = useState<{ id: string; account_code: string; account_name: string; account_type: string }[]>([]);
 
-  useEffect(() => { fetchLocations(); fetchCurrentExchangeRate(); fetchAccounts(); }, []);
+  // Central Categories feature: an item's accounts come FROM its category
+  // by default (categoryOverride off — inventory_account_id/cogs_account_id/
+  // revenue_account_id stay null on the item, so it keeps following its
+  // category even if the category's own accounts change later). The
+  // override toggle unlocks the three fields above for a per-item exception,
+  // same fields that already existed — this doesn't add new account
+  // columns, just a new source for what fills them by default.
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id: string | null; parent_name: string | null; revenue_account_id: string | null; revenue_account_code: string | null; revenue_account_name: string | null; cogs_account_id: string | null; cogs_account_code: string | null; cogs_account_name: string | null; inventory_account_id: string | null; inventory_account_code: string | null; inventory_account_name: string | null }[]>([]);
+  const [categoryOverride, setCategoryOverride] = useState(false);
+  const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({ name: '', inventory_account_id: '', cogs_account_id: '', revenue_account_id: '' });
+  const [savingNewCategory, setSavingNewCategory] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await authFetch(`/api/categories?type=item&clinic_id=${clinicId}`, { credentials: 'include' });
+      if (res.ok) setCategories(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch item categories', e);
+    }
+  };
+
+  useEffect(() => { fetchLocations(); fetchCurrentExchangeRate(); fetchAccounts(); fetchCategories(); }, []);
   // Load the catalogue, and re-load when a location filter is applied or cleared.
   //
   // This used to show nothing until a location was chosen, on the reasoning that a
@@ -221,6 +248,7 @@ export default function ItemMaster() {
   const openCreate = () => {
     setEditingItem(null);
     setFormData(emptyForm(currency.code));
+    setCategoryOverride(false);
   };
 
   const openEdit = (item: InventoryItem) => {
@@ -242,8 +270,76 @@ export default function ItemMaster() {
       preferred_supplier_id: item.preferred_supplier_id ? String(item.preferred_supplier_id) : '',
       notes: item.notes || '', initial_quantity: 0, location_id: '', expiry_date: '',
       inventory_account_id: item.inventory_account_id || '', cogs_account_id: item.cogs_account_id || '',
-      revenue_account_id: item.revenue_account_id || '',
+      revenue_account_id: item.revenue_account_id || '', category_id: item.category_id || '',
     });
+    // An item with ANY of its own account ids set is already an override —
+    // reflect that honestly rather than defaulting to "follows category"
+    // and silently hiding the fact it doesn't.
+    setCategoryOverride(!!(item.inventory_account_id || item.cogs_account_id || item.revenue_account_id));
+  };
+
+  const applyCategoryAccounts = (categoryId: string) => {
+    const cat = categories.find(c => c.id === categoryId);
+    setFormData(f => ({
+      ...f,
+      category_id: categoryId,
+      inventory_account_id: cat?.inventory_account_id || '',
+      cogs_account_id: cat?.cogs_account_id || '',
+      revenue_account_id: cat?.revenue_account_id || '',
+    }));
+  };
+
+  const handleCategoryChange = async (value: string) => {
+    if (value === NEW_CATEGORY_VALUE) {
+      setNewCategoryForm({ name: '', inventory_account_id: '', cogs_account_id: '', revenue_account_id: '' });
+      setShowNewCategoryDialog(true);
+      return;
+    }
+    if (categoryOverride) {
+      const keepOverrides = await confirm({
+        title: 'Switch to the new category\'s accounts?',
+        description: 'This item is using its own account overrides instead of its category\'s. Keep the current overrides, or switch to the new category\'s accounts?',
+      });
+      if (keepOverrides) {
+        setFormData(f => ({ ...f, category_id: value }));
+        return;
+      }
+      setCategoryOverride(false);
+    }
+    applyCategoryAccounts(value);
+  };
+
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryForm.name.trim()) { toast.error('Name is required'); return; }
+    if (!newCategoryForm.inventory_account_id || !newCategoryForm.revenue_account_id) {
+      toast.error('Inventory and Revenue accounts are required'); return;
+    }
+    setSavingNewCategory(true);
+    try {
+      const res = await authFetch('/api/categories', {
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({ ...newCategoryForm, type: 'item', clinic_id: clinicId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Category created');
+        setShowNewCategoryDialog(false);
+        await fetchCategories();
+        setCategoryOverride(false);
+        setFormData(f => ({
+          ...f, category_id: data.id,
+          inventory_account_id: data.inventory_account_id || '',
+          cogs_account_id: data.cogs_account_id || '',
+          revenue_account_id: data.revenue_account_id || '',
+        }));
+      } else {
+        toast.error(data.error || 'Failed to create category');
+      }
+    } catch {
+      toast.error('Network error creating category');
+    } finally {
+      setSavingNewCategory(false);
+    }
   };
 
   const viewItem = async (item: InventoryItem) => {
@@ -268,9 +364,22 @@ export default function ItemMaster() {
     try {
       const url = editingItem ? `/api/inventory/items/${editingItem.id}` : '/api/inventory/items';
       const method = editingItem ? 'PUT' : 'POST';
+      // item_category (the old free-text column) is kept in sync from the
+      // selected category's name rather than dropped, per the approved
+      // plan. The three account fields are sent ONLY when this item has its
+      // own override — otherwise left null, so the item always follows its
+      // category (the resolver reads override -> category, in that order).
+      const selectedCategory = categories.find(c => c.id === formData.category_id);
+      const payload = {
+        ...formData,
+        item_category: selectedCategory?.name.toLowerCase() || formData.item_category,
+        inventory_account_id: categoryOverride ? formData.inventory_account_id || null : null,
+        cogs_account_id: categoryOverride ? formData.cogs_account_id || null : null,
+        revenue_account_id: categoryOverride ? formData.revenue_account_id || null : null,
+      };
       const res = await authFetch(url, {
         method, headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ ...formData, clinic_id: clinicId, created_by: user?.uid }),
+        body: JSON.stringify({ ...payload, clinic_id: clinicId, created_by: user?.uid }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -453,9 +562,13 @@ export default function ItemMaster() {
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">Item Category</label>
                     <Combobox
-                      options={CATEGORY_OPTIONS}
-                      value={formData.item_category}
-                      onChange={v => setFormData({ ...formData, item_category: v })}
+                      options={[
+                        ...categories.map(c => ({ value: c.id, label: c.parent_name ? `${c.parent_name} / ${c.name}` : c.name })),
+                        { value: NEW_CATEGORY_VALUE, label: '+ New Category' },
+                      ]}
+                      value={formData.category_id}
+                      onChange={handleCategoryChange}
+                      placeholder="Select category..."
                       searchPlaceholder="Search categories..."
                       className="h-10 text-sm bg-white"
                     />
@@ -529,38 +642,69 @@ export default function ItemMaster() {
                     <Input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} className="h-10 text-sm bg-white" />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-foreground mb-1.5">Cost Of Sale Sub-Account</label>
-                    <Combobox
-                      options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                      value={formData.cogs_account_id}
-                      onChange={v => setFormData({ ...formData, cogs_account_id: v })}
-                      placeholder="Use category default"
-                      searchPlaceholder="Search accounts..."
-                      className="h-10 text-sm bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-foreground mb-1.5">Income Sub-Account</label>
-                    <Combobox
-                      options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
-                      value={formData.revenue_account_id}
-                      onChange={v => setFormData({ ...formData, revenue_account_id: v })}
-                      placeholder="Use category default"
-                      searchPlaceholder="Search accounts..."
-                      className="h-10 text-sm bg-white"
-                    />
+                  <div className="md:col-span-3 flex items-center justify-between bg-muted/30 rounded-md px-3 py-2 border border-dashed">
+                    <div className="text-xs text-muted-foreground">
+                      {categoryOverride
+                        ? 'This item uses its own accounts below instead of its category\'s.'
+                        : 'The three accounts below come from this item\'s category — they update automatically if the category\'s accounts change.'}
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-medium shrink-0 ml-3">
+                      <input
+                        type="checkbox"
+                        checked={categoryOverride}
+                        onChange={e => {
+                          const on = e.target.checked;
+                          setCategoryOverride(on);
+                          if (!on) applyCategoryAccounts(formData.category_id);
+                        }}
+                      />
+                      Use different accounts for this item
+                    </label>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">Inventory Sub-Account</label>
                     <Combobox
-                      options={[{ value: '', label: 'Use category default' }, ...accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))]}
+                      options={accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
                       value={formData.inventory_account_id}
                       onChange={v => setFormData({ ...formData, inventory_account_id: v })}
-                      placeholder="Use category default"
+                      disabled={!categoryOverride}
+                      placeholder="None"
                       searchPlaceholder="Search accounts..."
                       className="h-10 text-sm bg-white"
                     />
+                    {!categoryOverride && formData.inventory_account_id && (
+                      <p className="text-xs text-muted-foreground mt-1">From category</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Cost Of Sale Sub-Account</label>
+                    <Combobox
+                      options={accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                      value={formData.cogs_account_id}
+                      onChange={v => setFormData({ ...formData, cogs_account_id: v })}
+                      disabled={!categoryOverride}
+                      placeholder={!categoryOverride && !formData.cogs_account_id ? 'Not set on category' : 'None'}
+                      searchPlaceholder="Search accounts..."
+                      className="h-10 text-sm bg-white"
+                    />
+                    {!categoryOverride && formData.cogs_account_id && (
+                      <p className="text-xs text-muted-foreground mt-1">From category</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">Income Sub-Account</label>
+                    <Combobox
+                      options={accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                      value={formData.revenue_account_id}
+                      onChange={v => setFormData({ ...formData, revenue_account_id: v })}
+                      disabled={!categoryOverride}
+                      placeholder="None"
+                      searchPlaceholder="Search accounts..."
+                      className="h-10 text-sm bg-white"
+                    />
+                    {!categoryOverride && formData.revenue_account_id && (
+                      <p className="text-xs text-muted-foreground mt-1">From category</p>
+                    )}
                   </div>
 
                   {editingItem ? (
@@ -1109,6 +1253,51 @@ export default function ItemMaster() {
           </div>
         </div>
       )}
+
+      <Dialog open={showNewCategoryDialog} onOpenChange={setShowNewCategoryDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Item Category</DialogTitle>
+            <DialogDescription>Created and selected immediately — no need to leave this form.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-1.5">Name</label>
+              <Input className="h-10 text-sm" value={newCategoryForm.name} onChange={e => setNewCategoryForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-1.5">Inventory account (asset) <span className="text-destructive">*</span></label>
+              <Combobox
+                options={accounts.filter(a => a.account_type === 'asset').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                value={newCategoryForm.inventory_account_id} onChange={v => setNewCategoryForm(f => ({ ...f, inventory_account_id: v }))}
+                placeholder="Select account..." searchPlaceholder="Search accounts..." className="h-10 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-1.5">Cost of sales account (expense)</label>
+              <Combobox
+                options={accounts.filter(a => a.account_type === 'expense').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                value={newCategoryForm.cogs_account_id} onChange={v => setNewCategoryForm(f => ({ ...f, cogs_account_id: v }))}
+                placeholder="Optional" searchPlaceholder="Search accounts..." className="h-10 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-1.5">Revenue account (revenue) <span className="text-destructive">*</span></label>
+              <Combobox
+                options={accounts.filter(a => a.account_type === 'revenue').map(a => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                value={newCategoryForm.revenue_account_id} onChange={v => setNewCategoryForm(f => ({ ...f, revenue_account_id: v }))}
+                placeholder="Select account..." searchPlaceholder="Search accounts..." className="h-10 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewCategoryDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveNewCategory} disabled={savingNewCategory} className="gap-1.5">
+              {savingNewCategory && <Loader2 className="w-4 h-4 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

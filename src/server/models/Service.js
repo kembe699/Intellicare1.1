@@ -53,6 +53,13 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    // Central Categories feature — declared here so Service.create()/update()
+    // don't silently drop it (Sequelize ignores any attribute not in the
+    // model's schema, same reasoning as branch_id's own comment below).
+    category_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     // Branch-data-isolation: which branch this service belongs to (NULL = legacy/shared,
     // usable by every branch until backfilled — see ensureBranchIsolationColumns.js and
     // routes/services.js). Declared here so Service.create()/bulkCreate() don't silently

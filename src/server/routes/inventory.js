@@ -204,7 +204,7 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
   try {
     const id = uuidv4();
     const {
-      item_code, barcode, item_name, item_description, item_category, item_type,
+      item_code, barcode, item_name, item_description, item_category, item_type, category_id,
       unit_of_measure, reorder_unit, conversion_factor, units_per_pack, dose_unit_label,
       minimum_stock_level, maximum_stock_level, reorder_quantity, lead_time_days,
       inventory_valuation_method, current_unit_cost, selling_price, cost_currency,
@@ -217,14 +217,14 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
     if (!item_code || !item_name) return res.status(400).json({ error: 'item_code and item_name are required' });
 
     await sequelize.query(`
-      INSERT INTO inventory_items (id, clinic_id, branch_id, item_code, barcode, item_name, item_description, item_category, item_type,
+      INSERT INTO inventory_items (id, clinic_id, branch_id, item_code, barcode, item_name, item_description, item_category, item_type, category_id,
         unit_of_measure, reorder_unit, conversion_factor, units_per_pack, dose_unit_label,
         minimum_stock_level, maximum_stock_level, reorder_quantity, lead_time_days,
         inventory_valuation_method, current_unit_cost, average_unit_cost, selling_price, cost_currency,
         inventory_account_id, cogs_account_id, usage_account_id, revenue_account_id,
         requires_batch_tracking, requires_expiry_tracking, requires_serial_number,
         is_controlled_substance, notes, preferred_supplier_id, created_by)
-      VALUES (:id, :clinic_id, :branch_id, :item_code, :barcode, :item_name, :item_description, :item_category, :item_type,
+      VALUES (:id, :clinic_id, :branch_id, :item_code, :barcode, :item_name, :item_description, :item_category, :item_type, :category_id,
         :unit_of_measure, :reorder_unit, :conversion_factor, :units_per_pack, :dose_unit_label,
         :minimum_stock_level, :maximum_stock_level, :reorder_quantity, :lead_time_days,
         :inventory_valuation_method, :current_unit_cost, :current_unit_cost, :selling_price, :cost_currency,
@@ -237,6 +237,7 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
         barcode: barcode || null, item_name,
         item_description: item_description || null,
         item_category: item_category || 'general', item_type: item_type || 'consumable',
+        category_id: category_id || null,
         unit_of_measure: unit_of_measure || 'Each', reorder_unit: reorder_unit || unit_of_measure || 'Each',
         conversion_factor: conversion_factor || 1,
         units_per_pack: parseInt(units_per_pack, 10) || 1,
@@ -571,7 +572,7 @@ router.put('/items/:id', authorize('inventory.write'), async (req, res) => {
     const fields = [];
     const replacements = { id: req.params.id, clinicId };
     const allowed = [
-      'barcode', 'item_name', 'item_description', 'item_category', 'item_type', 'unit_of_measure',
+      'barcode', 'item_name', 'item_description', 'item_category', 'item_type', 'category_id', 'unit_of_measure',
       'reorder_unit', 'conversion_factor', 'units_per_pack', 'dose_unit_label', 'minimum_stock_level', 'maximum_stock_level',
       'reorder_quantity', 'lead_time_days', 'inventory_valuation_method', 'current_unit_cost',
       'selling_price', 'cost_currency', 'inventory_account_id', 'cogs_account_id', 'usage_account_id', 'revenue_account_id',

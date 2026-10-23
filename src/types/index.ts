@@ -261,6 +261,8 @@ export interface LabTest {
   testCode?: string;
   test_code?: string;
   category: string;
+  category_id?: string | null;
+  revenue_account_id?: string | null;
   price?: number;
   service_id?: number;
   machine_integration?: string | null;

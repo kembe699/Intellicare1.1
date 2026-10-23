@@ -101,6 +101,13 @@ async function ensureCategoriesTable(db = sequelize) {
     ['inventory_items', 'category_id', 'UUID REFERENCES categories(id)'],
     ['services', 'category_id', 'UUID REFERENCES categories(id)'],
     ['daily_expenses', 'category_id', 'UUID REFERENCES categories(id)'],
+    // lab_tests never had its own revenue account column at all — its
+    // revenue previously came only from a forced 'laboratory' regex bucket
+    // (resolveRevenueAccountForLine's lab_tests name-match branch). Adding
+    // the override column here too so it follows the exact same
+    // category-with-optional-override pattern as items/services, per the
+    // approved plan's 4B section ("Same behaviour... Lab Tests").
+    ['lab_tests', 'revenue_account_id', 'VARCHAR(36) REFERENCES chart_of_accounts(id)'],
   ];
   for (const [table, column, ddl] of columnAdds) {
     try { await db.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${ddl}`); } catch (err) { console.error(`Could not add ${table}.${column}:`, err.message); }

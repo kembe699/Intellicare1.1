@@ -90,6 +90,8 @@ interface Service {
   id: string;
   service_name: string;
   category: string;
+  category_id?: string | null;
+  revenue_account_id?: string | null;
   price: number;
   description?: string;
   department_id?: string;
@@ -264,10 +266,91 @@ const Services: React.FC = () => {
   const [price, setPrice] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
 
+  // Central Categories feature: revenue_account_id comes FROM the category
+  // by default (revenueOverride off — the field stays null on the service,
+  // so it keeps following its category even if the category's own account
+  // changes later). The regex auto-assign services.js's create/update used
+  // to do is gone — this picker + the category's own account is now the
+  // only way a service's revenue account is decided.
+  const [categoryId, setCategoryId] = useState('');
+  const [revenueAccountId, setRevenueAccountId] = useState('');
+  const [revenueOverride, setRevenueOverride] = useState(false);
+  const [serviceCategoryList, setServiceCategoryList] = useState<{ id: string; name: string; parent_id: string | null; parent_name: string | null; revenue_account_id: string | null }[]>([]);
+  const [coaAccounts, setCoaAccounts] = useState<{ id: string; account_code: string; account_name: string; account_type: string }[]>([]);
+  const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({ name: '', revenue_account_id: '' });
+  const [savingNewCategory, setSavingNewCategory] = useState(false);
+  const NEW_CATEGORY_VALUE = '__new_category__';
+
+  const fetchServiceCategories = async () => {
+    try {
+      const res = await authFetch(`/api/categories?type=service&clinic_id=${user?.clinic || 1}`, { credentials: 'include' });
+      if (res.ok) setServiceCategoryList(await res.json());
+    } catch (e) { console.error('Failed to fetch service categories', e); }
+  };
+  const fetchCoaAccounts = async () => {
+    try {
+      const res = await authFetch(`/api/accounting/chart-of-accounts?clinic_id=${user?.clinic || 1}`, { credentials: 'include' });
+      if (res.ok) setCoaAccounts(await res.json());
+    } catch (e) { console.error('Failed to fetch chart of accounts', e); }
+  };
+
+  const applyCategoryRevenue = (catId: string) => {
+    const cat = serviceCategoryList.find(c => c.id === catId);
+    setCategoryId(catId);
+    setRevenueAccountId(cat?.revenue_account_id || '');
+  };
+
+  const handleCategoryChange = async (value: string) => {
+    if (value === NEW_CATEGORY_VALUE) {
+      setNewCategoryForm({ name: '', revenue_account_id: '' });
+      setShowNewCategoryDialog(true);
+      return;
+    }
+    if (revenueOverride) {
+      const keepOverride = await confirm({
+        title: 'Switch to the new category\'s revenue account?',
+        description: 'This service is using its own revenue account instead of its category\'s. Keep the current override, or switch to the new category\'s account?',
+      });
+      if (keepOverride) { setCategoryId(value); return; }
+      setRevenueOverride(false);
+    }
+    applyCategoryRevenue(value);
+  };
+
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryForm.name.trim()) { toast.error('Name is required'); return; }
+    if (!newCategoryForm.revenue_account_id) { toast.error('Revenue account is required'); return; }
+    setSavingNewCategory(true);
+    try {
+      const res = await authFetch('/api/categories', {
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({ ...newCategoryForm, type: 'service', clinic_id: user?.clinic || 1 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Category created');
+        setShowNewCategoryDialog(false);
+        await fetchServiceCategories();
+        setRevenueOverride(false);
+        setCategoryId(data.id);
+        setRevenueAccountId(data.revenue_account_id || '');
+      } else {
+        toast.error(data.error || 'Failed to create category');
+      }
+    } catch {
+      toast.error('Network error creating category');
+    } finally {
+      setSavingNewCategory(false);
+    }
+  };
+
   useEffect(() => {
     fetchServices();
     fetchDepartments();
     fetchCurrentExchangeRate();
+    fetchServiceCategories();
+    fetchCoaAccounts();
   }, [user?.clinic]);
 
   const fetchCurrentExchangeRate = async () => {
@@ -369,6 +452,9 @@ const Services: React.FC = () => {
     setPrice('');
     setSelectedDepartment('');
     setEditingService(null);
+    setCategoryId('');
+    setRevenueAccountId('');
+    setRevenueOverride(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -389,9 +475,12 @@ const Services: React.FC = () => {
 
     setSaving(true);
     try {
+      const selectedCat = serviceCategoryList.find(c => c.id === categoryId);
       const serviceData = {
         service_name: serviceName.trim(),
-        category,
+        category: selectedCat?.name || category,
+        category_id: categoryId || null,
+        revenue_account_id: revenueOverride ? (revenueAccountId || null) : null,
         description,
         price: priceNum,
         department_id: selectedDepartment || null,
@@ -423,6 +512,14 @@ const Services: React.FC = () => {
     setDescription(service.description || '');
     setPrice(service.price.toString());
     setSelectedDepartment(service.department_id || '');
+    setCategoryId(service.category_id || '');
+    setRevenueAccountId(service.revenue_account_id || '');
+    // Only a genuine override if it differs from what the category itself
+    // would give — otherwise a pre-existing, now-redundant stored value
+    // (from before this feature, when every service auto-got one at save
+    // time) would wrongly show as "using a different account".
+    const cat = serviceCategoryList.find(c => c.id === service.category_id);
+    setRevenueOverride(!!service.revenue_account_id && service.revenue_account_id !== (cat?.revenue_account_id || null));
   };
 
   const handleDelete = async (serviceId: string) => {
@@ -732,12 +829,44 @@ const Services: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="category">Category *</Label>
                   <Combobox
-                    options={serviceCategories.map((cat) => ({ value: cat, label: cat }))}
-                    value={category}
-                    onChange={setCategory}
+                    options={[
+                      ...serviceCategoryList.map((c) => ({ value: c.id, label: c.parent_name ? `${c.parent_name} / ${c.name}` : c.name })),
+                      { value: NEW_CATEGORY_VALUE, label: '+ New Category' },
+                    ]}
+                    value={categoryId}
+                    onChange={handleCategoryChange}
                     placeholder="Select category"
                     searchPlaceholder="Search categories..."
                   />
+                </div>
+
+                <div className="space-y-2 bg-muted/30 rounded-md px-3 py-2 border border-dashed">
+                  <div className="text-xs text-muted-foreground">
+                    {revenueOverride
+                      ? 'This service uses its own revenue account instead of its category\'s.'
+                      : 'The revenue account below comes from this service\'s category.'}
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-medium">
+                    <input
+                      type="checkbox"
+                      checked={revenueOverride}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setRevenueOverride(on);
+                        if (!on) applyCategoryRevenue(categoryId);
+                      }}
+                    />
+                    Use a different revenue account for this service
+                  </label>
+                  <Combobox
+                    options={coaAccounts.filter((a) => a.account_type === 'revenue').map((a) => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                    value={revenueAccountId}
+                    onChange={setRevenueAccountId}
+                    disabled={!revenueOverride}
+                    placeholder="None"
+                    searchPlaceholder="Search accounts..."
+                  />
+                  {!revenueOverride && revenueAccountId && <p className="text-xs text-muted-foreground">From category</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -1127,6 +1256,35 @@ const Services: React.FC = () => {
               {applyingPriceAdj ? 'Applying...' : 'Apply Adjustment'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showNewCategoryDialog} onOpenChange={setShowNewCategoryDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Service Category</DialogTitle>
+            <DialogDescription>Created and selected immediately — no need to leave this form.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={newCategoryForm.name} onChange={(e) => setNewCategoryForm((f) => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Revenue account (revenue) <span className="text-destructive">*</span></Label>
+              <Combobox
+                options={coaAccounts.filter((a) => a.account_type === 'revenue').map((a) => ({ value: a.id, label: `${a.account_code} — ${a.account_name}` }))}
+                value={newCategoryForm.revenue_account_id} onChange={(v) => setNewCategoryForm((f) => ({ ...f, revenue_account_id: v }))}
+                placeholder="Select account..." searchPlaceholder="Search accounts..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewCategoryDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveNewCategory} disabled={savingNewCategory} className="gap-1.5">
+              {savingNewCategory && <Loader2 className="w-4 h-4 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>
