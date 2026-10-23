@@ -163,12 +163,9 @@ export default function ValuationCOGS() {
               </div>
             )}
 
-            <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
-              <div className="p-4 border-b bg-muted/30">
-                <h3 className="font-medium">Item Valuation Detail</h3>
-              </div>
-              <div className="overflow-auto p-4">
+            <div>
                 <AdvancedDataTable<any>
+                  title="Item Valuation Detail"
                   data={valuation?.items || []}
                   keyExtractor={(item) => item.id}
                   loading={loading}
@@ -190,7 +187,6 @@ export default function ValuationCOGS() {
                     <span className="font-mono">{totalQty} units · {fmt(valuation.total_inventory_value)}</span>
                   </div>
                 )}
-              </div>
             </div>
           </div>
         ) : (
@@ -228,12 +224,9 @@ export default function ValuationCOGS() {
               </div>
             </div>
 
-            <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
-              <div className="p-4 border-b bg-muted/30">
-                <h3 className="font-medium">COGS by Item — {cogsPeriod}</h3>
-              </div>
-              <div className="overflow-auto p-4">
+            <div>
                 <AdvancedDataTable<any>
+                  title={<>COGS by Item — {cogsPeriod}</>}
                   data={cogsData?.items || []}
                   keyExtractor={(item, idx) => item.item_code || idx}
                   loading={loading}
@@ -261,7 +254,6 @@ export default function ValuationCOGS() {
                     </span>
                   </div>
                 )}
-              </div>
             </div>
           </div>
         )}

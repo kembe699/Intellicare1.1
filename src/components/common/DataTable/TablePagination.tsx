@@ -22,16 +22,17 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
   onPageChange,
   onPageSizeChange,
 }) => {
-  const startItem = (currentPage - 1) * pageSize + 1;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  totalPages = Math.max(1, totalPages);
   const endItem = Math.min(currentPage * pageSize, totalItems);
 
   // 10 is always offered as a page size, regardless of what each page passes
   // in — a plain, non-searchable list this short doesn't need a search box.
-  const sizeOptions = Array.from(new Set([10, ...pageSizeOptions])).sort((a, b) => a - b);
+  const sizeOptions = Array.from(new Set([10, pageSize, ...pageSizeOptions])).sort((a, b) => a - b);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 border-t border-border print:hidden">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
         <span>Rows per page:</span>
         <Select value={pageSize.toString()} onValueChange={(value) => onPageSizeChange(Number(value))}>
           <SelectTrigger className="h-8 w-[70px] px-2">
@@ -45,7 +46,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
         </Select>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 whitespace-nowrap">
         <span className="text-sm text-muted-foreground">
           {startItem}-{endItem} of {totalItems}
         </span>

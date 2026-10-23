@@ -103,82 +103,79 @@ export default function AdmittedPatients() {
           actions={<Badge className="bg-primary/10 text-primary text-base px-3 py-1">{filteredAdmissions.length} {STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label || 'All'}</Badge>}
         />
 
-        <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-          <div className="p-4 border-b bg-muted/30 flex flex-wrap items-end gap-3">
-            <div className="relative flex-1 min-w-[200px]">
+        <AdvancedDataTable<any>
+          title="Admitted patients"
+          searchSlot={
+            <div className="relative w-52">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search by patient name, ID, or ward..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
+              <Input placeholder="Search by patient name, ID, or ward..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="h-8 text-sm pl-8" />
             </div>
-            <Combobox
-              options={STATUS_FILTER_OPTIONS}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              searchPlaceholder="Search..."
-              className="h-9 w-[140px]"
-            />
-            <Combobox
-              options={OUTCOME_FILTER_OPTIONS}
-              value={outcomeFilter}
-              onChange={setOutcomeFilter}
-              searchPlaceholder="Search..."
-              className="h-9 w-[150px]"
-            />
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <Input type="date" className="h-9 w-[150px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
+          }
+          toolbarExtra={
+            <>
+              <Combobox
+                options={STATUS_FILTER_OPTIONS}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                searchPlaceholder="Search..."
+                className="h-8 w-[9.5rem]"
+              />
+              <Combobox
+                options={OUTCOME_FILTER_OPTIONS}
+                value={outcomeFilter}
+                onChange={setOutcomeFilter}
+                searchPlaceholder="Search..."
+                className="h-8 w-[9.5rem]"
+              />
+              <Input type="date" className="text-sm h-8 w-[9.5rem]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
               <span className="text-xs text-muted-foreground">to</span>
-              <Input type="date" className="h-9 w-[150px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
+              <Input type="date" className="text-sm h-8 w-[9.5rem]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
               {(dateFrom || dateTo) && (
-                <Button type="button" variant="outline" size="icon" aria-label="Clear date filter" className="h-9 w-9" onClick={() => { setDateFrom(''); setDateTo(''); }} title="Clear date filter">
+                <Button type="button" variant="outline" size="icon" aria-label="Clear date filter" className="h-8 w-8" onClick={() => { setDateFrom(''); setDateTo(''); }} title="Clear date filter">
                   <X className="w-3.5 h-3.5" />
                 </Button>
               )}
-            </div>
-            <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
-              <FileSpreadsheet className="w-4 h-4" /> Export CSV
-            </Button>
-          </div>
-
-          <div className="p-4">
-            <AdvancedDataTable<any>
-              data={filteredAdmissions}
-              keyExtractor={(a) => a.id}
-              loading={isLoading}
-              emptyMessage="No admitted patients found"
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                { key: 'patient_number', header: 'Patient Number', sortable: true, render: (v) => <span className="text-muted-foreground font-mono">{v || '—'}</span> },
-                { key: 'patient_name', header: 'Patient', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
-                { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'room_number', header: 'Room', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                {
-                  key: 'admission_type', header: 'Type', sortable: true,
-                  render: (v) => <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : 'bg-primary/10 text-primary'}`}>{v}</Badge>,
-                },
-                { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
-                { key: 'diagnosis', header: 'Diagnosis', render: (v) => <span className="text-muted-foreground truncate max-w-[220px] block">{v || '—'}</span> },
-                {
-                  key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <Badge variant={v === 'active' ? 'success' : 'neutral'}>{v === 'active' ? 'In Bed' : 'Discharged'}</Badge>,
-                },
-                {
-                  key: 'discharge_outcome', header: 'Outcome',
-                  render: (v) => v ? <Badge variant={OUTCOME_VARIANT[v] || 'neutral'}>{OUTCOME_LABEL[v] || v}</Badge> : <span className="text-muted-foreground">—</span>,
-                },
-                { key: 'admission_date', header: 'Duration', sortable: true, render: (v, a) => <span className="text-muted-foreground">{a.status === 'active' ? 'Day' : ''} {getDaysAdmitted(v, a.discharge_date)}{a.status !== 'active' ? ' days' : ''}</span> },
-                {
-                  key: '__actions', header: 'Actions',
-                  render: (_v, a) => (
-                    <Button size="sm" className="gap-1.5" onClick={() => navigate(`/inpatient/patient/${a.id}`)}>
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </Button>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        </div>
+            </>
+          }
+          dateFilterKey={false}
+          autoFilters={false}
+          countLabel={['patient', 'patients']}
+          data={filteredAdmissions}
+          keyExtractor={(a) => a.id}
+          loading={isLoading}
+          emptyMessage="No admitted patients found"
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'patient_number', header: 'Patient Number', sortable: true, render: (v) => <span className="text-muted-foreground font-mono">{v || '—'}</span> },
+            { key: 'patient_name', header: 'Patient', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
+            { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            { key: 'room_number', header: 'Room', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            {
+              key: 'admission_type', header: 'Type', sortable: true,
+              render: (v) => <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : 'bg-primary/10 text-primary'}`}>{v}</Badge>,
+            },
+            { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
+            { key: 'diagnosis', header: 'Diagnosis', render: (v) => <span className="text-muted-foreground truncate max-w-[220px] block">{v || '—'}</span> },
+            {
+              key: 'status', header: 'Status', sortable: true,
+              render: (v) => <Badge variant={v === 'active' ? 'success' : 'neutral'}>{v === 'active' ? 'In Bed' : 'Discharged'}</Badge>,
+            },
+            {
+              key: 'discharge_outcome', header: 'Outcome',
+              render: (v) => v ? <Badge variant={OUTCOME_VARIANT[v] || 'neutral'}>{OUTCOME_LABEL[v] || v}</Badge> : <span className="text-muted-foreground">—</span>,
+            },
+            { key: 'admission_date', header: 'Duration', sortable: true, render: (v, a) => <span className="text-muted-foreground">{a.status === 'active' ? 'Day' : ''} {getDaysAdmitted(v, a.discharge_date)}{a.status !== 'active' ? ' days' : ''}</span> },
+            {
+              key: '__actions', header: 'Actions',
+              render: (_v, a) => (
+                <Button size="sm" className="gap-1.5" onClick={() => navigate(`/inpatient/patient/${a.id}`)}>
+                  <Eye className="h-3.5 w-3.5" /> View
+                </Button>
+              ),
+            },
+          ]}
+        />
       </div>
       </div>
     </AppLayout>

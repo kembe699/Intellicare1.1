@@ -968,6 +968,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
               </CardHeader>
               <CardContent className="p-4">
                 <AdvancedDataTable<DailyExpense>
+                  toolbar={false}
                   data={filteredExpenses}
                   keyExtractor={(exp) => exp.id}
                   loading={loadingExp}
@@ -1107,6 +1108,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   </div>
                 )}
                 <AdvancedDataTable<SupplierBill>
+                  toolbar={false}
                   data={filteredBills}
                   keyExtractor={(bill) => bill.id}
                   loading={loadingBills}
@@ -1250,6 +1252,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   </div>
                 )}
                 <AdvancedDataTable<ConsultantBill>
+                  toolbar={false}
                   data={filteredConsultantBills}
                   keyExtractor={(b) => b.id}
                   loading={loadingConsultantBills}

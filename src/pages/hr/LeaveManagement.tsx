@@ -175,48 +175,38 @@ export default function LeaveManagement() {
           </TabsList>
 
           <TabsContent value="requests" className="mt-4">
-            <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-              <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-                <h3 className="font-medium">Leave Requests</h3>
-                <Combobox
-                  options={[{ value: 'all', label: 'All Status' }, { value: 'pending', label: 'Pending' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Rejected' }, { value: 'cancelled', label: 'Cancelled' }]}
-                  value={statusFilter} onChange={setStatusFilter} searchPlaceholder="Search..." className="w-[160px] h-9"
-                />
-              </div>
-              <div className="p-4">
-                <AdvancedDataTable<LeaveRequest>
-                  data={requests}
-                  keyExtractor={(r) => r.id}
-                  loading={loadingRequests}
-                  emptyMessage="No leave requests yet."
-                  pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                  columns={[
-                    { key: 'first_name', header: 'Employee', render: (_v, r) => <span className="font-medium">{r.first_name} {r.last_name}</span> },
-                    { key: 'leave_type_name', header: 'Type' },
-                    { key: 'start_date', header: 'Period', render: (_v, r) => <span className="text-xs">{formatDate(r.start_date)} – {formatDate(r.end_date)}</span> },
-                    { key: 'days', header: 'Days', align: 'center' },
-                    { key: 'reason', header: 'Reason', render: (v) => v || '—' },
-                    { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },
-                    {
-                      key: '__actions', header: 'Actions', align: 'center',
-                      render: (_v, r) => (
-                        <div className="flex items-center justify-center gap-1">
-                          {r.status === 'pending' && (
-                            <>
-                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleApprove(r)}>Approve</Button>
-                              <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => { setRejectTarget(r); setRejectReason(''); }}>Reject</Button>
-                            </>
-                          )}
-                          {(r.status === 'pending' || r.status === 'approved') && (
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleCancel(r)}>Cancel</Button>
-                          )}
-                        </div>
-                      ),
-                    },
-                  ]}
-                />
-              </div>
-            </div>
+            <AdvancedDataTable<LeaveRequest>
+              title="Leave Requests"
+              data={requests}
+              keyExtractor={(r) => r.id}
+              loading={loadingRequests}
+              emptyMessage="No leave requests yet."
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              columns={[
+                { key: 'first_name', header: 'Employee', render: (_v, r) => <span className="font-medium">{r.first_name} {r.last_name}</span> },
+                { key: 'leave_type_name', header: 'Type' },
+                { key: 'start_date', header: 'Period', render: (_v, r) => <span className="text-xs">{formatDate(r.start_date)} – {formatDate(r.end_date)}</span> },
+                { key: 'days', header: 'Days', align: 'center' },
+                { key: 'reason', header: 'Reason', render: (v) => v || '—' },
+                { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },
+                {
+                  key: '__actions', header: 'Actions', align: 'center',
+                  render: (_v, r) => (
+                    <div className="flex items-center justify-center gap-1">
+                      {r.status === 'pending' && (
+                        <>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleApprove(r)}>Approve</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => { setRejectTarget(r); setRejectReason(''); }}>Reject</Button>
+                        </>
+                      )}
+                      {(r.status === 'pending' || r.status === 'approved') && (
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleCancel(r)}>Cancel</Button>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
           </TabsContent>
 
           <TabsContent value="lookup" className="mt-4">

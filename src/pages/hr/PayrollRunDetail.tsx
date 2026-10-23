@@ -289,57 +289,55 @@ export default function PayrollRunDetail() {
             </div>
           </div>
 
-          <div className="bg-card rounded-lg border shadow-sm p-4">
-            <AdvancedDataTable<any>
-              data={(run.lines || [])
-                .filter((l: any) => !currencyFilter || l.currency === currencyFilter)
-                .map((l: any) => ({ ...l, employee_name: `${l.first_name} ${l.last_name}` }))}
-              keyExtractor={(l) => l.id}
-              loading={false}
-              emptyMessage="No employees in this run"
-              searchable
-              searchPlaceholder="Search by employee name or ID..."
-              toolbarExtra={totalsByCurrency.length > 1 && (
-                <select
-                  value={currencyFilter}
-                  onChange={e => setCurrencyFilter(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm"
-                >
-                  <option value="">All Currencies</option>
-                  {totalsByCurrency.map(t => (
-                    <option key={t.currency} value={t.currency}>{t.currency}</option>
-                  ))}
-                </select>
-              )}
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                { key: 'employee_number', header: 'ID', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v}</span> },
-                { key: 'employee_name', header: 'Employee', render: (v) => v },
-                { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
-                { key: 'gross_pay', header: 'Gross', align: 'right', render: (v, l) => <span className="font-mono">{docTemplate.formatCurrency(v, l.currency)}</span> },
-                { key: 'deductions_total', header: 'Deductions', align: 'right', render: (v, l) => <span className="font-mono text-warning">{docTemplate.formatCurrency(v, l.currency)}</span> },
-                { key: 'net_pay', header: 'Net Pay', align: 'right', render: (v, l) => <span className="font-mono font-bold text-success">{docTemplate.formatCurrency(v, l.currency)}</span> },
-                {
-                  key: 'status', header: 'Paid', align: 'center',
-                  render: (v) => <StatusBadge status={v || 'unpaid'} label={v === 'paid' ? 'Paid' : 'Unpaid'} map={{ paid: 'success', unpaid: 'warning' }} />,
-                },
-                {
-                  key: '__actions', header: 'Actions', align: 'center',
-                  render: (_v, l) => (
-                    <div className="flex items-center justify-center gap-1">
-                      {run.status === 'approved' && l.status !== 'paid' && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => navigate('/accounting/payments/staff')} title="Payroll is paid in Accounting › Payments › Staff Payments">
-                          <Banknote className="w-3.5 h-3.5 mr-1" /> Pay in Accounting
-                        </Button>
-                      )}
-                      <Button size="icon" aria-label="Download Payslip" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download Payslip"><Download className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" aria-label="Print Payslip" variant="ghost" className="h-7 w-7" onClick={() => printPayslip(l)} title="Print Payslip"><Printer className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          </div>
+          <AdvancedDataTable<any>
+            data={(run.lines || [])
+              .filter((l: any) => !currencyFilter || l.currency === currencyFilter)
+              .map((l: any) => ({ ...l, employee_name: `${l.first_name} ${l.last_name}` }))}
+            keyExtractor={(l) => l.id}
+            loading={false}
+            emptyMessage="No employees in this run"
+            searchable
+            searchPlaceholder="Search by employee name or ID..."
+            toolbarExtra={totalsByCurrency.length > 1 && (
+              <select
+                value={currencyFilter}
+                onChange={e => setCurrencyFilter(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+              >
+                <option value="">All Currencies</option>
+                {totalsByCurrency.map(t => (
+                  <option key={t.currency} value={t.currency}>{t.currency}</option>
+                ))}
+              </select>
+            )}
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'employee_number', header: 'ID', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v}</span> },
+              { key: 'employee_name', header: 'Employee', render: (v) => v },
+              { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
+              { key: 'gross_pay', header: 'Gross', align: 'right', render: (v, l) => <span className="font-mono">{docTemplate.formatCurrency(v, l.currency)}</span> },
+              { key: 'deductions_total', header: 'Deductions', align: 'right', render: (v, l) => <span className="font-mono text-warning">{docTemplate.formatCurrency(v, l.currency)}</span> },
+              { key: 'net_pay', header: 'Net Pay', align: 'right', render: (v, l) => <span className="font-mono font-bold text-success">{docTemplate.formatCurrency(v, l.currency)}</span> },
+              {
+                key: 'status', header: 'Paid', align: 'center',
+                render: (v) => <StatusBadge status={v || 'unpaid'} label={v === 'paid' ? 'Paid' : 'Unpaid'} map={{ paid: 'success', unpaid: 'warning' }} />,
+              },
+              {
+                key: '__actions', header: 'Actions', align: 'center',
+                render: (_v, l) => (
+                  <div className="flex items-center justify-center gap-1">
+                    {run.status === 'approved' && l.status !== 'paid' && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => navigate('/accounting/payments/staff')} title="Payroll is paid in Accounting › Payments › Staff Payments">
+                        <Banknote className="w-3.5 h-3.5 mr-1" /> Pay in Accounting
+                      </Button>
+                    )}
+                    <Button size="icon" aria-label="Download Payslip" variant="ghost" className="h-7 w-7" onClick={() => downloadPayslip(l)} title="Download Payslip"><Download className="w-3.5 h-3.5" /></Button>
+                    <Button size="icon" aria-label="Print Payslip" variant="ghost" className="h-7 w-7" onClick={() => printPayslip(l)} title="Print Payslip"><Printer className="w-3.5 h-3.5" /></Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
 

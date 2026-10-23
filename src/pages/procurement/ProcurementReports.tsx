@@ -542,31 +542,27 @@ const ProcurementReports: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* By Supplier */}
-              <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b">
-                  <h3 className="font-semibold text-sm">Spend by Supplier</h3>
-                </div>
-                <AdvancedDataTable<any>
-                  data={purchaseSummary?.bySupplier || []}
-                  keyExtractor={(row, i) => i}
-                  emptyMessage="No data for this period"
-                  columns={[
-                    {
-                      key: 'supplier_name', header: 'Supplier',
-                      render: (v, row) => (
-                        <>
-                          <p className="font-medium">{v}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{row.supplier_code || '—'}</p>
-                        </>
-                      ),
-                    },
-                    { key: 'currency', header: 'Currency', render: (v) => <span className="text-xs text-muted-foreground">{v}</span> },
-                    { key: 'order_count', header: 'Orders', align: 'center' },
-                    { key: 'total_amount', header: 'Total', align: 'right', render: (v, row) => <span className="font-mono">{fmtAmt(v, row.currency)}</span> },
-                    { key: 'avg_order_value', header: 'Avg', align: 'right', render: (v, row) => <span className="font-mono text-muted-foreground">{fmtAmt(v, row.currency)}</span> },
-                  ]}
-                />
-              </div>
+              <AdvancedDataTable<any>
+                title="Spend by Supplier"
+                data={purchaseSummary?.bySupplier || []}
+                keyExtractor={(row, i) => i}
+                emptyMessage="No data for this period"
+                columns={[
+                  {
+                    key: 'supplier_name', header: 'Supplier',
+                    render: (v, row) => (
+                      <>
+                        <p className="font-medium">{v}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{row.supplier_code || '—'}</p>
+                      </>
+                    ),
+                  },
+                  { key: 'currency', header: 'Currency', render: (v) => <span className="text-xs text-muted-foreground">{v}</span> },
+                  { key: 'order_count', header: 'Orders', align: 'center' },
+                  { key: 'total_amount', header: 'Total', align: 'right', render: (v, row) => <span className="font-mono">{fmtAmt(v, row.currency)}</span> },
+                  { key: 'avg_order_value', header: 'Avg', align: 'right', render: (v, row) => <span className="font-mono text-muted-foreground">{fmtAmt(v, row.currency)}</span> },
+                ]}
+              />
 
               {/* By Status */}
               <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
@@ -657,40 +653,36 @@ const ProcurementReports: React.FC = () => {
         )}
 
         {activeTab === 'delivery' && (
-          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <h3 className="font-semibold text-sm">Supplier Delivery Performance</h3>
-            </div>
-            <AdvancedDataTable<any>
-              data={deliveryPerformance}
-              keyExtractor={(row, i) => i}
-              emptyMessage="No delivery data available"
-              columns={[
-                { key: 'supplier_name', header: 'Supplier', render: (v) => <span className="font-medium">{v}</span> },
-                { key: 'total_orders', header: 'Total Orders', align: 'center' },
-                { key: 'on_time', header: 'On Time', align: 'center', render: (v) => <Badge className="bg-success-bg text-success text-xs">{v || 0}</Badge> },
-                { key: 'late', header: 'Late', align: 'center', render: (v) => <Badge className="bg-destructive-bg text-destructive text-xs">{v || 0}</Badge> },
-                { key: 'pending', header: 'Pending', align: 'center', render: (v) => <Badge className="bg-muted text-muted-foreground text-xs">{v || 0}</Badge> },
-                { key: 'avg_delivery_days', header: 'Avg Days', align: 'center', render: (v) => <span className="font-mono">{v ? parseFloat(v).toFixed(1) : '—'}</span> },
-                {
-                  key: '__ontime_pct', header: 'On-Time %', align: 'center',
-                  render: (_v, row) => {
-                    const delivered = (parseInt(row.on_time) || 0) + (parseInt(row.late) || 0);
-                    const onTimePct = delivered > 0 ? ((parseInt(row.on_time) || 0) / delivered * 100) : 0;
-                    return (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-16 bg-muted rounded-full h-2">
-                          <div className={`h-2 rounded-full ${onTimePct >= 80 ? 'bg-success' : onTimePct >= 50 ? 'bg-warning' : 'bg-destructive'}`}
-                            style={{ width: `${onTimePct}%` }} />
-                        </div>
-                        <span className="text-xs font-medium">{onTimePct.toFixed(0)}%</span>
+          <AdvancedDataTable<any>
+            title="Supplier Delivery Performance"
+            data={deliveryPerformance}
+            keyExtractor={(row, i) => i}
+            emptyMessage="No delivery data available"
+            columns={[
+              { key: 'supplier_name', header: 'Supplier', render: (v) => <span className="font-medium">{v}</span> },
+              { key: 'total_orders', header: 'Total Orders', align: 'center' },
+              { key: 'on_time', header: 'On Time', align: 'center', render: (v) => <Badge className="bg-success-bg text-success text-xs">{v || 0}</Badge> },
+              { key: 'late', header: 'Late', align: 'center', render: (v) => <Badge className="bg-destructive-bg text-destructive text-xs">{v || 0}</Badge> },
+              { key: 'pending', header: 'Pending', align: 'center', render: (v) => <Badge className="bg-muted text-muted-foreground text-xs">{v || 0}</Badge> },
+              { key: 'avg_delivery_days', header: 'Avg Days', align: 'center', render: (v) => <span className="font-mono">{v ? parseFloat(v).toFixed(1) : '—'}</span> },
+              {
+                key: '__ontime_pct', header: 'On-Time %', align: 'center',
+                render: (_v, row) => {
+                  const delivered = (parseInt(row.on_time) || 0) + (parseInt(row.late) || 0);
+                  const onTimePct = delivered > 0 ? ((parseInt(row.on_time) || 0) / delivered * 100) : 0;
+                  return (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-16 bg-muted rounded-full h-2">
+                        <div className={`h-2 rounded-full ${onTimePct >= 80 ? 'bg-success' : onTimePct >= 50 ? 'bg-warning' : 'bg-destructive'}`}
+                          style={{ width: `${onTimePct}%` }} />
                       </div>
-                    );
-                  },
+                      <span className="text-xs font-medium">{onTimePct.toFixed(0)}%</span>
+                    </div>
+                  );
                 },
-              ]}
-            />
-          </div>
+              },
+            ]}
+          />
         )}
 
         {isNewReportTab && (
@@ -838,57 +830,47 @@ const ProcurementReports: React.FC = () => {
         )}
 
         {activeTab === 'requisitions' && (
-          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <h3 className="font-semibold text-sm">Purchase Requisitions</h3>
-              <p className="text-xs text-muted-foreground">{prReport.length} requisition{prReport.length === 1 ? '' : 's'} in range</p>
-            </div>
-            <AdvancedDataTable<any>
-              data={prReport}
-              keyExtractor={(row) => row.id}
-              emptyMessage="No purchase requisitions for the selected filters"
-              columns={[
-                { key: 'pr_number', header: 'PR Number', render: (v) => <span className="font-medium font-mono">{v}</span> },
-                {
-                  key: 'department', header: 'Department / Requester',
-                  render: (v, row) => (
-                    <>
-                      <p>{v || '—'}</p>
-                      <p className="text-xs text-muted-foreground">{row.created_by_name || '—'}</p>
-                    </>
-                  ),
-                },
-                { key: 'requisition_date', header: 'Date', render: (v) => v ? formatDate(v) : '—' },
-                { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={prStatusMap} className="capitalize" /> },
-                { key: 'currency', header: 'Currency', align: 'center', render: (v) => <span className="font-mono">{v || '—'}</span> },
-                { key: 'total_amount', header: 'Total Est. Amount', align: 'right', render: (v, row) => <span className="font-mono">{fmtAmt(v, row.currency)}</span> },
-                { key: 'approved_by_name', header: 'Approved By', render: (v) => v || '—' },
-              ]}
-            />
-          </div>
+          <AdvancedDataTable<any>
+            title="Purchase Requisitions"
+            data={prReport}
+            keyExtractor={(row) => row.id}
+            emptyMessage="No purchase requisitions for the selected filters"
+            columns={[
+              { key: 'pr_number', header: 'PR Number', render: (v) => <span className="font-medium font-mono">{v}</span> },
+              {
+                key: 'department', header: 'Department / Requester',
+                render: (v, row) => (
+                  <>
+                    <p>{v || '—'}</p>
+                    <p className="text-xs text-muted-foreground">{row.created_by_name || '—'}</p>
+                  </>
+                ),
+              },
+              { key: 'requisition_date', header: 'Date', render: (v) => v ? formatDate(v) : '—' },
+              { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={prStatusMap} className="capitalize" /> },
+              { key: 'currency', header: 'Currency', align: 'center', render: (v) => <span className="font-mono">{v || '—'}</span> },
+              { key: 'total_amount', header: 'Total Est. Amount', align: 'right', render: (v, row) => <span className="font-mono">{fmtAmt(v, row.currency)}</span> },
+              { key: 'approved_by_name', header: 'Approved By', render: (v) => v || '—' },
+            ]}
+          />
         )}
 
         {activeTab === 'receipts' && (
-          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <h3 className="font-semibold text-sm">Goods Receipt Notes</h3>
-              <p className="text-xs text-muted-foreground">{grnReport.length} receipt{grnReport.length === 1 ? '' : 's'} in range</p>
-            </div>
-            <AdvancedDataTable<any>
-              data={grnReport}
-              keyExtractor={(row) => row.id}
-              emptyMessage="No goods receipts for the selected filters"
-              columns={[
-                { key: 'grn_number', header: 'GRN Number', render: (v) => <span className="font-medium font-mono">{v}</span> },
-                { key: 'po_number', header: 'Linked PO', render: (v) => <span className="font-mono text-muted-foreground">{v || '—'}</span> },
-                { key: 'supplier_name', header: 'Supplier', render: (v) => v || '—' },
-                { key: 'receipt_date', header: 'Receipt Date', render: (v) => v ? formatDate(v) : '—' },
-                { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={grnStatusMap} className="capitalize" /> },
-                { key: 'received_by_name', header: 'Received By', render: (v) => v || '—' },
-                { key: 'inspected_by_name', header: 'Inspected By', render: (v) => v || '—' },
-              ]}
-            />
-          </div>
+          <AdvancedDataTable<any>
+            title="Goods Receipt Notes"
+            data={grnReport}
+            keyExtractor={(row) => row.id}
+            emptyMessage="No goods receipts for the selected filters"
+            columns={[
+              { key: 'grn_number', header: 'GRN Number', render: (v) => <span className="font-medium font-mono">{v}</span> },
+              { key: 'po_number', header: 'Linked PO', render: (v) => <span className="font-mono text-muted-foreground">{v || '—'}</span> },
+              { key: 'supplier_name', header: 'Supplier', render: (v) => v || '—' },
+              { key: 'receipt_date', header: 'Receipt Date', render: (v) => v ? formatDate(v) : '—' },
+              { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} map={grnStatusMap} className="capitalize" /> },
+              { key: 'received_by_name', header: 'Received By', render: (v) => v || '—' },
+              { key: 'inspected_by_name', header: 'Inspected By', render: (v) => v || '—' },
+            ]}
+          />
         )}
 
         {activeTab === 'consultant-bills' && (
@@ -918,26 +900,21 @@ const ProcurementReports: React.FC = () => {
                 </div>
               ) : null;
             })()}
-            <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b">
-                <h3 className="font-semibold text-sm">Consultant Bills</h3>
-                <p className="text-xs text-muted-foreground">{consultantBillsReport.length} bill{consultantBillsReport.length === 1 ? '' : 's'} — a percentage of consultation revenue billed to each consultant, paid from Procurement &gt; Expenses</p>
-              </div>
-              <AdvancedDataTable<any>
-                data={consultantBillsReport}
-                keyExtractor={(row) => row.id}
-                emptyMessage="No consultant bills yet"
-                columns={[
-                  { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-medium font-mono">{v}</span> },
-                  { key: 'first_name', header: 'Consultant', render: (_v, row) => `${row.first_name} ${row.last_name}` },
-                  { key: 'period_from', header: 'Period', render: (_v, row) => `${formatDate(row.period_from)} – ${formatDate(row.period_to)}` },
-                  { key: 'total_consultation_revenue', header: 'Revenue', align: 'right', render: (v, row) => <span className="font-mono">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
-                  { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => `${v}%` },
-                  { key: 'bill_amount', header: 'Bill Amount', align: 'right', render: (v, row) => <span className="font-mono font-bold">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
-                  { key: 'status', header: 'Status', align: 'center', render: (v) => <Badge variant={v === 'paid' ? 'outline' : 'secondary'} className="text-xs capitalize">{v}</Badge> },
-                ]}
-              />
-            </div>
+            <AdvancedDataTable<any>
+              title="Consultant Bills"
+              data={consultantBillsReport}
+              keyExtractor={(row) => row.id}
+              emptyMessage="No consultant bills yet"
+              columns={[
+                { key: 'bill_number', header: 'Bill No.', render: (v) => <span className="font-medium font-mono">{v}</span> },
+                { key: 'first_name', header: 'Consultant', render: (_v, row) => `${row.first_name} ${row.last_name}` },
+                { key: 'period_from', header: 'Period', render: (_v, row) => `${formatDate(row.period_from)} – ${formatDate(row.period_to)}` },
+                { key: 'total_consultation_revenue', header: 'Revenue', align: 'right', render: (v, row) => <span className="font-mono">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
+                { key: 'fee_percentage', header: 'Fee %', align: 'center', render: (v) => `${v}%` },
+                { key: 'bill_amount', header: 'Bill Amount', align: 'right', render: (v, row) => <span className="font-mono font-bold">{row.currency} {parseFloat(v || 0).toFixed(2)}</span> },
+                { key: 'status', header: 'Status', align: 'center', render: (v) => <Badge variant={v === 'paid' ? 'outline' : 'secondary'} className="text-xs capitalize">{v}</Badge> },
+              ]}
+            />
           </>
         )}
       </div>

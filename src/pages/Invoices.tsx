@@ -162,14 +162,16 @@ export default function Invoices() {
         />
 
         <div className="flex-1 min-h-0 flex flex-col gap-4">
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden flex-1 min-h-0">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Invoice Directory</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-56">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input placeholder="Search invoice or patient..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
+          <AdvancedDataTable<Invoice>
+            title="Invoice Directory"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input placeholder="Search invoice or patient..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <Combobox
                   options={[
                     { value: 'all', label: 'All statuses' },
@@ -182,56 +184,53 @@ export default function Invoices() {
                   value={statusFilter}
                   onChange={setStatusFilter}
                   searchPlaceholder="Search..."
-                  className="w-40 h-9"
+                  className="text-sm w-40 h-8"
                 />
-                <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
-                <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchInvoices} disabled={loading}>
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={fetchInvoices} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4">
-              <AdvancedDataTable<Invoice>
-                data={filteredInvoices}
-                keyExtractor={(inv) => inv.id}
-                loading={loading}
-                emptyMessage="No invoices found."
-                onRowClick={(inv) => fetchInvoiceDetail(inv)}
-                rowClassName={(inv) => (inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled') ? 'bg-orange-50/50' : ''}
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'invoice_number', header: 'Invoice No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'patient_name', header: 'Patient', sortable: true },
-                  { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                  {
-                    key: 'due_date', header: 'Due Date', sortable: true,
-                    render: (v, inv) => {
-                      const overdue = inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled';
-                      return (
-                        <>
-                          <span className={overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}>{formatDate(v)}</span>
-                          {overdue && <span className="text-xs text-orange-600 ml-1">({inv.days_overdue}d)</span>}
-                        </>
-                      );
-                    },
-                  },
-                  { key: 'amount', header: 'Total', sortable: true, render: (v, inv) => <span className="text-muted-foreground">{inv.currency || currency.code} {parseFloat(String(v)).toFixed(2)}</span> },
-                  {
-                    key: 'balance_due', header: 'Balance', sortable: true,
-                    render: (v, inv) => (
-                      <span className={`font-medium ${parseFloat(String(v)) > 0 ? 'text-destructive' : 'text-success'}`}>
-                        {inv.currency || currency.code} {parseFloat(String(v)).toFixed(2)}
-                      </span>
-                    ),
-                  },
-                  { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
-                ]}
-              />
-            </div>
-          </div>
+              </>
+            }
+            dateFilterKey={false}
+            autoFilters={false}
+            data={filteredInvoices}
+            keyExtractor={(inv) => inv.id}
+            loading={loading}
+            emptyMessage="No invoices found."
+            onRowClick={(inv) => fetchInvoiceDetail(inv)}
+            rowClassName={(inv) => (inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled') ? 'bg-orange-50/50' : ''}
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'invoice_number', header: 'Invoice No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+              { key: 'patient_name', header: 'Patient', sortable: true },
+              { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+              {
+                key: 'due_date', header: 'Due Date', sortable: true,
+                render: (v, inv) => {
+                  const overdue = inv.days_overdue > 0 && inv.status !== 'paid' && inv.status !== 'cancelled';
+                  return (
+                    <>
+                      <span className={overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}>{formatDate(v)}</span>
+                      {overdue && <span className="text-xs text-orange-600 ml-1">({inv.days_overdue}d)</span>}
+                    </>
+                  );
+                },
+              },
+              { key: 'amount', header: 'Total', sortable: true, render: (v, inv) => <span className="text-muted-foreground">{inv.currency || currency.code} {parseFloat(String(v)).toFixed(2)}</span> },
+              {
+                key: 'balance_due', header: 'Balance', sortable: true,
+                render: (v, inv) => (
+                  <span className={`font-medium ${parseFloat(String(v)) > 0 ? 'text-destructive' : 'text-success'}`}>
+                    {inv.currency || currency.code} {parseFloat(String(v)).toFixed(2)}
+                  </span>
+                ),
+              },
+              { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
+            ]}
+          />
 
         </div>
       </div>

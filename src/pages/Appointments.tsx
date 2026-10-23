@@ -163,7 +163,7 @@ export default function Appointments() {
     { key: 'first_name', header: 'Patient', render: (_v, row) => <div><p className="font-medium text-sm">{row.first_name} {row.last_name}</p><p className="text-xs text-muted-foreground font-mono">{row.participant_number}</p></div> },
     { key: 'doctor_name', header: 'Doctor', render: (v) => v ? `Dr. ${v}` : <span className="text-muted-foreground">Any doctor</span> },
     { key: 'reason', header: 'Reason', render: (v) => <span className="text-sm">{v || '-'}</span> },
-    { key: 'status', header: 'Status', render: (v) => <StatusBadge status={v} /> },
+    { key: 'status', header: 'Status', filterable: false, render: (v) => <StatusBadge status={v} /> },
     { key: 'created_by_name', header: 'Booked By', render: (v) => <span className="text-xs text-muted-foreground">{v || '-'}</span> },
     {
       key: 'id', header: 'Action',
@@ -189,13 +189,10 @@ export default function Appointments() {
           <Button className="gap-1.5" onClick={() => setOpen(true)}><Plus className="w-4 h-4" /> New Appointment</Button>
         } />
 
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-semibold text-muted-foreground">Status:</span>
-          <Combobox options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} className="w-44 h-9" searchPlaceholder="Search..." />
-        </div>
-
-        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
           <AdvancedDataTable<AppointmentRow>
+            title="Appointments"
+            countLabel={['appointment', 'appointments']}
+            toolbarExtra={<Combobox options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} className="h-8 w-40 text-sm" searchPlaceholder="Search..." />}
             data={rows}
             keyExtractor={(r) => r.id}
             loading={loading}
@@ -204,7 +201,6 @@ export default function Appointments() {
             pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
             columns={columns}
           />
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>

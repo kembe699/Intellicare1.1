@@ -120,8 +120,9 @@ export default function CreditNotes() {
               </div>
             }
           />
-          <div className="bg-card rounded-lg border shadow-sm p-4">
             <AdvancedDataTable<CreditNote>
+              title="Credit notes"
+              countLabel={['credit note', 'credit notes']}
               data={notes}
               loading={loading}
               keyExtractor={(n) => n.id}
@@ -147,7 +148,6 @@ export default function CreditNotes() {
               ]}
               empty={{ icon: FileMinus, title: 'No credit notes yet', message: 'Create one to reduce what a patient owes on a bill.', action: { label: 'New credit note', onClick: openCreate } }}
             />
-          </div>
         </div>
       </div>
 

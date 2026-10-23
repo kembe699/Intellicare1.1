@@ -270,35 +270,20 @@ const ChartOfAccounts: React.FC = () => {
         </Dialog>
 
         {/* Accounts Table */}
-        <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <h3 className="font-medium">Accounts</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Combobox
-                options={[{ value: 'all', label: 'All Types' }, ...ACCOUNT_TYPES.map(t => ({ value: t.value, label: t.label }))]}
-                value={filterType}
-                onChange={setFilterType}
-                placeholder="All Types"
-                searchPlaceholder="Search types..."
-                className="w-40 h-9"
-              />
-              <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none whitespace-nowrap">
-                <input type="checkbox" className="rounded border-input" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-                Show inactive
-              </label>
-              {(filterType !== 'all' || showInactive) && (
-                <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterType('all'); setShowInactive(false); }}>
-                  Clear
-                </Button>
-              )}
-              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={loadAccounts} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-          </div>
-
-          <div className="p-4">
             <AdvancedDataTable<Account>
+              title="Accounts"
+              countLabel={['account', 'accounts']}
+              toolbarExtra={
+                <>
+                  <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none whitespace-nowrap px-1">
+                    <input type="checkbox" className="rounded border-input" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+                    Show inactive
+                  </label>
+                  <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={loadAccounts} disabled={loading}>
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </>
+              }
               data={filteredAccounts}
               keyExtractor={(account) => account.id}
               emptyMessage={accounts.length === 0 ? 'No accounts found. Initialize default accounts or add one manually.' : 'No accounts match your search criteria.'}
@@ -336,8 +321,6 @@ const ChartOfAccounts: React.FC = () => {
                 },
               ]}
             />
-          </div>
-        </div>
 
         {/* View Dialog */}
         <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>

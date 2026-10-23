@@ -356,6 +356,9 @@ const Clinics: React.FC = () => {
             </div>
           ) : viewMode === 'table' ? (
             <AdvancedDataTable<Clinic>
+              title="Clinics"
+              countLabel={['clinic', 'clinics']}
+              searchable={false}
               data={filteredClinics}
               keyExtractor={(clinic) => clinic.id}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}

@@ -178,18 +178,8 @@ const Departments: React.FC = () => {
           title="Departments Management"
         />
 
-        {/* Search Bar and Actions */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search departments by name or code..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-9"
-            />
-          </div>
+        {/* Actions */}
+        <div className="mb-4 flex flex-wrap gap-2 items-center justify-end">
           <Dialog open={dialogOpen} onOpenChange={(open) => {
             setDialogOpen(open);
             if (!open) resetForm();
@@ -265,6 +255,9 @@ const Departments: React.FC = () => {
 
         {/* Departments Table */}
         <AdvancedDataTable<Department>
+          title="Departments"
+          countLabel={['department', 'departments']}
+          searchPlaceholder="Search departments by name or code..."
           data={filteredDepartments}
           keyExtractor={(department) => department.id}
           loading={loading}

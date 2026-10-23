@@ -50,34 +50,27 @@ export default function FixedAssetsRegister() {
     },
     { key: 'current_value', header: 'Book Value', align: 'right', render: (v) => fmt(v) },
     {
-      key: 'status', header: 'Status', width: '110px',
+      key: 'status', header: 'Status', width: '110px', filterable: false,
       render: (v) => <Badge variant={v === 'active' ? 'success' : v === 'disposed' ? 'danger' : 'neutral'}>{v}</Badge>,
     },
   ];
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-end gap-3">
-          <div className="min-w-[160px]">
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Status</label>
+        <AdvancedDataTable
+          title="Assets"
+          countLabel={['asset', 'assets']}
+          loading={loading}
+          searchPlaceholder="Name, code, serial, location..."
+          toolbarExtra={
             <Combobox
-              options={[{ value: 'active', label: 'Active' }, { value: 'under_maintenance', label: 'Under maintenance' }, { value: 'disposed', label: 'Disposed' }, { value: 'written_off', label: 'Written off' }, { value: '', label: 'All' }]}
+              options={[{ value: 'active', label: 'Active' }, { value: 'under_maintenance', label: 'Under maintenance' }, { value: 'disposed', label: 'Disposed' }, { value: 'written_off', label: 'Written off' }, { value: '', label: 'All statuses' }]}
               value={statusFilter}
               onChange={setStatusFilter}
               searchPlaceholder="Search status..."
-              className="h-9"
+              className="h-8 w-40 text-sm"
             />
-          </div>
-          <div className="min-w-[220px] flex-1">
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Search</label>
-            <Input placeholder="Name, code, serial, location..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="h-9" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {loading ? <LoadingState message="Loading assets..." /> : (
-        <AdvancedDataTable
+          }
           data={assets}
           columns={columns}
           onRowClick={(row) => navigate(`/accounting/fixed-assets/register/${row.id}`)}
@@ -87,7 +80,6 @@ export default function FixedAssetsRegister() {
           exportable
           exportFileName="fixed-assets-register"
         />
-      )}
     </div>
   );
 }

@@ -439,76 +439,70 @@ export default function Admissions() {
         </div>
 
         {/* Admissions Directory */}
-        <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-          <div className="p-4 border-b bg-muted/30 flex flex-wrap items-end gap-3">
-            <div className="relative flex-1 min-w-[200px]">
+        <AdvancedDataTable<any>
+          title="Admissions"
+          searchSlot={
+            <div className="relative w-52">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search patient or ward..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input placeholder="Search patient or ward..." className="h-8 text-sm pl-8" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <div>
-              <Label className="text-xs mb-1 block">From</Label>
-              <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">To</Label>
-              <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-            </div>
-            <Combobox
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'discharged', label: 'Discharged' },
-              ]}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              searchPlaceholder="Search..."
-              className="w-[150px]"
-            />
-            <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
-              <FileSpreadsheet className="w-4 h-4" /> Export CSV
-            </Button>
-          </div>
-
-          <div className="p-4">
-            <AdvancedDataTable<any>
-              data={filteredAdmissions}
-              keyExtractor={(a) => a.id}
-              emptyMessage="No admissions found."
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                {
-                  key: 'patient_name', header: 'Patient', sortable: true,
-                  render: (v) => <span className="font-medium">{v}</span>,
-                },
-                { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'room_number', header: 'Room', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'admission_date', header: 'Admission Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
-                { key: '__duration', header: 'Duration', render: (_v, a) => <span className="text-muted-foreground">{getDuration(a)}</span> },
-                {
-                  key: 'admission_type', header: 'Type', sortable: true,
-                  render: (v) => (
-                    <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : v === 'transfer' ? 'bg-warning-bg text-warning' : 'bg-primary/10 text-primary'}`}>
-                      {v}
-                    </Badge>
-                  ),
-                },
-                {
-                  key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <Badge variant={v === 'active' ? 'default' : 'secondary'} className="text-xs capitalize">{v}</Badge>,
-                },
-                {
-                  key: '__actions', header: 'Actions',
-                  render: (_v, a) => (
-                    <Button variant="outline" size="sm" className="gap-1.5" disabled={resolvingBillFor === a.id} onClick={() => viewBill(a)}>
-                      {resolvingBillFor === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Receipt className="h-3.5 w-3.5" />} Bill
-                    </Button>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        </div>
+          }
+          toolbarExtra={
+            <>
+              <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              <Combobox
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'discharged', label: 'Discharged' },
+                ]}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                searchPlaceholder="Search..."
+                className="w-[9.5rem]"
+              />
+            </>
+          }
+          dateFilterKey={false}
+          autoFilters={false}
+          countLabel={['admission', 'admissions']}
+          data={filteredAdmissions}
+          keyExtractor={(a) => a.id}
+          emptyMessage="No admissions found."
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            {
+              key: 'patient_name', header: 'Patient', sortable: true,
+              render: (v) => <span className="font-medium">{v}</span>,
+            },
+            { key: 'ward_name', header: 'Ward', sortable: true, render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            { key: 'room_number', header: 'Room', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            { key: 'bed_number', header: 'Bed', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            { key: 'admission_date', header: 'Admission Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
+            { key: '__duration', header: 'Duration', render: (_v, a) => <span className="text-muted-foreground">{getDuration(a)}</span> },
+            {
+              key: 'admission_type', header: 'Type', sortable: true,
+              render: (v) => (
+                <Badge className={`text-xs capitalize ${v === 'emergency' ? 'bg-destructive-bg text-destructive' : v === 'transfer' ? 'bg-warning-bg text-warning' : 'bg-primary/10 text-primary'}`}>
+                  {v}
+                </Badge>
+              ),
+            },
+            {
+              key: 'status', header: 'Status', sortable: true,
+              render: (v) => <Badge variant={v === 'active' ? 'default' : 'secondary'} className="text-xs capitalize">{v}</Badge>,
+            },
+            {
+              key: '__actions', header: 'Actions',
+              render: (_v, a) => (
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={resolvingBillFor === a.id} onClick={() => viewBill(a)}>
+                  {resolvingBillFor === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Receipt className="h-3.5 w-3.5" />} Bill
+                </Button>
+              ),
+            },
+          ]}
+        />
       </div>
       </div>
     </AppLayout>

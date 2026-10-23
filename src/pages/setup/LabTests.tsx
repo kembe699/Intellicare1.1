@@ -755,18 +755,8 @@ const handleBulkDelete = async () => {
           title="Lab Tests Management"
         />
 
-        {/* Search Bar and Actions */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search tests by name, code, or category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-9"
-            />
-          </div>
+        {/* Actions */}
+        <div className="mb-4 flex flex-wrap gap-2 items-center justify-end">
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -1094,6 +1084,9 @@ const handleBulkDelete = async () => {
 
         {/* Lab Tests Table */}
         <AdvancedDataTable<LabTest>
+          title="Lab tests"
+          countLabel={['test', 'tests']}
+          searchPlaceholder="Search tests by name, code, or category..."
           data={filteredTests}
           keyExtractor={(test) => test.id}
           loading={loading}

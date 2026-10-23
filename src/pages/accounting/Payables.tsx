@@ -74,9 +74,11 @@ export default function Payables() {
             ))}
           </div>
 
-          <div className="bg-card rounded-lg border shadow-sm p-4">
-            <h3 className="font-medium mb-3">By supplier <span className="text-xs text-muted-foreground font-normal">({currency || 'base currency'})</span></h3>
             <AdvancedDataTable<SummaryRow>
+              title={<>By supplier <span className="text-xs text-muted-foreground font-normal">({currency || 'base currency'})</span></>}
+              countLabel={['supplier', 'suppliers']}
+              exportFileName="ap-aging-by-supplier"
+              searchPlaceholder="Search supplier..."
               data={summary}
               loading={loading}
               keyExtractor={(r) => r.groupLabel}
@@ -87,30 +89,28 @@ export default function Payables() {
               ]}
               empty={{ icon: Scale, title: 'Nothing owed to suppliers', message: 'Authorized and received purchase orders with an unpaid balance appear here.' }}
             />
-          </div>
 
-          <div className="bg-card rounded-lg border shadow-sm p-4">
-            <h3 className="font-medium mb-3">Open supplier bills</h3>
             <AdvancedDataTable<DetailRow>
+              title="Open supplier bills"
+              countLabel={['bill', 'bills']}
               data={detail}
               loading={loading}
               keyExtractor={(r) => r.id}
-              searchable
               searchPlaceholder="Search PO or supplier..."
+              dateFilterKey="orderDate"
               pagination={{ enabled: true, pageSize: 20 }}
               columns={[
                 { key: 'poNumber', header: 'PO', sortable: true, render: (v) => <span className="font-mono text-sm whitespace-nowrap">{v}</span> },
-                { key: 'supplierName', header: 'Supplier', sortable: true },
+                { key: 'supplierName', header: 'Supplier', sortable: true, filterable: true },
                 { key: 'orderDate', header: 'Ordered', sortable: true, render: (v) => formatDate(v) },
                 { key: 'paymentTerms', header: 'Terms', render: (v) => v || '—' },
                 { key: 'totalAmount', header: 'Billed', align: 'right', render: (v, r) => <span className="font-mono tabular-nums whitespace-nowrap">{formatMoney(v, r.currency)}</span> },
                 { key: 'paidAmount', header: 'Paid', align: 'right', render: (v, r) => <span className="font-mono tabular-nums whitespace-nowrap">{formatMoney(v, r.currency)}</span> },
                 { key: 'balanceAmount', header: 'Owed', align: 'right', sortable: true, render: (v, r) => <span className="font-mono tabular-nums font-semibold whitespace-nowrap">{formatMoney(v, r.currency)}</span> },
-                { key: 'bucketLabel', header: 'Age', render: (v, r) => <span className="text-sm">{v} <span className="text-muted-foreground">({r.daysOverdue} d)</span></span> },
+                { key: 'bucketLabel', header: 'Age', filterable: true, exportValue: (r) => `${r.bucketLabel} (${r.daysOverdue} d)`, render: (v, r) => <span className="text-sm">{v} <span className="text-muted-foreground">({r.daysOverdue} d)</span></span> },
               ]}
               empty={{ icon: Scale, title: 'No open supplier bills' }}
             />
-          </div>
         </div>
       </div>
     </AppLayout>

@@ -790,24 +790,25 @@ export default function LISRegistration() {
             </form>
           </div>
 
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Patient Directory</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-64">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by ID or Name..."
-                    className="pl-8 h-9"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
+          <AdvancedDataTable<any>
+            title="Patient Directory"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by ID or Name..."
+                  className="pl-8 h-8"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <div className="flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
                   <Input
                     type="date"
-                    className="h-9 w-[150px]"
+                    className="h-8 w-[9.5rem]"
                     value={filterDateFrom}
                     max={filterDateTo || undefined}
                     onChange={(e) => setFilterDateFrom(e.target.value)}
@@ -815,44 +816,38 @@ export default function LISRegistration() {
                   <span className="text-xs text-muted-foreground">to</span>
                   <Input
                     type="date"
-                    className="h-9 w-[150px]"
+                    className="h-8 w-[9.5rem]"
                     value={filterDateTo}
                     min={filterDateFrom || undefined}
                     onChange={(e) => setFilterDateTo(e.target.value)}
                   />
                 </div>
                 {(filterDateFrom !== toLocalDateStr(new Date()) || filterDateTo !== toLocalDateStr(new Date())) && (
-                  <Button variant="outline" size="sm" className="h-9" onClick={() => { setFilterDateFrom(toLocalDateStr(new Date())); setFilterDateTo(toLocalDateStr(new Date())); }}>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setFilterDateFrom(toLocalDateStr(new Date())); setFilterDateTo(toLocalDateStr(new Date())); }}>
                     Today
                   </Button>
                 )}
-                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => fetchParticipants()} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={() => fetchParticipants()} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-              </div>
-            </div>
-            
-            <div className="p-4">
-              <AdvancedDataTable<any>
-                data={filteredParticipants}
-                keyExtractor={(p) => p.id}
-                loading={loading}
-                emptyMessage={`No patients found${filterDateFrom || filterDateTo ? ` for ${filterDateFrom || '…'} to ${filterDateTo || '…'}` : ''}.`}
-                onRowClick={(p) => openEditParticipant(p)}
-                pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50, 100] }}
-                columns={[
-                  { key: 'participant_number', header: 'Patient No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'first_name', header: 'Name', sortable: true, render: (_v, p) => <>{p.first_name} {p.last_name}</> },
-                  { key: 'gender', header: 'Gender', sortable: true },
-                  { key: 'study_ref', header: 'Study Ref', render: (v) => v || '-' },
-                  { key: 'created_at', header: 'Registered At', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleString()}</span> },
-                ]}
-              />
-            </div>
-            <div className="p-3 border-t bg-muted/30 text-xs text-muted-foreground flex justify-between">
-              <span>Total: {filteredParticipants.length}</span>
-            </div>
-          </div>
+              </>
+            }
+            dateFilterKey={false}
+            countLabel={['patient', 'patients']}
+            data={filteredParticipants}
+            keyExtractor={(p) => p.id}
+            loading={loading}
+            emptyMessage={`No patients found${filterDateFrom || filterDateTo ? ` for ${filterDateFrom || '…'} to ${filterDateTo || '…'}` : ''}.`}
+            onRowClick={(p) => openEditParticipant(p)}
+            pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50, 100] }}
+            columns={[
+              { key: 'participant_number', header: 'Patient No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+              { key: 'first_name', header: 'Name', sortable: true, render: (_v, p) => <>{p.first_name} {p.last_name}</> },
+              { key: 'gender', header: 'Gender', sortable: true },
+              { key: 'study_ref', header: 'Study Ref', render: (v) => v || '-' },
+              { key: 'created_at', header: 'Registered At', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleString()}</span> },
+            ]}
+          />
         </div>
       </div>
       </div>

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { Printer, Download, RefreshCw, Calendar } from 'lucide-react';
 import { getDatePresets, triggerPrint, CsvColumn, exportCSV } from '@/utils/reportUtils';
+import { InReportContext } from '@/components/common/DataTable/AdvancedDataTable';
 
 interface ReportShellProps {
   title: string;
@@ -122,7 +123,7 @@ export function ReportSubPageShell({
       )}
 
       {/* ── Report content ── */}
-      {children}
+      <InReportContext.Provider value={true}>{children}</InReportContext.Provider>
     </div>
   );
 }

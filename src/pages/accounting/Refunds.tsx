@@ -113,15 +113,13 @@ export function ReceiptApprovals() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-muted-foreground">
-          Voids and refunds requested by a cashier wait here for a second person. Approving reverses the payment in the ledger at its original rate.
-        </p>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />Refresh
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground mb-3">
+        Voids and refunds requested by a cashier wait here for a second person. Approving reverses the payment in the ledger at its original rate.
+      </p>
       <AdvancedDataTable
+        title="Waiting for approval"
+        countLabel={['request', 'requests']}
+        toolbarExtra={<Button variant="outline" size="icon" className="h-8 w-8" aria-label="Refresh" onClick={load} disabled={loading}><RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /></Button>}
         data={rows}
         columns={columns}
         loading={loading}
@@ -191,11 +189,11 @@ function DepositRefunds() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-muted-foreground">Patients holding an unused deposit. Refunding needs deposit-refund approval rights and an open cashier shift.</p>
-        <Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />Refresh</Button>
-      </div>
+      <p className="text-sm text-muted-foreground mb-3">Patients holding an unused deposit. Refunding needs deposit-refund approval rights and an open cashier shift.</p>
       <AdvancedDataTable<DepositBalance>
+        title="Deposits on hand"
+        countLabel={['patient', 'patients']}
+        toolbarExtra={<Button variant="outline" size="icon" className="h-8 w-8" aria-label="Refresh" onClick={load} disabled={loading}><RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /></Button>}
         data={rows}
         loading={loading}
         keyExtractor={(r) => `${r.patient_id}-${r.currency}`}
@@ -261,6 +259,8 @@ function PharmacyRefunds() {
         Cash refunds paid when a pharmacist records a return (stock back on the shelf, revenue reversed). Returns are recorded in <Link to="/pharmacy-returns" className="text-primary hover:underline">Pharmacy › Returns</Link>.
       </p>
       <AdvancedDataTable<PharmacyReturn>
+        title="Pharmacy refunds"
+        countLabel={['return', 'returns']}
         data={rows}
         loading={loading}
         keyExtractor={(r) => r.id}
@@ -294,9 +294,9 @@ export default function Refunds() {
               <TabsTrigger value="deposits" className="gap-2"><Wallet className="w-4 h-4" />Deposit refunds</TabsTrigger>
               <TabsTrigger value="pharmacy" className="gap-2"><Pill className="w-4 h-4" />Pharmacy refunds</TabsTrigger>
             </TabsList>
-            <TabsContent value="receipts" className="mt-4"><div className="bg-card rounded-lg border shadow-sm p-4"><ReceiptApprovals /></div></TabsContent>
-            <TabsContent value="deposits" className="mt-4"><div className="bg-card rounded-lg border shadow-sm p-4"><DepositRefunds /></div></TabsContent>
-            <TabsContent value="pharmacy" className="mt-4"><div className="bg-card rounded-lg border shadow-sm p-4"><PharmacyRefunds /></div></TabsContent>
+            <TabsContent value="receipts" className="mt-4"><ReceiptApprovals /></TabsContent>
+            <TabsContent value="deposits" className="mt-4"><DepositRefunds /></TabsContent>
+            <TabsContent value="pharmacy" className="mt-4"><PharmacyRefunds /></TabsContent>
           </Tabs>
         </div>
       </div>

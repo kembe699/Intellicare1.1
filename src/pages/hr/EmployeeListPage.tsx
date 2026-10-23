@@ -434,76 +434,71 @@ export const EmployeeListPage: React.FC<Props> = ({ employmentType, title, singu
           </form>
         </div>
 
-        <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <h3 className="font-medium">{title}</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-56">
-                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input className="pl-8 h-9" placeholder={`Search ${title.toLowerCase()}...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-              </div>
+        <AdvancedDataTable<Employee>
+          title={<>{title}</>}
+          searchSlot={
+            <div className="relative w-52">
+              <Search className="absolute left-2.5 top-2 w-4 h-4 text-muted-foreground" />
+              <Input className="text-sm pl-8 h-8" placeholder={`Search ${title.toLowerCase()}...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+          }
+          toolbarExtra={
+            <>
               <Combobox
                 options={[{ value: 'all', label: 'All Status' }, { value: 'active', label: 'Active' }, { value: 'on_leave', label: 'On Leave' }, { value: 'terminated', label: 'Terminated' }]}
-                value={statusFilter} onChange={setStatusFilter} searchPlaceholder="Search..." className="w-[150px] h-9"
+                value={statusFilter} onChange={setStatusFilter} searchPlaceholder="Search..." className="text-sm w-[9.5rem] h-8"
               />
-              <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-9">
-                <FileSpreadsheet className="w-4 h-4" /> Export CSV
-              </Button>
               {employmentType === 'staff' && (
                 <>
-                  <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="gap-1.5 h-9">
+                  <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="gap-1.5 h-8">
                     <FileSpreadsheet className="w-4 h-4" /> Download Template
                   </Button>
                   <input ref={bulkFileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleBulkFileSelected} />
-                  <Button type="button" variant="outline" onClick={() => bulkFileInputRef.current?.click()} disabled={uploadingBulk} className="gap-1.5 h-9">
+                  <Button type="button" variant="outline" onClick={() => bulkFileInputRef.current?.click()} disabled={uploadingBulk} className="gap-1.5 h-8">
                     {uploadingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Bulk Upload
                   </Button>
                 </>
               )}
-            </div>
-          </div>
-
-          <div className="p-4">
-            <AdvancedDataTable<Employee>
-              data={filteredEmployees}
-              keyExtractor={(e) => e.id}
-              loading={loading}
-              emptyMessage={searchQuery || statusFilter !== 'all' ? `No ${title.toLowerCase()} match your filters` : `No ${title.toLowerCase()} yet. Use the form above to add one.`}
-              onRowClick={(e) => openEdit(e)}
-              rowClassName={(e) => editingEmployee?.id === e.id ? 'bg-primary/5' : ''}
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                { key: 'employee_number', header: 'ID', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v}</span> },
-                { key: 'first_name', header: 'Name', sortable: true, render: (_v, e) => <p className="font-medium">{e.first_name} {e.last_name}</p> },
-                { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
-                { key: 'department', header: 'Department', render: (v) => v || '—' },
-                { key: 'phone', header: 'Phone', render: (v) => v || '—' },
-                employmentType === 'consultant'
-                  ? { key: 'consultation_fee_percentage', header: 'Fee %', align: 'right', render: (v: number | null) => v != null ? <span className="font-mono">{v}%</span> : <span className="text-muted-foreground italic text-xs">not set</span> }
-                  : { key: 'basic_salary', header: 'Salary', align: 'right', sortable: true, render: (v, e) => <span className="font-mono">{formatInCurrency(v, e.salary_currency)}</span> },
-                {
-                  key: '__status', header: 'Status', align: 'center',
-                  render: (_v, e) => <StatusBadge status={e.employment_status} label={e.employment_status.replace('_', ' ')} map={STATUS_TONE} />,
-                },
-                {
-                  key: '__actions', header: 'Actions', align: 'center',
-                  render: (_v, e) => (
-                    <div className="flex items-center justify-center gap-1">
-                      <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
-                      {employmentType === 'consultant' && (
-                        <Button size="icon" aria-label="Set fee %" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
-                      )}
-                      <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
-                        {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
-                      </Button>
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        </div>
+            </>
+          }
+          autoFilters={false}
+          data={filteredEmployees}
+          keyExtractor={(e) => e.id}
+          loading={loading}
+          emptyMessage={searchQuery || statusFilter !== 'all' ? `No ${title.toLowerCase()} match your filters` : `No ${title.toLowerCase()} yet. Use the form above to add one.`}
+          onRowClick={(e) => openEdit(e)}
+          rowClassName={(e) => editingEmployee?.id === e.id ? 'bg-primary/5' : ''}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'employee_number', header: 'ID', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v}</span> },
+            { key: 'first_name', header: 'Name', sortable: true, render: (_v, e) => <p className="font-medium">{e.first_name} {e.last_name}</p> },
+            { key: 'job_title', header: 'Job Title', render: (v) => v || '—' },
+            { key: 'department', header: 'Department', render: (v) => v || '—' },
+            { key: 'phone', header: 'Phone', render: (v) => v || '—' },
+            employmentType === 'consultant'
+              ? { key: 'consultation_fee_percentage', header: 'Fee %', align: 'right', render: (v: number | null) => v != null ? <span className="font-mono">{v}%</span> : <span className="text-muted-foreground italic text-xs">not set</span> }
+              : { key: 'basic_salary', header: 'Salary', align: 'right', sortable: true, render: (v, e) => <span className="font-mono">{formatInCurrency(v, e.salary_currency)}</span> },
+            {
+              key: '__status', header: 'Status', align: 'center',
+              render: (_v, e) => <StatusBadge status={e.employment_status} label={e.employment_status.replace('_', ' ')} map={STATUS_TONE} />,
+            },
+            {
+              key: '__actions', header: 'Actions', align: 'center',
+              render: (_v, e) => (
+                <div className="flex items-center justify-center gap-1">
+                  <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); navigate(`${profileBasePath}/${e.id}`); }}><Eye className="w-3.5 h-3.5" /></Button>
+                  <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}><Edit className="w-3.5 h-3.5" /></Button>
+                  {employmentType === 'consultant' && (
+                    <Button size="icon" aria-label="Set fee %" variant="ghost" className="h-7 w-7" title="Set fee %" onClick={(ev) => { ev.stopPropagation(); openFeeDialog(e); }}><Percent className="w-3.5 h-3.5" /></Button>
+                  )}
+                  <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); toggleTermination(e); }} disabled={busyId === e.id}>
+                    {busyId === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (e.employment_status === 'terminated' ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </div>
 
       <Dialog open={!!feeDialogEmployee} onOpenChange={(o) => !o && setFeeDialogEmployee(null)}>

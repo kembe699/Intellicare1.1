@@ -140,19 +140,17 @@ export default function Antenatal() {
           <Button className="gap-1.5" onClick={() => setOpen(true)}><UserPlus className="w-4 h-4" /> Register Patient</Button>
         } />
 
-        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-          <AdvancedDataTable<AntenatalRow>
-            data={rows}
-            keyExtractor={(r) => r.id}
-            loading={loading}
-            emptyMessage="No antenatal registrations yet"
-            searchable
-            exportable
-            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-            onRowClick={(row) => navigate(`/nursing/antenatal/${row.id}`)}
-            columns={columns}
-          />
-        </div>
+        <AdvancedDataTable<AntenatalRow>
+          data={rows}
+          keyExtractor={(r) => r.id}
+          loading={loading}
+          emptyMessage="No antenatal registrations yet"
+          searchable
+          exportable
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          onRowClick={(row) => navigate(`/nursing/antenatal/${row.id}`)}
+          columns={columns}
+        />
       </div>
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>

@@ -108,27 +108,25 @@ export default function PayrollManagement() {
           }
         />
 
-        <div className="bg-card rounded-lg border shadow-sm p-4">
-          <AdvancedDataTable<any>
-            data={runs}
-            keyExtractor={(r) => r.id}
-            loading={loading}
-            emptyMessage="No payroll runs yet. Click Run Payroll to create the first one."
-            onRowClick={(r) => navigate(`/hr/payroll/${r.id}`)}
-            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-            columns={[
-              { key: 'run_number', header: 'Run', render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-              { key: 'period_month', header: 'Period', render: (_v, r) => `${MONTHS[r.period_month - 1] || r.period_month} ${r.period_year}` },
-              { key: 'employee_count', header: 'Employees', align: 'center' },
-              { key: 'payment_account_name', header: 'Payment Account', render: (v) => v || '—' },
-              { key: 'run_date', header: 'Run Date', render: (v) => formatDate(v) },
-              {
-                key: 'status', header: 'Status',
-                render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} />,
-              },
-            ]}
-          />
-        </div>
+        <AdvancedDataTable<any>
+          data={runs}
+          keyExtractor={(r) => r.id}
+          loading={loading}
+          emptyMessage="No payroll runs yet. Click Run Payroll to create the first one."
+          onRowClick={(r) => navigate(`/hr/payroll/${r.id}`)}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'run_number', header: 'Run', render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+            { key: 'period_month', header: 'Period', render: (_v, r) => `${MONTHS[r.period_month - 1] || r.period_month} ${r.period_year}` },
+            { key: 'employee_count', header: 'Employees', align: 'center' },
+            { key: 'payment_account_name', header: 'Payment Account', render: (v) => v || '—' },
+            { key: 'run_date', header: 'Run Date', render: (v) => formatDate(v) },
+            {
+              key: 'status', header: 'Status',
+              render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} />,
+            },
+          ]}
+        />
       </div>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

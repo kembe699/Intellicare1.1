@@ -274,83 +274,82 @@ export default function Receipts() {
       <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
         <PageHeader title="Receipts" icon={<FileText />} className="mb-3" />
 
-        <div className="flex-1 min-h-0 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <h3 className="font-medium">Receipt Directory</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-56">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input placeholder="Search receipt or patient..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
+        <AdvancedDataTable<Receipt>
+          title="Receipt Directory"
+          searchSlot={
+            <div className="relative w-52">
+              <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+              <Input placeholder="Search receipt or patient..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          }
+          toolbarExtra={
+            <>
               <Combobox
                 options={STATUS_FILTER_OPTIONS}
                 value={statusFilter}
                 onChange={setStatusFilter}
                 searchPlaceholder="Search..."
-                className="w-40 h-9"
+                className="text-sm w-40 h-8"
               />
               <Combobox
                 options={METHOD_FILTER_OPTIONS}
                 value={methodFilter}
                 onChange={setMethodFilter}
                 searchPlaceholder="Search..."
-                className="w-40 h-9"
+                className="text-sm w-40 h-8"
               />
-              <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
+              <Input type="date" className="text-sm h-8 w-[9.5rem]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
               <span className="text-xs text-muted-foreground">to</span>
-              <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto p-4">
-            <AdvancedDataTable<Receipt>
-              data={filteredReceipts}
-              keyExtractor={(r) => r.id}
-              loading={loading}
-              emptyMessage="No receipts found."
-              onRowClick={(r) => setSelectedReceipt(r)}
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                {
-                  key: 'receipt_number', header: 'Receipt No.', sortable: true,
-                  render: (v, r) => (
-                    <>
-                      {v}
-                      {r.receipt_type && r.receipt_type !== 'payment' && (
-                        <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${r.receipt_type === 'deposit' ? 'bg-info-bg text-info border-info-border' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
-                          {r.receipt_type === 'deposit' ? 'Deposit' : 'Deposit Refund'}
-                        </span>
-                      )}
-                    </>
-                  ),
-                },
-                {
-                  key: 'patient_name', header: 'Patient',
-                  render: (v, r) => (
-                    <>
-                      {v || 'Walk-in Patient'}
-                      {/* The patient's own reference, not the internal row id —
-                          a raw UUID beside every name is noise. */}
-                      <span className="text-xs text-muted-foreground ml-1">{r.patient_ref ? `(${r.patient_ref})` : ''}</span>
-                    </>
-                  ),
-                },
-                { key: 'payment_amount', header: 'Amount', sortable: true, render: (v) => <span className="font-medium">{toAmount(v).toFixed(2)}</span> },
-                { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
-                { key: 'payment_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
-                { key: 'cashier_name', header: 'Cashier', render: (v) => <span className="text-muted-foreground">{v || 'Unknown'}</span> },
-                { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
-              ]}
-            />
-          </div>
-        </div>
+              <Input type="date" className="text-sm h-8 w-[9.5rem]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
+            </>
+          }
+          dateFilterKey={false}
+          autoFilters={false}
+          data={filteredReceipts}
+          keyExtractor={(r) => r.id}
+          loading={loading}
+          emptyMessage="No receipts found."
+          onRowClick={(r) => setSelectedReceipt(r)}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            {
+              key: 'receipt_number', header: 'Receipt No.', sortable: true,
+              render: (v, r) => (
+                <>
+                  {v}
+                  {r.receipt_type && r.receipt_type !== 'payment' && (
+                    <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${r.receipt_type === 'deposit' ? 'bg-info-bg text-info border-info-border' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                      {r.receipt_type === 'deposit' ? 'Deposit' : 'Deposit Refund'}
+                    </span>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'patient_name', header: 'Patient',
+              render: (v, r) => (
+                <>
+                  {v || 'Walk-in Patient'}
+                  {/* The patient's own reference, not the internal row id —
+                      a raw UUID beside every name is noise. */}
+                  <span className="text-xs text-muted-foreground ml-1">{r.patient_ref ? `(${r.patient_ref})` : ''}</span>
+                </>
+              ),
+            },
+            { key: 'payment_amount', header: 'Amount', sortable: true, render: (v) => <span className="font-medium">{toAmount(v).toFixed(2)}</span> },
+            { key: 'payment_method', header: 'Method', render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
+            { key: 'payment_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
+            { key: 'cashier_name', header: 'Cashier', render: (v) => <span className="text-muted-foreground">{v || 'Unknown'}</span> },
+            { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
+          ]}
+        />
       </div>
       </div>
 
       {/* Receipt Details Modal */}
       {selectedReceipt && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-lg max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> {selectedReceipt.receipt_number}
@@ -494,8 +493,8 @@ export default function Receipts() {
 
       {/* Cancel Receipt Modal */}
       {showCancelModal && selectedReceipt && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay z-[60]">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Cancel Receipt
@@ -548,8 +547,8 @@ export default function Receipts() {
 
       {/* Void Item Modal */}
       {voidItemIndex !== null && selectedReceipt && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay z-[70]">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Void Line Item

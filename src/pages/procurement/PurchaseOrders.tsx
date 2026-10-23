@@ -781,44 +781,39 @@ const PurchaseOrders: React.FC = () => {
 
           {/* RIGHT: List and Filters */}
           <div className="space-y-4">
-            {/* Filters */}
-            <div className="flex flex-wrap items-end gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search POs, suppliers..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-          </div>
-          <div>
-            <Label className="text-xs mb-1 block">From</Label>
-            <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-          </div>
-          <div>
-            <Label className="text-xs mb-1 block">To</Label>
-            <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-          </div>
-          <Combobox
-            options={[
-              { value: 'all', label: 'All Status' },
-              { value: 'draft', label: 'Draft' },
-              { value: 'check', label: 'Under Check' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'authorized', label: 'Authorized' },
-              { value: 'received', label: 'Received' },
-              { value: 'cancelled', label: 'Cancelled' },
-            ]}
-            value={statusFilter}
-            onChange={setStatusFilter}
-            searchPlaceholder="Search..."
-            className="w-[160px]"
-          />
-          <Button type="button" variant="outline" onClick={exportFilteredOrders} className="gap-1.5">
-            <FileSpreadsheet className="w-4 h-4" /> Export CSV
-          </Button>
-        </div>
-
-        {/* Table */}
-        <Card>
-          <CardContent className="p-4">
             <AdvancedDataTable<PurchaseOrder>
+              title="Purchase orders"
+              countLabel={['order', 'orders']}
+              searchSlot={
+                <div className="relative w-52">
+                  <Search className="absolute left-2.5 top-2 w-4 h-4 text-muted-foreground" />
+                  <Input className="pl-8 h-8 text-sm" placeholder="Search POs, suppliers..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                </div>
+              }
+              toolbarExtra={
+                <>
+                  <Input type="date" aria-label="From date" className="h-8 w-[9.5rem] text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <Input type="date" aria-label="To date" className="h-8 w-[9.5rem] text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <Combobox
+                  options={[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'check', label: 'Under Check' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'authorized', label: 'Authorized' },
+                    { value: 'received', label: 'Received' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                  ]}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  searchPlaceholder="Search..."
+                  className="h-8 w-40 text-sm"
+                />
+                </>
+              }
+              dateFilterKey={false}
+              autoFilters={false}
               data={filteredOrders}
               keyExtractor={(order) => order.id}
               emptyMessage="No purchase orders found"
@@ -855,8 +850,6 @@ const PurchaseOrders: React.FC = () => {
                 },
               ]}
             />
-          </CardContent>
-        </Card>
       </div>
       </div>
 

@@ -142,8 +142,9 @@ export default function ConsultantPayments() {
               ))}
             </div>
           )}
-          <div className="bg-card rounded-lg border shadow-sm p-4">
             <AdvancedDataTable<Payable>
+              title="Waiting to be paid"
+              countLabel={['payable', 'payables']}
               data={rows}
               loading={loading}
               keyExtractor={(r) => r.key}
@@ -151,7 +152,7 @@ export default function ConsultantPayments() {
               searchPlaceholder="Search payee, bill or procedure..."
               pagination={{ enabled: true, pageSize: 20 }}
               columns={[
-                { key: 'kind', header: 'Type', render: (v: Payable['kind']) => <StatusBadge status={v} map={KIND_MAP} label={v === 'consultant' ? 'Consultant bill' : 'Theatre fees'} /> },
+                { key: 'kind', header: 'Type', exportValue: (r) => (r.kind === 'consultant' ? 'Consultant bill' : 'Theatre fees'), render: (v: Payable['kind']) => <StatusBadge status={v} map={KIND_MAP} label={v === 'consultant' ? 'Consultant bill' : 'Theatre fees'} /> },
                 { key: 'payee', header: 'Payee', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
                 { key: 'detail', header: 'For', render: (v) => <span className="text-sm">{v}</span> },
                 { key: 'date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap">{formatDate(v)}</span> },
@@ -165,7 +166,6 @@ export default function ConsultantPayments() {
               ]}
               empty={{ icon: Stethoscope, title: 'Nothing waiting to be paid', message: 'Consultant bills (from a consultant’s profile) and theatre team fee splits (from completed operations) appear here.' }}
             />
-          </div>
           <p className="text-sm text-muted-foreground">Consultant bills are generated in <Link to="/hr/consultants" className="text-primary hover:underline">HR › Consultants &amp; Doctors</Link>; theatre fee splits when an operation is completed.</p>
         </div>
       </div>

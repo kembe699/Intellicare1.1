@@ -946,17 +946,7 @@ const Services: React.FC = () => {
 
           {/* Right: search, actions, and list */}
           <div className="space-y-4 min-w-0">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search services by name, category, or department..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-9"
-                />
-              </div>
+            <div className="flex flex-wrap gap-2 items-center justify-end">
               <div className="flex gap-2 flex-wrap">
                 <Button
                   variant="outline"
@@ -1081,6 +1071,9 @@ const Services: React.FC = () => {
 
             {/* Services Table */}
             <AdvancedDataTable<Service>
+              title="Services"
+              countLabel={['service', 'services']}
+              searchPlaceholder="Search services by name, category, or department..."
               data={filteredServices}
               keyExtractor={(service) => service.id}
               loading={loading}

@@ -865,8 +865,8 @@ export default function BillDetails() {
     <AppLayout>
       {confirmDialog}
       {voidPromptIndex !== null && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay z-[70]">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Ban className="w-5 h-5" /> Void Line Item
@@ -1470,8 +1470,8 @@ export default function BillDetails() {
 
       {/* Invoice Created Modal (credit payments) */}
       {invoiceData && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Invoice Created

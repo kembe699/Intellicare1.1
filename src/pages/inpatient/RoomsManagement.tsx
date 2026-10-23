@@ -193,24 +193,17 @@ export default function RoomsManagement() {
           }
         />
 
-        {/* Search Bar and Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by room or ward..."
-              className="pl-9 h-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => refetchRooms()} disabled={roomsLoading}>
-            <RefreshCw className={`w-4 h-4 ${roomsLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
 
         {/* Room Directory */}
         <AdvancedDataTable<any>
+          title="Rooms"
+          toolbarExtra={
+            <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={() => refetchRooms()} disabled={roomsLoading}>
+              <RefreshCw className={`w-3.5 h-3.5 ${roomsLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          }
+          countLabel={['room', 'rooms']}
+          searchPlaceholder="Search by room or ward..."
           data={filteredRooms}
           keyExtractor={(room) => room.id}
           loading={roomsLoading}

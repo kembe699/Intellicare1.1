@@ -773,58 +773,48 @@ export default function ProformaInvoicePage() {
             </div>
           </div>
         ) : (
-          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-            <div className="p-4 border-b bg-muted/30 flex flex-wrap justify-between items-center gap-3">
-              <h3 className="font-medium">All Proforma Invoices</h3>
-              <div className="relative w-64">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input placeholder="Search patient or number..." className="pl-8 h-9" value={historySearch} onChange={e => setHistorySearch(e.target.value)} />
-              </div>
-            </div>
-            <div className="max-h-[75vh] overflow-auto p-4">
-              <AdvancedDataTable<any>
-                data={filteredHistory}
-                keyExtractor={(h) => h.id}
-                loading={loadingHistory}
-                emptyMessage="No proforma invoices yet."
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'proforma_number', header: 'Proforma No.', sortable: true, render: (v) => <span className="font-mono text-primary">{v}</span> },
-                  { key: 'patient_name', header: 'Patient', sortable: true },
-                  { key: 'created_at', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleString()}</span> },
-                  { key: 'subtotal', header: 'Total', align: 'right', sortable: true, render: (v, h) => <span className="font-mono">{docTemplate.formatCurrency(v, h.currency)}</span> },
-                  {
-                    key: 'status', header: 'Status',
-                    render: (v) => v === 'converted' ? (
-                      <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><CheckCircle2 className="w-3 h-3" /> Converted</span>
+          <AdvancedDataTable<any>
+            title="All Proforma Invoices"
+            data={filteredHistory}
+            keyExtractor={(h) => h.id}
+            loading={loadingHistory}
+            emptyMessage="No proforma invoices yet."
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'proforma_number', header: 'Proforma No.', sortable: true, render: (v) => <span className="font-mono text-primary">{v}</span> },
+              { key: 'patient_name', header: 'Patient', sortable: true },
+              { key: 'created_at', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleString()}</span> },
+              { key: 'subtotal', header: 'Total', align: 'right', sortable: true, render: (v, h) => <span className="font-mono">{docTemplate.formatCurrency(v, h.currency)}</span> },
+              {
+                key: 'status', header: 'Status',
+                render: (v) => v === 'converted' ? (
+                  <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><CheckCircle2 className="w-3 h-3" /> Converted</span>
+                ) : (
+                  <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><Clock className="w-3 h-3" /> Draft</span>
+                ),
+              },
+              {
+                key: '__actions', header: 'Actions', align: 'right',
+                render: (_v, h) => (
+                  <div className="flex justify-end gap-1.5">
+                    <Button variant="ghost" size="icon" aria-label="Print" className="h-7 w-7" onClick={() => handlePrint(h)} title="Print">
+                      <Printer className="w-3.5 h-3.5" />
+                    </Button>
+                    {h.status !== 'converted' ? (
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleConvert(h)} disabled={convertingId === h.id}>
+                        {convertingId === h.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <ArrowRightLeft className="w-3 h-3 mr-1" />}
+                        Convert
+                      </Button>
                     ) : (
-                      <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium flex items-center w-fit gap-1"><Clock className="w-3 h-3" /> Draft</span>
-                    ),
-                  },
-                  {
-                    key: '__actions', header: 'Actions', align: 'right',
-                    render: (_v, h) => (
-                      <div className="flex justify-end gap-1.5">
-                        <Button variant="ghost" size="icon" aria-label="Print" className="h-7 w-7" onClick={() => handlePrint(h)} title="Print">
-                          <Printer className="w-3.5 h-3.5" />
-                        </Button>
-                        {h.status !== 'converted' ? (
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleConvert(h)} disabled={convertingId === h.id}>
-                            {convertingId === h.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <ArrowRightLeft className="w-3 h-3 mr-1" />}
-                            Convert
-                          </Button>
-                        ) : (
-                          <Link to="/patients-bill">
-                            <Button variant="ghost" size="sm" className="h-7 text-xs">View Bill</Button>
-                          </Link>
-                        )}
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </div>
+                      <Link to="/patients-bill">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs">View Bill</Button>
+                      </Link>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
       </div>

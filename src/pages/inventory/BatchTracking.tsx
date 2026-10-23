@@ -351,110 +351,105 @@ export default function BatchTracking() {
           </div>
 
           {/* Batch Directory */}
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden min-w-0">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <h3 className="font-medium">Batch Directory</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-56">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input placeholder="Search batches..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <AdvancedDataTable<Batch>
+            title="Batch Directory"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input placeholder="Search batches..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
               </div>
-              <Combobox
-                options={STATUS_FILTER_OPTIONS}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                searchPlaceholder="Search..."
-                className="w-40 h-9"
-              />
-              <Combobox
-                options={EXPIRY_FILTER_OPTIONS}
-                value={expiryFilter}
-                onChange={setExpiryFilter}
-                searchPlaceholder="Search..."
-                className="w-40 h-9"
-              />
-              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchBatches} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
-                <Download className="w-4 h-4 mr-2" /> Export
-              </Button>
-              <Button variant="outline" size="sm" className="h-9 text-destructive border-destructive-border hover:bg-destructive-bg" onClick={selectAllExpired}>
-                <AlertTriangle className="w-4 h-4 mr-2" /> Select Expired
-              </Button>
-            </div>
-          </div>
-
-          <div className="p-4 min-w-0">
-            <AdvancedDataTable<Batch>
-              data={filteredBatches}
-              keyExtractor={(batch) => batch.id}
-              loading={loading}
-              emptyMessage="No batches found."
-              rowClassName={(batch) => selectedIds.has(batch.id) ? 'bg-destructive-bg/60' : ''}
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                {
-                  key: '__select', header: '', width: '2rem',
-                  render: (_v, batch) => (
-                    <input
-                      type="checkbox" className="rounded"
-                      checked={selectedIds.has(batch.id)}
-                      onChange={() => toggleSelect(batch.id)}
-                      disabled={batch.quantity_available <= 0}
-                    />
-                  ),
+            }
+            toolbarExtra={
+              <>
+                <Combobox
+                  options={STATUS_FILTER_OPTIONS}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  searchPlaceholder="Search..."
+                  className="text-sm w-40 h-8"
+                />
+                <Combobox
+                  options={EXPIRY_FILTER_OPTIONS}
+                  value={expiryFilter}
+                  onChange={setExpiryFilter}
+                  searchPlaceholder="Search..."
+                  className="text-sm w-40 h-8"
+                />
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={fetchBatches} disabled={loading}>
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 text-destructive border-destructive-border hover:bg-destructive-bg" onClick={selectAllExpired}>
+                  <AlertTriangle className="w-4 h-4 mr-2" /> Select Expired
+                </Button>
+              </>
+            }
+            autoFilters={false}
+            data={filteredBatches}
+            keyExtractor={(batch) => batch.id}
+            loading={loading}
+            emptyMessage="No batches found."
+            rowClassName={(batch) => selectedIds.has(batch.id) ? 'bg-destructive-bg/60' : ''}
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              {
+                key: '__select', header: '', width: '2rem',
+                render: (_v, batch) => (
+                  <input
+                    type="checkbox" className="rounded"
+                    checked={selectedIds.has(batch.id)}
+                    onChange={() => toggleSelect(batch.id)}
+                    disabled={batch.quantity_available <= 0}
+                  />
+                ),
+              },
+              { key: 'batch_number', header: 'Batch No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+              {
+                key: 'item_name', header: 'Item', sortable: true,
+                render: (v, batch) => (
+                  <>
+                    {v}
+                    <span className="text-xs text-muted-foreground ml-1 font-mono">({batch.item_code})</span>
+                  </>
+                ),
+              },
+              { key: 'location_name', header: 'Location', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+              { key: 'quantity_available', header: 'Available', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
+              { key: 'unit_cost', header: 'Unit Cost', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
+              {
+                key: 'expiry_date', header: 'Expiry', sortable: true,
+                render: (v, batch) => {
+                  if (!v) return <span className="text-xs text-muted-foreground">N/A</span>;
+                  const expBadge = expiryBadge(batch.days_to_expiry, batch.is_expired);
+                  return (
+                    <div>
+                      <p className="text-xs">{formatDate(v)}</p>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border mt-0.5 ${expBadge.className}`}>{expBadge.label}</span>
+                    </div>
+                  );
                 },
-                { key: 'batch_number', header: 'Batch No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                {
-                  key: 'item_name', header: 'Item', sortable: true,
-                  render: (v, batch) => (
-                    <>
-                      {v}
-                      <span className="text-xs text-muted-foreground ml-1 font-mono">({batch.item_code})</span>
-                    </>
-                  ),
-                },
-                { key: 'location_name', header: 'Location', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'quantity_available', header: 'Available', sortable: true, render: (v) => <span className="font-medium">{v}</span> },
-                { key: 'unit_cost', header: 'Unit Cost', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
-                {
-                  key: 'expiry_date', header: 'Expiry', sortable: true,
-                  render: (v, batch) => {
-                    if (!v) return <span className="text-xs text-muted-foreground">N/A</span>;
-                    const expBadge = expiryBadge(batch.days_to_expiry, batch.is_expired);
-                    return (
-                      <div>
-                        <p className="text-xs">{formatDate(v)}</p>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border mt-0.5 ${expBadge.className}`}>{expBadge.label}</span>
-                      </div>
-                    );
-                  },
-                },
-                {
-                  key: 'status', header: 'Status', sortable: true,
-                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
-                },
-                {
-                  key: '__actions', header: 'Actions',
-                  render: (_v, batch) => (
-                    batch.quantity_available > 0 && batch.status !== 'expired' ? (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openUse(batch)}>Use</Button>
-                    ) : null
-                  ),
-                },
-              ]}
-            />
-          </div>
-          </div>
+              },
+              {
+                key: 'status', header: 'Status', sortable: true,
+                render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
+              },
+              {
+                key: '__actions', header: 'Actions',
+                render: (_v, batch) => (
+                  batch.quantity_available > 0 && batch.status !== 'expired' ? (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openUse(batch)}>Use</Button>
+                  ) : null
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
       </div>
 
       {/* Use Batch Modal */}
       {showUseModal && selectedBatch && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <div>
                 <h3 className="font-semibold text-lg">Record Batch Usage</h3>
@@ -505,8 +500,8 @@ export default function BatchTracking() {
 
       {/* Retire Confirmation Modal */}
       {showRetireModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2 text-destructive">
                 <Trash2 className="w-5 h-5" /> Retire Batches

@@ -168,8 +168,9 @@ export default function StaffPayments() {
                   ))}
                 </div>
               )}
-              <div className="bg-card rounded-lg border shadow-sm p-4">
                 <AdvancedDataTable<PayLine>
+                  title="Payroll lines waiting"
+                  countLabel={['line', 'lines']}
                   data={lines}
                   loading={loading}
                   keyExtractor={(l) => l.id}
@@ -194,12 +195,12 @@ export default function StaffPayments() {
                   ]}
                   empty={{ icon: Banknote, title: 'No payroll waiting to be paid', message: 'Lines from payroll runs HR has approved appear here.' }}
                 />
-              </div>
             </TabsContent>
 
             <TabsContent value="advances" className="mt-4">
-              <div className="bg-card rounded-lg border shadow-sm p-4">
                 <AdvancedDataTable<Advance>
+                  title="Advances to disburse"
+                  countLabel={['advance', 'advances']}
                   data={advances}
                   loading={loading}
                   keyExtractor={(a) => a.id}
@@ -218,7 +219,6 @@ export default function StaffPayments() {
                   ]}
                   empty={{ icon: HandCoins, title: 'No approved advances to disburse', message: 'Advances approved in HR › Salary Advances appear here.' }}
                 />
-              </div>
             </TabsContent>
           </Tabs>
           <p className="text-sm text-muted-foreground">Payroll runs are prepared and approved in <Link to="/hr/payroll" className="text-primary hover:underline">HR › Payroll</Link>; advances in <Link to="/hr/salary-advances" className="text-primary hover:underline">HR › Salary Advances</Link>.</p>

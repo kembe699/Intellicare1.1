@@ -338,96 +338,86 @@ export default function PhysicalCounts() {
           )}
 
           {/* Directory */}
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden min-w-0">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30">
-            <h3 className="font-medium">{activeMode === 'counts' ? 'Count Directory' : 'Adjustment Directory'}</h3>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              {activeMode === 'adjustments' && (
-                <Button size="sm" className="h-9" onClick={() => { setAdjForm({ item_id: '', location_id: '', system_quantity: 0, physical_count: 0, variance_reason: 'recount_error', notes: '' }); setShowCreateAdj(true); }}>
-                  <Plus className="w-4 h-4 mr-2" /> New Adjustment
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 min-w-0">
-            {activeMode === 'counts' ? (
-              <AdvancedDataTable<any>
-                data={counts}
-                keyExtractor={(c) => c.id}
-                loading={loading}
-                emptyMessage="No physical counts yet."
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'count_number', header: 'Count No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'count_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
-                  { key: 'count_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
-                  { key: 'location_name', header: 'Location', render: (v) => v || 'All' },
-                  { key: 'total_items_counted', header: 'Items', sortable: true, render: (v) => v || 0 },
-                  { key: 'variance_count', header: 'Variances', sortable: true, render: (v) => v || 0 },
-                  {
-                    key: 'status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
-                  },
-                  {
-                    key: '__actions', header: 'Actions',
-                    render: (_v, c) => <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={() => viewCount(c)}><Eye className="w-3.5 h-3.5" /></Button>,
-                  },
-                ]}
-              />
-            ) : (
-              <AdvancedDataTable<any>
-                data={adjustments}
-                keyExtractor={(adj) => adj.id}
-                emptyMessage="No adjustments yet."
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'adjustment_number', header: 'Adj No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  {
-                    key: 'item_name', header: 'Item', sortable: true,
-                    render: (v, adj) => (
-                      <>
-                        {v}
-                        <span className="text-xs text-muted-foreground ml-1 font-mono">({adj.item_code})</span>
-                      </>
-                    ),
-                  },
-                  { key: 'system_quantity', header: 'System', sortable: true },
-                  { key: 'physical_count', header: 'Physical', sortable: true },
-                  {
-                    key: 'variance', header: 'Variance', sortable: true,
-                    render: (v) => <span className={`font-mono ${v > 0 ? 'text-success' : v < 0 ? 'text-destructive' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
-                  },
-                  { key: 'variance_value', header: 'Value', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
-                  { key: 'variance_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
-                  {
-                    key: 'approval_status', header: 'Status', sortable: true,
-                    render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v}</span>,
-                  },
-                  {
-                    key: '__actions', header: 'Actions',
-                    render: (_v, adj) => adj.approval_status === 'pending' ? (
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" aria-label="Confirm" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
-                          {processingAdj?.id === adj.id && processingAdj.action === 'approve'
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-success" />
-                            : <CheckCircle className="w-3.5 h-3.5 text-success" />}
-                        </Button>
-                        <Button variant="ghost" size="icon" aria-label="Close" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
-                          {processingAdj?.id === adj.id && processingAdj.action === 'reject'
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-destructive" />
-                            : <XCircle className="w-3.5 h-3.5 text-destructive" />}
-                        </Button>
-                      </div>
-                    ) : null,
-                  },
-                ]}
-              />
-            )}
-          </div>
+          <div className="min-w-0">
+          {activeMode === 'counts' ? (
+            <AdvancedDataTable<any>
+              title="Count directory"
+              countLabel={['count', 'counts']}
+              toolbarExtra={<Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}><RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /></Button>}
+              data={counts}
+              keyExtractor={(c) => c.id}
+              loading={loading}
+              emptyMessage="No physical counts yet."
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              columns={[
+                { key: 'count_number', header: 'Count No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+                { key: 'count_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
+                { key: 'count_type', header: 'Type', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
+                { key: 'location_name', header: 'Location', render: (v) => v || 'All' },
+                { key: 'total_items_counted', header: 'Items', sortable: true, render: (v) => v || 0 },
+                { key: 'variance_count', header: 'Variances', sortable: true, render: (v) => v || 0 },
+                {
+                  key: 'status', header: 'Status', sortable: true,
+                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
+                },
+                {
+                  key: '__actions', header: 'Actions',
+                  render: (_v, c) => <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={() => viewCount(c)}><Eye className="w-3.5 h-3.5" /></Button>,
+                },
+              ]}
+            />
+          ) : (
+            <AdvancedDataTable<any>
+              title="Adjustment directory"
+              countLabel={['adjustment', 'adjustments']}
+              toolbarExtra={<><Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={() => { fetchCounts(); fetchAdjustments(); }} disabled={loading}><RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /></Button><Button size="sm" className="h-8 text-xs" onClick={() => { setAdjForm({ item_id: '', location_id: '', system_quantity: 0, physical_count: 0, variance_reason: 'recount_error', notes: '' }); setShowCreateAdj(true); }}><Plus className="w-3.5 h-3.5 mr-1.5" /> New Adjustment</Button></>}
+              data={adjustments}
+              keyExtractor={(adj) => adj.id}
+              emptyMessage="No adjustments yet."
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              columns={[
+                { key: 'adjustment_number', header: 'Adj No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+                {
+                  key: 'item_name', header: 'Item', sortable: true,
+                  render: (v, adj) => (
+                    <>
+                      {v}
+                      <span className="text-xs text-muted-foreground ml-1 font-mono">({adj.item_code})</span>
+                    </>
+                  ),
+                },
+                { key: 'system_quantity', header: 'System', sortable: true },
+                { key: 'physical_count', header: 'Physical', sortable: true },
+                {
+                  key: 'variance', header: 'Variance', sortable: true,
+                  render: (v) => <span className={`font-mono ${v > 0 ? 'text-success' : v < 0 ? 'text-destructive' : ''}`}>{v > 0 ? '+' : ''}{v}</span>,
+                },
+                { key: 'variance_value', header: 'Value', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
+                { key: 'variance_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
+                {
+                  key: 'approval_status', header: 'Status', sortable: true,
+                  render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v}</span>,
+                },
+                {
+                  key: '__actions', header: 'Actions',
+                  render: (_v, adj) => adj.approval_status === 'pending' ? (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" aria-label="Confirm" className="h-7 w-7" onClick={() => approveAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
+                        {processingAdj?.id === adj.id && processingAdj.action === 'approve'
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin text-success" />
+                          : <CheckCircle className="w-3.5 h-3.5 text-success" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" aria-label="Close" className="h-7 w-7" onClick={() => rejectAdjustment(adj.id)} disabled={processingAdj?.id === adj.id}>
+                        {processingAdj?.id === adj.id && processingAdj.action === 'reject'
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin text-destructive" />
+                          : <XCircle className="w-3.5 h-3.5 text-destructive" />}
+                      </Button>
+                    </div>
+                  ) : null,
+                },
+              ]}
+            />
+          )}
           </div>
         </div>
       </div>
@@ -435,8 +425,8 @@ export default function PhysicalCounts() {
 
       {/* Count Detail Modal */}
       {selectedCount && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-2xl max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <div>
                 <h3 className="font-semibold text-lg font-mono">{selectedCount.count_number}</h3>
@@ -505,8 +495,8 @@ export default function PhysicalCounts() {
         // other modal+Combobox pairing in this file (Count Detail, Create
         // Adjustment) is already z-50, which is what lets the popover's later
         // DOM position win the tie and render on top, as intended.
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Count Item</h3>
               <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowAddLine(false)}><X className="w-4 h-4" /></Button>
@@ -551,8 +541,8 @@ export default function PhysicalCounts() {
 
       {/* Create Adjustment Modal */}
       {showCreateAdj && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-primary" /> Create Adjustment</h3>
               <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowCreateAdj(false)}><X className="w-4 h-4" /></Button>

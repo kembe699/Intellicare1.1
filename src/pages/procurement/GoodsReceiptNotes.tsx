@@ -622,70 +622,64 @@ const GoodsReceiptNotes: React.FC = () => {
           </div>
 
           {/* RIGHT: Table */}
-          <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-            <div className="p-4 border-b bg-muted/30 flex flex-wrap items-end gap-3">
-              <div className="relative flex-1 min-w-[200px]">
+          <AdvancedDataTable<GRN>
+            title="Goods received notes"
+            searchSlot={
+              <div className="relative w-52">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input className="pl-9" placeholder="Search GRNs..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <Input className="h-8 text-sm pl-8" placeholder="Search GRNs..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
-              <div>
-                <Label className="text-xs mb-1 block">From</Label>
-                <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">To</Label>
-                <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-              </div>
-              <Combobox
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'pending_inspection', label: 'Pending' },
-                  { value: 'inspected', label: 'Inspected' },
-                  { value: 'accepted', label: 'Accepted' },
-                  { value: 'rejected', label: 'Rejected' },
-                  { value: 'partial', label: 'Partial' },
-                ]}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                searchPlaceholder="Search..."
-                className="w-[150px]"
-              />
-              <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
-                <FileSpreadsheet className="w-4 h-4" /> Export CSV
-              </Button>
-            </div>
-
-            <div className="p-4">
-              <AdvancedDataTable<GRN>
-                data={filteredGRNs}
-                keyExtractor={(grn) => grn.id}
-                emptyMessage="No goods receipt notes found"
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'grn_number', header: 'GRN Number', sortable: true, render: (v) => <span className="font-mono text-xs font-medium">{v}</span> },
-                  { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || '—'}</span> },
-                  { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v) => <span className="text-xs">{v || '—'}</span> },
-                  { key: 'receipt_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{v ? formatDate(v) : '—'}</span> },
-                  { key: '__items', header: 'Items', align: 'center', render: (_v, grn) => <span className="text-xs">{grn.total_items_received || grn.line_count || 0}</span> },
-                  {
-                    key: 'status', header: 'Status', align: 'center', sortable: true,
-                    render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
-                  },
-                  {
-                    // Download/Inspect/Accept/Reject all already live inside
-                    // the View modal itself (see the GRN details dialog's own
-                    // Actions row below) — no need to duplicate them here too.
-                    key: '__actions', header: 'Actions', align: 'center',
-                    render: (_v, grn) => (
-                      <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" aria-label="View" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </div>
+            }
+            toolbarExtra={
+              <>
+                <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <Combobox
+                  options={[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'pending_inspection', label: 'Pending' },
+                    { value: 'inspected', label: 'Inspected' },
+                    { value: 'accepted', label: 'Accepted' },
+                    { value: 'rejected', label: 'Rejected' },
+                    { value: 'partial', label: 'Partial' },
+                  ]}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  searchPlaceholder="Search..."
+                  className="w-[9.5rem]"
+                />
+              </>
+            }
+            dateFilterKey={false}
+            autoFilters={false}
+            countLabel={['GRN', 'GRNs']}
+            data={filteredGRNs}
+            keyExtractor={(grn) => grn.id}
+            emptyMessage="No goods receipt notes found"
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'grn_number', header: 'GRN Number', sortable: true, render: (v) => <span className="font-mono text-xs font-medium">{v}</span> },
+              { key: 'po_number', header: 'PO Number', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || '—'}</span> },
+              { key: 'supplier_name', header: 'Supplier', sortable: true, render: (v) => <span className="text-xs">{v || '—'}</span> },
+              { key: 'receipt_date', header: 'Date', sortable: true, render: (v) => <span className="text-xs">{v ? formatDate(v) : '—'}</span> },
+              { key: '__items', header: 'Items', align: 'center', render: (_v, grn) => <span className="text-xs">{grn.total_items_received || grn.line_count || 0}</span> },
+              {
+                key: 'status', header: 'Status', align: 'center', sortable: true,
+                render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v?.replace('_', ' ')}</Badge>,
+              },
+              {
+                // Download/Inspect/Accept/Reject all already live inside
+                // the View modal itself (see the GRN details dialog's own
+                // Actions row below) — no need to duplicate them here too.
+                key: '__actions', header: 'Actions', align: 'center',
+                render: (_v, grn) => (
+                  <div className="flex items-center justify-center gap-1">
+                    <Button size="icon" aria-label="View" variant="ghost" className="w-7 h-7" onClick={() => viewGRN(grn)}><Eye className="w-3.5 h-3.5" /></Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
 
 

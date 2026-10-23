@@ -273,8 +273,8 @@ export default function StockLocations() {
 
       {/* Location Stock Modal */}
       {selectedLocation && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-2xl max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Stock at {selectedLocation.location_name}</h3>
               <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setSelectedLocation(null)}>

@@ -777,61 +777,55 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Set Service Price
               </Button>
             </div>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Service Prices for {selectedScheme?.scheme_name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AdvancedDataTable<any>
-                  data={servicePricing}
-                  keyExtractor={(sp) => sp.id}
-                  emptyMessage="No service prices set for this scheme. Services will use base price or scheme markup/discount."
-                  pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                  searchable
-                  searchPlaceholder="Search services..."
-                  exportable
-                  exportFileName={`${selectedScheme?.scheme_code || 'scheme'}-service-prices`}
-                  columns={[
-                    {
-                      key: 'service_name', header: 'Service', sortable: true,
-                      render: (v, sp) => (
-                        <>
-                          <div className="font-medium">{v}</div>
-                          <div className="text-xs text-muted-foreground">{sp.catalog_category || sp.service_category}</div>
-                        </>
-                      ),
-                    },
-                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => fmtCurrency(v, currency.code) },
-                    {
-                      key: 'scheme_price', header: 'Scheme Price', align: 'right',
-                      render: (v) => <span className="font-bold">{v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : '-'}</span>,
-                    },
-                    {
-                      key: '__markup', header: 'Markup/Disc', align: 'right',
-                      render: (_v, sp) => (
-                        <>
-                          {sp.markup_percentage > 0 && <span className="text-success">+{sp.markup_percentage}%</span>}
-                          {sp.discount_percentage > 0 && <span className="text-destructive">-{sp.discount_percentage}%</span>}
-                        </>
-                      ),
-                    },
-                    {
-                      key: 'insurance_copay', header: 'Copay', align: 'right',
-                      render: (v, sp) => v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : sp.insurance_copay_percentage ? `${sp.insurance_copay_percentage}%` : '-',
-                    },
-                    { key: 'effective_from', header: 'Effective', render: (v, sp) => <span className="text-xs">{v || '-'}{sp.effective_to ? ` to ${sp.effective_to}` : ''}</span> },
-                    {
-                      key: '__actions', header: 'Actions', align: 'right',
-                      render: (_v, sp) => (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteServicePrice(sp.id)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      ),
-                    },
-                  ]}
-                />
-              </CardContent>
-            </Card>
+            <AdvancedDataTable<any>
+              title={<>Service Prices for {selectedScheme?.scheme_name}</>}
+              data={servicePricing}
+              keyExtractor={(sp) => sp.id}
+              emptyMessage="No service prices set for this scheme. Services will use base price or scheme markup/discount."
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              searchable
+              searchPlaceholder="Search services..."
+              exportable
+              exportFileName={`${selectedScheme?.scheme_code || 'scheme'}-service-prices`}
+              columns={[
+                {
+                  key: 'service_name', header: 'Service', sortable: true,
+                  render: (v, sp) => (
+                    <>
+                      <div className="font-medium">{v}</div>
+                      <div className="text-xs text-muted-foreground">{sp.catalog_category || sp.service_category}</div>
+                    </>
+                  ),
+                },
+                { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => fmtCurrency(v, currency.code) },
+                {
+                  key: 'scheme_price', header: 'Scheme Price', align: 'right',
+                  render: (v) => <span className="font-bold">{v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : '-'}</span>,
+                },
+                {
+                  key: '__markup', header: 'Markup/Disc', align: 'right',
+                  render: (_v, sp) => (
+                    <>
+                      {sp.markup_percentage > 0 && <span className="text-success">+{sp.markup_percentage}%</span>}
+                      {sp.discount_percentage > 0 && <span className="text-destructive">-{sp.discount_percentage}%</span>}
+                    </>
+                  ),
+                },
+                {
+                  key: 'insurance_copay', header: 'Copay', align: 'right',
+                  render: (v, sp) => v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : sp.insurance_copay_percentage ? `${sp.insurance_copay_percentage}%` : '-',
+                },
+                { key: 'effective_from', header: 'Effective', render: (v, sp) => <span className="text-xs">{v || '-'}{sp.effective_to ? ` to ${sp.effective_to}` : ''}</span> },
+                {
+                  key: '__actions', header: 'Actions', align: 'right',
+                  render: (_v, sp) => (
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteServicePrice(sp.id)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           </>
         )}
       </div>
@@ -854,42 +848,36 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Set Product Price
               </Button>
             </div>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Product Prices for {selectedScheme?.scheme_name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AdvancedDataTable<any>
-                  data={productPricing}
-                  keyExtractor={(pp) => pp.id}
-                  emptyMessage="No product prices set for this scheme"
-                  pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                  searchable
-                  searchPlaceholder="Search products..."
-                  exportable
-                  exportFileName={`${selectedScheme?.scheme_code || 'scheme'}-product-prices`}
-                  columns={[
-                    { key: 'product_name', header: 'Product', sortable: true, render: (v, pp) => <span className="font-medium">{v || pp.product_code}</span> },
-                    { key: 'product_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
-                    { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => fmtCurrency(v, currency.code) },
-                    { key: 'scheme_price', header: 'Scheme Price', align: 'right', render: (v) => <span className="font-bold">{v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : '-'}</span> },
-                    {
-                      key: 'insurance_copay', header: 'Copay', align: 'right',
-                      render: (v, pp) => v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : pp.insurance_copay_percentage ? `${pp.insurance_copay_percentage}%` : '-',
-                    },
-                    { key: 'effective_from', header: 'Effective', render: (v) => <span className="text-xs">{v || '-'}</span> },
-                    {
-                      key: '__actions', header: 'Actions', align: 'right',
-                      render: (_v, pp) => (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteProductPrice(pp.id)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      ),
-                    },
-                  ]}
-                />
-              </CardContent>
-            </Card>
+            <AdvancedDataTable<any>
+              title={<>Product Prices for {selectedScheme?.scheme_name}</>}
+              data={productPricing}
+              keyExtractor={(pp) => pp.id}
+              emptyMessage="No product prices set for this scheme"
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              searchable
+              searchPlaceholder="Search products..."
+              exportable
+              exportFileName={`${selectedScheme?.scheme_code || 'scheme'}-product-prices`}
+              columns={[
+                { key: 'product_name', header: 'Product', sortable: true, render: (v, pp) => <span className="font-medium">{v || pp.product_code}</span> },
+                { key: 'product_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
+                { key: 'base_price', header: 'Base Price', align: 'right', render: (v) => fmtCurrency(v, currency.code) },
+                { key: 'scheme_price', header: 'Scheme Price', align: 'right', render: (v) => <span className="font-bold">{v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : '-'}</span> },
+                {
+                  key: 'insurance_copay', header: 'Copay', align: 'right',
+                  render: (v, pp) => v ? fmtCurrency(v, selectedScheme?.currency || currency.code) : pp.insurance_copay_percentage ? `${pp.insurance_copay_percentage}%` : '-',
+                },
+                { key: 'effective_from', header: 'Effective', render: (v) => <span className="text-xs">{v || '-'}</span> },
+                {
+                  key: '__actions', header: 'Actions', align: 'right',
+                  render: (_v, pp) => (
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleDeleteProductPrice(pp.id)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           </>
         )}
       </div>
@@ -909,58 +897,52 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> Add Member
               </Button>
             </div>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Members of {selectedScheme?.scheme_name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AdvancedDataTable<any>
-                  data={members}
-                  keyExtractor={(m) => m.id}
-                  emptyMessage="No members in this scheme"
-                  pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                  columns={[
-                    {
-                      key: 'patient_name', header: 'Patient', sortable: true,
-                      render: (v, m) => (
-                        <>
-                          {v || 'Unknown patient'}
-                          {m.patient_number && <span className="ml-1.5 text-xs text-muted-foreground font-mono">({m.patient_number})</span>}
-                        </>
-                      ),
-                    },
-                    { key: 'member_number', header: 'Member #', render: (v) => <span className="font-mono text-xs">{v || '-'}</span> },
-                    { key: 'relationship_to_member', header: 'Relationship', render: (v) => <span className="capitalize">{v}</span> },
-                    { key: 'effective_from', header: 'From', render: (v) => <span className="text-xs">{v}</span> },
-                    { key: 'effective_to', header: 'To', render: (v) => <span className="text-xs">{v || 'Ongoing'}</span> },
-                    {
-                      key: 'verified', header: 'Verified', align: 'center',
-                      render: (v, m) => v ? (
-                        <span title={m.verified_by ? `Verified by ${m.verified_by}${m.verified_date ? ` on ${m.verified_date}` : ''}` : undefined}>
-                          <CheckCircle className="w-4 h-4 text-success inline" />
-                        </span>
-                      ) : (
-                        <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => handleVerifyMember(m.id)} disabled={verifyingId === m.id}>
-                          {verifyingId === m.id ? 'Verifying...' : 'Verify'}
-                        </Button>
-                      ),
-                    },
-                    {
-                      key: 'is_active', header: 'Status', align: 'center',
-                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
-                    },
-                    {
-                      key: '__actions', header: 'Actions', align: 'right',
-                      render: (_v, m) => (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleRemoveMember(m.id)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      ),
-                    },
-                  ]}
-                />
-              </CardContent>
-            </Card>
+            <AdvancedDataTable<any>
+              title={<>Members of {selectedScheme?.scheme_name}</>}
+              data={members}
+              keyExtractor={(m) => m.id}
+              emptyMessage="No members in this scheme"
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              columns={[
+                {
+                  key: 'patient_name', header: 'Patient', sortable: true,
+                  render: (v, m) => (
+                    <>
+                      {v || 'Unknown patient'}
+                      {m.patient_number && <span className="ml-1.5 text-xs text-muted-foreground font-mono">({m.patient_number})</span>}
+                    </>
+                  ),
+                },
+                { key: 'member_number', header: 'Member #', render: (v) => <span className="font-mono text-xs">{v || '-'}</span> },
+                { key: 'relationship_to_member', header: 'Relationship', render: (v) => <span className="capitalize">{v}</span> },
+                { key: 'effective_from', header: 'From', render: (v) => <span className="text-xs">{v}</span> },
+                { key: 'effective_to', header: 'To', render: (v) => <span className="text-xs">{v || 'Ongoing'}</span> },
+                {
+                  key: 'verified', header: 'Verified', align: 'center',
+                  render: (v, m) => v ? (
+                    <span title={m.verified_by ? `Verified by ${m.verified_by}${m.verified_date ? ` on ${m.verified_date}` : ''}` : undefined}>
+                      <CheckCircle className="w-4 h-4 text-success inline" />
+                    </span>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => handleVerifyMember(m.id)} disabled={verifyingId === m.id}>
+                      {verifyingId === m.id ? 'Verifying...' : 'Verify'}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'is_active', header: 'Status', align: 'center',
+                  render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
+                },
+                {
+                  key: '__actions', header: 'Actions', align: 'right',
+                  render: (_v, m) => (
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleRemoveMember(m.id)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           </>
         )}
       </div>
@@ -980,34 +962,28 @@ const SchemeManagement: React.FC = () => {
                 <Plus className="w-4 h-4 mr-2" /> New Discount
               </Button>
             </div>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Discounts for {selectedScheme?.scheme_name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AdvancedDataTable<any>
-                  data={discounts}
-                  keyExtractor={(d) => d.id}
-                  emptyMessage="No discounts configured"
-                  pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                  columns={[
-                    { key: 'discount_code', header: 'Code', render: (v) => <span className="font-mono text-xs">{v}</span> },
-                    { key: 'discount_name', header: 'Name', sortable: true },
-                    { key: 'discount_type', header: 'Type', render: (v) => <span className="capitalize">{v?.replace('_', ' ')}</span> },
-                    {
-                      key: 'discount_value', header: 'Value', align: 'right',
-                      render: (v, d) => <span className="font-bold">{d.discount_type === 'percentage' ? `${v}%` : fmtCurrency(v, selectedScheme?.currency || currency.code)}</span>,
-                    },
-                    { key: 'applies_to', header: 'Applies To', render: (v) => <span className="capitalize">{v?.replace('_', ' ')}</span> },
-                    { key: 'effective_from', header: 'Period', render: (v, d) => <span className="text-xs">{v || 'Always'}{d.effective_to ? ` - ${d.effective_to}` : ''}</span> },
-                    {
-                      key: 'is_active', header: 'Status', align: 'center',
-                      render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
-                    },
-                  ]}
-                />
-              </CardContent>
-            </Card>
+            <AdvancedDataTable<any>
+              title={<>Discounts for {selectedScheme?.scheme_name}</>}
+              data={discounts}
+              keyExtractor={(d) => d.id}
+              emptyMessage="No discounts configured"
+              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+              columns={[
+                { key: 'discount_code', header: 'Code', render: (v) => <span className="font-mono text-xs">{v}</span> },
+                { key: 'discount_name', header: 'Name', sortable: true },
+                { key: 'discount_type', header: 'Type', render: (v) => <span className="capitalize">{v?.replace('_', ' ')}</span> },
+                {
+                  key: 'discount_value', header: 'Value', align: 'right',
+                  render: (v, d) => <span className="font-bold">{d.discount_type === 'percentage' ? `${v}%` : fmtCurrency(v, selectedScheme?.currency || currency.code)}</span>,
+                },
+                { key: 'applies_to', header: 'Applies To', render: (v) => <span className="capitalize">{v?.replace('_', ' ')}</span> },
+                { key: 'effective_from', header: 'Period', render: (v, d) => <span className="text-xs">{v || 'Always'}{d.effective_to ? ` - ${d.effective_to}` : ''}</span> },
+                {
+                  key: 'is_active', header: 'Status', align: 'center',
+                  render: (v) => <Badge variant={v ? 'default' : 'destructive'} className="text-xs">{v ? 'Active' : 'Inactive'}</Badge>,
+                },
+              ]}
+            />
           </>
         )}
       </div>
@@ -1020,48 +996,36 @@ const SchemeManagement: React.FC = () => {
         <div className="flex justify-end"><Button variant="outline" size="sm" onClick={loadReports}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button></div>
 
         {/* Membership Report */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Membership by Scheme</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AdvancedDataTable<any>
-              data={membershipReport}
-              keyExtractor={(r, i) => i}
-              columns={[
-                { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="font-medium">{v}</span> },
-                { key: 'scheme_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
-                { key: 'active_members', header: 'Active', align: 'right', render: (v) => <span className="text-success font-bold">{v}</span> },
-                { key: 'inactive_members', header: 'Inactive', align: 'right', render: (v) => <span className="text-muted-foreground">{v}</span> },
-                { key: 'total_members', header: 'Total', align: 'right', render: (v) => <span className="font-bold">{v}</span> },
-              ]}
-            />
-          </CardContent>
-        </Card>
+        <AdvancedDataTable<any>
+          title="Membership by Scheme"
+          data={membershipReport}
+          keyExtractor={(r, i) => i}
+          columns={[
+            { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="font-medium">{v}</span> },
+            { key: 'scheme_type', header: 'Type', render: (v) => <span className="capitalize">{v}</span> },
+            { key: 'active_members', header: 'Active', align: 'right', render: (v) => <span className="text-success font-bold">{v}</span> },
+            { key: 'inactive_members', header: 'Inactive', align: 'right', render: (v) => <span className="text-muted-foreground">{v}</span> },
+            { key: 'total_members', header: 'Total', align: 'right', render: (v) => <span className="font-bold">{v}</span> },
+          ]}
+        />
 
         {/* Margin Analysis */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Margin Analysis by Scheme</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AdvancedDataTable<any>
-              data={marginReport}
-              keyExtractor={(r, i) => i}
-              columns={[
-                { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="font-medium">{v}</span> },
-                { key: 'services_priced', header: 'Services Priced', align: 'right', render: (v) => v || 0 },
-                {
-                  key: 'avg_margin_pct', header: 'Avg Margin %', align: 'right',
-                  render: (v) => v !== null ? <span className={parseFloat(v) >= 0 ? 'text-success' : 'text-destructive'}>{parseFloat(v || 0).toFixed(1)}%</span> : '-',
-                },
-                { key: 'above_base', header: 'Above Base', align: 'right', render: (v) => <span className="text-success">{v || 0}</span> },
-                { key: 'below_base', header: 'Below Base', align: 'right', render: (v) => <span className="text-destructive">{v || 0}</span> },
-                { key: 'at_base', header: 'At Base', align: 'right', render: (v) => v || 0 },
-              ]}
-            />
-          </CardContent>
-        </Card>
+        <AdvancedDataTable<any>
+          title="Margin Analysis by Scheme"
+          data={marginReport}
+          keyExtractor={(r, i) => i}
+          columns={[
+            { key: 'scheme_name', header: 'Scheme', render: (v) => <span className="font-medium">{v}</span> },
+            { key: 'services_priced', header: 'Services Priced', align: 'right', render: (v) => v || 0 },
+            {
+              key: 'avg_margin_pct', header: 'Avg Margin %', align: 'right',
+              render: (v) => v !== null ? <span className={parseFloat(v) >= 0 ? 'text-success' : 'text-destructive'}>{parseFloat(v || 0).toFixed(1)}%</span> : '-',
+            },
+            { key: 'above_base', header: 'Above Base', align: 'right', render: (v) => <span className="text-success">{v || 0}</span> },
+            { key: 'below_base', header: 'Below Base', align: 'right', render: (v) => <span className="text-destructive">{v || 0}</span> },
+            { key: 'at_base', header: 'At Base', align: 'right', render: (v) => v || 0 },
+          ]}
+        />
       </div>
     );
   }

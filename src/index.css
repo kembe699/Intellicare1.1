@@ -330,6 +330,32 @@
   .ic-form-field {
     @apply flex flex-col gap-1.5;
   }
+  /* ── Hand-built pop-ups (the "fixed inset-0" panels that predate <Dialog>) ──
+     Same look as DialogContent: teal-tinted overlay, 20px side padding,
+     header / body / footer rhythm, and 40px footer buttons. */
+  .ic-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4 bg-heading/45 animate-in fade-in-0;
+  }
+  .ic-modal {
+    @apply bg-card w-full rounded-xl shadow-lg border border-border overflow-hidden flex flex-col;
+  }
+  .ic-modal > :first-child.border-b {
+    @apply pl-5 pr-4 py-3 bg-transparent;
+  }
+  .ic-modal > :first-child.border-b h3 {
+    @apply text-base font-semibold leading-snug;
+  }
+  .ic-modal > :not(:first-child):not(.border-t) {
+    @apply px-5 py-4;
+  }
+  .ic-modal > .border-t:last-child {
+    @apply px-5 py-3 gap-2 bg-muted/30;
+  }
+  .ic-modal > .border-t:last-child > button,
+  .ic-modal > .border-t:last-child > * > button {
+    @apply h-10 px-4 text-sm min-w-24;
+  }
+
   .ic-form-label {
     font-size: 13px;
     line-height: 18px;

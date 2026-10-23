@@ -528,40 +528,11 @@ const JournalEntriesPage: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Search & Filter */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search JE number or description..." value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
-          </div>
-          <Combobox
-            options={[
-              { value: 'all', label: 'All Status' },
-              { value: 'draft', label: 'Draft' },
-              { value: 'submitted', label: 'Submitted' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'posted', label: 'Posted' },
-              { value: 'rejected', label: 'Rejected' },
-            ]}
-            value={statusFilter}
-            onChange={setStatusFilter}
-            placeholder="All Status"
-            searchPlaceholder="Search..."
-            className="w-[140px]"
-          />
-          {(searchQuery || statusFilter !== 'all') && (
-            <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>Clear</Button>
-          )}
-          <span className="text-sm text-muted-foreground ml-auto">
-            {filteredEntries.length} of {journalEntries.length} entries
-          </span>
-        </div>
-
-        <Card className="rounded-lg shadow-sm bg-primary/10 border-primary/15">
-          <CardContent className="p-4">
             <AdvancedDataTable<JournalEntry>
-              data={filteredEntries}
+              title="Journal entries"
+              countLabel={['entry', 'entries']}
+              searchPlaceholder="Search JE number or description..."
+              data={journalEntries}
               keyExtractor={(entry) => entry.id}
               emptyMessage={journalEntries.length === 0 ? 'No journal entries found. Click "New Journal Entry" to create one.' : 'No entries match your search criteria.'}
               pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
@@ -610,8 +581,6 @@ const JournalEntriesPage: React.FC = () => {
                 },
               ]}
             />
-          </CardContent>
-        </Card>
         {/* VIEW DIALOG */}
         <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">

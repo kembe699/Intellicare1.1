@@ -746,66 +746,65 @@ const CashierShift: React.FC = () => {
           </>
         )}
 
-        <Card className="mt-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Shift History</CardTitle>
-              {user?.role === 'admin' && (
-                <div className="flex gap-2 items-center flex-wrap">
-                  <Combobox
-                    options={[{ value: 'all', label: 'All Cashiers' }, ...cashierOptions.map(c => ({ value: String(c.cashier_id), label: c.cashier_name }))]}
-                    value={filterCashierId}
-                    onChange={setFilterCashierId}
-                    placeholder="Cashier"
-                    searchPlaceholder="Search cashiers..."
-                    className="w-[170px]"
-                  />
-                  <Combobox
-                    options={[
-                      { value: 'all', label: 'All Status' },
-                      { value: 'open', label: 'Open' },
-                      { value: 'closed', label: 'Closed' },
-                    ]}
-                    value={filterStatus}
-                    onChange={setFilterStatus}
-                    placeholder="Status"
-                    searchPlaceholder="Search..."
-                    className="w-[140px]"
-                  />
-                  <Input
-                    type="date"
-                    value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
-                    placeholder="Start Date"
-                    className="w-[150px]"
-                  />
-                  <Input
-                    type="date"
-                    value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
-                    placeholder="End Date"
-                    className="w-[150px]"
-                  />
-                  {(filterStatus !== 'all' || filterStartDate || filterEndDate || filterCashierId !== 'all') && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setFilterStatus('all');
-                        setFilterStartDate('');
-                        setFilterEndDate('');
-                        setFilterCashierId('all');
-                      }}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
             <AdvancedDataTable<CashierShift>
+              title="Shift history"
+              className="mt-6"
+              countLabel={['shift', 'shifts']}
+              toolbarExtra={user?.role === 'admin' ? (
+                <>
+              <Combobox
+                options={[{ value: 'all', label: 'All Cashiers' }, ...cashierOptions.map(c => ({ value: String(c.cashier_id), label: c.cashier_name }))]}
+                value={filterCashierId}
+                onChange={setFilterCashierId}
+                placeholder="Cashier"
+                searchPlaceholder="Search cashiers..."
+                className="h-8 w-40 text-sm"
+              />
+              <Combobox
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'open', label: 'Open' },
+                  { value: 'closed', label: 'Closed' },
+                ]}
+                value={filterStatus}
+                onChange={setFilterStatus}
+                placeholder="Status"
+                searchPlaceholder="Search..."
+                className="h-8 w-36 text-sm"
+              />
+              <Input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => setFilterStartDate(e.target.value)}
+                placeholder="Start Date"
+                className="h-8 w-[9.5rem] text-sm"
+              />
+              <Input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => setFilterEndDate(e.target.value)}
+                placeholder="End Date"
+                className="h-8 w-[9.5rem] text-sm"
+              />
+              {(filterStatus !== 'all' || filterStartDate || filterEndDate || filterCashierId !== 'all') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setFilterStatus('all');
+                    setFilterStartDate('');
+                    setFilterEndDate('');
+                    setFilterCashierId('all');
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+                </>
+              ) : undefined}
+              dateFilterKey={user?.role === 'admin' ? false : undefined}
+              autoFilters={user?.role !== 'admin'}
               data={allShifts}
               keyExtractor={(shift) => shift.id}
               onRowClick={(shift) => handleShiftClick(shift)}
@@ -838,8 +837,6 @@ const CashierShift: React.FC = () => {
                 },
               ]}
             />
-          </CardContent>
-        </Card>
 
         <Dialog open={showStartShiftModal} onOpenChange={setShowStartShiftModal}>
           <DialogContent>

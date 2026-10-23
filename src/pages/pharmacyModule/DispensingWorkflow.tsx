@@ -2008,53 +2008,52 @@ export default function DispensingWorkflow() {
             </>
           </div>
         ) : (
-          <div className="mt-6 flex-1 min-h-0 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-semibold flex items-center gap-2"><History className="w-4 h-4 text-primary" /> Dispensing Records</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-56">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input placeholder="Search records..." className="pl-8 h-9" value={historySearch} onChange={e => setHistorySearch(e.target.value)} />
-                </div>
+          <AdvancedDataTable<any>
+            title={<><History className="w-4 h-4 text-primary" /> Dispensing Records</>}
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input placeholder="Search records..." className="text-sm pl-8 h-8" value={historySearch} onChange={e => setHistorySearch(e.target.value)} />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <Calendar className="w-4 h-4 text-muted-foreground" />
-                <Input type="date" className="h-9 w-[150px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
-                <Input type="date" className="h-9 w-[150px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchHistory} disabled={historyLoading}>
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={fetchHistory} disabled={historyLoading}>
                   <RefreshCw className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} />
                 </Button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              <AdvancedDataTable<any>
-                data={filteredHistory}
-                keyExtractor={(h) => h.id}
-                loading={historyLoading}
-                emptyMessage="No dispensing records found."
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'dispensing_number', header: 'Dispensing No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium whitespace-nowrap">{v}</span> },
-                  { key: 'patient_name', header: 'Patient', render: (v) => v || 'Unknown' },
-                  { key: 'drug_name', header: 'Drug', render: (v) => <span className="text-muted-foreground">{v}</span> },
-                  { key: 'quantity_dispensed', header: 'Qty', sortable: true, render: (v) => <span className="whitespace-nowrap">{v}</span> },
-                  {
-                    key: '__amount', header: 'Amount', align: 'right',
-                    render: (_v, h) => <span className="font-medium whitespace-nowrap">{fmt((parseFloat(h.unit_price) || 0) * (h.quantity_dispensed || 0))}</span>,
-                  },
-                  { key: 'pharmacist_name', header: 'Pharmacist', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                  { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? formatDate(v) : '—'}</span> },
-                ]}
-              />
-            </div>
-          </div>
+              </>
+            }
+            dateFilterKey={false}
+            data={filteredHistory}
+            keyExtractor={(h) => h.id}
+            loading={historyLoading}
+            emptyMessage="No dispensing records found."
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'dispensing_number', header: 'Dispensing No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium whitespace-nowrap">{v}</span> },
+              { key: 'patient_name', header: 'Patient', render: (v) => v || 'Unknown' },
+              { key: 'drug_name', header: 'Drug', render: (v) => <span className="text-muted-foreground">{v}</span> },
+              { key: 'quantity_dispensed', header: 'Qty', sortable: true, render: (v) => <span className="whitespace-nowrap">{v}</span> },
+              {
+                key: '__amount', header: 'Amount', align: 'right',
+                render: (_v, h) => <span className="font-medium whitespace-nowrap">{fmt((parseFloat(h.unit_price) || 0) * (h.quantity_dispensed || 0))}</span>,
+              },
+              { key: 'pharmacist_name', header: 'Pharmacist', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+              { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? formatDate(v) : '—'}</span> },
+            ]}
+          />
         )}
       </div>
       </div>
 
       {/* Start Cashier Shift Modal */}
       {showStartShiftModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center px-5 py-4 border-b bg-muted/30">
               <h3 className="font-semibold text-base flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" /> Start Cashier Shift</h3>
               <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
@@ -2089,8 +2088,8 @@ export default function DispensingWorkflow() {
 
       {/* Invoice Created Modal (credit payments) */}
       {invoiceData && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center px-5 py-4 border-b bg-muted/30">
               <h3 className="font-semibold text-base flex items-center gap-2">
                 <Check className="w-4 h-4 text-primary" />

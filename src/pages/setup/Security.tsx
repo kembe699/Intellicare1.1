@@ -723,50 +723,56 @@ const Security: React.FC = () => {
 
           {/* User list panel */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Search & Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Combobox
-                options={[{ value: 'all', label: 'All Roles' }, ...ROLES]}
-                value={roleFilter}
-                onChange={setRoleFilter}
-                searchPlaceholder="Search roles..."
-                className="w-[160px]"
-              />
-              <Combobox
-                options={[
-                  { value: 'all', label: 'All Branches' },
-                  { value: 'unassigned', label: 'Unassigned' },
-                  ...branches.map((b) => ({ value: String(b.id), label: b.name })),
-                ]}
-                value={branchFilter}
-                onChange={setBranchFilter}
-                searchPlaceholder="Search branches..."
-                className="w-[170px]"
-              />
-              <Combobox
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' },
-                ]}
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v as any)}
-                searchPlaceholder="Search..."
-                className="w-[140px]"
-              />
-            </div>
 
             {/* Users Table */}
             <AdvancedDataTable<UserData>
+              title="Users"
+              searchSlot={
+                <div className="relative w-52">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-8 text-sm"
+                  />
+                </div>
+              }
+              toolbarExtra={
+                <>
+                  <Combobox
+                    options={[{ value: 'all', label: 'All Roles' }, ...ROLES]}
+                    value={roleFilter}
+                    onChange={setRoleFilter}
+                    searchPlaceholder="Search roles..."
+                    className="h-8 w-40 text-sm"
+                  />
+                  <Combobox
+                    options={[
+                      { value: 'all', label: 'All Branches' },
+                      { value: 'unassigned', label: 'Unassigned' },
+                      ...branches.map((b) => ({ value: String(b.id), label: b.name })),
+                    ]}
+                    value={branchFilter}
+                    onChange={setBranchFilter}
+                    searchPlaceholder="Search branches..."
+                    className="h-8 w-40 text-sm"
+                  />
+                  <Combobox
+                    options={[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'active', label: 'Active' },
+                      { value: 'inactive', label: 'Inactive' },
+                    ]}
+                    value={statusFilter}
+                    onChange={(v) => setStatusFilter(v as any)}
+                    searchPlaceholder="Search..."
+                    className="w-[9.5rem]"
+                  />
+                </>
+              }
+              autoFilters={false}
+              countLabel={['user', 'users']}
               data={filteredUsers}
               keyExtractor={(u) => u.id}
               loading={loading}

@@ -558,13 +558,9 @@ const ExchangeRates: React.FC = () => {
             </div>
 
             {/* Rate table */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Rate History</CardTitle>
-                <CardDescription>{activeRates.length} active, {rates.length} total</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
                 <AdvancedDataTable<ExRate>
+                  title={<>Rate history <span className="text-xs font-normal text-muted-foreground ml-1">{activeRates.length} active ·</span></>}
+                  countLabel={['rate', 'rates']}
                   data={rates}
                   keyExtractor={(r) => r.id}
                   emptyMessage='No exchange rates. Click "New Rate" to add.'
@@ -600,8 +596,6 @@ const ExchangeRates: React.FC = () => {
                     },
                   ]}
                 />
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* ═══ CURRENCIES TAB ═══ */}
@@ -807,9 +801,9 @@ const ExchangeRates: React.FC = () => {
               </Card>
             </div>
             {/* Table */}
-            <Card>
-              <CardContent className="p-4">
                 <AdvancedDataTable<Adjustment>
+                  title="Exchange adjustments"
+                  countLabel={['adjustment', 'adjustments']}
                   data={adjustments}
                   keyExtractor={(a) => a.id}
                   emptyMessage="No exchange adjustments recorded yet."
@@ -828,8 +822,6 @@ const ExchangeRates: React.FC = () => {
                     { key: 'adjustment_status', header: 'Status', render: (v) => <StatusBadge status={v} map={ADJUSTMENT_STATUS_MAP} className="capitalize" /> },
                   ]}
                 />
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* ═══ CONVERSION HISTORY TAB ═══ */}
@@ -840,9 +832,9 @@ const ExchangeRates: React.FC = () => {
                 <RefreshCw className="h-3.5 w-3.5" /> Refresh
               </Button>
             </div>
-            <Card>
-              <CardContent className="p-4">
                 <AdvancedDataTable<ConversionLog>
+                  title="Conversions"
+                  countLabel={['conversion', 'conversions']}
                   data={conversions}
                   keyExtractor={(c) => c.id}
                   emptyMessage="No conversions recorded yet."
@@ -858,8 +850,6 @@ const ExchangeRates: React.FC = () => {
                     { key: 'source_transaction_type', header: 'Source', render: (v) => <span className="text-xs capitalize">{v || '—'}</span> },
                   ]}
                 />
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* ═══ CONVERTER TAB ═══ */}

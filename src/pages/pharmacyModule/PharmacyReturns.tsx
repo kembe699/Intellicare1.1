@@ -137,60 +137,44 @@ export default function PharmacyReturns() {
       <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
         <PageHeader title="Pharmacy Returns" icon={<RotateCcw />} className="mb-3" />
 
-        <div className="flex-1 min-h-0 bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <div className="flex items-baseline gap-4 flex-wrap">
-              <h3 className="font-medium">Return Directory</h3>
-              <span className="text-xs text-muted-foreground">
-                {filteredReturns.length} return{filteredReturns.length === 1 ? '' : 's'} ·
-                refunded <strong className="text-foreground">{fmt(refundedTotal)}</strong>
-                {refundedToday > 0 && <> · today <strong className="text-foreground">{fmt(refundedToday)}</strong></>}
-              </span>
-              <span
-                className="text-xs text-muted-foreground"
-                title="Each refund posts a journal entry: pharmacy revenue is debited and cash at hand credited, so the income statement and cash balance both reflect the money returned."
-              >
-                Refunds reduce pharmacy revenue and cash at hand in the accounts.
-              </span>
+        <AdvancedDataTable<any>
+          title="Return Directory"
+          searchSlot={
+            <div className="relative w-52">
+              <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+              <Input placeholder="Search returns..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-64">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input placeholder="Search returns..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
+          }
+          toolbarExtra={
+            <>
               <Button onClick={openModal}>
                 <RotateCcw className="w-4 h-4 mr-2" /> Process Return
               </Button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto p-4">
-            <AdvancedDataTable<any>
-              data={filteredReturns}
-              keyExtractor={(r) => r.id}
-              loading={loading}
-              emptyMessage="No returns found."
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                { key: 'return_number', header: 'Return No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                { key: 'patient_name', header: 'Patient', render: (v) => v || '—' },
-                { key: 'drug_name', header: 'Drug', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-                { key: 'quantity_returned', header: 'Qty', sortable: true },
-                { key: 'amount_refunded', header: 'Refund', sortable: true, render: (v) => <span className="font-medium">{fmt(parseFloat(v) || 0)}</span> },
-                { key: 'return_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
-                { key: 'return_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
-                { key: 'processed_by_name', header: 'Processed By', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
-              ]}
-            />
-          </div>
-        </div>
+            </>
+          }
+          data={filteredReturns}
+          keyExtractor={(r) => r.id}
+          loading={loading}
+          emptyMessage="No returns found."
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'return_number', header: 'Return No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+            { key: 'patient_name', header: 'Patient', render: (v) => v || '—' },
+            { key: 'drug_name', header: 'Drug', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+            { key: 'quantity_returned', header: 'Qty', sortable: true },
+            { key: 'amount_refunded', header: 'Refund', sortable: true, render: (v) => <span className="font-medium">{fmt(parseFloat(v) || 0)}</span> },
+            { key: 'return_reason', header: 'Reason', render: (v) => <span className="capitalize text-muted-foreground">{v?.replace(/_/g, ' ')}</span> },
+            { key: 'return_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : '—'}</span> },
+            { key: 'processed_by_name', header: 'Processed By', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
+          ]}
+        />
       </div>
       </div>
 
       {/* Process Return Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-lg max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <RotateCcw className="w-5 h-5 text-primary" /> Process Drug Return

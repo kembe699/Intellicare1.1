@@ -269,27 +269,20 @@ const CashTransfer: React.FC = () => {
           </div>
 
           {/* Transfer History */}
-          <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-            <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-sm">Transfer History</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{transfers.length} transfers recorded</p>
-              </div>
-              {transfers.length > 0 && (
-                <Button size="sm" variant="outline" onClick={downloadCSV} className="gap-1.5">
-                  <Download className="w-4 h-4" />
-                  CSV
-                </Button>
-              )}
-            </div>
-            <div className="max-h-[460px] overflow-y-auto p-4">
+          <div className="min-w-0">
               <AdvancedDataTable<Transfer>
+                title="Transfer history"
+                countLabel={['transfer', 'transfers']}
+                exportFileName="cash-transfers"
+                dateFilterKey="createdAt"
+                searchPlaceholder="Search account or notes..."
                 data={transfers}
                 keyExtractor={(transfer) => transfer.id}
                 emptyMessage="No transfers yet"
                 columns={[
                   {
                     key: '__date', header: 'Date',
+                    exportValue: (t) => fmtDate(getCreatedAt(t)),
                     render: (_v, transfer) => (
                       <>
                         <p className="text-sm">{fmtDate(getCreatedAt(transfer))}</p>
@@ -299,6 +292,7 @@ const CashTransfer: React.FC = () => {
                   },
                   {
                     key: '__from_to', header: 'From → To',
+                    exportValue: (t) => `${t.from_account_name} → ${t.to_account_name}${t.notes ? ` (${t.notes})` : ''}`,
                     render: (_v, transfer) => (
                       <>
                         <div className="flex items-center gap-1 flex-wrap">
@@ -318,11 +312,11 @@ const CashTransfer: React.FC = () => {
                   },
                   {
                     key: '__status', header: 'Status', align: 'right',
+                    exportValue: () => 'Completed',
                     render: () => <StatusBadge status="completed" map={{ completed: 'success' }} label="Completed" />,
                   },
                 ]}
               />
-            </div>
           </div>
         </div>
       </div>

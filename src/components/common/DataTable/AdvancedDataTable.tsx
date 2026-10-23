@@ -1,6 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronUp, ChevronDown, Download, Columns } from 'lucide-react';
+import { ChevronUp, ChevronDown, Download, Columns, FileSpreadsheet } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Combobox } from '@/components/ui/combobox';
+import { toast } from '@/lib/notify';
+import { formatDate } from '@/lib/format';
+import * as docTemplate from '@/utils/documentTemplate';
+import { getFacilityInfo } from '@/hooks/useFacilityInfo';
+import { InDialogContext } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,12 +22,26 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+/**
+ * True inside a Reports-centre page. The report already has its own period,
+ * print and export controls, so lists there show every row (a printed report
+ * must not stop at row 20) and skip the table's own date filter.
+ */
+export const InReportContext = React.createContext(false);
+
 export interface Column<T> {
   key: keyof T | string;
   header: string;
   render?: (value: any, row: T, index: number) => React.ReactNode;
   sortable?: boolean;
+  /**
+   * Adds an "All <header>" dropdown to the toolbar listing this column's
+   * distinct values. Status/type/method-style columns get one automatically;
+   * pass false to suppress that, true to force it for any column.
+   */
   filterable?: boolean;
+  /** Plain-text value for CSV/PDF export when the raw field isn't what should be exported. */
+  exportValue?: (row: T) => string | number | null | undefined;
   width?: string;
   align?: 'left' | 'center' | 'right';
   hidden?: boolean;
@@ -52,17 +73,36 @@ export interface AdvancedDataTableProps<T> {
   // Pagination
   pagination?: PaginationConfig;
   
+  /**
+   * Card-header title shown at the left of the toolbar with the row count —
+   * the same header every list in the app uses (see Supplier Payments).
+   */
+  title?: React.ReactNode;
+  /** Noun for the row count next to the title, e.g. ['bill', 'bills']. Defaults to record/records. */
+  countLabel?: [string, string];
+  /**
+   * Column key the From/To date filter applies to. Detected automatically from
+   * the first date-valued column; pass false to hide the date filter.
+   */
+  dateFilterKey?: string | false;
+  /** Hide the whole toolbar (title, filters, CSV/PDF, search) — for small embedded tables such as line-item editors. */
+  toolbar?: boolean;
+  /** Set false when the page supplies its own filter dropdowns (via toolbarExtra), so status/type columns don't get a second one. */
+  autoFilters?: boolean;
+
   // Search
   searchable?: boolean;
   searchPlaceholder?: string;
   /** Extra controls rendered in the toolbar next to the search box (e.g. a date-range filter). */
   toolbarExtra?: React.ReactNode;
+  /** The page's own search box (e.g. a server-side search), shown where the built-in one would be. Implies searchable={false}. */
+  searchSlot?: React.ReactNode;
 
   // Selection
   selectable?: boolean;
   onSelectionChange?: (selected: T[]) => void;
   
-  // Export
+  // Export (CSV + PDF; on by default)
   exportable?: boolean;
   exportFileName?: string;
   
@@ -99,14 +139,20 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   className,
   rowClassName,
   keyExtractor = (_, index) => index,
-  pagination,
-  searchable = false,
+  pagination: paginationProp,
+  title,
+  countLabel = ['record', 'records'],
+  dateFilterKey,
+  toolbar: toolbarProp,
+  autoFilters = true,
+  searchable = true,
   searchPlaceholder = 'Search...',
   toolbarExtra,
+  searchSlot,
   selectable = false,
   onSelectionChange,
-  exportable = false,
-  exportFileName = 'export',
+  exportable = true,
+  exportFileName,
   bulkActions = [],
   headerClassName,
   footerRow,
@@ -114,6 +160,20 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   maxRows,
   compact = false,
 }: AdvancedDataTableProps<T>) {
+  // Every list pages at 20 rows unless the page says otherwise — an unpaged
+  // list was the main reason tables looked different from screen to screen.
+  // Inside a modal the list is plain (no toolbar, no paging) unless the page asks.
+  // Inside a modal: <Dialog>s say so through context; the older hand-built
+  // pop-ups (.ic-modal) are found from the DOM before first paint.
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const [inLegacyModal, setInLegacyModal] = useState(false);
+  React.useLayoutEffect(() => {
+    if (rootRef.current?.closest('.ic-modal')) setInLegacyModal(true);
+  }, []);
+  const inDialog = React.useContext(InDialogContext) || inLegacyModal;
+  const inReport = React.useContext(InReportContext);
+  const toolbar = toolbarProp ?? !inDialog;
+  const pagination = paginationProp ?? (maxRows || inDialog || inReport ? undefined : { enabled: true, pageSize: 20 });
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: 'asc' | 'desc';
@@ -123,6 +183,9 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   const [pageSize, setPageSize] = useState(pagination?.pageSize || 20);
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
 
   const columns = useMemo(
     () => initialColumns.filter((col) => !hiddenColumns.has(col.key as string)),
@@ -137,17 +200,65 @@ export function AdvancedDataTable<T extends Record<string, any>>({
     setSortConfig({ key: columnKey, direction });
   };
 
-  const filteredData = useMemo(() => {
-    if (!searchQuery) return data;
+  // ── Toolbar filters ────────────────────────────────────────────────
+  // The date column: the one the page named, else the first column whose
+  // values are mostly ISO dates.
+  const dateKey = useMemo(() => {
+    if (dateFilterKey === false || !toolbar || (inReport && !dateFilterKey)) return null;
+    if (dateFilterKey) return dateFilterKey;
+    const sample = data.slice(0, 50);
+    if (sample.length === 0) return null;
+    for (const col of initialColumns) {
+      const vals = sample.map((r) => r[col.key as string]).filter((v) => v !== null && v !== undefined && v !== '');
+      if (vals.length > 0 && vals.filter((v) => isIsoDate(v)).length / vals.length >= 0.6) return col.key as string;
+    }
+    return null;
+  }, [dateFilterKey, toolbar, inReport, data, initialColumns]);
 
+  // Dropdown filters: columns marked filterable, plus status/type-like
+  // columns with a short list of plain-text values.
+  const filterColumns = useMemo(() => {
+    if (!toolbar) return [];
+    const out: { key: string; header: string; options: { value: string; label: string }[] }[] = [];
+    for (const col of initialColumns) {
+      const key = col.key as string;
+      if (col.filterable === false || !col.header) continue;
+      if (!col.filterable && (!autoFilters || !AUTO_FILTER_KEY.test(key))) continue;
+      const distinct = Array.from(new Set(data.map((r) => r[key]).filter((v) => typeof v === 'string' && v.trim() !== ''))) as string[];
+      if (distinct.length < (col.filterable ? 1 : 2) || distinct.length > 25) continue;
+      out.push({
+        key,
+        header: col.header,
+        options: [{ value: 'all', label: `All ${plural(col.header)}` }, ...distinct.sort().map((v) => ({ value: v, label: humanize(v) }))],
+      });
+      if (!col.filterable && out.length >= 2) break;
+    }
+    return out;
+  }, [toolbar, autoFilters, initialColumns, data]);
+
+  const filteredData = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return data.filter((row) => {
+      if (dateKey && (dateFrom || dateTo)) {
+        const d = String(row[dateKey] ?? '').slice(0, 10);
+        if (!d) return false;
+        if (dateFrom && d < dateFrom) return false;
+        if (dateTo && d > dateTo) return false;
+      }
+      for (const [key, val] of Object.entries(columnFilters)) {
+        if (val && val !== 'all' && row[key] !== val) return false;
+      }
+      if (!q) return true;
       return columns.some((column) => {
         const value = row[column.key];
         if (value === null || value === undefined) return false;
-        return value.toString().toLowerCase().includes(searchQuery.toLowerCase());
+        return value.toString().toLowerCase().includes(q);
       });
     });
-  }, [data, searchQuery, columns]);
+  }, [data, searchQuery, columns, dateKey, dateFrom, dateTo, columnFilters]);
+
+  // Back to page 1 whenever a filter narrows the list.
+  React.useEffect(() => { setCurrentPage(1); }, [searchQuery, dateFrom, dateTo, columnFilters]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
@@ -194,26 +305,68 @@ export function AdvancedDataTable<T extends Record<string, any>>({
     setSelectedRows(newSelected);
   };
 
+  // Export uses the visible, filtered, sorted rows and skips action columns.
+  const exportColumns = columns.filter((col) => col.header && col.key !== 'actions');
+  const fileBase = exportFileName || (typeof title === 'string' ? title : 'export').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'export';
+  const cellText = (col: Column<T>, row: T, index: number): string => {
+    if (col.exportValue) return String(col.exportValue(row) ?? '');
+    const raw = row[col.key as string];
+    if (raw !== null && raw !== undefined && typeof raw !== 'object') {
+      return (col.key as string) === dateKey || isIsoDate(raw) ? formatDate(raw) : String(raw);
+    }
+    const rendered = col.render?.(raw, row, index);
+    return typeof rendered === 'string' || typeof rendered === 'number' ? String(rendered) : '';
+  };
+
   const handleExport = () => {
+    if (sortedData.length === 0) { toast.error('Nothing to export'); return; }
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const csvContent = [
-      columns.map((col) => col.header).join(','),
-      ...sortedData.map((row) =>
-        columns.map((col) => {
-          const value = row[col.key];
-          return typeof value === 'string' && value.includes(',')
-            ? `"${value}"`
-            : value;
-        }).join(',')
-      ),
+      exportColumns.map((col) => esc(col.header)).join(','),
+      ...sortedData.map((row, i) => exportColumns.map((col) => esc(cellText(col, row, i))).join(',')),
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${exportFileName}.csv`;
+    link.download = `${fileBase}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handlePdf = async () => {
+    if (sortedData.length === 0) { toast.error('Nothing to export'); return; }
+    const info = await getFacilityInfo();
+    const docTitle = typeof title === 'string' ? title : 'Report';
+    const period = dateFrom || dateTo
+      ? `${dateFrom ? formatDate(dateFrom) : 'Earliest'} — ${dateTo ? formatDate(dateTo) : 'Latest'}`
+      : 'All dates';
+    const filterRows = filterColumns
+      .filter((f) => columnFilters[f.key] && columnFilters[f.key] !== 'all')
+      .map((f) => ({ label: f.header, value: humanize(columnFilters[f.key]) }));
+    const bodyHTML = [
+      docTemplate.buildInfoGrid({ title: 'Filters', rows: [
+        ...(dateKey ? [{ label: 'Period', value: period }] : []),
+        ...filterRows,
+        ...(searchQuery ? [{ label: 'Search', value: searchQuery }] : []),
+        { label: 'Rows', value: sortedData.length, bold: true },
+      ] }),
+      docTemplate.buildTable(
+        exportColumns.map((col) => ({ label: col.header, align: col.align === 'right' ? 'right' as const : undefined })),
+        sortedData.map((row, i) => ({ cells: exportColumns.map((col) => cellText(col, row, i)) })),
+      ),
+    ].join('\n');
+    const html = docTemplate.buildDocument({
+      title: docTitle,
+      docType: docTitle,
+      date: new Date(),
+      bodyHTML,
+      logoUrl: info.facilityLogo || undefined,
+      facilityInfo: { name: info.facilityName, type: info.facilityType, address: info.facilityAddress, city: info.facilityCity, phone: info.facilityPhone, email: info.facilityEmail, licenseNo: info.facilityLicenseNo },
+      branchInfo: { name: info.branchName, address: info.branchAddress, phone: info.branchPhone },
+    });
+    if (!docTemplate.openPrintWindow(html)) toast.error('Please allow pop-ups to create the PDF');
   };
 
   const toggleColumnVisibility = (columnKey: string) => {
@@ -253,48 +406,76 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   );
 
   return (
-    <div className={cn('bg-card rounded-md border border-border overflow-hidden', className)}>
-      {/* Toolbar */}
-      {(searchable || exportable || toolbarExtra || initialColumns.some((col) => col.hidden !== undefined)) && (
-        <div className="flex items-center justify-between p-3 border-b border-border gap-3 flex-wrap">
-          <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
-            {searchable && (
-              <div className="flex-1 min-w-[160px] max-w-2xl">
-                <TableSearch
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder={searchPlaceholder}
-                />
+    <div ref={rootRef} className={cn('bg-card rounded-md border border-border overflow-hidden', className)}>
+      {/* Toolbar — one layout for every list: title + count on the left;
+          date range, filters, page extras, CSV, PDF, columns and search on
+          the right, all 32px controls (matches Supplier Payments). */}
+      {toolbar && (
+        <div className="flex flex-row items-center justify-between gap-2 flex-wrap px-4 py-3 border-b border-border print:hidden">
+          <div className="text-base font-semibold text-foreground min-w-0">
+            {title}
+            <span className={cn('text-xs font-normal text-muted-foreground', title && 'ml-2')}>
+              {filteredData.length} {filteredData.length === 1 ? countLabel[0] : countLabel[1]}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {dateKey && (
+              <>
+                <Input type="date" aria-label="From date" className="h-8 w-[9.5rem] text-sm" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                <span className="text-muted-foreground text-xs">to</span>
+                <Input type="date" aria-label="To date" className="h-8 w-[9.5rem] text-sm" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                {(dateFrom || dateTo) && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear</Button>
+                )}
+              </>
+            )}
+            {filterColumns.map((f) => (
+              <Combobox
+                key={f.key}
+                options={f.options}
+                value={columnFilters[f.key] || 'all'}
+                onChange={(v) => setColumnFilters((prev) => ({ ...prev, [f.key]: v || 'all' }))}
+                searchPlaceholder={`Search ${f.header.toLowerCase()}...`}
+                className="h-8 w-40 text-sm"
+              />
+            ))}
+            {toolbarExtra}
+            {exportable && (
+              <>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport}>
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />CSV
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handlePdf}>
+                  <Download className="w-3.5 h-3.5 mr-1.5" />PDF
+                </Button>
+              </>
+            )}
+            {initialColumns.length > 4 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs" aria-label="Show or hide columns">
+                    <Columns className="w-3.5 h-3.5 mr-1.5" />Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {initialColumns.filter((col) => col.header).map((col) => (
+                    <DropdownMenuCheckboxItem
+                      key={col.key as string}
+                      checked={!hiddenColumns.has(col.key as string)}
+                      onCheckedChange={() => toggleColumnVisibility(col.key as string)}
+                    >
+                      {col.header}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {searchSlot}
+            {searchable && !searchSlot && (
+              <div className="w-52">
+                <TableSearch value={searchQuery} onChange={setSearchQuery} placeholder={searchPlaceholder} />
               </div>
             )}
-            {toolbarExtra}
-          </div>
-          <div className="flex items-center gap-2">
-            {exportable && (
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="h-4 w-4 mr-2" />
-                CSV
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Columns className="h-4 w-4 mr-2" />
-                  Columns
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {initialColumns.map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.key as string}
-                    checked={!hiddenColumns.has(col.key as string)}
-                    onCheckedChange={() => toggleColumnVisibility(col.key as string)}
-                  >
-                    {col.header}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       )}
@@ -387,12 +568,13 @@ export function AdvancedDataTable<T extends Record<string, any>>({
                   className="text-center align-middle"
                   style={{ height: `${emptyBodyHeight}px` }}
                 >
+                  {/* The table is already the frame, so the empty state drops its own dashed box. */}
                   {empty ? (
-                    <EmptyState {...empty} />
+                    <EmptyState {...empty} className="border-0" />
                   ) : (
                     <>
                       {emptyIcon && <div className="mb-4 flex justify-center">{emptyIcon}</div>}
-                      <p className="text-muted-foreground">{emptyMessage}</p>
+                      <p className="text-sm text-muted-foreground">{emptyMessage}</p>
                     </>
                   )}
                 </td>
@@ -435,6 +617,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
                         key={colIndex}
                         className={cn(
                           'px-4 text-sm',
+                          ROW_BUTTONS,
                           compact ? 'py-2' : 'py-2.5',
                           column.align === 'center' && 'text-center',
                           column.align === 'right' && 'text-right'
@@ -471,4 +654,26 @@ export function AdvancedDataTable<T extends Record<string, any>>({
       )}
     </div>
   );
+}
+
+// Buttons inside rows are 32px with 14px text (icon buttons 32px square), so
+// a row with an "Approve" button is no taller than a row with an eye icon.
+// Checkboxes and switches keep their own size.
+const ROW_BUTTONS = '[&_button:not([role=checkbox]):not([role=switch])]:h-8 [&_button:not([role=checkbox]):not([role=switch])]:text-sm [&_button.w-11]:w-8 [&_button.w-10]:w-8 [&_button.px-4]:px-3';
+
+const AUTO_FILTER_KEY = /(^|_)(status|type|kind|category|method|currency|department|gender|source|role|priority|payment_mode|mode)$/i;
+
+function isIsoDate(v: unknown): boolean {
+  return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}([T ]|$)/.test(v)) || v instanceof Date;
+}
+
+function humanize(v: string): string {
+  const s = v.replace(/_/g, ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function plural(header: string): string {
+  if (/s$/i.test(header)) return header;
+  if (/[^aeiou]y$/i.test(header)) return header.slice(0, -1) + 'ies';
+  return header + 's';
 }

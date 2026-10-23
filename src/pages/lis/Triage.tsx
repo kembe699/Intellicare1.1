@@ -126,22 +126,19 @@ export default function Triage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Waiting area — list, left */}
         <div className="lg:col-span-1">
-          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
-              <h4 className="font-semibold text-sm text-foreground">Waiting ({sortedQueue.length})</h4>
-            </div>
-            <AdvancedDataTable<any>
-              data={sortedQueue}
-              keyExtractor={(p) => p.order_id}
-              loading={loading}
-              emptyMessage="No patients waiting"
-              searchable
-              pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
-              onRowClick={(p) => selectPatient(p)}
-              columns={columns}
-            />
-          </div>
+          <AdvancedDataTable<any>
+            title="Waiting"
+            countLabel={['patient', 'patients']}
+            exportable={false}
+            data={sortedQueue}
+            keyExtractor={(p) => p.order_id}
+            loading={loading}
+            emptyMessage="No patients waiting"
+            searchable
+            pagination={{ enabled: true, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+            onRowClick={(p) => selectPatient(p)}
+            columns={columns}
+          />
         </div>
 
         {/* Vitals form — right */}

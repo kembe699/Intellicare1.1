@@ -402,20 +402,22 @@ const SuppliersManagement: React.FC = () => {
           </div>
 
           {/* RIGHT: Supplier Directory */}
-          <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Supplier Directory</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-56">
-                  <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                  <Input className="pl-8 h-9" placeholder="Search suppliers..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                </div>
+          <AdvancedDataTable<Supplier>
+            title="Supplier Directory"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="absolute left-2.5 top-2 w-4 h-4 text-muted-foreground" />
+                <Input className="text-sm pl-8 h-8" placeholder="Search suppliers..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <Combobox
                   options={[{ value: 'all', label: 'All Types' }, ...supplierTypes]}
                   value={typeFilter}
                   onChange={setTypeFilter}
                   searchPlaceholder="Search..."
-                  className="w-[160px] h-9"
+                  className="text-sm w-[160px] h-8"
                 />
                 <Combobox
                   options={[
@@ -427,71 +429,64 @@ const SuppliersManagement: React.FC = () => {
                   value={statusFilter}
                   onChange={setStatusFilter}
                   searchPlaceholder="Search..."
-                  className="w-[130px] h-9"
+                  className="text-sm w-[130px] h-8"
                 />
-                <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-9">
-                  <FileSpreadsheet className="w-4 h-4" /> Export CSV
-                </Button>
-              </div>
-            </div>
-
-            <div className="p-4">
-              <AdvancedDataTable<Supplier>
-                data={filteredSuppliers}
-                keyExtractor={(s) => s.id}
-                loading={loading}
-                emptyMessage={searchQuery || typeFilter !== 'all' || statusFilter !== 'all' ? 'No suppliers match your filters' : 'No suppliers yet. Use the form above to create one.'}
-                onRowClick={(s) => openEdit(s)}
-                rowClassName={(s) => editingSupplier?.id === s.id ? 'bg-primary/5' : ''}
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  {
-                    key: 'name', header: 'Supplier', sortable: true,
-                    render: (v, s) => (
-                      <div className="flex items-center gap-2">
-                        {!!s.is_preferred && <Star className="w-3.5 h-3.5 text-warning fill-warning" />}
-                        <p className="font-medium">{v}</p>
-                      </div>
-                    ),
-                  },
-                  { key: 'supplier_code', header: 'Supplier Number', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || '—'}</span> },
-                  {
-                    key: 'contact_person', header: 'Contact',
-                    render: (v, s) => (
-                      <>
-                        <p>{v || '—'}</p>
-                        <p className="text-xs text-muted-foreground">{s.email || '—'}</p>
-                      </>
-                    ),
-                  },
-                  { key: 'phone', header: 'Phone Number', render: (v) => v || '—' },
-                  {
-                    key: 'supplier_type', header: 'Type',
-                    render: (v) => <Badge variant="outline" className="text-xs capitalize">{(v || 'general').replace('_', ' ')}</Badge>,
-                  },
-                  {
-                    key: '__status', header: 'Status', align: 'center',
-                    render: (_v, s) => {
-                      const st = supplierStatus(s);
-                      return <StatusBadge status={st.status} label={st.label} map={SUPPLIER_STATUS_TONE} />;
-                    },
-                  },
-                  {
-                    key: '__actions', header: 'Actions', align: 'center',
-                    render: (_v, s) => (
-                      <div className="flex items-center justify-center gap-1">
-                        <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewSupplier(s); }}><Eye className="w-3.5 h-3.5" /></Button>
-                        <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Edit className="w-3.5 h-3.5" /></Button>
-                        <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toggleHold(s); }} disabled={holdingId === s.id}>
-                          {holdingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (s.on_hold ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
-                        </Button>
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </div>
+              </>
+            }
+            autoFilters={false}
+            data={filteredSuppliers}
+            keyExtractor={(s) => s.id}
+            loading={loading}
+            emptyMessage={searchQuery || typeFilter !== 'all' || statusFilter !== 'all' ? 'No suppliers match your filters' : 'No suppliers yet. Use the form above to create one.'}
+            onRowClick={(s) => openEdit(s)}
+            rowClassName={(s) => editingSupplier?.id === s.id ? 'bg-primary/5' : ''}
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              {
+                key: 'name', header: 'Supplier', sortable: true,
+                render: (v, s) => (
+                  <div className="flex items-center gap-2">
+                    {!!s.is_preferred && <Star className="w-3.5 h-3.5 text-warning fill-warning" />}
+                    <p className="font-medium">{v}</p>
+                  </div>
+                ),
+              },
+              { key: 'supplier_code', header: 'Supplier Number', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || '—'}</span> },
+              {
+                key: 'contact_person', header: 'Contact',
+                render: (v, s) => (
+                  <>
+                    <p>{v || '—'}</p>
+                    <p className="text-xs text-muted-foreground">{s.email || '—'}</p>
+                  </>
+                ),
+              },
+              { key: 'phone', header: 'Phone Number', render: (v) => v || '—' },
+              {
+                key: 'supplier_type', header: 'Type',
+                render: (v) => <Badge variant="outline" className="text-xs capitalize">{(v || 'general').replace('_', ' ')}</Badge>,
+              },
+              {
+                key: '__status', header: 'Status', align: 'center',
+                render: (_v, s) => {
+                  const st = supplierStatus(s);
+                  return <StatusBadge status={st.status} label={st.label} map={SUPPLIER_STATUS_TONE} />;
+                },
+              },
+              {
+                key: '__actions', header: 'Actions', align: 'center',
+                render: (_v, s) => (
+                  <div className="flex items-center justify-center gap-1">
+                    <Button size="icon" aria-label="View" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewSupplier(s); }}><Eye className="w-3.5 h-3.5" /></Button>
+                    <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Edit className="w-3.5 h-3.5" /></Button>
+                    <Button size="icon" aria-label="Confirm" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toggleHold(s); }} disabled={holdingId === s.id}>
+                      {holdingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (s.on_hold ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Ban className="w-3.5 h-3.5 text-warning" />)}
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
       </div>

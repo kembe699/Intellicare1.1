@@ -347,83 +347,46 @@ export default function LISLabQC() {
         </div>
 
         {/* BOTTOM: QC History */}
-        <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden mt-6 flex-1 min-h-0">
-          <div className="p-4 border-b bg-muted/30 flex justify-between items-center flex-wrap gap-4">
-            <h3 className="font-medium">QC Log & History</h3>
-            <div className="flex items-center gap-3">
-              <div className="relative w-48">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search barcode, test..."
-                  className="pl-8 h-9 text-sm"
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                />
-              </div>
-              <div className="relative w-40">
-                <Calendar className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input
-                  type="date"
-                  className="pl-8 h-9 text-sm"
-                  value={historyDate}
-                  onChange={(e) => setHistoryDate(e.target.value)}
-                />
-              </div>
-              <div className="relative w-40">
-                <Filter className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground z-10 pointer-events-none" />
-                <Combobox
-                  options={HISTORY_STATUS_OPTIONS}
-                  value={historyStatus}
-                  onChange={(v) => setHistoryStatus(v)}
-                  searchPlaceholder="Search..."
-                  className="pl-8 h-9 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto p-4">
-            <AdvancedDataTable<any>
-              data={filteredHistory}
-              keyExtractor={(s) => s.id}
-              loading={loading}
-              emptyMessage="No matching records found."
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                { key: 'order_time', header: 'Order Time', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleString()}</span> },
-                { key: 'barcode', header: 'Barcode ID', sortable: true, render: (v) => <span className="font-mono font-medium text-primary">{v}</span> },
-                {
-                  key: 'participant_number', header: 'Participant', sortable: true,
-                  render: (v, s) => (
-                    <>
-                      <div className="font-medium">{v}</div>
-                      <div className="text-xs text-muted-foreground">{s.first_name} {s.last_name}</div>
-                    </>
-                  ),
-                },
-                {
-                  key: 'test_name', header: 'Test Details', sortable: true,
-                  render: (v, s) => (
-                    <>
-                      <div className="font-medium">{v}</div>
-                      <div className="text-xs text-muted-foreground">{s.department || 'General'}</div>
-                    </>
-                  ),
-                },
-                {
-                  key: 'status', header: 'QC Status', sortable: true,
-                  render: (v) => (
-                    <>
-                      {v === 'in_transit' && <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium">Pending QC</span>}
-                      {['accepted', 'routed', 'analyzed', 'approved'].includes(v) && <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v}</span>}
-                      {['rejected', 'recollection_required'].includes(v) && <span className="bg-destructive-bg text-destructive px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v.replace('_', ' ')}</span>}
-                    </>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        </div>
+        <AdvancedDataTable<any>
+          title="QC Log & History"
+          data={filteredHistory}
+          keyExtractor={(s) => s.id}
+          loading={loading}
+          emptyMessage="No matching records found."
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'order_time', header: 'Order Time', sortable: true, render: (v) => <span className="text-muted-foreground">{new Date(v).toLocaleString()}</span> },
+            { key: 'barcode', header: 'Barcode ID', sortable: true, render: (v) => <span className="font-mono font-medium text-primary">{v}</span> },
+            {
+              key: 'participant_number', header: 'Participant', sortable: true,
+              render: (v, s) => (
+                <>
+                  <div className="font-medium">{v}</div>
+                  <div className="text-xs text-muted-foreground">{s.first_name} {s.last_name}</div>
+                </>
+              ),
+            },
+            {
+              key: 'test_name', header: 'Test Details', sortable: true,
+              render: (v, s) => (
+                <>
+                  <div className="font-medium">{v}</div>
+                  <div className="text-xs text-muted-foreground">{s.department || 'General'}</div>
+                </>
+              ),
+            },
+            {
+              key: 'status', header: 'QC Status', sortable: true,
+              render: (v) => (
+                <>
+                  {v === 'in_transit' && <span className="bg-warning-bg text-warning px-2 py-0.5 rounded-full text-xs font-medium">Pending QC</span>}
+                  {['accepted', 'routed', 'analyzed', 'approved'].includes(v) && <span className="bg-success-bg text-success px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v}</span>}
+                  {['rejected', 'recollection_required'].includes(v) && <span className="bg-destructive-bg text-destructive px-2 py-0.5 rounded-full text-xs font-medium uppercase">{v.replace('_', ' ')}</span>}
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
       </div>
     </AppLayout>

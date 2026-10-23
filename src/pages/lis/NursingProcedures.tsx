@@ -295,23 +295,18 @@ export default function NursingProcedures() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center gap-2">
-                <ListChecks className="w-4 h-4 text-primary" />
-                <h4 className="font-semibold text-sm text-foreground">Recent Activity</h4>
-                <span className="text-xs text-muted-foreground">— click a patient to open their record</span>
-              </div>
-              <AdvancedDataTable<NursingProcedure>
-                data={log}
-                keyExtractor={(r) => r.id}
-                loading={loadingLog}
-                emptyMessage="No nursing procedures logged yet"
-                searchable
-                pagination={{ enabled: true, pageSize: 15, pageSizeOptions: [15, 30, 50] }}
-                onRowClick={(row) => navigate(`/nursing/procedures/${row.participant_id}`)}
-                columns={columns}
-              />
-            </div>
+            <AdvancedDataTable<NursingProcedure>
+              title="Recent activity"
+              countLabel={['procedure', 'procedures']}
+              data={log}
+              keyExtractor={(r) => r.id}
+              loading={loadingLog}
+              emptyMessage="No nursing procedures logged yet"
+              searchable
+              pagination={{ enabled: true, pageSize: 15, pageSizeOptions: [15, 30, 50] }}
+              onRowClick={(row) => navigate(`/nursing/procedures/${row.participant_id}`)}
+              columns={columns}
+            />
           </div>
         </div>
       </div>

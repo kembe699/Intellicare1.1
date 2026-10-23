@@ -355,34 +355,32 @@ export default function SalaryStructuresManagement() {
           )}
         </div>
 
-        <div className="bg-card rounded-lg border shadow-sm p-4">
-          <AdvancedDataTable<SalaryStructure>
-            data={structures}
-            keyExtractor={(s) => s.id}
-            loading={loading}
-            emptyMessage="No salary structures yet. Use the form above to create one."
-            rowClassName={(s) => editing?.id === s.id ? 'bg-primary/5' : ''}
-            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-            columns={[
-              { key: 'name', header: 'Name', sortable: true, render: (v, s) => <div><p className="font-medium">{v}</p>{s.description && <p className="text-xs text-muted-foreground">{s.description}</p>}</div> },
-              { key: 'basic_salary', header: 'Basic Salary', align: 'right', render: (v, s) => <span className="font-mono">{formatAmount(v, s.currency)}</span> },
-              { key: 'pay_frequency', header: 'Frequency', render: (v) => <span className="capitalize">{v}</span> },
-              { key: 'component_count', header: 'Components', align: 'center' },
-              {
-                key: '__actions', header: 'Actions', align: 'center',
-                render: (_v, s) => (
-                  <div className="flex items-center justify-center gap-1">
-                    <Button size="sm" variant="outline" className="h-7" onClick={() => openAssign(s)}>
-                      <Users2 className="w-3.5 h-3.5 mr-1.5" /> Assign
-                    </Button>
-                    <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}><Edit className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" aria-label="Delete" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(s)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </div>
+        <AdvancedDataTable<SalaryStructure>
+          data={structures}
+          keyExtractor={(s) => s.id}
+          loading={loading}
+          emptyMessage="No salary structures yet. Use the form above to create one."
+          rowClassName={(s) => editing?.id === s.id ? 'bg-primary/5' : ''}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'name', header: 'Name', sortable: true, render: (v, s) => <div><p className="font-medium">{v}</p>{s.description && <p className="text-xs text-muted-foreground">{s.description}</p>}</div> },
+            { key: 'basic_salary', header: 'Basic Salary', align: 'right', render: (v, s) => <span className="font-mono">{formatAmount(v, s.currency)}</span> },
+            { key: 'pay_frequency', header: 'Frequency', render: (v) => <span className="capitalize">{v}</span> },
+            { key: 'component_count', header: 'Components', align: 'center' },
+            {
+              key: '__actions', header: 'Actions', align: 'center',
+              render: (_v, s) => (
+                <div className="flex items-center justify-center gap-1">
+                  <Button size="sm" variant="outline" className="h-7" onClick={() => openAssign(s)}>
+                    <Users2 className="w-3.5 h-3.5 mr-1.5" /> Assign
+                  </Button>
+                  <Button size="icon" aria-label="Edit" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}><Edit className="w-3.5 h-3.5" /></Button>
+                  <Button size="icon" aria-label="Delete" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(s)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </div>
 
       <Dialog open={!!assignTarget} onOpenChange={(o) => !o && setAssignTarget(null)}>

@@ -303,84 +303,80 @@ export default function StockTransactions() {
           </div>
 
           {/* Transaction Log */}
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden min-w-0">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Transaction Log</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-56">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input placeholder="Search transactions..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
+          <AdvancedDataTable<Transaction>
+            title="Transaction Log"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input placeholder="Search transactions..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <Combobox
                   options={[{ value: 'all', label: 'All types' }, ...TX_TYPES]}
                   value={typeFilter}
                   onChange={setTypeFilter}
                   searchPlaceholder="Search types..."
-                  className="w-40 h-9"
+                  className="text-sm w-40 h-8"
                 />
-                <Input type="date" className="h-9 w-[140px]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
-                <Input type="date" className="h-9 w-[140px]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchTransactions} disabled={loading}>
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={fetchTransactions} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-                <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
-                  <Download className="w-4 h-4 mr-2" /> Export
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4">
-              <AdvancedDataTable<Transaction>
-                data={filteredTx}
-                keyExtractor={(tx) => tx.id}
-                loading={loading}
-                emptyMessage="No transactions found."
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'transaction_number', header: 'Txn No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : ''}</span> },
-                  {
-                    key: 'item_name', header: 'Item', sortable: true,
-                    render: (v, tx) => (
-                      <>
-                        {v}
-                        <span className="text-xs text-muted-foreground ml-1 font-mono">({tx.item_code})</span>
-                      </>
-                    ),
-                  },
-                  {
-                    key: 'transaction_type', header: 'Type', sortable: true,
-                    render: (v) => {
-                      const typeInfo = TX_TYPE_MAP[v] || { label: v, className: 'bg-muted text-muted-foreground border-border' };
-                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${typeInfo.className}`}>{typeInfo.label}</span>;
-                    },
-                  },
-                  {
-                    key: 'quantity_change', header: 'Qty', sortable: true,
-                    render: (v) => (
-                      <span className={`flex items-center gap-1 font-mono ${v > 0 ? 'text-success' : 'text-destructive'}`}>
-                        {v > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        {v > 0 ? '+' : ''}{v}
-                      </span>
-                    ),
-                  },
-                  { key: 'total_cost', header: 'Cost', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
-                  {
-                    key: '__location', header: 'Location',
-                    render: (_v, tx) => (
-                      <span className="text-xs text-muted-foreground">
-                        {tx.transaction_type === 'transfer'
-                          ? `${tx.from_location_name || '?'} → ${tx.to_location_name || '?'}`
-                          : tx.to_location_name || tx.from_location_name || '—'}
-                      </span>
-                    ),
-                  },
-                  { key: 'reference_type', header: 'Reference', render: (v) => <span className="text-xs text-muted-foreground">{v || '—'}</span> },
-                ]}
-              />
-            </div>
-          </div>
+              </>
+            }
+            dateFilterKey={false}
+            autoFilters={false}
+            data={filteredTx}
+            keyExtractor={(tx) => tx.id}
+            loading={loading}
+            emptyMessage="No transactions found."
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'transaction_number', header: 'Txn No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+              { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? formatDate(v) : ''}</span> },
+              {
+                key: 'item_name', header: 'Item', sortable: true,
+                render: (v, tx) => (
+                  <>
+                    {v}
+                    <span className="text-xs text-muted-foreground ml-1 font-mono">({tx.item_code})</span>
+                  </>
+                ),
+              },
+              {
+                key: 'transaction_type', header: 'Type', sortable: true,
+                render: (v) => {
+                  const typeInfo = TX_TYPE_MAP[v] || { label: v, className: 'bg-muted text-muted-foreground border-border' };
+                  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${typeInfo.className}`}>{typeInfo.label}</span>;
+                },
+              },
+              {
+                key: 'quantity_change', header: 'Qty', sortable: true,
+                render: (v) => (
+                  <span className={`flex items-center gap-1 font-mono ${v > 0 ? 'text-success' : 'text-destructive'}`}>
+                    {v > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                    {v > 0 ? '+' : ''}{v}
+                  </span>
+                ),
+              },
+              { key: 'total_cost', header: 'Cost', sortable: true, render: (v) => <span className="font-mono text-muted-foreground">{fmt(v)}</span> },
+              {
+                key: '__location', header: 'Location',
+                render: (_v, tx) => (
+                  <span className="text-xs text-muted-foreground">
+                    {tx.transaction_type === 'transfer'
+                      ? `${tx.from_location_name || '?'} → ${tx.to_location_name || '?'}`
+                      : tx.to_location_name || tx.from_location_name || '—'}
+                  </span>
+                ),
+              },
+              { key: 'reference_type', header: 'Reference', render: (v) => <span className="text-xs text-muted-foreground">{v || '—'}</span> },
+            ]}
+          />
         </div>
       </div>
       </div>

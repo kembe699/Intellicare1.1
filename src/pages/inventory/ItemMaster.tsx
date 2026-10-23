@@ -804,29 +804,31 @@ export default function ItemMaster() {
           </div>
 
           {/* BOTTOM: Item Directory */}
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Item Directory</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-56">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input placeholder="Search items..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
+          <AdvancedDataTable<InventoryItem>
+            title="Item Directory"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input placeholder="Search items..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <Combobox
                   options={[{ value: 'all', label: 'All categories' }, ...CATEGORY_OPTIONS]}
                   value={categoryFilter}
                   onChange={setCategoryFilter}
                   searchPlaceholder="Search categories..."
-                  className="w-44 h-9"
+                  className="text-sm w-44 h-8"
                 />
                 <Combobox
                   options={STOCK_FILTER_OPTIONS}
                   value={stockFilter}
                   onChange={setStockFilter}
                   searchPlaceholder="Search..."
-                  className="w-40 h-9"
+                  className="text-sm w-40 h-8"
                 />
-                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchItems} disabled={loading}>
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={fetchItems} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
                 <div className="flex items-center gap-2 mr-1">
@@ -843,86 +845,79 @@ export default function ItemMaster() {
                     onChange={setViewLocationId}
                     placeholder="All locations"
                     searchPlaceholder="Search locations..."
-                    className="h-9 w-56"
+                    className="h-8 w-56"
                   />
                 </div>
-                <Button variant="outline" size="sm" className="h-9" onClick={exportCSV}>
-                  <Download className="w-4 h-4 mr-2" /> Export
-                </Button>
-                <Button variant="outline" size="sm" className="h-9" onClick={() => setShowBulkUpload(true)}>
+                <Button variant="outline" size="sm" className="h-8" onClick={() => setShowBulkUpload(true)}>
                   <Upload className="w-4 h-4 mr-2" /> Bulk Upload
                 </Button>
-                <Button variant="outline" size="sm" className="h-9" onClick={() => setShowPriceAdjustment(true)}>
+                <Button variant="outline" size="sm" className="h-8" onClick={() => setShowPriceAdjustment(true)}>
                   <Percent className="w-4 h-4 mr-2" /> Price Adjustment
                 </Button>
-              </div>
-            </div>
-
-            <div className="p-4">
-              <AdvancedDataTable<InventoryItem>
-                data={filteredItems}
-                keyExtractor={(item) => item.id}
-                loading={loading}
-                loadingMessage="Loading items at this location..."
-                emptyMessage="No items held at this location yet."
-                onRowClick={(item) => openEdit(item)}
-                rowClassName={(item) => editingItem?.id === item.id ? 'bg-primary/5' : ''}
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'item_code', header: 'Code', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  {
-                    key: 'item_name', header: 'Item Name', sortable: true,
-                    render: (v, item) => (
-                      <>
-                        {v}
-                        <span className="text-xs text-muted-foreground ml-1">({item.unit_of_measure})</span>
-                      </>
-                    ),
-                  },
-                  { key: 'item_category', header: 'Category', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
-                  {
-                    key: 'quantity_on_hand',
-                    // Name the number rather than leaving the reader to assume. Filtered
-                    // to a store it is that store's stock; unfiltered it is the item's
-                    // on-hand, the figure dispensing and billing are gated on.
-                    header: viewLocationId
-                      ? `At ${locations.find((l: any) => String(l.id) === viewLocationId)?.location_name || 'location'}`
-                      : 'On Hand',
-                    sortable: true,
-                  },
-                  { key: 'average_unit_cost', header: 'Unit Cost', sortable: true, render: (v) => <span className="text-muted-foreground">{formatCurrency(v)}</span> },
-                  {
-                    key: '__value', header: 'Value',
-                    render: (_v, item) => <span className="font-medium">{formatCurrency(item.quantity_on_hand * (item.average_unit_cost || 0))}</span>,
-                  },
-                  {
-                    key: '__status', header: 'Status',
-                    render: (_v, item) => {
-                      const status = stockStatus(item);
-                      return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${status.className}`}>{status.label}</span>;
-                    },
-                  },
-                  {
-                    key: '__actions', header: 'Actions',
-                    render: (_v, item) => (
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewItem(item); }}><Eye className="w-3.5 h-3.5" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(item); }}><Edit className="w-3.5 h-3.5" /></Button>
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </div>
+              </>
+            }
+            autoFilters={false}
+            data={filteredItems}
+            keyExtractor={(item) => item.id}
+            loading={loading}
+            loadingMessage="Loading items at this location..."
+            emptyMessage="No items held at this location yet."
+            onRowClick={(item) => openEdit(item)}
+            rowClassName={(item) => editingItem?.id === item.id ? 'bg-primary/5' : ''}
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'item_code', header: 'Code', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+              {
+                key: 'item_name', header: 'Item Name', sortable: true,
+                render: (v, item) => (
+                  <>
+                    {v}
+                    <span className="text-xs text-muted-foreground ml-1">({item.unit_of_measure})</span>
+                  </>
+                ),
+              },
+              { key: 'item_category', header: 'Category', sortable: true, render: (v) => <span className="capitalize text-muted-foreground">{v}</span> },
+              {
+                key: 'quantity_on_hand',
+                // Name the number rather than leaving the reader to assume. Filtered
+                // to a store it is that store's stock; unfiltered it is the item's
+                // on-hand, the figure dispensing and billing are gated on.
+                header: viewLocationId
+                  ? `At ${locations.find((l: any) => String(l.id) === viewLocationId)?.location_name || 'location'}`
+                  : 'On Hand',
+                sortable: true,
+              },
+              { key: 'average_unit_cost', header: 'Unit Cost', sortable: true, render: (v) => <span className="text-muted-foreground">{formatCurrency(v)}</span> },
+              {
+                key: '__value', header: 'Value',
+                render: (_v, item) => <span className="font-medium">{formatCurrency(item.quantity_on_hand * (item.average_unit_cost || 0))}</span>,
+              },
+              {
+                key: '__status', header: 'Status',
+                render: (_v, item) => {
+                  const status = stockStatus(item);
+                  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border ${status.className}`}>{status.label}</span>;
+                },
+              },
+              {
+                key: '__actions', header: 'Actions',
+                render: (_v, item) => (
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); viewItem(item); }}><Eye className="w-3.5 h-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(item); }}><Edit className="w-3.5 h-3.5" /></Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
       </div>
 
       {/* Item Details Modal */}
       {selectedItem && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-2xl rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-2xl max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <div>
                 <h3 className="font-semibold text-lg font-mono">{selectedItem.item_code}</h3>
@@ -1039,8 +1034,8 @@ export default function ItemMaster() {
 
       {/* Bulk Upload Modal */}
       {showBulkUpload && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-lg max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Upload className="w-5 h-5 text-primary" /> Bulk Upload Items
@@ -1109,8 +1104,8 @@ export default function ItemMaster() {
 
       {/* Bulk Price Adjustment Modal */}
       {showPriceAdjustment && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Percent className="w-5 h-5 text-primary" /> Bulk Price Adjustment

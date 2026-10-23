@@ -825,100 +825,97 @@ export default function PatientsBill() {
           </div>
 
           {/* Bill Directory */}
-          <div className="bg-card rounded-lg border shadow-sm p-0 flex flex-col overflow-hidden flex-1 min-h-0">
-            <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-              <h3 className="font-medium">Bill Directory</h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative w-56">
-                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input placeholder="Search bill or patient..." className="pl-8 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
+          <AdvancedDataTable<any>
+            title="Bill Directory"
+            searchSlot={
+              <div className="relative w-52">
+                <Search className="w-4 h-4 absolute left-2.5 top-2 text-muted-foreground" />
+                <Input placeholder="Search bill or patient..." className="text-sm pl-8 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+            }
+            toolbarExtra={
+              <>
                 <Combobox
                   options={STATUS_FILTER_OPTIONS}
                   value={statusFilter}
                   onChange={setStatusFilter}
                   searchPlaceholder="Search..."
-                  className="w-40 h-9"
+                  className="text-sm w-40 h-8"
                 />
-                <Input type="date" className="h-9 w-[140px]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={filterDateFrom} max={filterDateTo || undefined} onChange={e => setFilterDateFrom(e.target.value)} />
                 <span className="text-xs text-muted-foreground">to</span>
-                <Input type="date" className="h-9 w-[140px]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
-                <Button variant="outline" size="icon" aria-label="Refresh" className="h-9 w-9" onClick={fetchBills} disabled={loading}>
+                <Input type="date" className="text-sm h-8 w-[9.5rem]" value={filterDateTo} min={filterDateFrom || undefined} onChange={e => setFilterDateTo(e.target.value)} />
+                <Button variant="outline" size="icon" aria-label="Refresh" className="h-8 w-8" onClick={fetchBills} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4">
-              <AdvancedDataTable<any>
-                data={filteredBills}
-                keyExtractor={(bill) => bill.id}
-                loading={loading}
-                emptyMessage="No bills found."
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                exportable
-                exportFileName="patient-bills"
-                toolbarExtra={
-                  <Button size="sm" onClick={() => { setNewBillSearch(''); setShowWalkinForm(false); setShowNewBillModal(true); }}>
-                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Create New Bill
-                  </Button>
-                }
-                columns={[
-                  {
-                    key: 'bill_number', header: 'Bill No.', sortable: true,
-                    render: (v, bill) => (
-                      <span className="font-mono text-primary font-medium cursor-pointer" onClick={() => navigate(`/patients-bill/${bill.id}`)}>
-                        {v}
+                <Button size="sm" className="h-8 text-xs" onClick={() => { setNewBillSearch(''); setShowWalkinForm(false); setShowNewBillModal(true); }}>
+                  <Plus className="w-3.5 h-3.5 mr-1.5" /> Create New Bill
+                </Button>
+              </>
+            }
+            dateFilterKey={false}
+            autoFilters={false}
+            data={filteredBills}
+            keyExtractor={(bill) => bill.id}
+            loading={loading}
+            emptyMessage="No bills found."
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            exportable
+            exportFileName="patient-bills"
+            columns={[
+              {
+                key: 'bill_number', header: 'Bill No.', sortable: true,
+                render: (v, bill) => (
+                  <span className="font-mono text-primary font-medium cursor-pointer" onClick={() => navigate(`/patients-bill/${bill.id}`)}>
+                    {v}
+                  </span>
+                ),
+              },
+              {
+                key: 'bill_date', header: 'Date', sortable: true,
+                render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? new Date(v).toLocaleString() : '—'}</span>,
+              },
+              { key: 'patient_name', header: 'Patient', sortable: true },
+              { key: 'total_amount', header: 'Total', sortable: true, render: (v) => <span className="text-muted-foreground">{parseFloat(v).toFixed(2)}</span> },
+              {
+                key: 'balance_amount', header: 'Balance', sortable: true,
+                render: (v) => (
+                  <div className="flex items-center gap-1.5 font-medium">
+                    {parseFloat(v).toFixed(2)}
+                    {parseFloat(v) < 0 && (
+                      <span title={`Overpaid by ${Math.abs(parseFloat(v)).toFixed(2)} — paid amount exceeds the bill total. Review before refunding or adjusting.`}>
+                        <AlertTriangle className="w-3.5 h-3.5 text-warning" />
                       </span>
-                    ),
-                  },
-                  {
-                    key: 'bill_date', header: 'Date', sortable: true,
-                    render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? new Date(v).toLocaleString() : '—'}</span>,
-                  },
-                  { key: 'patient_name', header: 'Patient', sortable: true },
-                  { key: 'total_amount', header: 'Total', sortable: true, render: (v) => <span className="text-muted-foreground">{parseFloat(v).toFixed(2)}</span> },
-                  {
-                    key: 'balance_amount', header: 'Balance', sortable: true,
-                    render: (v) => (
-                      <div className="flex items-center gap-1.5 font-medium">
-                        {parseFloat(v).toFixed(2)}
-                        {parseFloat(v) < 0 && (
-                          <span title={`Overpaid by ${Math.abs(parseFloat(v)).toFixed(2)} — paid amount exceeds the bill total. Review before refunding or adjusting.`}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-                          </span>
-                        )}
-                      </div>
-                    ),
-                  },
-                  { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
-                  {
-                    key: '__actions', header: 'Actions',
-                    render: (_v, bill) => (
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate(`/patients-bill/${bill.id}`)}>
-                          <Eye className="w-3.5 h-3.5" />
-                        </Button>
-                        {parseFloat(bill.balance_amount) > 0 && (
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => openPaymentModal(bill)}>
-                            <CreditCard className="w-3.5 h-3.5 mr-1" /> Pay
-                          </Button>
-                        )}
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </div>
+                    )}
+                  </div>
+                ),
+              },
+              { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
+              {
+                key: '__actions', header: 'Actions',
+                render: (_v, bill) => (
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate(`/patients-bill/${bill.id}`)}>
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                    {parseFloat(bill.balance_amount) > 0 && (
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => openPaymentModal(bill)}>
+                        <CreditCard className="w-3.5 h-3.5 mr-1" /> Pay
+                      </Button>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
       </div>
 
       {/* Payment Modal */}
       {selectedBill && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Record Payment
@@ -1051,8 +1048,8 @@ export default function PatientsBill() {
           (an existing active bill if they have one, else a fresh one) where Add
           Service/Product, scheme pricing, and payment already live. */}
       {showNewBillModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-md max-h-[80vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Create New Bill</h3>
               <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowNewBillModal(false)}>
@@ -1142,8 +1139,8 @@ export default function PatientsBill() {
 
       {/* Start Cashier Shift Modal */}
       {showStartShiftModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg">Start Cashier Shift</h3>
               <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowStartShiftModal(false)}>
@@ -1199,8 +1196,8 @@ export default function PatientsBill() {
 
       {/* Accept Deposit Modal */}
       {showAcceptDepositModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-primary" /> Accept Deposit
@@ -1247,8 +1244,8 @@ export default function PatientsBill() {
 
       {/* Refund Deposit Modal */}
       {showRefundDepositModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <Undo2 className="w-5 h-5 text-primary" /> Refund Deposit
@@ -1302,8 +1299,8 @@ export default function PatientsBill() {
 
       {/* Invoice Created Modal (credit payments) */}
       {invoiceData && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-sm rounded-xl shadow-lg border overflow-hidden flex flex-col">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-sm">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" /> Invoice Created

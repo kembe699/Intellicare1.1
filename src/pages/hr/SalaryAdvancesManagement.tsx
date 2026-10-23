@@ -190,55 +190,45 @@ export default function SalaryAdvancesManagement() {
           actions={<Button size="sm" onClick={() => setShowCreate(true)}><Plus className="w-4 h-4 mr-2" /> Request Advance</Button>}
         />
 
-        <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-          <div className="p-4 border-b flex justify-between items-center bg-muted/30 flex-wrap gap-3">
-            <h3 className="font-medium">Advances</h3>
-            <Combobox
-              options={[{ value: 'all', label: 'All Status' }, { value: 'pending', label: 'Pending' }, { value: 'approved', label: 'Approved' }, { value: 'disbursed', label: 'Disbursed' }, { value: 'repaying', label: 'Repaying' }, { value: 'repaid', label: 'Repaid' }, { value: 'cancelled', label: 'Cancelled' }]}
-              value={statusFilter} onChange={setStatusFilter} searchPlaceholder="Search..." className="w-[160px] h-9"
-            />
-          </div>
-          <div className="p-4">
-            <AdvancedDataTable<Advance>
-              data={advances}
-              keyExtractor={(a) => a.id}
-              loading={loading}
-              emptyMessage="No salary advances yet."
-              pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-              columns={[
-                { key: 'advance_number', header: 'Advance No.', render: (v) => <span className="font-mono text-xs">{v}</span> },
-                { key: 'first_name', header: 'Employee', render: (_v, a) => <span className="font-medium">{a.first_name} {a.last_name}</span> },
-                { key: 'request_date', header: 'Date', render: (v) => formatDate(v) },
-                { key: 'amount', header: 'Amount', align: 'right', render: (v, a) => <span className="font-mono">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
-                { key: 'balance_remaining', header: 'Balance', align: 'right', render: (v, a) => <span className="font-mono text-warning">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
-                { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },
-                {
-                  key: '__actions', header: 'Actions', align: 'center',
-                  render: (_v, a) => (
-                    <div className="flex items-center justify-center gap-1">
-                      {a.status === 'pending' && (
-                        <>
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleApprove(a)}>Approve</Button>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleCancel(a)}>Cancel</Button>
-                        </>
-                      )}
-                      {a.status === 'approved' && (
-                        <>
-                          <Button size="sm" className="h-7 text-xs" onClick={() => navigate('/accounting/payments/staff')} title="Advances are disbursed in Accounting › Payments › Staff Payments">Disburse in Accounting</Button>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleCancel(a)}>Cancel</Button>
-                        </>
-                      )}
-                      {(a.status === 'disbursed' || a.status === 'repaying') && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openAction(a, 'repay')}>Record Repayment</Button>
-                      )}
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate(`/hr/employees/${a.employee_id}`)}>View Employee</Button>
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        </div>
+        <AdvancedDataTable<Advance>
+          title="Advances"
+          data={advances}
+          keyExtractor={(a) => a.id}
+          loading={loading}
+          emptyMessage="No salary advances yet."
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'advance_number', header: 'Advance No.', render: (v) => <span className="font-mono text-xs">{v}</span> },
+            { key: 'first_name', header: 'Employee', render: (_v, a) => <span className="font-medium">{a.first_name} {a.last_name}</span> },
+            { key: 'request_date', header: 'Date', render: (v) => formatDate(v) },
+            { key: 'amount', header: 'Amount', align: 'right', render: (v, a) => <span className="font-mono">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
+            { key: 'balance_remaining', header: 'Balance', align: 'right', render: (v, a) => <span className="font-mono text-warning">{a.currency} {parseFloat(String(v)).toFixed(2)}</span> },
+            { key: 'status', header: 'Status', align: 'center', render: (v) => <StatusBadge status={v} label={v} map={STATUS_TONE} /> },
+            {
+              key: '__actions', header: 'Actions', align: 'center',
+              render: (_v, a) => (
+                <div className="flex items-center justify-center gap-1">
+                  {a.status === 'pending' && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleApprove(a)}>Approve</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleCancel(a)}>Cancel</Button>
+                    </>
+                  )}
+                  {a.status === 'approved' && (
+                    <>
+                      <Button size="sm" className="h-7 text-xs" onClick={() => navigate('/accounting/payments/staff')} title="Advances are disbursed in Accounting › Payments › Staff Payments">Disburse in Accounting</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleCancel(a)}>Cancel</Button>
+                    </>
+                  )}
+                  {(a.status === 'disbursed' || a.status === 'repaying') && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openAction(a, 'repay')}>Record Repayment</Button>
+                  )}
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate(`/hr/employees/${a.employee_id}`)}>View Employee</Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </div>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

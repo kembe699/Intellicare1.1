@@ -271,6 +271,8 @@ export default function LISQueue() {
 
           <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-border bg-card/40">
             <AdvancedDataTable<any>
+              toolbar={false}
+              pagination={{ enabled: false }}
               data={waiting}
               keyExtractor={(p) => p.order_id}
               emptyMessage="The waiting list is currently empty."

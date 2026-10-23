@@ -829,61 +829,55 @@ export default function PrescriptionManagement() {
         </div>
 
         {/* Prescription Directory */}
-        <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-            <div className="p-4 border-b bg-muted/30 flex flex-wrap items-end gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Search Rx or patient..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">From</Label>
-                <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">To</Label>
-                <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-              </div>
+        <AdvancedDataTable<any>
+          title="Prescriptions"
+          searchSlot={
+            <div className="relative w-52">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Search Rx or patient..." className="h-8 text-sm pl-8" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          }
+          toolbarExtra={
+            <>
+              <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
               <Combobox
                 options={STATUS_FILTER_OPTIONS}
                 value={statusFilter}
                 onChange={setStatusFilter}
                 searchPlaceholder="Search..."
-                className="w-40 h-9"
+                className="w-40 h-8"
               />
-              <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
-                <FileSpreadsheet className="w-4 h-4" /> Export CSV
-              </Button>
               <Button variant="outline" size="icon" aria-label="Refresh" onClick={fetchPrescriptions} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
-            </div>
-
-            <div className="p-4">
-              <AdvancedDataTable<any>
-                data={filteredRx}
-                keyExtractor={(rx) => rx.id}
-                loading={loading}
-                emptyMessage="No prescriptions found."
-                onRowClick={(rx) => openDetail(rx)}
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'prescription_number', header: 'Rx No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
-                  { key: 'patient_name', header: 'Patient', render: (v) => v || 'Unknown' },
-                  { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
-                  { key: 'prescription_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
-                  { key: '__items', header: 'Items', render: (_v, rx) => <span className="text-muted-foreground">{rx.dispensed_count}/{rx.line_count}</span> },
-                  { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
-                ]}
-              />
-            </div>
-        </div>
+            </>
+          }
+          dateFilterKey={false}
+          autoFilters={false}
+          countLabel={['prescription', 'prescriptions']}
+          data={filteredRx}
+          keyExtractor={(rx) => rx.id}
+          loading={loading}
+          emptyMessage="No prescriptions found."
+          onRowClick={(rx) => openDetail(rx)}
+          pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+          columns={[
+            { key: 'prescription_number', header: 'Rx No.', sortable: true, render: (v) => <span className="font-mono text-primary font-medium">{v}</span> },
+            { key: 'patient_name', header: 'Patient', render: (v) => v || 'Unknown' },
+            { key: 'doctor_name', header: 'Doctor', sortable: true, render: (v) => <span className="text-muted-foreground">{v ? `Dr. ${v}` : '—'}</span> },
+            { key: 'prescription_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground">{formatDate(v)}</span> },
+            { key: '__items', header: 'Items', render: (_v, rx) => <span className="text-muted-foreground">{rx.dispensed_count}/{rx.line_count}</span> },
+            { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
+          ]}
+        />
       </div>
       </div>
 
       {/* Prescription Detail Modal */}
       {selectedRx && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card w-full max-w-lg rounded-xl shadow-lg border overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="ic-modal-overlay">
+          <div className="ic-modal max-w-lg max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b bg-muted/30">
               <div>
                 <h3 className="font-semibold text-lg">{selectedRx.prescription_number}</h3>

@@ -942,82 +942,77 @@ const PurchaseRequisitions: React.FC = () => {
           </div>
 
           {/* RIGHT: Filters + Table */}
-          <div className="bg-card rounded-lg border shadow-sm flex flex-col overflow-hidden">
-            <div className="p-4 border-b bg-muted/30 flex flex-wrap items-end gap-3">
-              <div className="relative flex-1 min-w-[200px]">
+          <AdvancedDataTable<PR>
+            title="Requisitions"
+            searchSlot={
+              <div className="relative w-52">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input className="pl-9" placeholder="Search PRs..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <Input className="h-8 text-sm pl-8" placeholder="Search PRs..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
-              <div>
-                <Label className="text-xs mb-1 block">From</Label>
-                <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">To</Label>
-                <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-              </div>
-              <Combobox
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'draft', label: 'Draft' },
-                  { value: 'submitted', label: 'Submitted' },
-                  { value: 'approved', label: 'Approved' },
-                  { value: 'rejected', label: 'Rejected' },
-                  { value: 'cancelled', label: 'Cancelled' },
-                ]}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                searchPlaceholder="Search..."
-                className="w-[150px]"
-              />
-              <Button type="button" variant="outline" onClick={handleExportCSV} className="gap-1.5">
-                <Download className="w-3.5 h-3.5" /> Export CSV
-              </Button>
-            </div>
-            <div className="p-4">
-              <AdvancedDataTable<PR>
-                data={filteredPRs}
-                keyExtractor={(pr) => pr.id}
-                emptyMessage="No requisitions found"
-                pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
-                columns={[
-                  { key: 'pr_number', header: 'PR Number', sortable: true, render: (v) => <span className="text-sm font-mono font-medium">{v}</span> },
-                  { key: 'requisition_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{v ? formatDate(v) : '—'}</span> },
-                  { key: 'requester_name', header: 'Requested By', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
-                  { key: 'department', header: 'Department', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
-                  { key: 'requisition_type', header: 'Type', align: 'center', render: (v) => <Badge variant="outline" className="text-xs capitalize">{v}</Badge> },
-                  { key: 'total_amount', header: 'Amount', align: 'right', sortable: true, render: (v) => <span className="font-mono text-sm">{fmt(v)}</span> },
-                  { key: 'status', header: 'Status', align: 'center', sortable: true, render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v}</Badge> },
-                  {
-                    key: '__actions', header: 'Actions', align: 'center',
-                    render: (_v, pr) => (
-                      <div className="flex items-center justify-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => viewPR(pr)}><Eye className="w-3.5 h-3.5" /></Button>
-                        {pr.status === 'draft' && (
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(pr)}><Edit className="w-3.5 h-3.5" /></Button>
-                        )}
-                        {pr.status === 'draft' && (
-                          <Button size="sm" variant="ghost" onClick={() => submitPR(pr.id)} disabled={processing?.id === pr.id}>
-                            {processing?.id === pr.id && processing.action === 'submit' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-primary" />}
-                          </Button>
-                        )}
-                        {pr.status === 'submitted' && (
-                          <>
-                            <Button size="sm" variant="ghost" onClick={() => approvePR(pr.id)} disabled={processing?.id === pr.id}>
-                              {processing?.id === pr.id && processing.action === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => rejectPR(pr.id)} disabled={processing?.id === pr.id}>
-                              {processing?.id === pr.id && processing.action === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </div>
+            }
+            toolbarExtra={
+              <>
+                <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                <Input type="date" className="h-8 text-sm w-[9.5rem]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <Combobox
+                  options={[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'submitted', label: 'Submitted' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'rejected', label: 'Rejected' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                  ]}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  searchPlaceholder="Search..."
+                  className="w-[9.5rem]"
+                />
+              </>
+            }
+            dateFilterKey={false}
+            autoFilters={false}
+            countLabel={['requisition', 'requisitions']}
+            data={filteredPRs}
+            keyExtractor={(pr) => pr.id}
+            emptyMessage="No requisitions found"
+            pagination={{ enabled: true, pageSize: 20, pageSizeOptions: [20, 50, 100] }}
+            columns={[
+              { key: 'pr_number', header: 'PR Number', sortable: true, render: (v) => <span className="text-sm font-mono font-medium">{v}</span> },
+              { key: 'requisition_date', header: 'Date', sortable: true, render: (v) => <span className="text-sm">{v ? formatDate(v) : '—'}</span> },
+              { key: 'requester_name', header: 'Requested By', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
+              { key: 'department', header: 'Department', sortable: true, render: (v) => <span className="text-sm">{v || '—'}</span> },
+              { key: 'requisition_type', header: 'Type', align: 'center', render: (v) => <Badge variant="outline" className="text-xs capitalize">{v}</Badge> },
+              { key: 'total_amount', header: 'Amount', align: 'right', sortable: true, render: (v) => <span className="font-mono text-sm">{fmt(v)}</span> },
+              { key: 'status', header: 'Status', align: 'center', sortable: true, render: (v) => <Badge className={`text-xs ${getStatusColor(v)}`}>{v}</Badge> },
+              {
+                key: '__actions', header: 'Actions', align: 'center',
+                render: (_v, pr) => (
+                  <div className="flex items-center justify-center gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => viewPR(pr)}><Eye className="w-3.5 h-3.5" /></Button>
+                    {pr.status === 'draft' && (
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(pr)}><Edit className="w-3.5 h-3.5" /></Button>
+                    )}
+                    {pr.status === 'draft' && (
+                      <Button size="sm" variant="ghost" onClick={() => submitPR(pr.id)} disabled={processing?.id === pr.id}>
+                        {processing?.id === pr.id && processing.action === 'submit' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-primary" />}
+                      </Button>
+                    )}
+                    {pr.status === 'submitted' && (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => approvePR(pr.id)} disabled={processing?.id === pr.id}>
+                          {processing?.id === pr.id && processing.action === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => rejectPR(pr.id)} disabled={processing?.id === pr.id}>
+                          {processing?.id === pr.id && processing.action === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
 
         {/* Details Dialog */}

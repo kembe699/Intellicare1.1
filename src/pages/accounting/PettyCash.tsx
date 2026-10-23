@@ -127,9 +127,9 @@ export default function PettyCash() {
                   <p className="text-lg font-semibold font-mono tabular-nums mt-1">{formatMoney(stats.outMonth, data!.currency)}</p>
                 </div>
               </div>
-              <div className="bg-card rounded-lg border shadow-sm p-4">
-                <h3 className="font-medium mb-3">Movements</h3>
                 <AdvancedDataTable<Movement>
+                  title="Movements"
+                  countLabel={['movement', 'movements']}
                   data={data!.movements}
                   loading={loading}
                   keyExtractor={(m) => m.id}
@@ -139,13 +139,12 @@ export default function PettyCash() {
                   columns={[
                     { key: 'transaction_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap">{formatDate(v)}</span> },
                     { key: 'description', header: 'Description', render: (v) => <span className="text-sm">{v}</span> },
-                    { key: 'source_module', header: 'Type', render: (v) => <span className="text-sm text-muted-foreground">{SOURCE_LABEL[v] || v || '—'}</span> },
+                    { key: 'source_module', header: 'Type', exportValue: (m) => SOURCE_LABEL[m.source_module || ''] || m.source_module || '', render: (v) => <span className="text-sm text-muted-foreground">{SOURCE_LABEL[v] || v || '—'}</span> },
                     { key: 'money_in', header: 'In', align: 'right', render: (v) => (v > 0 ? <span className="font-mono tabular-nums text-success whitespace-nowrap">{formatMoney(v, data!.currency)}</span> : '') },
                     { key: 'money_out', header: 'Out', align: 'right', render: (v) => (v > 0 ? <span className="font-mono tabular-nums whitespace-nowrap">{formatMoney(v, data!.currency)}</span> : '') },
                   ]}
                   empty={{ icon: Coins, title: 'No movements yet', message: 'Top up the float to start.' }}
                 />
-              </div>
             </>
           )}
         </div>
