@@ -277,7 +277,7 @@ async function resolveLineAccounts(line, ctx = {}) {
 
     const [[item]] = await db.query('SELECT * FROM inventory_items WHERE LOWER(item_name) = LOWER(:name) LIMIT 1', { replacements: { name } });
     if (item) {
-      const accounts = await resolveItemAccounts(item, ctx);
+      const accounts = await resolveItemAccounts(item, { ...ctx, need: ['revenue'] });
       return accounts.revenue;
     }
   }
