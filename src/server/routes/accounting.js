@@ -868,6 +868,67 @@ router.get('/receivables', authorize('accounting.read'), async (req, res) => {
   }
 });
 
+// ============ PETTY CASH (account 1108) ============
+// Balance and movements of the petty cash float. Top-ups are cash transfers into
+// 1108; spending is an expense whose paid-from account is 1108.
+router.get('/petty-cash', authorize('accounting.read'), async (req, res) => {
+  try {
+    const clinicId = parseInt(req.query.clinic_id) || req.user?.clinicId || 1;
+    const [[account]] = await sequelize.query(
+      `SELECT id, account_code, account_name, is_active FROM chart_of_accounts WHERE clinic_id = :clinicId AND account_code = '1108' LIMIT 1`,
+      { replacements: { clinicId } }
+    );
+    const { getBaseCurrencyCode } = require('../utils/baseCurrency');
+    const currency = await getBaseCurrencyCode();
+    if (!account || !account.is_active) return res.json({ account: account || null, currency, balance: 0, movements: [] });
+    const [[bal]] = await sequelize.query(
+      `SELECT COALESCE(SUM(debit_amount - credit_amount), 0)::float AS balance FROM account_ledger
+        WHERE account_id::text = :id AND COALESCE(is_posted, TRUE) = TRUE`,
+      { replacements: { id: String(account.id) } }
+    );
+    const [movements] = await sequelize.query(
+      `SELECT id, transaction_date, description, source_module, reference_number,
+              debit_amount::float AS money_in, credit_amount::float AS money_out, posted_by
+         FROM account_ledger
+        WHERE account_id::text = :id AND COALESCE(is_posted, TRUE) = TRUE
+        ORDER BY transaction_date DESC, created_at DESC
+        LIMIT 500`,
+      { replacements: { id: String(account.id) } }
+    );
+    res.json({ account, currency, balance: bal.balance, movements });
+  } catch (error) {
+    console.error('Error loading petty cash:', error);
+    res.status(500).json({ error: 'Failed to load petty cash' });
+  }
+});
+
+// Turns on the petty cash account — activates 1108 if it exists, otherwise creates it.
+// An explicit, user-confirmed action (nothing seeds it automatically).
+router.post('/petty-cash/setup', authorize('accounting.write'), async (req, res) => {
+  try {
+    const clinicId = parseInt(req.body?.clinic_id) || req.user?.clinicId || 1;
+    const [[existing]] = await sequelize.query(
+      `SELECT id, is_active FROM chart_of_accounts WHERE clinic_id = :clinicId AND account_code = '1108' LIMIT 1`,
+      { replacements: { clinicId } }
+    );
+    if (existing) {
+      if (!existing.is_active) {
+        await sequelize.query(`UPDATE chart_of_accounts SET is_active = TRUE, updated_at = NOW() WHERE id = :id`, { replacements: { id: existing.id } });
+      }
+      return res.json({ message: 'Petty cash account 1108 is active', id: existing.id, created: false });
+    }
+    const created = await ChartOfAccounts.create({
+      clinic_id: clinicId, account_code: '1108', account_name: 'Petty Cash', account_type: 'asset',
+      sub_account_type: 'current_asset', balance_type: 'debit', is_active: true,
+      description: 'Small cash float for minor purchases — topped up by cash transfer, spent through expenses',
+    });
+    res.status(201).json({ message: 'Petty cash account 1108 created', id: created.id, created: true });
+  } catch (error) {
+    console.error('Error setting up petty cash:', error);
+    res.status(500).json({ error: 'Failed to set up petty cash' });
+  }
+});
+
 // ============ FINANCIAL REPORTS ENDPOINTS ============
 
 // Get trial balance

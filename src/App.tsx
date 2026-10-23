@@ -89,6 +89,7 @@ const AccountingCreditNotes = lazyWithRetry(() => import('./pages/accounting/Cre
 const AccountingPayables = lazyWithRetry(() => import('./pages/accounting/Payables'));
 const AccountingStaffPayments = lazyWithRetry(() => import('./pages/accounting/StaffPayments'));
 const AccountingConsultantPayments = lazyWithRetry(() => import('./pages/accounting/ConsultantPayments'));
+const AccountingPettyCash = lazyWithRetry(() => import('./pages/accounting/PettyCash'));
 const CashierShift = lazyWithRetry(() => import('./pages/cashier/CashierShift'));
 const PurchaseOrders = lazyWithRetry(() => import('./pages/procurement/PurchaseOrders'));
 const DailyExpenses = lazyWithRetry(() => import('./pages/procurement/DailyExpenses'));
@@ -638,6 +639,11 @@ const AppRoutes = () => {
       <Route path="/accounting/payments/staff" element={
         <ProtectedRoute requiredPrivilege={['hr.payroll.write', 'hr.salary_advances.write']}>
           <AccountingStaffPayments />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/payments/petty-cash" element={
+        <ProtectedRoute requiredPrivilege="accounting.read">
+          <AccountingPettyCash />
         </ProtectedRoute>
       } />
       <Route path="/accounting/payments/refunds" element={

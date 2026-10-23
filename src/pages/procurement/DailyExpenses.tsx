@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -77,6 +77,19 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [bills, setBills] = useState<SupplierBill[]>([]);
   const [coaAccounts, setCoaAccounts] = useState<CoAAccount[]>([]);
+  // ?paid_from=<accountId> (e.g. from Accounting › Payments › Petty Cash): open a new
+  // expense with that account preset as the paid-from account.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paidFromParam = searchParams.get('paid_from');
+  useEffect(() => {
+    if (mode !== 'requests' || !paidFromParam || coaAccounts.length === 0) return;
+    const acct = coaAccounts.find((a) => String(a.id) === paidFromParam);
+    if (acct) {
+      setExpForm((f) => ({ ...f, account_id: String(acct.id), account_name: acct.account_name }));
+      setShowExpModal(true);
+    }
+    setSearchParams({}, { replace: true });
+  }, [mode, paidFromParam, coaAccounts]);
   // Central Categories feature: the expense account (debit side) now comes
   // FROM the category, read by AccountResolver.resolveExpenseAccount at pay
   // time — the "paid from" cash/bank account (expForm.account_id) stays a

@@ -193,6 +193,7 @@ const accountingDropdown: NavDropdown = {
     { group: 'Payments', label: 'Staff Payments', href: '/accounting/payments/staff', icon: Users2, privilege: ['hr.payroll.write', 'hr.salary_advances.write'] },
     { group: 'Payments', label: 'Refunds', href: '/accounting/payments/refunds', icon: RotateCcw, privilege: ['receipts.write', 'accounting.read'] },
     { group: 'Payments', label: 'Cash Transfers', href: '/accounting/cash-transfer', icon: Wallet, privilege: 'cash_transfers.write' },
+    { group: 'Payments', label: 'Petty Cash', href: '/accounting/payments/petty-cash', icon: Coins, privilege: 'accounting.read' },
   ]
 };
 
