@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { authorize } = require('../middleware/authorize');
 
@@ -10,7 +11,7 @@ const { sequelize, ChartOfAccounts } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { getBranchConditionSQL, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
-const { resolveCashOrBankAccount, BASE_CURRENCY } = require('./patientDeposits');
+const { resolveCashOrBankAccount } = require('./patientDeposits');
 const { postJournalEntry: sharedPostJournalEntry } = require('../services/JournalPostingService');
 
 // Neither invoice creation nor invoice payment ever touched the general ledger — an
@@ -51,7 +52,7 @@ async function postInvoiceJournalEntry({ clinicId, branchId, amount, currency, d
     // same underlying problem: a foreign-currency invoice never reached the
     // ledger at all. Now converts properly via the shared helper, same as
     // every other posting path.
-    clinicId, branchId, transaction, entryDate: today, description, reference, currency: currency || BASE_CURRENCY,
+    clinicId, branchId, transaction, entryDate: today, description, reference, currency: currency || (await getBaseCurrencyCode(transaction)),
     lines: [
       { accountId: debitAccount.id, debit: amount, description },
       { accountId: creditAccount.id, credit: amount, description },
@@ -95,12 +96,13 @@ router.post('/', authorize('invoices.write'), async (req, res) => {
     const branchId = getCreateBranchId(req);
     const terms = parseInt(payment_terms) || 30;
     const parsedAmount = parseFloat(amount) || 0;
+    const invCurrency = currency || (await getBaseCurrencyCode());
     let dueD = due_date;
     if (!dueD) { const dd = new Date(); dd.setDate(dd.getDate() + terms); dueD = dd.toISOString().split('T')[0]; }
 
     await sequelize.query(
       `INSERT INTO invoices (id,clinic_id,branch_id,bill_id,patient_id,patient_name,invoice_number,amount,amount_paid,balance_due,currency,payment_terms,due_date,status,notes,scheme_id,scheme_name,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,'unpaid',?,?,?,?,NOW(),NOW())`,
-      { replacements: [id,clinic_id||1,branchId,bill_id||null,patient_id,patient_name||'Unknown',invoiceNumber,parsedAmount,parsedAmount,currency||'SSP',terms,dueD,notes||null,scheme_id||null,scheme_name||null,req.user?.userId||null], transaction: t }
+      { replacements: [id,clinic_id||1,branchId,bill_id||null,patient_id,patient_name||'Unknown',invoiceNumber,parsedAmount,parsedAmount,invCurrency,terms,dueD,notes||null,scheme_id||null,scheme_name||null,req.user?.userId||null], transaction: t }
     );
 
     const svcs = typeof services === 'string' ? JSON.parse(services) : (services || []);
@@ -108,7 +110,7 @@ router.post('/', authorize('invoices.write'), async (req, res) => {
       const qty = s.quantity||1, up = parseFloat(s.unitPrice||s.price||s.unit_price||0);
       await sequelize.query(
         `INSERT INTO invoice_items (id,invoice_id,service_id,description,quantity,unit_price,amount,currency,created_at) VALUES (?,?,?,?,?,?,?,?,NOW())`,
-        { replacements: [uuidv4(),id,s.serviceId||s.service_id||null,s.serviceName||s.name||s.service_name||'Service',qty,up,parseFloat(s.totalPrice||s.total_price||(up*qty)),s.currency||currency||'SSP'], transaction: t }
+        { replacements: [uuidv4(),id,s.serviceId||s.service_id||null,s.serviceName||s.name||s.service_name||'Service',qty,up,parseFloat(s.totalPrice||s.total_price||(up*qty)),s.currency||invCurrency], transaction: t }
       );
     }
 

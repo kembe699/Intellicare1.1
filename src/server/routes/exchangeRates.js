@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { authorize } = require('../middleware/authorize');
 
 // Server-side role gate. These endpoints had none: any authenticated user of
@@ -196,7 +197,7 @@ router.get('/rates/history', async (req, res) => {
         AND from_currency = ? AND to_currency = ?
         AND effective_date >= ((CURRENT_DATE) - ((?)::text || ' day')::interval)
       ORDER BY effective_date ASC
-    `, { replacements: [clinicId, from_currency || 'USD', to_currency || 'SSP', lookback] });
+    `, { replacements: [clinicId, from_currency || 'USD', to_currency || (await getBaseCurrencyCode()), lookback] });
 
     res.json({ data: history });
   } catch (err) {

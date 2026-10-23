@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const router = express.Router();
 const { sequelize } = require('../models');
 const CurrencyService = require('../services/CurrencyService');
@@ -323,7 +324,7 @@ router.get('/drugs/:id/stock-level', authorize('pharmacy.read'), async (req, res
     res.json({
       total_stock: stock[0].quantity_on_hand || 0,
       selling_price: stock[0].selling_price || 0,
-      cost_currency: stock[0].cost_currency || 'SSP',
+      cost_currency: stock[0].cost_currency || (await getBaseCurrencyCode()),
       locations: stock,
       batches
     });
@@ -1523,13 +1524,13 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
     console.log('✅ Step 3 complete: Dispensing number:', dispensingNumber);
 
     // 4. Calculate pricing from inventory selling_price + accounting exchange rate
-    const curr = currency_code || item.cost_currency || 'SSP';
+    const curr = currency_code || item.cost_currency || (await getBaseCurrencyCode());
     let price = unit_price !== undefined ? unit_price : (item.selling_price || 0);
     // If currency differs from item cost_currency, try to get exchange rate from accounting
-    if (unit_price === undefined && curr !== (item.cost_currency || 'SSP')) {
+    if (unit_price === undefined && curr !== (item.cost_currency || (await getBaseCurrencyCode()))) {
       try {
         const AccountingService = require('../services/AccountingService');
-        const rate = await AccountingService.requireExchangeRate(cid, item.cost_currency || 'SSP', curr, new Date(), `price ${item.item_name || 'this item'} in ${curr}`);
+        const rate = await AccountingService.requireExchangeRate(cid, item.cost_currency || (await getBaseCurrencyCode()), curr, new Date(), `price ${item.item_name || 'this item'} in ${curr}`);
         price = (item.selling_price || 0) * rate;
       } catch (rateErr) {
         // Charging the unconverted price in another currency is the same silent 1:1 bug.

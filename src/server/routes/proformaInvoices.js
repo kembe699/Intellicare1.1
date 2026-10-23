@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { authorize } = require('../middleware/authorize');
 
 // Server-side role gate. These endpoints had none: any authenticated user of
@@ -112,7 +113,7 @@ router.post('/', authorize('proforma.write'), async (req, res) => {
     `, {
       replacements: {
         id, clinicId, branchId, proformaNumber, patient_id, patient_name: patient_name || '',
-        items: JSON.stringify(items), subtotal, currency: currency || 'SSP', notes: notes || null,
+        items: JSON.stringify(items), subtotal, currency: currency || (await getBaseCurrencyCode()), notes: notes || null,
         created_by: req.user?.id || null, created_by_name: req.user?.displayName || req.user?.email || 'System',
       },
     });
@@ -161,7 +162,7 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
 
     const items = typeof proforma.items === 'string' ? JSON.parse(proforma.items) : proforma.items;
     const clinicId = proforma.clinic_id;
-    const proformaCurrency = proforma.currency || 'SSP';
+    const proformaCurrency = proforma.currency || (await getBaseCurrencyCode());
 
     // Converts the proforma's items/subtotal from proformaCurrency into targetCurrency
     // using the rate configured under Accounting → Exchange Rates. A proforma is always
@@ -226,7 +227,7 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
       // already be a scheme bill (its own currency) or a prior cash bill in the base
       // currency; converting the incoming items to match keeps every line on that bill
       // in one consistent currency instead of re-introducing the mix this fix removes.
-      const targetCurrency = existingBill.bill_currency || 'SSP';
+      const targetCurrency = existingBill.bill_currency || (await getBaseCurrencyCode());
       const { items: convertedItems, subtotal: convertedSubtotal } = await convertToCurrency(targetCurrency);
       const existingServices = typeof existingBill.services === 'string' ? JSON.parse(existingBill.services) : (existingBill.services || []);
       const combinedServices = [...existingServices, ...convertedItems];

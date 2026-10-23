@@ -1,4 +1,5 @@
 const { sequelize } = require('../models');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { v4: uuidv4 } = require('uuid');
 const { CHECKLIST_TEMPLATE } = require('../scripts/migrateTheatreTables');
 const { addLineItemsToBill } = require('../utils/billingResolver');
@@ -105,10 +106,10 @@ class TheatreService {
       `INSERT INTO theatre_requests (id, clinic_id, branch_id, patient_id, requested_by, requesting_department,
          procedure_name, service_id, estimated_fee, fee_currency, bill_id, billed_at, diagnosis, priority, notes)
        VALUES (:id, :clinicId, :branchId, :patientId, :userId, :department,
-         :procedureName, :serviceId, :estimatedFee, 'SSP', :billId, :billedAt, :diagnosis, :priority, :notes)`,
+         :procedureName, :serviceId, :estimatedFee, :feeCurrency, :billId, :billedAt, :diagnosis, :priority, :notes)`,
       { replacements: {
           id, clinicId, branchId: branchId || null, patientId, userId: userId || null, department: department || null,
-          procedureName: service.service_name, serviceId, estimatedFee: fee, billId, billedAt: billId ? new Date() : null,
+          procedureName: service.service_name, serviceId, estimatedFee: fee, feeCurrency: await getBaseCurrencyCode(), billId, billedAt: billId ? new Date() : null,
           diagnosis: diagnosis || null, priority: validPriority, notes: notes || null,
         } }
     );
@@ -157,7 +158,7 @@ class TheatreService {
     } = data;
     let procedureFee = procedureFeeRaw != null ? parseFloat(procedureFeeRaw) : null;
     if (procedureFee != null && (isNaN(procedureFee) || procedureFee < 0)) throw httpError('procedure_fee must be a non-negative number', 400);
-    let feeCurrency = (feeCurrencyRaw || 'SSP').toUpperCase();
+    let feeCurrency = (feeCurrencyRaw || (await getBaseCurrencyCode())).toUpperCase();
     if (!clinicId) throw httpError('clinic_id is required', 400);
 
     let patientId = patientIdRaw;
@@ -177,7 +178,7 @@ class TheatreService {
       if (request.bill_id) {
         billIdFromRequest = request.bill_id;
         procedureFee = parseFloat(request.estimated_fee) || 0;
-        feeCurrency = (request.fee_currency || 'SSP').toUpperCase();
+        feeCurrency = (request.fee_currency || (await getBaseCurrencyCode())).toUpperCase();
       }
     }
     if (!patientId) throw httpError('patient_id is required', 400);

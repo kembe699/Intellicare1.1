@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const router = express.Router();
 const { sequelize } = require('../models');
 const PDFGenerator = require('../services/PDFGenerator');
@@ -69,6 +70,7 @@ router.get('/invoice/:id/pdf', authorize('bills.read'), async (req, res) => {
     const createdByName = await resolveCreatedByName(invoice.created_by);
     const subtotal = parseFloat(invoice.amount) || 0;
 
+    const invCurrency = invoice.currency || (await getBaseCurrencyCode());
     const pdfData = {
       company,
       createdByName,
@@ -78,7 +80,7 @@ router.get('/invoice/:id/pdf', authorize('bills.read'), async (req, res) => {
       terms: invoice.payment_terms,
       status: invoice.status,
       customerName: invoice.patient_name,
-      currency: invoice.currency || 'SSP',
+      currency: invoice.currency || (await getBaseCurrencyCode()),
       items: items.map(it => ({
         description: it.description,
         quantity: it.quantity,
@@ -91,7 +93,7 @@ router.get('/invoice/:id/pdf', authorize('bills.read'), async (req, res) => {
       amountPaid: parseFloat(invoice.amount_paid) || 0,
       balanceDue: parseFloat(invoice.balance_due) || 0,
       notes: invoice.notes || (payments.length > 0
-        ? `Payment history: ${payments.map(p => `${new Date(p.payment_date).toLocaleDateString()} - ${invoice.currency || 'SSP'} ${parseFloat(p.amount).toFixed(2)} (${p.payment_method})`).join('; ')}`
+        ? `Payment history: ${payments.map(p => `${new Date(p.payment_date).toLocaleDateString()} - ${invCurrency} ${parseFloat(p.amount).toFixed(2)} (${p.payment_method})`).join('; ')}`
         : null),
     };
 
@@ -127,7 +129,7 @@ router.get('/bill/:id/pdf', authorize('bills.read'), async (req, res) => {
     // write path in patientBills.js) — the bill's real currency is
     // `patient_bills.bill_currency`, the same field every other reader in
     // this codebase uses (receipts.js, billingEnhanced.js, AccountingService.js).
-    const currency = bill.bill_currency || 'SSP';
+    const currency = bill.bill_currency || (await getBaseCurrencyCode());
 
     const pdfData = {
       company,
@@ -186,6 +188,7 @@ router.get('/receipt/:id/pdf', authorize('bills.read'), async (req, res) => {
     const company = await getCompanyInfo();
     const createdByName = await resolveCreatedByName(receipt.cashier_name);
     const amount = parseFloat(receipt.amount) || 0;
+    const rcptCurrency = receipt.receipt_currency || receipt.currency || (await getBaseCurrencyCode());
 
     const pdfData = {
       company,
@@ -193,13 +196,13 @@ router.get('/receipt/:id/pdf', authorize('bills.read'), async (req, res) => {
       documentNumber: receipt.receipt_number || `RCP-${receipt.id?.substring(0, 8)}`,
       date: receipt.payment_date || receipt.created_at,
       customerName: receipt.patient_name || receipt.bill_patient_name || 'Patient',
-      currency: receipt.currency || 'SSP',
+      currency: rcptCurrency,
       items: services.length > 0 ? services.map(s => ({
         description: s.serviceName || s.name || s.service_name || 'Service',
         quantity: s.quantity || 1,
         unitPrice: s.price || s.unitPrice || s.unit_price || 0,
         amount: s.totalPrice || s.total_price || s.amount || ((s.price || 0) * (s.quantity || 1)),
-        currency: s.currency || receipt.currency || 'SSP',
+        currency: s.currency || rcptCurrency,
       })) : [{
         description: 'Payment',
         quantity: 1,

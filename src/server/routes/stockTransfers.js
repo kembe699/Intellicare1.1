@@ -12,6 +12,7 @@
 // (lines) + location_access (per-user per-location request/fulfill grants) —
 // see scripts/migrateStockTransfers.js.
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const router = express.Router();
 const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -114,7 +115,7 @@ router.post('/locations/:id/consume', authorize('stock_transfers.use'), async (r
         { replacements: { item_id: inventory_item_id }, transaction: t }
       );
       const unitCost = parseFloat(costRow?.current_unit_cost) || parseFloat(costRow?.average_unit_cost) || 0;
-      const costCurrency = costRow?.cost_currency || 'SSP';
+      const costCurrency = costRow?.cost_currency || (await getBaseCurrencyCode());
 
       const txDate = new Date().toISOString().split('T')[0];
       const [[countResult]] = await sequelize.query(
@@ -353,7 +354,7 @@ router.post('/:id/approve', authorize('stock_transfers.use'), async (req, res) =
         );
         const unitCost = parseFloat(costRow?.current_unit_cost) || parseFloat(costRow?.average_unit_cost) || 0;
         const totalCost = unitCost * qty;
-        const costCurrency = costRow?.cost_currency || 'SSP';
+        const costCurrency = costRow?.cost_currency || (await getBaseCurrencyCode());
         if (available < qty) {
           throw Object.assign(new Error(`Not enough stock remaining at the source location to fulfill this request (${available} available, ${qty} needed).`), { statusCode: 409 });
         }

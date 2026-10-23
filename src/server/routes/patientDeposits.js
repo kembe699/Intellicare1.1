@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const router = express.Router();
 const { sequelize, Receipt, ChartOfAccounts, JournalEntries, JournalEntryLines, AccountLedger, CashierShift } = require('../models');
@@ -10,7 +11,9 @@ const { requireApprovalPermission } = require('../middleware/requireApprovalPerm
 const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 const { postJournalEntry } = require('../services/JournalPostingService');
 
-const BASE_CURRENCY = 'SSP';
+// Only the column DEFAULT in the DDL below; runtime defaults use the tenant's
+// real base currency (getBaseCurrencyCode), never an assumed SSP.
+const DDL_DEFAULT_CURRENCY = 'SSP';
 // Same roles as BILLS_FINANCIAL_ACTION in patientBills.js — recording a payment/deposit
 // is a cashier/finance action, matching how the rest of the billing surface is gated.
 
@@ -27,7 +30,7 @@ const BASE_CURRENCY = 'SSP';
       CREATE TABLE IF NOT EXISTS patient_deposit_balances (
         patient_id VARCHAR(36) NOT NULL,
         clinic_id INT NOT NULL,
-        currency VARCHAR(10) NOT NULL DEFAULT '${BASE_CURRENCY}',
+        currency VARCHAR(10) NOT NULL DEFAULT '${DDL_DEFAULT_CURRENCY}',
         balance DECIMAL(15,2) NOT NULL DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (patient_id, clinic_id, currency)
@@ -43,7 +46,7 @@ const BASE_CURRENCY = 'SSP';
         patient_name VARCHAR(255),
         clinic_id INT NOT NULL,
         branch_id INT NULL,
-        currency VARCHAR(10) NOT NULL DEFAULT '${BASE_CURRENCY}',
+        currency VARCHAR(10) NOT NULL DEFAULT '${DDL_DEFAULT_CURRENCY}',
         type ENUM('deposit','usage','usage_reversal','refund') NOT NULL,
         amount DECIMAL(15,2) NOT NULL,
         balance_after DECIMAL(15,2) NOT NULL,
@@ -119,7 +122,7 @@ async function adjustDepositBalance(t, {
 }) {
   if (!patientId) throw new Error('patientId is required');
   if (!(amount > 0)) throw new Error('amount must be greater than zero');
-  const cur = currency || BASE_CURRENCY;
+  const cur = currency || (await getBaseCurrencyCode(t));
 
   // Ensure the balance row exists, then lock it. The no-op ON CONFLICT DO NOTHING is the
   // standard idiom for "insert if absent" without a separate existence check racing
@@ -170,7 +173,8 @@ async function adjustDepositBalance(t, {
 
 // Read-only helper — used by patientBills.js to check "does this patient have enough
 // deposit" before attempting the transactional draw-down, and by the GET endpoints below.
-async function getDepositBalance(patientId, clinicId, currency = BASE_CURRENCY) {
+async function getDepositBalance(patientId, clinicId, currencyArg) {
+  const currency = currencyArg || (await getBaseCurrencyCode());
   const [rows] = await sequelize.query(
     `SELECT balance FROM patient_deposit_balances WHERE patient_id = ? AND clinic_id = ? AND currency = ?`,
     { replacements: [patientId, clinicId, currency] }
@@ -251,7 +255,7 @@ async function requireOpenShift(req, res) {
 router.get('/:patientId/balance', authorize('deposits.read'), async (req, res) => {
   try {
     const clinicId = parseInt(req.query.clinic_id) || req.user?.clinic || 1;
-    const currency = req.query.currency || BASE_CURRENCY;
+    const currency = req.query.currency || (await getBaseCurrencyCode());
     const balance = await getDepositBalance(req.params.patientId, clinicId, currency);
     const [totals] = await sequelize.query(
       `SELECT type, COALESCE(SUM(amount), 0) AS total FROM patient_deposits
@@ -299,7 +303,7 @@ router.post('/', authorize('deposits.write'), async (req, res) => {
 
     const clinicId = parseInt(req.body.clinic_id) || req.user?.clinic || 1;
     const branchId = getCreateBranchId(req);
-    const currency = req.body.currency || BASE_CURRENCY;
+    const currency = req.body.currency || (await getBaseCurrencyCode());
     const receiptId = uuidv4();
     const receiptNumber = `DEP-${Date.now().toString().slice(-8)}`;
 
@@ -364,7 +368,7 @@ router.post('/:patientId/refund', requireApprovalPermission('deposit_refund_appr
 
     const clinicId = parseInt(req.body.clinic_id) || req.user?.clinic || 1;
     const branchId = getCreateBranchId(req);
-    const currency = req.body.currency || BASE_CURRENCY;
+    const currency = req.body.currency || (await getBaseCurrencyCode());
     const receiptId = uuidv4();
     const receiptNumber = `DEPR-${Date.now().toString().slice(-8)}`;
 
@@ -428,4 +432,3 @@ module.exports.getDepositBalance = getDepositBalance;
 module.exports.postDepositGL = postDepositGL;
 module.exports.resolveCashOrBankAccount = resolveCashOrBankAccount;
 module.exports.generateJENumber = generateJENumber;
-module.exports.BASE_CURRENCY = BASE_CURRENCY;

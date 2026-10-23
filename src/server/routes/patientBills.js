@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
 const { PatientBill, Patient, Receipt, sequelize } = require('../models');
@@ -359,11 +360,12 @@ async function applySchemePrice(patientId, services, schemeId, req = null) {
   // entirely in USD kept reporting SSP for every service/product with no currency of its
   // own actually set. Only falls back to the row's column if the scheme itself has none.
   const priceMap = {};
+  const baseCurForPricing = await getBaseCurrencyCode();
   for (const sp of servicePricing) {
-    if (!priceMap[sp.service_id]) priceMap[sp.service_id] = { price: parseFloat(sp.scheme_price), currency: schemeCurrency || sp.scheme_currency || 'SSP' };
+    if (!priceMap[sp.service_id]) priceMap[sp.service_id] = { price: parseFloat(sp.scheme_price), currency: schemeCurrency || sp.scheme_currency || baseCurForPricing };
   }
   for (const pp of productPricing) {
-    if (!priceMap[pp.product_id]) priceMap[pp.product_id] = { price: parseFloat(pp.scheme_price), currency: schemeCurrency || pp.scheme_currency || 'SSP' };
+    if (!priceMap[pp.product_id]) priceMap[pp.product_id] = { price: parseFloat(pp.scheme_price), currency: schemeCurrency || pp.scheme_currency || baseCurForPricing };
   }
 
   // Name-based fallback match for callers that don't pass an explicit serviceId/service_id
@@ -427,7 +429,7 @@ async function applySchemePrice(patientId, services, schemeId, req = null) {
     throw err;
   }
 
-  return { services: updatedServices, schemeId, schemeName, schemeCurrency: schemeCurrency || 'SSP' };
+  return { services: updatedServices, schemeId, schemeName, schemeCurrency: schemeCurrency || (await getBaseCurrencyCode()) };
 }
 
 // A bill's services can genuinely span multiple currencies — a patient with an active
@@ -619,7 +621,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
         // and pays later (via a Credit invoice in this same currency), so converting it to
         // an SSP-equivalent would bill the patient/insurer a number neither agreed to —
         // e.g. an $85 claim has no business becoming "510,000 SSP".
-        const schemeCurrency = result.schemeCurrency || 'SSP';
+        const schemeCurrency = result.schemeCurrency || (await getBaseCurrencyCode());
         const newTotal = parsedServices.filter(s => !s.isVoided).reduce((sum, s) => sum + (parseFloat(s.totalPrice) || 0), 0);
         billData.total_amount = newTotal;
         billData.balance_amount = newTotal - (billData.paid_amount || 0);
@@ -1027,7 +1029,7 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
       updatePayload.scheme_pricing_applied = true;
       // Scheme bills stay in the scheme's own currency throughout — see the total
       // calculation above for why converting this to SSP would be wrong.
-      updatePayload.bill_currency = schemeResult.schemeCurrency || 'SSP';
+      updatePayload.bill_currency = schemeResult.schemeCurrency || (await getBaseCurrencyCode());
     } else {
       // Cash bill — bill-level totals are always in the tenant's real base
       // currency; each line item keeps its own real currency/price for
@@ -2383,12 +2385,12 @@ async function createTheatreRequestsFromBill(billData, bill) {
           `INSERT INTO theatre_requests (id, clinic_id, branch_id, patient_id, requested_by, requesting_department,
              procedure_name, service_id, estimated_fee, fee_currency, bill_id, billed_at, priority, status, notes)
            VALUES (:id, :clinicId, :branchId, :patientId, :requestedBy, 'Billing',
-             :procedureName, :serviceId, :estimatedFee, 'SSP', :billId, NOW(), 'routine', 'pending', :notes)`,
+             :procedureName, :serviceId, :estimatedFee, :feeCurrency, :billId, NOW(), 'routine', 'pending', :notes)`,
           {
             replacements: {
               id: requestId, clinicId: billData.clinic_id, branchId: bill.branch_id || null, patientId: billData.patient_id,
               requestedBy: billData.created_by || null, procedureName: name, serviceId: catalogRow.id,
-              estimatedFee: parseFloat(svc.totalPrice ?? svc.unitPrice ?? catalogRow.price) || 0, billId: bill.id,
+              estimatedFee: parseFloat(svc.totalPrice ?? svc.unitPrice ?? catalogRow.price) || 0, feeCurrency: bill.bill_currency || (await getBaseCurrencyCode()), billId: bill.id,
               notes: `Auto-created from patient bill ${bill.bill_number}`,
             },
           }

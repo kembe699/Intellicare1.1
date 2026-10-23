@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode, BASE_CURRENCY_SQL } = require('../utils/baseCurrency');
 const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
 const router = express.Router();
@@ -324,7 +325,7 @@ router.post('/suppliers', authorize('procurement.write'), async (req, res) => {
         tax_id: tax_id || null, bank_account_name: bank_account_name || null,
         bank_account_number: bank_account_number || null, bank_name: bank_name || null,
         payment_terms: payment_terms || 'Net30', credit_limit: credit_limit || 0,
-        currency: currency || 'SSP', is_preferred: is_preferred || false,
+        currency: currency || (await getBaseCurrencyCode()), is_preferred: is_preferred || false,
         clinic_id: clinic_id || null
       }
     });
@@ -549,7 +550,7 @@ router.post('/purchase-requisitions', authorize('procurement.write'), async (req
         department: department || null, cost_center_id: cost_center_id || null,
         requisition_type: requisition_type || 'routine',
         delivery_date_required: delivery_date_required || null,
-        currency: currency || 'SSP', notes: notes || null,
+        currency: currency || (await getBaseCurrencyCode()), notes: notes || null,
         created_by: requested_by || null,
         branch_id: prBranchId
       }
@@ -1836,7 +1837,7 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
       'SELECT po_currency FROM purchase_orders WHERE id = :id',
       { replacements: { id: grn.po_id }, transaction: t }
     );
-    const grnCostCurrency = poCurrencyRows[0]?.po_currency || 'SSP';
+    const grnCostCurrency = poCurrencyRows[0]?.po_currency || (await getBaseCurrencyCode());
 
     // Resolve storage location_id from received_location name
     let locationId = null;
@@ -2139,7 +2140,7 @@ router.post('/goods-receipt-notes/:id/accept', requireApprovalPermission('grn_ac
           // silently understating USD GRNs by ~6000x — the live PO-2026-0001 entry is a real
           // example of this, left uncorrected pending explicit sign-off, see chat).
           const [poRows] = await sequelize.query('SELECT po_currency FROM purchase_orders WHERE id = :id', { replacements: { id: grn.po_id } });
-          const poCurrency = poRows[0]?.po_currency || 'SSP';
+          const poCurrency = poRows[0]?.po_currency || (await getBaseCurrencyCode());
 
           const glData = {
             clinic_id: grn.clinic_id,
@@ -2314,22 +2315,22 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
     // number.
     const [poByCurrency] = await sequelize.query(`
       SELECT
-        COALESCE(po_currency, 'SSP') as currency,
+        COALESCE(po_currency, ${BASE_CURRENCY_SQL}) as currency,
         COALESCE(SUM(CASE WHEN status NOT IN ('received','cancelled') THEN total_amount ELSE 0 END), 0) as open_value,
         COALESCE(SUM(CASE WHEN status IN ('approved','authorized') THEN total_amount ELSE 0 END), 0) as committed_amount,
         COALESCE(SUM(total_amount), 0) as total_value
       FROM purchase_orders po ${cw('po')} ${bf('po')}
-      GROUP BY COALESCE(po_currency, 'SSP')
+      GROUP BY COALESCE(po_currency, ${BASE_CURRENCY_SQL})
     `);
     const [spendByCurrency] = await sequelize.query(`
-      SELECT COALESCE(po.po_currency, 'SSP') as currency, COALESCE(SUM(po.total_amount), 0) as spend_30d
+      SELECT COALESCE(po.po_currency, ${BASE_CURRENCY_SQL}) as currency, COALESCE(SUM(po.total_amount), 0) as spend_30d
       FROM purchase_orders po
       WHERE po.id IN (
         SELECT DISTINCT grn.po_id FROM goods_receipt_notes grn
         WHERE grn.status = 'accepted' AND grn.receipt_date >= ((CURRENT_DATE) - INTERVAL '30 day')
       )
       ${cid !== null ? `AND po.clinic_id = ${cid}` : ''} ${bf('po')}
-      GROUP BY COALESCE(po.po_currency, 'SSP')
+      GROUP BY COALESCE(po.po_currency, ${BASE_CURRENCY_SQL})
     `);
 
     // Actual cash paid to suppliers in the last 30 days — shown alongside
@@ -2342,7 +2343,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
 
     // Recent POs
     const [recentPOs] = await sequelize.query(`
-      SELECT po.id, po.po_number, po.order_date, po.total_amount, COALESCE(po.po_currency, 'SSP') as po_currency, po.status, s.name as supplier_name
+      SELECT po.id, po.po_number, po.order_date, po.total_amount, COALESCE(po.po_currency, ${BASE_CURRENCY_SQL}) as po_currency, po.status, s.name as supplier_name
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id
       ${cw('po')} ${bf('po')}
@@ -2352,7 +2353,7 @@ router.get('/dashboard/stats', authorize('procurement.read'), async (req, res) =
     // Overdue deliveries — orders still open (not received/cancelled) past
     // their requested delivery date.
     const [overdue] = await sequelize.query(`
-      SELECT po.id, po.po_number, po.requested_delivery_date, po.total_amount, COALESCE(po.po_currency, 'SSP') as po_currency, s.name as supplier_name,
+      SELECT po.id, po.po_number, po.requested_delivery_date, po.total_amount, COALESCE(po.po_currency, ${BASE_CURRENCY_SQL}) as po_currency, s.name as supplier_name,
         ((CURRENT_DATE)::date - (po.requested_delivery_date)::date) as days_overdue
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id

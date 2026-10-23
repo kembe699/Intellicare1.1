@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode, BASE_CURRENCY_SQL } = require('../utils/baseCurrency');
 const router = express.Router();
 const { Patient, Visit, LabTest, DrugInventory, PharmacyDispensing, sequelize } = require('../models');
 const { Op } = require('sequelize');
@@ -261,7 +262,7 @@ router.get('/revenue-by-currency', async (req, res) => {
     try {
       const [rows] = await sequelize.query(
         `SELECT
-           COALESCE(NULLIF(receipt_currency,''), 'SSP') AS currency,
+           COALESCE(NULLIF(receipt_currency,''), ${BASE_CURRENCY_SQL}) AS currency,
            COUNT(*) AS receipt_count,
            COALESCE(SUM(payment_amount), 0) AS total_collected_base
          FROM receipts
@@ -278,7 +279,7 @@ router.get('/revenue-by-currency', async (req, res) => {
     try {
       const [rows] = await sequelize.query(
         `SELECT
-           COALESCE(NULLIF(payment_currency,''), 'SSP') AS currency,
+           COALESCE(NULLIF(payment_currency,''), ${BASE_CURRENCY_SQL}) AS currency,
            COUNT(*) AS receipt_count,
            COALESCE(SUM(payment_amount), 0) AS total_collected_base
          FROM dispensing_receipts
@@ -295,7 +296,7 @@ router.get('/revenue-by-currency', async (req, res) => {
     try {
       const [rows] = await sequelize.query(
         `SELECT
-           COALESCE(currency, 'SSP') AS currency,
+           COALESCE(currency, ${BASE_CURRENCY_SQL}) AS currency,
            COUNT(*) AS bill_count,
            COALESCE(SUM(total_amount), 0) AS total_billed,
            COALESCE(SUM(paid_amount), 0) AS total_paid,
@@ -1203,6 +1204,7 @@ router.get('/receipts-by-user', async (req, res) => {
       dailyTrend = trend;
     } catch(e) {}
 
+    const baseCurForDetail = await getBaseCurrencyCode();
     res.json({
       userReceipts: userReceipts.map(u => ({
         user_name: u.user_name,
@@ -1219,7 +1221,7 @@ router.get('/receipts-by-user', async (req, res) => {
         patientName: (r.patient_name_resolved || '').trim() || '—',
         amount: parseFloat(r.payment_amount || 0),
         method: r.payment_method || 'cash',
-        currency: r.receipt_currency || 'SSP',
+        currency: r.receipt_currency || baseCurForDetail,
         notes: r.notes || '',
       })),
       paymentMethods: paymentMethods.map(p => ({ method: p.method, count: parseInt(p.count), amount: parseFloat(p.amount) })),
@@ -1352,6 +1354,7 @@ router.get('/procurement-report', async (req, res) => {
       vendorStats = vendors;
     } catch(e) {}
 
+    const baseCurForOrders = await getBaseCurrencyCode();
     res.json({
       orders: orders.map(o => ({
         id: o.id, poNumber: o.po_number, supplier: o.supplier_name, orderDate: o.order_date,
@@ -1660,7 +1663,7 @@ router.get('/po-report', async (req, res) => {
       orders: orders.map(o => ({
         id: o.id, poNumber: o.po_number, orderDate: o.order_date,
         expectedDelivery: o.expected_delivery_date, totalAmount: parseFloat(o.total_amount || 0),
-        currency: o.po_currency || 'SSP', status: o.status, paymentTerms: o.payment_terms,
+        currency: o.po_currency || baseCurForOrders, status: o.status, paymentTerms: o.payment_terms,
         supplierName: o.supplier_name, contactPerson: o.contact_person, itemCount: parseInt(o.item_count || 0),
       })),
       lineItems: lineItems.map(i => ({

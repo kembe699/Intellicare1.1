@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { authorize } = require('../middleware/authorize');
 
 // Server-side role gate. These endpoints had none: any authenticated user of
@@ -239,7 +240,7 @@ router.post('/', authorize('schemes.write'), async (req, res) => {
         approvalAbove: approval_required_above || null, allowsNeg: allows_negotiation || false,
         contactPerson: contact_person || null, contactPhone: contact_phone || null,
         contactEmail: contact_email || null, website: website || null, notes: notes || null,
-        currency: currency || 'SSP', createdBy: req.user?.id || null, branchId
+        currency: currency || (await getBaseCurrencyCode()), createdBy: req.user?.id || null, branchId
       },
       transaction: t
     });
@@ -618,7 +619,7 @@ router.post('/:id/service-pricing', authorize('schemes.write'), async (req, res)
     `, {
       replacements: {
         id, cid, sid: schemeId, svid: service_id,
-        price: scheme_price != null ? scheme_price : null, curr: scheme_currency || 'SSP',
+        price: scheme_price != null ? scheme_price : null, curr: scheme_currency || (await getBaseCurrencyCode()),
         markup: markup_percentage || 0, disc: discount_percentage || 0,
         copay: insurance_copay || null, copayPct: insurance_copay_percentage || null,
         coverage: insurance_coverage_amount || null,
@@ -860,7 +861,7 @@ router.post('/:id/product-pricing', authorize('schemes.write'), async (req, res)
     `, {
       replacements: {
         id, cid, sid: schemeId, pid: product_id, pt: product_type || 'drug',
-        price: scheme_price != null ? scheme_price : null, curr: scheme_currency || 'SSP',
+        price: scheme_price != null ? scheme_price : null, curr: scheme_currency || (await getBaseCurrencyCode()),
         markup: markup_percentage || 0, disc: discount_percentage || 0,
         copay: insurance_copay || null, copayPct: insurance_copay_percentage || null,
         coverage: insurance_coverage_amount || null,
@@ -1040,7 +1041,7 @@ router.post('/:id/tiered-pricing', authorize('schemes.write'), async (req, res) 
         svid: service_id || null, pid: product_id || null, pt: product_type || null,
         level: tier_level || 1, tname: tier_name || null,
         minQ: min_quantity || 1, maxQ: max_quantity || null,
-        price: tier_price, curr: tier_currency || 'SSP',
+        price: tier_price, curr: tier_currency || (await getBaseCurrencyCode()),
         disc: tier_discount_percentage || 0, copay: tier_copay || null,
         ef: effective_from || null, et: effective_to || null, by: req.user?.id || null,
         branchId: getCreateBranchId(req)
@@ -1854,7 +1855,8 @@ router.post('/bulk-csv-pricing', authorize('schemes.write'), async (req, res) =>
     const currencyCache = {};
     const schemesReplacements = { cid };
     const [allSchemes] = await sequelize.query(`SELECT id, currency FROM patient_schemes WHERE clinic_id = :cid${branchScope(req, schemesReplacements)}`, { replacements: schemesReplacements });
-    for (const s of allSchemes) { currencyCache[s.id] = s.currency || 'SSP'; }
+    const baseCur = await getBaseCurrencyCode();
+    for (const s of allSchemes) { currencyCache[s.id] = s.currency || baseCur; }
 
     for (const p of (prices || [])) {
       if (!p.scheme_id || !p.item_id || p.scheme_price === '' || p.scheme_price === null || p.scheme_price === undefined) {
@@ -1864,7 +1866,7 @@ router.post('/bulk-csv-pricing', authorize('schemes.write'), async (req, res) =>
       const price = parseFloat(p.scheme_price);
       if (isNaN(price)) { skipped++; continue; }
 
-      const curr = currencyCache[p.scheme_id] || 'SSP';
+      const curr = currencyCache[p.scheme_id] || baseCur;
       const id = uuidv4();
 
       try {

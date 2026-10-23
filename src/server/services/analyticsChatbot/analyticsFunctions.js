@@ -419,13 +419,15 @@ async function getPurchaseOrdersSummary(sequelize, { req, clinicId, start, end, 
       ORDER BY po.order_date DESC LIMIT 50`,
     { replacements: listReplacements },
   );
+  const [[baseRow]] = await sequelize.query('SELECT code FROM currencies WHERE is_base_currency = true LIMIT 1');
+  const baseCurrency = baseRow?.code || 'SSP';
   result.pos = pos.map((r) => ({
     poNumber: r.po_number,
     supplierName: r.supplier_name || 'Unknown supplier',
     status: r.status,
     approvalStage: describePoApprovalStage(r),
     totalAmount: parseFloat(r.total_amount) || 0,
-    currency: r.po_currency || 'SSP',
+    currency: r.po_currency || baseCurrency,
     orderDate: r.order_date,
   }));
   return result;

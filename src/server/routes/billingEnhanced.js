@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode, BASE_CURRENCY_SQL } = require('../utils/baseCurrency');
 const { isUniqueViolation, isDuplicateColumn } = require('../utils/dbErrors');
 const { authorize } = require('../middleware/authorize');
 const { reportSchemaGuardFailure } = require('../utils/legacyDDL');
@@ -190,7 +191,7 @@ router.post('/bills/:billId/line-items', authorize('billing.write'), async (req,
         sourceId: item.source_id || null,
         quantity: item.quantity || 1,
         unitPrice: item.unit_price || 0,
-        currency: item.line_currency || 'SSP',
+        currency: item.line_currency || (await getBaseCurrencyCode()),
         exchangeRate,
         baseCurrencyUnitPrice: Math.round((item.unit_price || 0) * exchangeRate * 100) / 100,
         lineTotal, baseCurrencyTotal,
@@ -555,7 +556,7 @@ router.post('/credit-notes', authorize('billing.write'), async (req, res) => {
         id, clinicId: bill.clinic_id, cn: creditNoteNumber,
         billId: original_bill_id, patientId: bill.patient_id,
         patientName: bill.patient_name, amount: credit_amount,
-        currency: credit_currency || 'SSP', reason: reason || 'adjustment',
+        currency: credit_currency || (await getBaseCurrencyCode()), reason: reason || 'adjustment',
         details: reason_details || '', createdBy: req.user?.id || null,
         branchId: getCreateBranchId(req)
       },
@@ -943,7 +944,7 @@ router.post('/insurance-claims/:billId', authorize('billing.write'), async (req,
         patientId: bill.patient_id, patientName: bill.patient_name,
         provider: bill.insurance_type, insType: bill.insurance_type,
         memberId: bill.insurance_member_id, amount: bill.insurance_coverage_amount || 0,
-        currency: bill.bill_currency || 'SSP', createdBy: req.user?.id || null
+        currency: bill.bill_currency || (await getBaseCurrencyCode()), createdBy: req.user?.id || null
       }
     });
 
@@ -1018,7 +1019,7 @@ router.get('/receivables/aging', async (req, res) => {
         SUM(total_amount) AS total_billed,
         SUM(paid_amount) AS total_paid
       FROM (
-        SELECT balance_amount, total_amount, paid_amount, COALESCE(bill_currency, 'SSP') AS bill_currency,
+        SELECT balance_amount, total_amount, paid_amount, COALESCE(bill_currency, ${BASE_CURRENCY_SQL}) AS bill_currency,
           CASE
             WHEN due_date IS NULL OR ((CURRENT_DATE)::date - (due_date)::date) <= 0 THEN 'current'
             WHEN ((CURRENT_DATE)::date - (due_date)::date) BETWEEN 1 AND 30 THEN '1_30'
@@ -1035,7 +1036,7 @@ router.get('/receivables/aging', async (req, res) => {
 
     // Totals per currency — an array now instead of one blended object.
     const [totals] = await sequelize.query(`
-      SELECT COALESCE(bill_currency, 'SSP') AS bill_currency,
+      SELECT COALESCE(bill_currency, ${BASE_CURRENCY_SQL}) AS bill_currency,
         COUNT(*) AS total_bills,
         COALESCE(SUM(total_amount), 0) AS total_billed,
         COALESCE(SUM(paid_amount), 0) AS total_paid,
@@ -1148,7 +1149,7 @@ router.get('/reports/outstanding-balance', async (req, res) => {
     // USD scheme bill gets one row per currency instead of the two balances being summed
     // together into a single number with only one (wrong) currency label.
     const [rows] = await sequelize.query(`
-      SELECT pb.patient_id, pb.patient_name, COALESCE(pb.bill_currency, 'SSP') AS bill_currency,
+      SELECT pb.patient_id, pb.patient_name, COALESCE(pb.bill_currency, ${BASE_CURRENCY_SQL}) AS bill_currency,
         COUNT(*) AS bill_count,
         COALESCE(SUM(pb.total_amount), 0) AS total_billed,
         COALESCE(SUM(pb.paid_amount), 0) AS total_paid,
@@ -1157,7 +1158,7 @@ router.get('/reports/outstanding-balance', async (req, res) => {
         MAX(((CURRENT_DATE)::date - (pb.due_date)::date)) AS max_days_overdue
       FROM patient_bills pb
       WHERE pb.clinic_id = :clinicId AND pb.balance_amount > 0 AND pb.status != 'paid'
-      GROUP BY pb.patient_id, pb.patient_name, COALESCE(pb.bill_currency, 'SSP')
+      GROUP BY pb.patient_id, pb.patient_name, COALESCE(pb.bill_currency, ${BASE_CURRENCY_SQL})
       ORDER BY total_outstanding DESC
     `, { replacements: { clinicId: parseInt(clinic_id) } });
     res.json(rows);
@@ -1450,7 +1451,7 @@ router.get('/settings/:clinicId', async (req, res) => {
     if (settings.length === 0) {
       return res.json({
         clinic_id: parseInt(clinicId),
-        default_currency: 'SSP', default_payment_terms: 'immediate', default_due_date_days: 30,
+        default_currency: await getBaseCurrencyCode(), default_payment_terms: 'immediate', default_due_date_days: 30,
         auto_bill_pharmacy_dispensing: true, auto_bill_lab_tests: true,
         auto_bill_clinical_visits: true, auto_bill_on_service: true, auto_post_to_gl: true,
         nhif_enabled: false, nhif_copay_percentage: 10, auto_apply_insurance_copay: false,

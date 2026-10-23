@@ -54,6 +54,7 @@ const { authorize } = require('../middleware/authorize');
 router.use(authorize('pages.reports.view'));
 
 const { sequelize } = require('../models');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { QueryTypes } = require('sequelize');
 const { getBranchConditionSQL } = require('../middleware/branchFilter');
 
@@ -90,14 +91,17 @@ async function resolveItemAmount(item, bill, rateCache, clinicId) {
   const isSchemeBill = !!bill.schemeId;
   const isIndividuallyInsured = item.schemePrice != null && cashAmount === 0;
   if (!isSchemeBill && !isIndividuallyInsured) return { amount: cashAmount, isInsurance: false };
+  // Converted into the tenant's base currency (USD for some tenants), never assumed SSP.
+  if (!rateCache.has('__base')) rateCache.set('__base', await getBaseCurrencyCode());
+  const base = rateCache.get('__base');
   const rawAmount = isSchemeBill ? cashAmount : num(item.schemePrice);
-  const currency = (isSchemeBill ? bill.billCurrency : item.schemeCurrency) || 'SSP';
-  if (currency === 'SSP' || rawAmount === 0) return { amount: rawAmount, isInsurance: true };
+  const currency = (isSchemeBill ? bill.billCurrency : item.schemeCurrency) || base;
+  if (currency === base || rawAmount === 0) return { amount: rawAmount, isInsurance: true };
   const asOfDate = bill.billDay || new Date();
   const cacheKey = `${currency}|${asOfDate}`;
   let rate = rateCache.get(cacheKey);
   if (rate === undefined) {
-    try { rate = await AccountingService.getExchangeRate(clinicId, currency, 'SSP', asOfDate); } catch { rate = null; }
+    try { rate = await AccountingService.getExchangeRate(clinicId, currency, base, asOfDate); } catch { rate = null; }
     rateCache.set(cacheKey, rate);
   }
   const amount = rate != null ? AccountingService.convertAmount(rawAmount, rate) : rawAmount;

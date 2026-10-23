@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const router = express.Router();
 const { sequelize, AccountLedger } = require('../models');
 const { v4: uuidv4 } = require('uuid');
@@ -246,7 +247,7 @@ router.post('/items', authorize('inventory.write'), async (req, res) => {
         reorder_quantity: reorder_quantity || 0, lead_time_days: lead_time_days || 7,
         inventory_valuation_method: inventory_valuation_method || 'weighted_average',
         current_unit_cost: current_unit_cost || 0, selling_price: selling_price || 0,
-        cost_currency: cost_currency || 'SSP',
+        cost_currency: cost_currency || (await getBaseCurrencyCode()),
         inventory_account_id: inventory_account_id || null, cogs_account_id: cogs_account_id || null,
         usage_account_id: usage_account_id || null, revenue_account_id: revenue_account_id || null,
         requires_batch_tracking: !!requires_batch_tracking,
@@ -344,6 +345,7 @@ router.post('/items/bulk-upload', authorize('inventory.write'), async (req, res)
       return res.status(400).json({ error: 'Branch ID is required for non-admin users' });
     }
 
+    const importBaseCurrency = await getBaseCurrencyCode();
     for (let i = 0; i < rows.length; i++) {
       // Each row's item + initial batch are inserted atomically — a failure partway
       // through (e.g. the batch insert) used to leave an orphaned item row behind with
@@ -407,7 +409,7 @@ router.post('/items/bulk-upload', authorize('inventory.write'), async (req, res)
             inventory_valuation_method: row.inventory_valuation_method || 'weighted_average',
             current_unit_cost: parseFloat(row.current_unit_cost) || 0,
             selling_price: parseFloat(row.selling_price) || 0,
-            cost_currency: row.cost_currency || 'SSP',
+            cost_currency: row.cost_currency || importBaseCurrency,
             requires_batch_tracking: row.requires_batch_tracking === 'true',
             requires_expiry_tracking: row.requires_expiry_tracking === 'true',
             is_controlled_substance: row.is_controlled_substance === 'true',
@@ -926,7 +928,7 @@ router.post('/batches', authorize('inventory.write'), async (req, res) => {
         serial_number: serial_number || null, location_id: location_id || null,
         po_id: po_id || null, grn_id: grn_id || null, supplier_id: supplier_id || null,
         receipt_date: receipt_date || new Date().toISOString().split('T')[0],
-        quantity_received, unit_cost: unit_cost || 0, cost_currency: cost_currency || 'SSP',
+        quantity_received, unit_cost: unit_cost || 0, cost_currency: cost_currency || (await getBaseCurrencyCode()),
         batch_total_cost: batchTotalCost,
         manufacture_date: manufacture_date || null, expiry_date: expiry_date || null,
         notes: notes || null
@@ -1210,7 +1212,7 @@ router.post('/transactions', authorize('inventory.write'), async (req, res) => {
         quantity_change, from_location_id: from_location_id || null,
         to_location_id: to_location_id || null, batch_id: batch_id || null,
         unit_cost: unit_cost || 0, total_cost: totalCost,
-        cost_currency: cost_currency || 'SSP', exchange_rate: exchange_rate || 1,
+        cost_currency: cost_currency || (await getBaseCurrencyCode()), exchange_rate: exchange_rate || 1,
         reference_type: reference_type || null, reference_id: reference_id || null,
         transaction_date: txDate, notes: notes || null, created_by: created_by || null
       }
@@ -1280,7 +1282,7 @@ router.post('/transactions', authorize('inventory.write'), async (req, res) => {
     const txnData = {
       id, transaction_number, transaction_type, quantity_change,
       total_cost: totalCost, notes, item_id,
-      cost_currency: cost_currency || 'SSP', exchange_rate: exchange_rate || null,
+      cost_currency: cost_currency || (await getBaseCurrencyCode()), exchange_rate: exchange_rate || null,
     };
     const jeNumber = await createInventoryGLEntry(clinic_id, txnData, created_by);
     if (jeNumber) {

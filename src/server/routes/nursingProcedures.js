@@ -18,6 +18,7 @@
  * Keyed on lis_participants.id, same convention as patient_referrals.js.
  */
 const express = require('express');
+const { getBaseCurrencyCode } = require('../utils/baseCurrency');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const { authorize, getRolePrivileges } = require('../middleware/authorize');
@@ -191,6 +192,7 @@ router.post('/orders', authorize('nursing.procedures.order'), async (req, res) =
     }
 
     const ids = [];
+    const feeCurrency = await getBaseCurrencyCode();
     for (const { item, service, fee } of lines) {
       const id = uuidv4();
       await db.query(
@@ -198,10 +200,10 @@ router.post('/orders', authorize('nursing.procedures.order'), async (req, res) =
            (id, clinic_id, branch_id, participant_id, order_id, ordered_by, ordered_at, entry_type, status,
             procedure_type, service_id, fee_amount, fee_currency, bill_id, description, notes, performed_at)
          VALUES (?, ?, ?, ?, ?, ?, NOW(), 'procedure', 'pending',
-                 ?, ?, ?, 'SSP', ?, ?, ?, NOW())`,
+                 ?, ?, ?, ?, ?, ?, ?, NOW())`,
         { replacements: [
           id, clinicId, branchId, participant_id, order_id || null, req.user?.id || null,
-          item.procedure_type, service.id, fee, fee > 0 ? billId : null, service.service_name, item.notes || null,
+          item.procedure_type, service.id, fee, feeCurrency, fee > 0 ? billId : null, service.service_name, item.notes || null,
         ] }
       );
       ids.push(id);

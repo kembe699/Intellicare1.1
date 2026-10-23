@@ -1,4 +1,5 @@
 const express = require('express');
+const { getBaseCurrencyCode, BASE_CURRENCY_SQL } = require('../utils/baseCurrency');
 const { authorize } = require('../middleware/authorize');
 
 // Server-side role gate. These endpoints had none: any authenticated user of
@@ -135,7 +136,7 @@ router.get('/unpaid-invoices', authorize('claims.write'), async (req, res) => {
         pb.patient_id, pb.patient_name, pb.id as bill_id,
         pb.total_amount as amount, pb.paid_amount as amount_paid,
         pb.balance_amount as balance_due,
-        COALESCE(pb.bill_currency, 'SSP') as currency,
+        COALESCE(pb.bill_currency, ${BASE_CURRENCY_SQL}) as currency,
         pb.status, pb.due_date,
         pb.created_at as invoice_date, pb.scheme_id, pb.scheme_name,
         COALESCE(((CURRENT_DATE)::date - (COALESCE(pb.due_date, pb.created_at))::date), 0) as days_overdue,
@@ -178,15 +179,15 @@ router.post('/', authorize('claims.write'), async (req, res) => {
     const currencies = new Set();
     for (const invId of invoice_ids) {
       const [invRows] = await sequelize.query(`SELECT currency FROM invoices WHERE id = ?`, { replacements: [invId], transaction: t });
-      if (invRows.length) { currencies.add(invRows[0].currency || 'SSP'); continue; }
+      if (invRows.length) { currencies.add(invRows[0].currency || (await getBaseCurrencyCode())); continue; }
       const [billRows] = await sequelize.query(`SELECT bill_currency FROM patient_bills WHERE id = ?`, { replacements: [invId], transaction: t });
-      if (billRows.length) currencies.add(billRows[0].bill_currency || 'SSP');
+      if (billRows.length) currencies.add(billRows[0].bill_currency || (await getBaseCurrencyCode()));
     }
     if (currencies.size > 1) {
       await t.rollback();
       return res.status(400).json({ error: `Selected invoices are in different currencies (${Array.from(currencies).join(', ')}) — create separate claims per currency.` });
     }
-    const claimCurrency = currencies.size === 1 ? Array.from(currencies)[0] : (scheme.currency || 'SSP');
+    const claimCurrency = currencies.size === 1 ? Array.from(currencies)[0] : (scheme.currency || (await getBaseCurrencyCode()));
 
     const claimId = uuidv4();
     const claimNumber = await generateClaimNumber();
@@ -290,13 +291,13 @@ router.get('/', authorize('claims.write'), async (req, res) => {
     `);
     const [byCurrency] = await sequelize.query(`
       SELECT
-        COALESCE(currency, 'SSP') as currency,
+        COALESCE(currency, ${BASE_CURRENCY_SQL}) as currency,
         COALESCE(SUM(claim_amount), 0) as total_amount,
         COALESCE(SUM(CASE WHEN status IN ('pending','submitted') THEN claim_amount ELSE 0 END), 0) as pending_amount,
         COALESCE(SUM(CASE WHEN status = 'paid' THEN paid_amount ELSE 0 END), 0) as paid_amount,
         COALESCE(SUM(CASE WHEN status = 'submitted' THEN claim_amount ELSE 0 END), 0) as submitted_amount
       FROM insurance_batch_claims
-      GROUP BY COALESCE(currency, 'SSP')
+      GROUP BY COALESCE(currency, ${BASE_CURRENCY_SQL})
     `);
 
     res.json({ data: claims, stats: { ...(counts[0] || {}), by_currency: byCurrency } });
@@ -601,7 +602,7 @@ router.get('/:id/pdf', authorize('claims.write'), async (req, res) => {
       }, {});
     }
 
-    const currency = claim.currency || claim.scheme_currency || items[0]?.currency || 'SSP';
+    const currency = claim.currency || claim.scheme_currency || items[0]?.currency || (await getBaseCurrencyCode());
 
     const [facilityRows] = await sequelize.query(`SELECT * FROM facilities ORDER BY created_at ASC LIMIT 1`);
     const facility = facilityRows[0] || {};
