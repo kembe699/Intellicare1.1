@@ -77,6 +77,7 @@ export default function TheatreOperationDetail() {
   const navigate = useNavigate();
   const { hasPrivilege } = useAuth();
   const canWrite = hasPrivilege('theatre.write');
+  const canPayTeam = hasPrivilege('theatre.payout');
   const facilityInfo = useFacilityInfo();
   const { prompt, promptDialog } = usePromptDialog();
 
@@ -112,6 +113,15 @@ export default function TheatreOperationDetail() {
   const [administerNotes, setAdministerNotes] = useState('');
 
   const [employees, setEmployees] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
+
+  const [teamPayouts, setTeamPayouts] = useState<{ fee: number; currency: string; hospital_amount: number; payouts: any[] } | null>(null);
+  const [newFeePct, setNewFeePct] = useState<Record<TeamRole, string>>({ surgeon: '', anesthetist: '', scrub_nurse: '' });
+  const [editingFeeFor, setEditingFeeFor] = useState<string | null>(null);
+  const [editingFeeValue, setEditingFeeValue] = useState('');
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [showPayTeamDialog, setShowPayTeamDialog] = useState(false);
+  const [payAccountId, setPayAccountId] = useState('');
+  const [payingTeam, setPayingTeam] = useState(false);
 
   const timer = useElapsedTimer(operation?.started_at || null, operation?.status === 'in_progress');
 
@@ -179,6 +189,33 @@ export default function TheatreOperationDetail() {
   }, [id]);
 
   useEffect(() => { fetchOperation(true); }, [fetchOperation]);
+
+  const fetchTeamPayouts = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/team-payouts`, { credentials: 'include' });
+      if (res.ok) setTeamPayouts(await res.json());
+    } catch { /* non-blocking */ }
+  }, [id]);
+
+  // The breakdown ("who did this, what each gets") only exists once the fee
+  // is locked in and payouts are actually computed — see TheatreService.
+  // completeOperation — so there's nothing meaningful to show before then.
+  useEffect(() => { if (operation?.status === 'completed') fetchTeamPayouts(); }, [operation?.status, fetchTeamPayouts]);
+
+  useEffect(() => {
+    if (!canPayTeam) return;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/accounting/chart-of-accounts?clinic_id=${operation?.clinic_id || 1}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) { setAccounts(data); return; }
+        }
+        const r2 = await authFetch('/api/ledger-accounts');
+        if (r2.ok) setAccounts(await r2.json());
+      } catch { /* non-blocking */ }
+    })();
+  }, [canPayTeam, operation?.clinic_id]);
 
   const handleStart = async () => {
     setBusy(true);
@@ -316,11 +353,12 @@ export default function TheatreOperationDetail() {
 
   const handleAddTeamMember = async (role: TeamRole, employeeId: string) => {
     try {
+      const pct = newFeePct[role];
       const res = await authFetch(`/api/theatre/operations/${id}/team`, {
         method: 'POST',
-        body: JSON.stringify({ employee_id: employeeId, role }),
+        body: JSON.stringify({ employee_id: employeeId, role, fee_percentage: pct !== '' ? pct : undefined }),
       });
-      if (res.ok) { fetchOperation(); } else {
+      if (res.ok) { setNewFeePct((p) => ({ ...p, [role]: '' })); fetchOperation(); } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to add team member');
       }
@@ -335,6 +373,43 @@ export default function TheatreOperationDetail() {
         toast.error(err.error || 'Failed to remove team member');
       }
     } catch { toast.error('Network error'); }
+  };
+
+  const handleSaveTeamMemberFee = async (teamMemberId: string) => {
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/team/${teamMemberId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ fee_percentage: editingFeeValue !== '' ? editingFeeValue : null }),
+      });
+      if (res.ok) { setEditingFeeFor(null); fetchOperation(); } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to update fee percentage');
+      }
+    } catch { toast.error('Network error'); }
+  };
+
+  const handlePayTeam = async () => {
+    if (!payAccountId) { toast.error('Select an account to pay from.'); return; }
+    setPayingTeam(true);
+    try {
+      const res = await authFetch(`/api/theatre/operations/${id}/team-payouts/pay`, {
+        method: 'POST',
+        body: JSON.stringify({ payment_account_id: payAccountId }),
+      });
+      if (res.ok) {
+        toast.success("The surgical team's fee split has been paid.");
+        setShowPayTeamDialog(false);
+        setPayAccountId('');
+        fetchTeamPayouts();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to pay team');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setPayingTeam(false);
+    }
   };
 
   const fi = () => ({ name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo });
@@ -587,28 +662,107 @@ export default function TheatreOperationDetail() {
                   <div key={role} className="mb-3 last:mb-0">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{ROLE_LABEL[role]}</p>
                     {members.length === 0 && <p className="text-xs text-muted-foreground mb-1">None assigned</p>}
-                    {members.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between text-sm py-0.5">
-                        <span>{m.first_name} {m.last_name}</span>
-                        {canWrite && ['scheduled', 'in_progress'].includes(operation.status) && (
-                          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={() => handleRemoveTeamMember(m.id)}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                    {members.map((m) => {
+                      const editable = canWrite && ['scheduled', 'in_progress'].includes(operation.status);
+                      return (
+                        <div key={m.id} className="flex items-center justify-between text-sm py-0.5 gap-2">
+                          <span className="truncate">{m.first_name} {m.last_name}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {editingFeeFor === m.id ? (
+                              <>
+                                <Input type="number" min="0" max="100" step="0.5" value={editingFeeValue}
+                                  onChange={(e) => setEditingFeeValue(e.target.value)} placeholder="%"
+                                  className="h-6 w-16 text-xs px-1.5" autoFocus />
+                                <Button variant="ghost" size="sm" className="h-6 px-1 text-xs" onClick={() => handleSaveTeamMemberFee(m.id)}>Save</Button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!editable}
+                                className={`text-xs ${editable ? 'text-primary hover:underline' : 'text-muted-foreground'}`}
+                                onClick={() => { if (editable) { setEditingFeeFor(m.id); setEditingFeeValue(m.fee_percentage != null ? String(m.fee_percentage) : ''); } }}
+                              >
+                                {m.fee_percentage != null ? `${parseFloat(String(m.fee_percentage))}%` : (editable ? 'Set %' : '—')}
+                              </button>
+                            )}
+                            {editable && (
+                              <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={() => handleRemoveTeamMember(m.id)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                     {canWrite && ['scheduled', 'in_progress'].includes(operation.status) && (
-                      <Combobox
-                        options={availableEmployees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))}
-                        value="" onChange={(empId) => empId && handleAddTeamMember(role, empId)}
-                        placeholder={`Add ${ROLE_LABEL[role].toLowerCase()}...`} searchPlaceholder="Search employees..."
-                        className="h-8 mt-1"
-                      />
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Combobox
+                          options={availableEmployees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))}
+                          value="" onChange={(empId) => empId && handleAddTeamMember(role, empId)}
+                          placeholder={`Add ${ROLE_LABEL[role].toLowerCase()}...`} searchPlaceholder="Search employees..."
+                          className="h-8 flex-1"
+                        />
+                        <Input type="number" min="0" max="100" step="0.5" value={newFeePct[role]}
+                          onChange={(e) => setNewFeePct((p) => ({ ...p, [role]: e.target.value }))}
+                          placeholder="%" title="Fee percentage — defaults to this employee's own default if left blank"
+                          className="h-8 w-16 text-sm px-1.5" />
+                      </div>
                     )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Who did this operation and what each person gets — only
+                exists once the fee is locked in and payouts are computed
+                (TheatreService.completeOperation). The hospital's own cut
+                is never stored anywhere; it's just the fee minus whatever
+                the team's percentages add up to. */}
+            {operation.status === 'completed' && teamPayouts && (
+              <div className="bg-card rounded-lg border shadow-sm p-5">
+                <h3 className="font-medium flex items-center gap-2 mb-3 text-sm"><Users className="w-4 h-4 text-primary" /> Team Fee Split</h3>
+                <div className="space-y-1.5">
+                  {teamPayouts.payouts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No team member had a fee percentage set for this operation.</p>
+                  ) : teamPayouts.payouts.map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between text-sm">
+                      <span>{p.first_name} {p.last_name} <span className="text-xs text-muted-foreground">({ROLE_LABEL[p.role]}, {parseFloat(p.fee_percentage)}%)</span></span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{p.currency} {parseFloat(p.amount).toFixed(2)}</span>
+                        <Badge variant={p.status === 'paid' ? 'success' : 'warning'} className="capitalize">{p.status}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-sm pt-1.5 border-t mt-1.5">
+                    <span className="font-medium">Hospital</span>
+                    <span className="font-mono font-medium">{teamPayouts.currency} {teamPayouts.hospital_amount.toFixed(2)}</span>
+                  </div>
+                </div>
+                {canPayTeam && teamPayouts.payouts.some((p: any) => p.status === 'unpaid') && (
+                  <Button size="sm" className="w-full mt-3" onClick={() => setShowPayTeamDialog(true)}>Pay Team</Button>
+                )}
+              </div>
+            )}
+
+            <Dialog open={showPayTeamDialog} onOpenChange={(open) => { setShowPayTeamDialog(open); if (!open) setPayAccountId(''); }}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Pay the surgical team</DialogTitle>
+                  <DialogDescription>Choose the account to deduct the team's unpaid fee split from.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <Combobox
+                    options={accounts.map((a: any) => ({ value: String(a.id), label: a.account_name }))}
+                    value={payAccountId} onChange={setPayAccountId}
+                    placeholder="Select account..." searchPlaceholder="Search accounts..." className="h-9"
+                  />
+                  <Button className="w-full" onClick={handlePayTeam} disabled={payingTeam || !payAccountId}>
+                    {payingTeam ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Confirm Payment
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* RIGHT: phase workflow — checklist + vitals */}

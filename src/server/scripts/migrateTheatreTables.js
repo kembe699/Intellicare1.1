@@ -174,6 +174,43 @@ async function migrateTheatreTables(db = sequelize) {
     )
   `);
 
+  // T2: this team member's cut of the operation's fee — set when they're
+  // added to the team (pre-filled from employees.theatre_fee_percentage,
+  // editable per operation since real splits vary case to case). The
+  // hospital's own cut is never stored anywhere — it's just the fee minus
+  // whatever the team's percentages add up to, computed on read, so there's
+  // nothing to keep in sync if a percentage is edited later.
+  try { await db.query(`ALTER TABLE theatre_operation_team ADD COLUMN IF NOT EXISTS fee_percentage NUMERIC(5,2)`); } catch (err) { console.error('Could not add theatre_operation_team.fee_percentage:', err.message); }
+
+  // One row per team member per operation, computed once the operation
+  // completes and its fee is billed (TheatreService.completeOperation) —
+  // mirrors consultant_bill_items' one-row-per-event shape (ensureHRTables.js)
+  // but per-operation instead of batched over a period, since the point here
+  // is "this operation was done by X and Y, here's what each gets," visible
+  // immediately. Paying one out is a separate, later cashier action (same
+  // relationship payroll has between generating a run and paying a line) —
+  // see POST /api/theatre/operations/:id/team-payouts/pay.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS theatre_team_payouts (
+      id CHAR(36) PRIMARY KEY,
+      operation_id CHAR(36) NOT NULL,
+      employee_id CHAR(36) NOT NULL,
+      role VARCHAR(20) NOT NULL,
+      fee_percentage NUMERIC(5,2) NOT NULL,
+      amount NUMERIC(15,2) NOT NULL,
+      currency VARCHAR(3) NOT NULL DEFAULT 'SSP',
+      status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+      payment_account_id CHAR(36),
+      gl_entry_id CHAR(36),
+      paid_by INTEGER,
+      paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT chk_theatre_team_payouts_status CHECK (status IN ('unpaid', 'paid')),
+      CONSTRAINT uq_theatre_team_payouts UNIQUE (operation_id, employee_id, role)
+    )
+  `);
+  try { await db.query(`CREATE INDEX IF NOT EXISTS idx_theatre_team_payouts_operation ON theatre_team_payouts (operation_id)`); } catch (err) { console.error('Index creation failed:', err.message); }
+
   // Safety net for a schema created before this file used TIMESTAMPTZ: a plain
   // TIMESTAMP column stores NOW() as a naive local wall-clock value (this
   // deployment's session timezone is UTC+3), which a JS Date then reads back

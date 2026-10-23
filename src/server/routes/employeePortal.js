@@ -27,12 +27,17 @@ const { getWorkflowSettings } = require('../config/ensureHrWorkflowSettings');
 const { resolveApprover, isApproverFor } = require('../utils/approverResolution');
 const { notifyRole, notifyUser } = require('../services/notificationService');
 const { notifyEmployee } = require('../utils/portalNotify');
+const { completePayrollLineReceipt } = require('../services/PayrollPayment');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const PORTAL_TOKEN_EXPIRY = '30d';
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 const DUPLICATE_TAP_WINDOW_MS = 2 * 60 * 1000;
+// Mirrors publicPayroll.js's own signing-link lifetime — the same QR is
+// meant to work the same way whether it's scanned by the kiosk page or from
+// inside the portal.
+const PAYROLL_TOKEN_MAX_AGE_DAYS = 14;
 
 async function resolveTenantConnection(code) {
   const client = await Client.findOne({ where: { code: String(code || '').trim().toLowerCase() } });
@@ -367,6 +372,101 @@ router.post('/notifications/:id/read', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: 'Could not update notification.' });
+  }
+});
+
+// ─── Payroll — view own payslips, scan the HR-generated QR to confirm
+// receipt. The QR already encodes a real, working link (hr.js's
+// POST /payroll/runs/:id/lines/:lineId/signing-link + the public kiosk page
+// at routes/publicPayroll.js): /payroll-sign/{tenantCode}/{signing_token}.
+// Scanning it from inside the portal reuses that exact signing_token and the
+// same underlying payment completion (PayrollPayment.completePayrollLineReceipt)
+// instead of re-implementing it — the only thing that changes is how
+// identity is proven: the public kiosk page has no login at all, so it
+// re-asks for the employee number; here the portal's own JWT already proves
+// who's scanning, so the one check that actually matters is that the
+// token's line belongs to THIS employee. No signature is captured here (per
+// product decision) — a null signature on an otherwise-paid/signed line is
+// how this path is told apart from the kiosk one if that's ever needed.
+router.get('/payroll/lines', async (req, res) => {
+  try {
+    const { sequelize } = require('../models');
+    const [rows] = await sequelize.query(
+      `SELECT prl.id, prl.net_pay, prl.currency, prl.status, prl.signed_at,
+              pr.run_number, pr.period_month, pr.period_year
+       FROM payroll_run_lines prl
+       JOIN payroll_runs pr ON pr.id = prl.payroll_run_id
+       WHERE prl.employee_id = :employeeId
+       ORDER BY pr.period_year DESC, pr.period_month DESC`,
+      { replacements: { employeeId: req.employee.id } }
+    );
+    res.json(rows.map((r) => ({
+      id: r.id,
+      run_number: r.run_number,
+      period_month: r.period_month,
+      period_year: r.period_year,
+      net_pay: r.net_pay,
+      currency: r.currency,
+      status: r.status,
+      received: !!r.signed_at,
+      received_at: r.signed_at,
+    })));
+  } catch (error) {
+    console.error('Employee portal payroll lines error:', error);
+    res.status(500).json({ error: 'Could not load your payroll.' });
+  }
+});
+
+router.post('/payroll/confirm-receipt', async (req, res) => {
+  try {
+    const { sequelize } = require('../models');
+    // The scanner may hand back the bare token or the full scanned URL
+    // (…/payroll-sign/{code}/{token}) — accept either.
+    const raw = String(req.body?.token || '').trim();
+    const token = raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+    if (!token) return res.status(400).json({ error: 'No valid code found in that QR code.' });
+
+    const [[line]] = await sequelize.query(
+      `SELECT prl.*, pr.run_number, pr.period_month, pr.period_year, pr.status AS run_status, pr.clinic_id, pr.run_date,
+              pr.payment_account_id AS run_payment_account_id,
+              e.employee_number, e.first_name, e.last_name, e.employment_type
+       FROM payroll_run_lines prl
+       JOIN payroll_runs pr ON pr.id = prl.payroll_run_id
+       JOIN employees e ON e.id = prl.employee_id
+       WHERE prl.signing_token = :token`,
+      { replacements: { token } }
+    );
+    if (!line) return res.status(404).json({ error: 'This QR code is invalid or has expired. Ask HR to generate a new one.' });
+
+    // The real security boundary for this authenticated path: the raw token
+    // alone (as the unauthenticated kiosk page uses it) has no owner check,
+    // but a portal session must only ever be able to confirm its OWN line.
+    if (line.employee_id !== req.employee.id) {
+      return res.status(403).json({ error: 'This QR code belongs to a different employee.' });
+    }
+    if (line.signing_token_created_at) {
+      const ageMs = Date.now() - new Date(line.signing_token_created_at).getTime();
+      if (ageMs > PAYROLL_TOKEN_MAX_AGE_DAYS * 24 * 60 * 60 * 1000) {
+        return res.status(410).json({ error: 'This QR code has expired. Ask HR to generate a new one.' });
+      }
+    }
+
+    const glEntry = await completePayrollLineReceipt(sequelize, line, { signatureData: null, userId: null });
+
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req,
+        user_id: null, user_name: `${line.first_name} ${line.last_name} (employee portal)`, user_role: 'employee',
+        module: 'HR', action: 'PAYROLL_LINE_SIGNED', entity_type: 'PayrollRunLine', entity_id: line.id,
+        description: `Payroll ${line.run_number} — ${line.first_name} ${line.last_name} confirmed receipt via the employee portal, GL entry ${glEntry.gl_number}`,
+        status: 'success',
+      });
+    } catch (e) { /* non-blocking */ }
+
+    res.json({ ok: true, net_pay: line.net_pay, currency: line.currency, run_number: line.run_number });
+  } catch (error) {
+    console.error('Employee portal confirm-receipt error:', error);
+    res.status(error.statusCode || 500).json({ error: error.message || 'Could not confirm receipt. Please try again.' });
   }
 });
 

@@ -94,6 +94,7 @@ const CATALOG = [
 
   ['theatre.view', 'View theatre/OR', 'theatre', 'Operation requests, rooms, schedule, and operation detail (read)', ['admin', 'doctor', 'nurse']],
   ['theatre.write', 'Manage theatre/OR', 'theatre', 'Create requests, schedule/start/complete operations, checklists, vitals, rooms', ['admin', 'doctor', 'nurse']],
+  ['theatre.payout', 'Pay theatre team members', 'theatre', 'Pay out an operation team\'s fee split from a chosen account', ['admin', 'cashier', 'finance_manager', 'accountant']],
 
   ['inventory.read', 'View inventory', 'inventory', 'Items, batches, transactions, valuation, reports', ['admin', 'pharmacy', 'finance_manager', 'accountant', 'procurement']],
   ['inventory.write', 'Manage inventory', 'inventory', 'Items, locations, batches, adjustments, physical counts', ['admin', 'pharmacy', 'procurement']],

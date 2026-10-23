@@ -2,6 +2,7 @@ const { sequelize } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { CHECKLIST_TEMPLATE } = require('../scripts/migrateTheatreTables');
 const { addLineItemsToBill } = require('../utils/billingResolver');
+const AccountingService = require('./AccountingService');
 
 // patient_id is polymorphic across `patients` and `lis_participants` — the
 // same dual-identity shape inpatient_admissions already uses. A random UUID
@@ -324,14 +325,43 @@ class TheatreService {
     return rows;
   }
 
-  async addTeamMember(clinicId, operationId, { employee_id: employeeId, role }) {
+  async addTeamMember(clinicId, operationId, { employee_id: employeeId, role, fee_percentage: feePercentage }) {
     await this._assertOperationEditable(operationId, clinicId);
     if (!employeeId) throw httpError('employee_id is required', 400);
     if (!['surgeon', 'anesthetist', 'scrub_nurse'].includes(role)) throw httpError('role must be surgeon, anesthetist, or scrub_nurse', 400);
+
+    // An explicit percentage on this one assignment always wins; otherwise
+    // fall back to this employee's own default (employees.theatre_fee_percentage,
+    // settable from their profile, same idea as consultants' per-employee
+    // consultation_fee_percentage) — either way it stays editable on this
+    // team row afterwards, since real splits vary case to case.
+    let pct = feePercentage != null && feePercentage !== '' ? parseFloat(feePercentage) : null;
+    if (pct == null || Number.isNaN(pct)) {
+      const [[emp]] = await sequelize.query(`SELECT theatre_fee_percentage FROM employees WHERE id = :employeeId`, { replacements: { employeeId } });
+      pct = emp?.theatre_fee_percentage != null ? parseFloat(emp.theatre_fee_percentage) : null;
+    }
+
     await sequelize.query(
-      `INSERT INTO theatre_operation_team (id, operation_id, employee_id, role) VALUES (:id, :operationId, :employeeId, :role) ON CONFLICT DO NOTHING`,
-      { replacements: { id: uuidv4(), operationId, employeeId, role } }
+      `INSERT INTO theatre_operation_team (id, operation_id, employee_id, role, fee_percentage) VALUES (:id, :operationId, :employeeId, :role, :pct) ON CONFLICT DO NOTHING`,
+      { replacements: { id: uuidv4(), operationId, employeeId, role, pct } }
     );
+    return this.getOperationTeam(operationId);
+  }
+
+  // Lets the fee split be corrected per-operation (e.g. the surgeon and
+  // scrub nurse agreed a different cut for this particular case) any time
+  // before the operation completes — see completeOperation's guard: once
+  // completed, the payout rows already locked in a percentage/amount and
+  // this would silently stop affecting what anyone's actually paid.
+  async updateTeamMemberFee(clinicId, operationId, teamMemberId, feePercentage) {
+    await this._assertOperationEditable(operationId, clinicId);
+    const pct = feePercentage === null || feePercentage === '' ? null : parseFloat(feePercentage);
+    if (pct != null && (Number.isNaN(pct) || pct < 0 || pct > 100)) throw httpError('fee_percentage must be between 0 and 100', 400);
+    const [, meta] = await sequelize.query(
+      `UPDATE theatre_operation_team SET fee_percentage = :pct WHERE id = :teamMemberId AND operation_id = :operationId`,
+      { replacements: { pct, teamMemberId, operationId } }
+    );
+    if (meta.rowCount === 0) throw httpError('Team member not found', 404);
     return this.getOperationTeam(operationId);
   }
 
@@ -345,6 +375,106 @@ class TheatreService {
     await this._assertOperationEditable(operationId, clinicId);
     await sequelize.query(`DELETE FROM theatre_operation_team WHERE id = :teamMemberId AND operation_id = :operationId`, { replacements: { teamMemberId, operationId } });
     return this.getOperationTeam(operationId);
+  }
+
+  // ── Team fee split payouts ───────────────────────────────────────────
+  // One row per team member who had a fee_percentage set at the moment the
+  // operation completed — a member with no percentage configured simply
+  // gets no payout row, not an error. The hospital's own cut is never
+  // stored: it's the fee minus whatever these rows add up to, computed on
+  // read (see theatre.js's GET .../team-payouts).
+  async _createTeamPayouts(operationId, fee, feeCurrency, transaction) {
+    const [team] = await sequelize.query(
+      `SELECT employee_id, role, fee_percentage FROM theatre_operation_team
+       WHERE operation_id = :operationId AND fee_percentage IS NOT NULL AND fee_percentage > 0`,
+      { replacements: { operationId }, transaction }
+    );
+    for (const member of team) {
+      const amount = Math.round(fee * parseFloat(member.fee_percentage) / 100 * 100) / 100;
+      if (amount <= 0) continue;
+      await sequelize.query(
+        `INSERT INTO theatre_team_payouts (id, operation_id, employee_id, role, fee_percentage, amount, currency, status)
+         VALUES (:id, :operationId, :employeeId, :role, :pct, :amount, :currency, 'unpaid')
+         ON CONFLICT (operation_id, employee_id, role) DO NOTHING`,
+        { replacements: { id: uuidv4(), operationId, employeeId: member.employee_id, role: member.role, pct: member.fee_percentage, amount, currency: feeCurrency }, transaction }
+      );
+    }
+  }
+
+  async getTeamPayouts(clinicId, operationId) {
+    const [[op]] = await sequelize.query(`SELECT id, procedure_fee, fee_currency FROM theatre_operations WHERE id = :operationId AND clinic_id = :clinicId`, { replacements: { operationId, clinicId } });
+    if (!op) throw httpError('Operation not found', 404);
+    const [payouts] = await sequelize.query(
+      `SELECT tp.*, e.first_name, e.last_name FROM theatre_team_payouts tp
+       JOIN employees e ON e.id = tp.employee_id WHERE tp.operation_id = :operationId ORDER BY tp.role`,
+      { replacements: { operationId } }
+    );
+    const teamTotal = payouts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const fee = parseFloat(op.procedure_fee) || 0;
+    return { fee, currency: op.fee_currency, payouts, hospital_amount: Math.max(Math.round((fee - teamTotal) * 100) / 100, 0) };
+  }
+
+  // The cashier's action — a separate, later step from collecting the
+  // patient's own payment (same relationship payroll has between generating
+  // a run and paying one of its lines): one balanced GL entry per team
+  // member, debiting the Doctor Fees expense account (5110) — reused rather
+  // than a brand-new "Theatre Team Fees" code, since a new code would also
+  // need its own chart-of-accounts seeding/activation to reliably exist on
+  // every tenant (see ensureHRTables.js's own reactivation self-heal for
+  // exactly this problem with 5100/5110/2200) — and crediting whichever
+  // account the cashier chose to pay from. Mirrors PayrollPayment.
+  // payOnePayrollLine's FOR UPDATE + re-check so a double-click or a second
+  // concurrent call can't pay the same payout twice.
+  async payTeamPayouts(clinicId, operationId, paymentAccountId, userId) {
+    if (!paymentAccountId) throw httpError('payment_account_id is required', 400);
+    const [[op]] = await sequelize.query(`SELECT id, branch_id FROM theatre_operations WHERE id = :operationId AND clinic_id = :clinicId`, { replacements: { operationId, clinicId } });
+    if (!op) throw httpError('Operation not found', 404);
+
+    const [payouts] = await sequelize.query(
+      `SELECT tp.*, e.first_name, e.last_name FROM theatre_team_payouts tp JOIN employees e ON e.id = tp.employee_id
+       WHERE tp.operation_id = :operationId AND tp.status = 'unpaid'`,
+      { replacements: { operationId } }
+    );
+    if (payouts.length === 0) throw httpError('No unpaid team payouts for this operation', 409);
+
+    const doctorFeesAccount = await AccountingService.getAccountByCode(clinicId, '5110');
+    if (!doctorFeesAccount) throw httpError('The Doctor Fees expense account is not set up. Please contact an administrator.', 500);
+
+    const glUserId = userId ? String(userId) : 'system';
+    for (const payout of payouts) {
+      const transaction = await sequelize.transaction();
+      try {
+        const [[locked]] = await sequelize.query(`SELECT status FROM theatre_team_payouts WHERE id = :id FOR UPDATE`, { replacements: { id: payout.id }, transaction });
+        if (!locked || locked.status === 'paid') { await transaction.rollback(); continue; }
+
+        const employeeLabel = `${payout.first_name} ${payout.last_name} (${payout.role})`;
+        const amount = parseFloat(payout.amount) || 0;
+        const glEntry = await AccountingService.createGLEntry({
+          clinic_id: clinicId,
+          branch_id: op.branch_id,
+          transaction_date: new Date(),
+          transaction_type: 'theatre_team_payout',
+          description: `Theatre team payout — ${employeeLabel}`,
+          reference_id: payout.id,
+          reference_module: 'theatre_team_payout',
+        }, [
+          { account_id: doctorFeesAccount.id, debit_amount: amount, credit_amount: 0, description: `Theatre team payout — ${employeeLabel}` },
+          { account_id: paymentAccountId, debit_amount: 0, credit_amount: amount, description: `Theatre team payout — ${employeeLabel}` },
+        ], glUserId, transaction);
+
+        await sequelize.query(
+          `UPDATE theatre_team_payouts SET status = 'paid', payment_account_id = :paymentAccountId, gl_entry_id = :glId, paid_by = :userId, paid_at = NOW() WHERE id = :id`,
+          { replacements: { id: payout.id, paymentAccountId, glId: glEntry.id, userId: userId || null }, transaction }
+        );
+        await transaction.commit();
+        await AccountingService.postGLEntry(glEntry.id, glUserId);
+      } catch (error) {
+        if (!transaction.finished) await transaction.rollback().catch(() => {});
+        throw error;
+      }
+    }
+
+    return this.getTeamPayouts(clinicId, operationId);
   }
 
   // room_id points at the general `rooms` table (room_type = 'or'), managed
@@ -419,6 +549,15 @@ class TheatreService {
       );
       if (op.theatre_room_id) {
         await this._setRoomStatus(op.theatre_room_id, 'cleaning', transaction);
+      }
+
+      // Computed from the fee captured at scheduling time, not from whatever
+      // the bill ends up actually collecting — same reasoning as the billing
+      // step below (a fee genuinely not set yet means no payouts either, not
+      // an error), and done inside this same transaction since it's a plain
+      // insert with no external call, unlike billing's addLineItemsToBill.
+      if (op.procedure_fee != null && parseFloat(op.procedure_fee) > 0) {
+        await this._createTeamPayouts(id, parseFloat(op.procedure_fee), op.fee_currency, transaction);
       }
 
       await transaction.commit();

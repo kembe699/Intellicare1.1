@@ -209,6 +209,21 @@ async function ensureHRTables(sequelize) {
     }
   } catch (e) { /* best-effort column add */ }
 
+  // Same idea as consultation_fee_percentage above, but for a theatre team
+  // member's cut of an operation's fee (surgeon/anesthetist/scrub nurse) —
+  // this is just the DEFAULT that pre-fills when the employee is added to an
+  // operation's team (theatre_operation_team.fee_percentage, see
+  // migrateTheatreTables.js); the actual split is editable per operation
+  // since real splits vary case to case.
+  try {
+    const [[col]] = await sequelize.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'employees' AND column_name = 'theatre_fee_percentage'`
+    );
+    if (parseInt(col.cnt, 10) === 0) {
+      await sequelize.query(`ALTER TABLE employees ADD COLUMN theatre_fee_percentage NUMERIC(5,2)`);
+    }
+  } catch (e) { /* best-effort column add */ }
+
   // A consultant bill = a percentage of the consultation revenue collected
   // for that consultant over a period, computed from lis_test_orders +
   // patient_bills (see hr.js's consultation-attribution logic, adapted from

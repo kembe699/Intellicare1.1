@@ -33,7 +33,7 @@ export interface ProcedureServiceOption { id: string; service_name: string; pric
 
 export interface TeamMember {
   id: string; operation_id: string; employee_id: string; role: 'surgeon' | 'anesthetist' | 'scrub_nurse';
-  first_name: string; last_name: string; created_at: string;
+  first_name: string; last_name: string; created_at: string; fee_percentage: string | number | null;
 }
 export const ROLE_LABEL: Record<string, string> = { surgeon: 'Surgeon', anesthetist: 'Anaesthetist', scrub_nurse: 'Scrub Nurse' };
 
@@ -48,7 +48,7 @@ export interface VitalsEntry {
 }
 
 export interface TheatreOperation {
-  id: string; request_id: string | null; patient_id: string;
+  id: string; clinic_id: number; request_id: string | null; patient_id: string;
   patient_first_name: string | null; patient_last_name: string | null; patient_code: string | null;
   patient_gender: string | null; patient_dob: string | null;
   theatre_room_id: string | null; room_name: string | null;

@@ -40,6 +40,7 @@ const StaffHome = lazyWithRetry(() => import('./pages/staff/StaffHome'));
 const StaffLeave = lazyWithRetry(() => import('./pages/staff/StaffLeave'));
 const StaffAdvances = lazyWithRetry(() => import('./pages/staff/StaffAdvances'));
 const StaffApprovals = lazyWithRetry(() => import('./pages/staff/StaffApprovals'));
+const StaffPayroll = lazyWithRetry(() => import('./pages/staff/StaffPayroll'));
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const AnalyticsAssistant = lazyWithRetry(() => import('./pages/AnalyticsAssistant'));
 const PatientVisitsHistory = lazyWithRetry(() => import('./pages/PatientVisitsHistory'));
@@ -339,6 +340,7 @@ const AppRoutes = () => {
           <Route index element={<StaffHome />} />
           <Route path="leave" element={<StaffLeave />} />
           <Route path="advances" element={<StaffAdvances />} />
+          <Route path="payroll" element={<StaffPayroll />} />
           <Route path="approvals" element={<StaffApprovals />} />
         </Route>
       </Route>
@@ -453,6 +455,16 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/lis/orders" element={
+        <ProtectedRoute requiredPrivilege="lis.clinical.read">
+          <LISTestOrders />
+        </ProtectedRoute>
+      } />
+      <Route path="/lis/orders/summary" element={
+        <ProtectedRoute requiredPrivilege="lis.clinical.read">
+          <LISTestOrders />
+        </ProtectedRoute>
+      } />
+      <Route path="/lis/orders/summary/:participantId/:orderId" element={
         <ProtectedRoute requiredPrivilege="lis.clinical.read">
           <LISTestOrders />
         </ProtectedRoute>

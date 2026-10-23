@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useStaffAuth } from '@/contexts/StaffAuthContext';
 import { staffFetch } from '@/api/apiClient';
 import { formatDateTime } from '@/lib/format';
-import { Clock, CalendarDays, HandCoins, ClipboardCheck, Loader2, Bell } from 'lucide-react';
+import { Clock, CalendarDays, HandCoins, ClipboardCheck, Loader2, Bell, Wallet } from 'lucide-react';
 
 function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -121,6 +121,7 @@ export default function StaffLayout() {
     { to: '/staff', label: 'Home', icon: Clock, end: true },
     { to: '/staff/leave', label: 'Leave', icon: CalendarDays },
     { to: '/staff/advances', label: 'Advances', icon: HandCoins },
+    { to: '/staff/payroll', label: 'Payroll', icon: Wallet },
     ...(isDepartmentHead ? [{ to: '/staff/approvals', label: 'Approvals', icon: ClipboardCheck }] : []),
   ];
 

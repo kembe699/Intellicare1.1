@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
  * to its own (zxing-based) decoder otherwise — satisfying "BarcodeDetector
  * API with html5-qrcode fallback" without hand-rolling both paths.
  */
-export default function QrScanner({ onScan, onClose }: { onScan: (text: string) => void; onClose: () => void }) {
+export default function QrScanner({ onScan, onClose, title = "Scan the site's QR code" }: { onScan: (text: string) => void; onClose: () => void; title?: string }) {
   const elementId = 'staff-qr-scanner-region';
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export default function QrScanner({ onScan, onClose }: { onScan: (text: string) 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       <div className="flex items-center justify-between p-4 text-white">
-        <p className="font-medium">Scan the site's QR code</p>
+        <p className="font-medium">{title}</p>
         <button type="button" onClick={onClose} className="p-2" aria-label="Close scanner" style={{ minWidth: 44, minHeight: 44 }}>
           <X className="w-6 h-6" />
         </button>

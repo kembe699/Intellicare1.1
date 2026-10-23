@@ -176,6 +176,46 @@ async function payOnePayrollLine(sequelize, clinicId, run, line, accounts, baseC
   return glEntry;
 }
 
+// Shared by both ways an employee can complete their own payroll line
+// without an HR user clicking "Pay": the public, unauthenticated QR kiosk
+// page (routes/publicPayroll.js — re-verifies the employee number itself and
+// always carries a drawn signature) and the authenticated employee-portal
+// scan (routes/employeePortal.js — identity is already proven by the
+// portal's own JWT, so it passes signatureData: null; a null signature on an
+// otherwise-signed line is how that path is told apart from the kiosk one).
+// Both callers must do their own pre-checks (expiry, lock-out, signature
+// validation) BEFORE calling this — this function only does the part that's
+// actually identical: pay the line and stamp the receipt.
+async function completePayrollLineReceipt(sequelize, line, { signatureData = null, userId = null } = {}) {
+  if (line.signed_at || line.status === 'paid') {
+    throw Object.assign(new Error('This payment has already been signed for.'), { statusCode: 409 });
+  }
+  if (line.run_status !== 'approved') {
+    throw Object.assign(new Error('This payroll run is no longer open for payment. Please contact HR.'), { statusCode: 409 });
+  }
+  if (!line.run_payment_account_id) {
+    throw Object.assign(new Error('No payment account is set for this payroll run. Please contact HR.'), { statusCode: 400 });
+  }
+
+  const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`);
+  const baseCurrency = baseCurrencyRow?.code || 'USD';
+  const accounts = await resolvePayrollAccounts(line.clinic_id);
+  if (!accounts.salariesAccount || !accounts.doctorFeesAccount || !accounts.payrollLiabilitiesAccount) {
+    throw Object.assign(new Error('Payroll accounts are not set up. Please contact HR.'), { statusCode: 500 });
+  }
+
+  const run = { run_number: line.run_number, run_date: line.run_date };
+  const glEntry = await payOnePayrollLine(sequelize, line.clinic_id, run, line, accounts, baseCurrency, line.run_payment_account_id, userId);
+  await finalizeRunIfFullyPaid(sequelize, line.payroll_run_id, userId);
+
+  await sequelize.query(
+    `UPDATE payroll_run_lines SET signature_data = :signature, signed_at = NOW(), updated_at = NOW() WHERE id = :id`,
+    { replacements: { id: line.id, signature: signatureData || null } }
+  );
+
+  return glEntry;
+}
+
 // Once every line in a run is individually paid, the run itself is "paid" —
 // this just reflects that, it never pays anything by itself.
 async function finalizeRunIfFullyPaid(sequelize, runId, userId) {
@@ -232,4 +272,4 @@ async function restoreSalaryAdvanceDeduction(sequelize, repaymentId, transaction
   return { advanceId: repayment.salary_advance_id, restoredAmount: parseFloat(repayment.amount) };
 }
 
-module.exports = { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid, restoreSalaryAdvanceDeduction };
+module.exports = { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid, restoreSalaryAdvanceDeduction, completePayrollLineReceipt };

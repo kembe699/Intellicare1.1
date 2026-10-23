@@ -201,6 +201,43 @@ router.delete('/operations/:id/team/:teamMemberId', authorize('theatre.write'), 
   }
 });
 
+router.put('/operations/:id/team/:teamMemberId', authorize('theatre.write'), async (req, res) => {
+  try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
+    const team = await TheatreService.updateTeamMemberFee(req.body.clinic_id || req.user?.clinicId || 1, req.params.id, req.params.teamMemberId, req.body.fee_percentage);
+    await logAudit(req, { action: 'TEAM_MEMBER_FEE_UPDATED', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Updated team member ${req.params.teamMemberId}'s fee percentage`, new_values: req.body });
+    res.json(team);
+  } catch (error) {
+    console.error('Error updating theatre team member fee:', error);
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to update fee percentage' });
+  }
+});
+
+// ── Team fee split payouts — who did this operation, what each gets, and
+// (separately, later) the cashier paying it out from a chosen account. ───
+router.get('/operations/:id/team-payouts', authorize('theatre.view'), async (req, res) => {
+  try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
+    const result = await TheatreService.getTeamPayouts(req.query.clinic_id || req.user?.clinicId || 1, req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('Error getting theatre team payouts:', error);
+    res.status(statusFor(error, 500)).json({ error: error.message || 'Failed to load team payouts' });
+  }
+});
+
+router.post('/operations/:id/team-payouts/pay', authorize('theatre.payout'), async (req, res) => {
+  try {
+    if (!(await assertBranchAccess(req, res, 'theatre_operations', req.params.id))) return;
+    const result = await TheatreService.payTeamPayouts(req.body.clinic_id || req.user?.clinicId || 1, req.params.id, req.body.payment_account_id, req.user?.id);
+    await logAudit(req, { action: 'TEAM_PAYOUT_PAID', entity_type: 'TheatreOperation', entity_id: req.params.id, description: `Paid the surgical team's fee split from account ${req.body.payment_account_id}`, new_values: req.body });
+    res.json(result);
+  } catch (error) {
+    console.error('Error paying theatre team payouts:', error);
+    res.status(statusFor(error, 400)).json({ error: error.message || 'Failed to pay team' });
+  }
+});
+
 // ── Requests ────────────────────────────────────────────────────────────
 
 router.get('/requests', authorize('theatre.view'), async (req, res) => {

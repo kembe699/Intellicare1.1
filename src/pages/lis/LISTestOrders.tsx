@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
 import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Send, Scan, Syringe, CalendarClock, Egg, HeartPulse, Brain, Wind, Bone, Stethoscope } from 'lucide-react';
@@ -137,6 +137,8 @@ export default function LISTestOrders() {
   const { user, hasPrivilege } = useAuth();
   const { currency: baseCurrency } = useCurrency();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { participantId: urlParticipantId, orderId: urlOrderId } = useParams<{ participantId?: string; orderId?: string }>();
   const facilityInfo = useFacilityInfo();
   const [queuedPatients, setQueuedPatients] = useState<any[]>([]);
   const [labTests, setLabTests] = useState<any[]>([]);
@@ -181,7 +183,11 @@ export default function LISTestOrders() {
   const [triagedAt, setTriagedAt] = useState<string | null>(null);
   const [selectedTests, setSelectedTests] = useState<any[]>([]);
   const [middleStep, setMiddleStep] = useState<1 | 2>(1);
-  const [activeMode, setActiveMode] = useState<'order' | 'results' | 'summary'>('order');
+  // /lis/orders/summary(/...) is a distinct route from /lis/orders — read the
+  // initial tab from the URL so a direct link/refresh lands on the right one.
+  const [activeMode, setActiveMode] = useState<'order' | 'results' | 'summary'>(() =>
+    location.pathname.startsWith('/lis/orders/summary') ? 'summary' : 'order'
+  );
   const [submittingOrder, setSubmittingOrder] = useState(false);
   // React state updates are batched, so two clicks landing in the same tick
   // could both read submittingOrder as still false before a re-render. A ref
@@ -441,6 +447,47 @@ export default function LISTestOrders() {
       setSummaryResultsLoading(false);
     }
   };
+
+  // Restores the selected visit summary from the URL so a refresh (or a
+  // bookmarked/shared link) lands back on the same patient's summary instead
+  // of bouncing to Place Order — /lis/orders/summary/:participantId/:orderId
+  // is the only state this page persists outside memory.
+  useEffect(() => {
+    if (!urlParticipantId || !urlOrderId) return;
+    const alreadySelected = selectedSummary
+      && String(selectedSummary.participant_id) === urlParticipantId
+      && String(selectedSummary.order_id) === urlOrderId;
+    if (alreadySelected) {
+      if (activeMode !== 'summary') setActiveMode('summary');
+      return;
+    }
+    setActiveMode('summary');
+    const cached = allVisitSummaries.find((s) => String(s.order_id) === urlOrderId && String(s.participant_id) === urlParticipantId);
+    if (cached) {
+      openVisitSummary(cached);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await authFetch(`/api/lis/visit-summaries?participant_id=${urlParticipantId}`, { credentials: 'include' });
+        if (!res.ok) { toast.error('Failed to load that visit summary'); return; }
+        const list = await res.json();
+        const found = list.find((o: any) => String(o.order_id) === urlOrderId);
+        if (!found) {
+          toast.error('That visit could not be found.');
+          navigate('/lis/orders', { replace: true });
+          return;
+        }
+        setAllVisitSummaries((prev) => (prev.some((s) => s.order_id === found.order_id) ? prev : [...prev, found]));
+        openVisitSummary(found);
+      } catch (e) {
+        toast.error('Failed to load that visit summary');
+      }
+    })();
+    // Only the URL identifies which visit to restore — re-running this on
+    // every selectedSummary/allVisitSummaries change would refetch in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlParticipantId, urlOrderId]);
 
   const fetchPharmacyDrugs = async () => {
     try {
@@ -1978,13 +2025,13 @@ export default function LISTestOrders() {
           )}
           <div className="flex bg-muted p-1 rounded-lg">
             <button
-              onClick={() => setActiveMode('order')}
+              onClick={() => navigate('/lis/orders')}
               className={cn("px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2", activeMode === 'order' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               <ClipboardList className="w-4 h-4" /> Place Order
             </button>
             <button
-              onClick={() => setActiveMode('summary')}
+              onClick={() => navigate('/lis/orders/summary')}
               className={cn("px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2", activeMode === 'summary' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               <History className="w-4 h-4" /> Visit Summary
@@ -3032,7 +3079,7 @@ export default function LISTestOrders() {
             {selectedSummary ? (
               <div className="flex flex-col flex-1 min-h-0">
                 <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedSummary(null)} className="text-muted-foreground hover:text-foreground -ml-2">
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedSummary(null); navigate('/lis/orders/summary'); }} className="text-muted-foreground hover:text-foreground -ml-2">
                     <ArrowLeft className="w-4 h-4 mr-2" /> Back to Visits
                   </Button>
                   <div className="flex items-center gap-2">
@@ -3830,7 +3877,7 @@ export default function LISTestOrders() {
                         return (
                           <div
                             key={summary.order_id}
-                            onClick={() => openVisitSummary(summary)}
+                            onClick={() => navigate(`/lis/orders/summary/${summary.participant_id}/${summary.order_id}`)}
                             className="bg-card rounded-lg border shadow-sm p-4 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all flex flex-col gap-3"
                           >
                             <div className="flex justify-between items-start">

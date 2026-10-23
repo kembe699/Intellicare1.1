@@ -29,7 +29,7 @@ const { Client } = require('../models/platform');
 const { getTenantConnection } = require('../tenantDb');
 const tenantContext = require('../tenantContext');
 const { payrollSignLimiter } = require('../middleware/rateLimiters');
-const { resolvePayrollAccounts, payOnePayrollLine, finalizeRunIfFullyPaid } = require('../services/PayrollPayment');
+const { completePayrollLineReceipt } = require('../services/PayrollPayment');
 
 const MAX_VERIFY_ATTEMPTS = 5;
 const TOKEN_MAX_AGE_DAYS = 14;
@@ -200,25 +200,7 @@ router.post('/:code/:token/submit', payrollSignLimiter, async (req, res) => {
         return res.status(400).json({ error: 'Signature image is too large.' });
       }
 
-      if (!line.run_payment_account_id) {
-        return res.status(400).json({ error: 'No payment account is set for this payroll run. Please contact HR.' });
-      }
-
-      const [[baseCurrencyRow]] = await sequelize.query(`SELECT code FROM currencies WHERE is_base_currency = TRUE LIMIT 1`);
-      const baseCurrency = baseCurrencyRow?.code || 'USD';
-      const accounts = await resolvePayrollAccounts(line.clinic_id);
-      if (!accounts.salariesAccount || !accounts.doctorFeesAccount || !accounts.payrollLiabilitiesAccount) {
-        return res.status(500).json({ error: 'Payroll accounts are not set up. Please contact HR.' });
-      }
-
-      const run = { run_number: line.run_number, run_date: line.run_date };
-      const glEntry = await payOnePayrollLine(sequelize, line.clinic_id, run, line, accounts, baseCurrency, line.run_payment_account_id, null);
-      await finalizeRunIfFullyPaid(sequelize, line.payroll_run_id, null);
-
-      await sequelize.query(
-        `UPDATE payroll_run_lines SET signature_data = :signature, signed_at = NOW(), updated_at = NOW() WHERE id = :id`,
-        { replacements: { id: line.id, signature } }
-      );
+      const glEntry = await completePayrollLineReceipt(sequelize, line, { signatureData: signature, userId: null });
 
       try {
         const rr = require('./reports');
