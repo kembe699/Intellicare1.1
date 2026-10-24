@@ -125,6 +125,8 @@ export default function Receipts() {
 
   // Live bill state for the selected receipt — used to know which line items are
   // already voided (a receipt itself never changes after the fact) and to void one.
+  // The bill this receipt paid — so a reprint shows the real bill number and totals.
+  const [billMeta, setBillMeta] = useState<{ bill_number?: string; total_amount?: number; paid_amount?: number } | null>(null);
   const [billServices, setBillServices] = useState<Array<{ serviceName: string; quantity?: number; unitPrice?: number; totalPrice: number; isVoided?: boolean; discountLabel?: string | null }> | null>(null);
   const [loadingBill, setLoadingBill] = useState(false);
   const [voidItemIndex, setVoidItemIndex] = useState<number | null>(null);
@@ -140,6 +142,7 @@ export default function Receipts() {
       fetchBillServices(selectedReceipt.bill_id);
     } else {
       setBillServices(null);
+      setBillMeta(null);
     }
   }, [selectedReceipt?.bill_id]);
 
@@ -150,6 +153,7 @@ export default function Receipts() {
       if (res.ok) {
         const data = await res.json();
         setBillServices(Array.isArray(data.services) ? data.services : []);
+        setBillMeta({ bill_number: data.bill_number, total_amount: Number(data.total_amount), paid_amount: Number(data.paid_amount) });
       }
     } catch (e) {
       console.error(e);
@@ -447,11 +451,11 @@ export default function Receipts() {
                 <PaymentReceipt
                   bill={{
                     id: selectedReceipt.id,
-                    billNumber: selectedReceipt.receipt_number,
+                    billNumber: billMeta?.bill_number || '',
                     patientName: selectedReceipt.patient_name || '',
                     patientId: selectedReceipt.patient_id || '',
-                    totalAmount: toAmount(selectedReceipt.payment_amount),
-                    paidAmount: toAmount(selectedReceipt.payment_amount),
+                    totalAmount: Number.isFinite(billMeta?.total_amount) ? (billMeta!.total_amount as number) : toAmount(selectedReceipt.payment_amount),
+                    paidAmount: Number.isFinite(billMeta?.paid_amount) ? (billMeta!.paid_amount as number) : toAmount(selectedReceipt.payment_amount),
                     balanceAmount: 0,
                     billDate: selectedReceipt.payment_date,
                     services: displayServices.map(s => ({
