@@ -86,10 +86,10 @@ export default function DutyRosters() {
           <PageHeader
             icon={<CalendarRange />}
             title="Duty Rosters"
-            subtitle="Monthly shift rosters per department — upload the Excel template or fill in the grid, then submit for approval"
+            subtitle="Monthly shift rosters per department"
             actions={
               <div className="flex items-center gap-2 flex-wrap">
-                <Input type="month" aria-label="Month" className="w-44" value={period} onChange={(e) => e.target.value && go({ period: e.target.value })} />
+                <Input type="month" aria-label="Month" className="w-52" value={period} onChange={(e) => e.target.value && go({ period: e.target.value })} />
                 {meta?.permissions.manage && (
                   <Button variant="outline" onClick={() => setShiftsOpen(true)}><Settings2 className="w-4 h-4 mr-2" />Shift codes</Button>
                 )}
@@ -377,7 +377,7 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
         <TabsContent value="grid" className="mt-4 space-y-3">
           {editable && (
             <div className="bg-card border rounded-lg shadow-sm px-4 py-3 flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground mr-1">Pick a shift, then click or drag across cells:</span>
+              <span className="text-sm text-muted-foreground mr-1 whitespace-nowrap">1. Pick a shift → 2. click or drag across days:</span>
               {shifts.map((s) => {
                 const i = shiftById.get(s.id)?._i ?? 0;
                 return (
@@ -398,25 +398,30 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
             {detail.employees.length === 0 ? (
               <p className="text-sm text-muted-foreground p-8 text-center">No active staff in {department}. Employees join a department on their HR profile.</p>
             ) : (
-              <table className="border-collapse text-xs w-max min-w-full">
+              <table className="border-collapse text-xs w-full table-fixed" style={{ minWidth: `${150 + detail.days.length * 24 + 44}px` }}>
+                <colgroup>
+                  <col style={{ width: 150 }} />
+                  {detail.days.map((d) => <col key={d} />)}
+                  <col style={{ width: 44 }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-muted">
-                    <th className="sticky left-0 z-10 bg-muted text-left font-semibold px-3 py-2 min-w-[170px] border-b border-r">Staff</th>
+                    <th className="sticky left-0 z-10 bg-muted text-left font-semibold px-3 py-2 border-b border-r">Staff</th>
                     {detail.days.map((d) => (
-                      <th key={d} className={cn('w-[30px] min-w-[30px] font-semibold py-1 border-b text-center', [0, 6].includes(dow(d)) && 'bg-muted-foreground/10')}>
-                        <div className="text-[10px] font-normal text-muted-foreground">{['S', 'M', 'T', 'W', 'T', 'F', 'S'][dow(d)]}</div>
-                        {Number(d.slice(8))}
+                      <th key={d} className={cn('font-semibold py-1 border-b text-center leading-tight', [0, 6].includes(dow(d)) && 'bg-muted-foreground/10')}>
+                        <div className="text-[9px] font-normal text-muted-foreground">{['S', 'M', 'T', 'W', 'T', 'F', 'S'][dow(d)]}</div>
+                        <div className="text-[11px]">{Number(d.slice(8))}</div>
                       </th>
                     ))}
-                    <th className="px-2 border-b text-center font-semibold" title="Shifts this month">Total</th>
+                    <th className="border-b text-center font-semibold text-[11px]" title="Shifts this month">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detail.employees.map((e) => (
                     <tr key={e.id} className="border-b last:border-b-0">
                       <td className="sticky left-0 z-10 bg-card px-3 py-1.5 border-r">
-                        <div className="font-medium text-sm leading-tight">{e.first_name} {e.last_name}</div>
-                        <div className="text-[11px] text-muted-foreground">{e.employee_number}{e.job_title ? ` · ${e.job_title}` : ''}</div>
+                        <div className="font-medium text-sm leading-tight truncate" title={`${e.first_name} ${e.last_name}`}>{e.first_name} {e.last_name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate" title={`${e.employee_number}${e.job_title ? ` · ${e.job_title}` : ''}`}>{e.employee_number}</div>
                       </td>
                       {detail.days.map((d) => {
                         const id = cell(e.id, d);
@@ -432,7 +437,7 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
                             className={cn('p-0.5 text-center border-l border-border/40', [0, 6].includes(dow(d)) && 'bg-muted/40', editable && 'cursor-pointer hover:bg-primary/10', pending.has(key) && 'bg-primary/5')}
                             style={l && !s ? { backgroundImage: 'repeating-linear-gradient(45deg, transparent 0 4px, rgba(202,138,4,.18) 4px 8px)' } : undefined}>
                             {s ? (
-                              <span className={cn('inline-flex items-center justify-center rounded text-white font-bold h-6 w-[26px] text-[11px]', conflict && 'ring-2 ring-destructive')}
+                              <span className={cn('inline-flex items-center justify-center rounded text-white font-bold h-6 w-full max-w-[26px] text-[10px]', conflict && 'ring-2 ring-destructive')}
                                 style={{ backgroundColor: shiftColor(s, s._i) }}>{shiftLabel(s)}</span>
                             ) : l ? (
                               <span className="text-[10px] font-semibold text-warning">L</span>
@@ -446,9 +451,9 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
                     </tr>
                   ))}
                   <tr className="bg-muted/50 border-t">
-                    <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 border-r text-[11px] font-semibold">On duty (excl. on-call)</td>
+                    <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 border-r text-[11px] font-semibold truncate" title="Staff on duty that day (on-call not counted)">On duty</td>
                     {coverage.map((n, i) => (
-                      <td key={i} className={cn('text-center font-semibold py-1', n === 0 && 'text-destructive')}>{n}</td>
+                      <td key={i} className={cn('text-center font-semibold py-1 text-[11px]', n === 0 && 'text-destructive')}>{n}</td>
                     ))}
                     <td />
                   </tr>
@@ -456,9 +461,12 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
               </table>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Hover a cell for details. <span className="font-semibold text-warning">L</span> = approved leave. Red-outlined shifts fall on leave. A red 0 in the last row means nobody is on duty that day.
-          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span><span className="font-semibold text-warning">L</span> approved leave</span>
+            <span><span className="inline-block w-3 h-3 rounded ring-2 ring-destructive align-middle mr-1" />shift on leave</span>
+            <span><span className="font-semibold text-destructive">0</span> nobody on duty</span>
+            <span className="2xl:hidden">Scroll sideways if a day is hidden →</span>
+          </div>
         </TabsContent>
 
         <TabsContent value="report" className="mt-4">
