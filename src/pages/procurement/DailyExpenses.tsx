@@ -28,7 +28,7 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useApprovalSettings } from '@/hooks/useApprovalSettings';
 
 interface CoAAccount { id: string | number; account_code: string; account_name: string; account_type: string; current_balance?: number; balance?: number; }
-interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; category_id?: string | null; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
+interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; category_id?: string | null; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; supplier_id?: number | null; supplier_name?: string | null; }
 interface ExpApproval { id: string; expense_id: number; approval_level: number; approved_by: string; approved_by_title?: string; signature?: string | null; notes?: string; approved_at: string; }
 interface SupplierBill { id: string; po_number: string; order_date: string; total_amount: number; po_currency: string; payment_terms: string; status: string; supplier_name: string; contact_person: string; supplier_phone: string; paid_amount: number; payment_status: string; balance_due: number; approval_count?: number; }
 interface ConsultantBill { id: string; bill_number: string; first_name: string; last_name: string; employee_number: string; period_from: string; period_to: string; total_consultation_revenue: number; fee_percentage: number; bill_amount: number; currency: string; status: string; created_at: string; paid_at?: string; }
@@ -120,7 +120,13 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
   const [billTo, setBillTo] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [showExpModal, setShowExpModal] = useState(false);
-  const [expForm, setExpForm] = useState({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash' });
+  const [expForm, setExpForm] = useState({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash', supplier_id: '' });
+  // Optional supplier for an expense (Record Daily Expense).
+  const [expenseSuppliers, setExpenseSuppliers] = useState<{ id: number; name: string; supplier_code?: string }[]>([]);
+  useEffect(() => {
+    authFetch('/api/daily-expenses/suppliers/options').then((r) => (r.ok ? r.json() : [])).then((d) => setExpenseSuppliers(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  const supplierOptions4Exp = useMemo(() => [{ value: '', label: 'No supplier' }, ...expenseSuppliers.map((x) => ({ value: String(x.id), label: x.supplier_code ? `${x.name} (${x.supplier_code})` : x.name }))], [expenseSuppliers]);
   const [openExpCombo, setOpenExpCombo] = useState(false);
   const [submittingExp, setSubmittingExp] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
@@ -700,12 +706,12 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
     setSubmittingExp(true);
     try {
       const r = await authFetch('/api/daily-expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...expForm, amount: parseFloat(expForm.amount), clinic_id: clinicId, created_by: (user as any)?.display_name || (user as any)?.username || 'admin' }) });
+        body: JSON.stringify({ ...expForm, supplier_id: expForm.supplier_id || null, amount: parseFloat(expForm.amount), clinic_id: clinicId, created_by: (user as any)?.display_name || (user as any)?.username || 'admin' }) });
       if (!r.ok) throw new Error();
       const data = await r.json();
       toast.success(`Expense submitted — awaiting ${expReq} approval${expReq === 1 ? '' : 's'} before the voucher is issued`);
       setShowExpModal(false);
-      setExpForm({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash' });
+      setExpForm({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash', supplier_id: '' });
       fetchExpenses();
     } catch { toast.error('Failed to record expense'); }
     finally { setSubmittingExp(false); }
@@ -751,7 +757,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
   const printExpVoucher = (exp: DailyExpense) => {
     const body = docTemplate.buildInfoGrid(
       { title: 'Expense Details', rows: [{ label: 'Voucher No', value: exp.voucher_number || '-', bold: true }, { label: 'Date', value: formatDate(exp.expense_date) }, { label: 'Category', value: exp.category || '-' }, { label: 'Method', value: exp.payment_method || 'Cash' }] },
-      { title: 'Payment Info', rows: [{ label: 'Account', value: exp.account_name || '-' }, { label: 'Amount', value: fmt(parseFloat(String(exp.amount || 0))), bold: true }, { label: 'Prepared By', value: exp.created_by || '-' }] }
+      { title: 'Payment Info', rows: [...(exp.supplier_name ? [{ label: 'Paid To', value: exp.supplier_name, bold: true }] : []), { label: 'Account', value: exp.account_name || '-' }, { label: 'Amount', value: fmt(parseFloat(String(exp.amount || 0))), bold: true }, { label: 'Prepared By', value: exp.created_by || '-' }] }
     ) + `<div class="ic-section-title">Description</div><p style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">${exp.description || '-'}</p>`
       + (exp.notes ? docTemplate.buildNotes(exp.notes) : '')
       + docTemplate.buildSignatures([{ label: 'Prepared By', name: exp.created_by || '' }, { label: 'Approved By', name: '' }, { label: 'Received By', name: '' }]);
@@ -1026,7 +1032,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   columns={[
                     { key: 'voucher_number', header: 'Voucher', render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || <span className="text-warning italic">pending</span>}</span> },
                     { key: 'expense_date', header: 'Date', sortable: true, render: (v) => <span className="whitespace-nowrap">{formatDate(v)}</span> },
-                    { key: 'description', header: 'Description', render: (v) => <span className="font-medium max-w-[200px] truncate block">{v}</span> },
+                    { key: 'description', header: 'Description', exportValue: (exp) => exp.supplier_name ? `${exp.description} — ${exp.supplier_name}` : exp.description, render: (v, exp) => <span className="block max-w-[220px]"><span className="font-medium truncate block">{v}</span>{exp.supplier_name && <span className="text-xs text-muted-foreground truncate block">{exp.supplier_name}</span>}</span> },
                     { key: 'category', header: 'Category', render: (v) => <Badge variant="outline" className="text-xs">{v || '-'}</Badge> },
                     { key: 'account_name', header: 'Account', render: (v) => <span className="text-xs text-muted-foreground">{v}</span> },
                     { key: 'payment_method', header: 'Method', render: (v) => <span className="text-xs">{v || 'Cash'}</span> },
@@ -1366,6 +1372,18 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                 </div>
               </div>
               <div><Label className="text-xs">Description *</Label><Input className="mt-1" value={expForm.description} onChange={e => setExpForm(f => ({...f, description: e.target.value}))} placeholder="What was purchased/paid for" required /></div>
+              <div>
+                <Label className="text-xs">Supplier <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Combobox
+                  options={supplierOptions4Exp}
+                  value={expForm.supplier_id}
+                  onChange={v => setExpForm(f => ({ ...f, supplier_id: v }))}
+                  placeholder="No supplier"
+                  searchPlaceholder="Search suppliers..."
+                  emptyText="No supplier with that name — add it under Procurement › Suppliers"
+                  className="mt-1 h-9"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label className="text-xs">Amount ({currency.code}) *</Label><Input type="number" step="0.01" min="0.01" className="mt-1" value={expForm.amount} onChange={e => setExpForm(f => ({...f, amount: e.target.value}))} required /></div>
                 <div>
@@ -1409,7 +1427,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                     saveExpenseEdit({
                       expense_date: e.expense_date, description: e.description, amount: parseFloat(String(e.amount)),
                       category: e.category, category_id: e.category_id, notes: e.notes, payment_method: e.payment_method,
-                      account_id: e.account_id,
+                      account_id: e.account_id, supplier_id: e.supplier_id ?? null,
                     } as any);
                   }}
                 >
@@ -1437,6 +1455,17 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   <div><Label className="text-xs">Description *</Label>
                     <Input className="mt-1" value={e.description || ''}
                       onChange={ev => set({ description: ev.target.value } as any)} required /></div>
+                  <div>
+                    <Label className="text-xs">Supplier <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Combobox
+                      options={supplierOptions4Exp}
+                      value={e.supplier_id ? String(e.supplier_id) : ''}
+                      onChange={v => set({ supplier_id: v ? Number(v) : null } as any)}
+                      placeholder="No supplier"
+                      searchPlaceholder="Search suppliers..."
+                      className="mt-1 h-9"
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><Label className="text-xs">Amount ({currency.code}) *</Label>
                       <Input type="number" step="0.01" min="0.01" className="mt-1" value={String(e.amount ?? '')}

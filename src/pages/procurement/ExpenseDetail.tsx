@@ -28,6 +28,7 @@ interface Expense {
   account_name: string; account_id: string; category: string; notes: string;
   created_by: string; payment_method: string; voucher_number: string | null;
   status: string; clinic_id: number; paid_at?: string | null;
+  supplier_name?: string | null;
 }
 interface Approval {
   id: string; expense_id: number; approval_level: number;
@@ -147,6 +148,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
         { label: 'Prepared By', value: expense.created_by || '—' },
       ]},
       { title: 'Payment', rows: [
+        ...(expense.supplier_name ? [{ label: 'Paid To', value: expense.supplier_name, bold: true }] : []),
         { label: 'Account', value: expense.account_name || '—' },
         { label: 'Method', value: expense.payment_method || 'Cash' },
         { label: 'Amount', value: fmt(parseFloat(String(expense.amount || 0))), bold: true },
@@ -252,6 +254,12 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
                   <span className="flex items-center gap-2 text-sm text-muted-foreground"><Tag className="w-4 h-4" />Category</span>
                   <Badge variant="outline" className="text-xs">{expense.category || '—'}</Badge>
                 </div>
+                {expense.supplier_name && (
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><User className="w-4 h-4" />Supplier</span>
+                    <span className="font-medium text-sm text-right max-w-[200px] truncate">{expense.supplier_name}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="w-4 h-4" />Account</span>
                   <span className="font-medium text-sm text-right max-w-[200px] truncate">{expense.account_name}</span>

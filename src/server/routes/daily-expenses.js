@@ -30,6 +30,21 @@ function branchScope(req, replacements, alias = '') {
 // underlying expense_approve/supplier_bill_approve grant.
 const { getFacilitySettings } = require('../utils/facilitySettings');
 
+/** Resolves an optional supplier for an expense: { supplier_id, supplier_name } or nulls. */
+async function resolveSupplier(supplierId, clinicId) {
+  if (supplierId === undefined) return undefined;          // not sent — leave as is
+  if (supplierId === null || supplierId === '') return { supplier_id: null, supplier_name: null };
+  const [[sup]] = await sequelize.query('SELECT id, name FROM suppliers WHERE id = :id AND (clinic_id = :clinicId OR clinic_id IS NULL) LIMIT 1',
+    { replacements: { id: parseInt(supplierId, 10), clinicId } });
+  if (!sup) { const e = new Error('That supplier was not found'); e.status = 400; throw e; }
+  return { supplier_id: sup.id, supplier_name: sup.name };
+}
+async function saveSupplier(expenseId, sup) {
+  if (!sup) return;
+  await sequelize.query('UPDATE daily_expenses SET supplier_id = :sid, supplier_name = :sname WHERE id = :id',
+    { replacements: { sid: sup.supplier_id, sname: sup.supplier_name, id: expenseId } });
+}
+
 async function isSoleApprover(clinicId, userId, approvalType) {
   // A tenant missing the column (see config/ensureApprovalPermissionColumns.js)
   // simply has no sole approvers — never a reason to fail the approval.
@@ -295,7 +310,16 @@ router.get('/', authorize('expenses.read'), async (req, res) => {
       where.expense_date = { [Op.lte]: endOfDay(dateTo) };
     }
 
-    const expenses = await DailyExpense.findAll({ where, order: [['expense_date', 'DESC'], ['id', 'DESC']] });
+    const expenses = (await DailyExpense.findAll({ where, order: [['expense_date', 'DESC'], ['id', 'DESC']] })).map((e) => e.toJSON());
+    // Supplier is read raw (not a model attribute) so a tenant still missing
+    // the column only loses the supplier, never the whole list.
+    if (expenses.length) {
+      try {
+        const [sups] = await sequelize.query('SELECT id, supplier_id, supplier_name FROM daily_expenses WHERE id IN (:ids)', { replacements: { ids: expenses.map((e) => e.id) } });
+        const byId = new Map(sups.map((r) => [r.id, r]));
+        for (const e of expenses) { const r = byId.get(e.id); e.supplier_id = r?.supplier_id ?? null; e.supplier_name = r?.supplier_name ?? null; }
+      } catch (e) { /* supplier columns not there yet */ }
+    }
     res.json(expenses);
   } catch (error) {
     console.error('Error fetching expenses:', error);
@@ -817,6 +841,20 @@ router.post('/:id/pay', authorize('expenses.pay'), async (req, res) => {
 });
 
 // Get single expense by id
+// Supplier picker for Record Daily Expense — whoever can record an expense
+// (they don't necessarily hold procurement.read); a minimal id/name list.
+router.get('/suppliers/options', authorize('expenses.write'), async (req, res) => {
+  try {
+    const [rows] = await sequelize.query(
+      `SELECT id, name, supplier_code FROM suppliers WHERE (clinic_id = :clinicId OR clinic_id IS NULL) AND COALESCE(is_active, true) ORDER BY name`,
+      { replacements: { clinicId: BranchQueryFilter.resolveClinicId(req) } });
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing suppliers for expenses:', error);
+    res.status(500).json({ error: 'Failed to load suppliers' });
+  }
+});
+
 router.get('/:id', authorize('expenses.read'), async (req, res) => {
   try {
     const getReplacements = { id: parseInt(req.params.id), clinicId: BranchQueryFilter.resolveClinicId(req) };
@@ -965,6 +1003,8 @@ router.put('/:id', authorize('expenses.write'), async (req, res) => {
     if (error) return res.status(error.code).json(error.body);
 
     const { account_id, amount, description, expense_date, category, category_id, notes, payment_method } = req.body;
+    let supplier;
+    try { supplier = await resolveSupplier(req.body.supplier_id, expense.clinic_id); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
 
     if (amount !== undefined && !(parseFloat(amount) > 0)) {
       return res.status(400).json({ error: 'Amount must be greater than zero' });
@@ -1005,6 +1045,7 @@ router.put('/:id', authorize('expenses.write'), async (req, res) => {
               updated_at = NOW()
         WHERE id = :id`,
       { replacements: { ...next, id } });
+    await saveSupplier(id, supplier);
 
     try {
       const rr = require('./reports');
@@ -1126,6 +1167,8 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
     }
     const { account_id, amount, description, expense_date, category, category_id, notes, created_by, payment_method } = req.body;
     const clinic_id = BranchQueryFilter.resolveClinicId(req);
+    let supplier;
+    try { supplier = await resolveSupplier(req.body.supplier_id, clinic_id); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
     let accountName = 'Unknown';
     try {
       const coa = await ChartOfAccounts.findByPk(account_id);
@@ -1149,8 +1192,9 @@ router.post('/', authorize('expenses.write'), async (req, res) => {
       status: 'pending_approval',
       branch_id: getCreateBranchId(req),
     });
+    if (supplier?.supplier_id) await saveSupplier(expense.id, supplier);
     try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: created_by || req.user?.display_name, user_role: req.user?.role, module: 'Expenses', action: 'EXPENSE_CREATED', entity_type: 'DailyExpense', entity_id: String(expense.id), description: `Expense created: ${description} — ${amount}`, new_values: { amount, category, account_name: accountName }, ip_address: req.ip, status: 'success' }); } catch(e) {}
-    res.status(201).json({ ...expense.toJSON(), status: 'pending_approval' });
+    res.status(201).json({ ...expense.toJSON(), status: 'pending_approval', supplier_id: supplier?.supplier_id ?? null, supplier_name: supplier?.supplier_name ?? null });
   } catch (error) {
     console.error('Error creating expense:', error);
     res.status(500).json({ error: 'Failed to create expense' });
