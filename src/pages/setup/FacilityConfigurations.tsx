@@ -49,16 +49,19 @@ const SECTIONS = [
   { id: 'hr', label: 'HR & attendance', icon: Users },
 ];
 
-/** One setting: what it does on the left, its control on the right. */
-function Row({ title, description, children, warn }: { title: string; description: React.ReactNode; children: React.ReactNode; warn?: string | false }) {
+/** One setting as a compact tile: short name, a few words, its control. */
+function Row({ title, description, children, warn, wide }: { title: string; description?: React.ReactNode; children: React.ReactNode; warn?: string | false; wide?: boolean }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 py-4 first:pt-0 last:pb-0">
-      <div className="min-w-0 sm:max-w-xl">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
-        {warn && <p className="text-xs text-warning mt-1.5">{warn}</p>}
+    <div className={cn('bg-card border rounded-lg shadow-sm p-4 flex flex-col gap-3', wide && 'sm:col-span-2', warn && 'border-warning-border')}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground leading-snug">{title}</p>
+          {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        </div>
+        {!wide && <div className="shrink-0">{children}</div>}
       </div>
-      <div className="shrink-0">{children}</div>
+      {wide && <div>{children}</div>}
+      {warn && <p className="text-xs text-warning">{warn}</p>}
     </div>
   );
 }
@@ -79,14 +82,11 @@ function Choice({ value, options, onChange, disabled }: { value: number; options
   );
 }
 
-function Section({ id, title, description, children }: { id: string; title: string; description: string; children: React.ReactNode }) {
+function Section({ id, title, icon: Icon, children }: { id: string; title: string; icon: React.ElementType; description?: string; children: React.ReactNode }) {
   return (
-    <section id={id} className="bg-card border rounded-lg shadow-sm scroll-mt-4">
-      <div className="px-5 py-4 border-b border-border">
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-      </div>
-      <div className="px-5 py-4 divide-y divide-border">{children}</div>
+    <section id={id} className="space-y-3">
+      <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-foreground"><Icon className="w-4 h-4 text-primary" />{title}</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">{children}</div>
     </section>
   );
 }
@@ -164,58 +164,44 @@ export default function FacilityConfigurations() {
   return (
     <AppLayout>
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
-        <PageHeader icon={<Settings />} title="Configurations" subtitle="How this facility works — approvals, registration and HR rules. Changes apply as soon as you save." />
+        <PageHeader icon={<Settings />} title="Configurations" />
 
         {loading ? (
           <LoadingState message="Loading configurations..." />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[13rem_1fr] gap-6 items-start pb-24">
-            {/* Section menu */}
-            <nav className="lg:sticky lg:top-4 bg-card border rounded-lg shadow-sm p-2 flex lg:flex-col gap-1 overflow-x-auto" aria-label="Configuration sections">
-              {sections.map((s) => (
-                <button key={s.id} type="button" onClick={() => go(s.id)}
-                  className={cn('flex items-center gap-2 rounded-md px-3 h-10 text-sm whitespace-nowrap text-left transition-colors',
-                    active === s.id ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-muted')}>
-                  <s.icon className="w-4 h-4 shrink-0" />{s.label}
-                </button>
-              ))}
-            </nav>
-
-            <div className="space-y-5 min-w-0 max-w-4xl">
-              <Section id="approvals" title="Approvals & controls" description="Who has to sign off on money going out or being given back.">
-                <Row title="Approvals needed for an expense" description="Each expense request must get this many approvals before it can be paid.">
+          <div className="space-y-6 pb-24">
+              <Section id="approvals" title="Approvals & controls" icon={ShieldCheck}>
+                <Row title="Expense approvals" description="Needed before payment">
                   <Choice value={f.expense_approvals_required} disabled={!canFacility}
                     options={[{ value: 1, label: '1' }, { value: 2, label: '2' }]}
                     onChange={(v) => setFacility('expense_approvals_required', v)} />
                 </Row>
-                <Row title="Approvals needed for a supplier bill" description="Checked by → Reviewed by → Approved by. A supplier bill can be paid once it has this many.">
+                <Row title="Supplier bill approvals" description="Needed before payment">
                   <Choice value={f.supplier_bill_approvals_required} disabled={!canFacility}
                     options={[{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }]}
                     onChange={(v) => setFacility('supplier_bill_approvals_required', v)} />
                 </Row>
-                <Row title="Let one person give every approval"
-                  description={<>When on, the same person can approve an expense or supplier bill more than once, so you no longer see “You have already approved this expense — a second, different approver is required”. When off, each approval must come from a different person (individual exceptions can still be set under Setup › Approvals).</>}
-                  warn={f.approvals_allow_same_person && 'One person can now approve and release payments alone.'}>
+                <Row title="Same person can approve every level" description="Expenses & supplier bills"
+                  warn={f.approvals_allow_same_person && 'One person can approve and pay alone.'}>
                   <Switch checked={f.approvals_allow_same_person} disabled={!canFacility} onCheckedChange={(v) => setFacility('approvals_allow_same_person', v)} aria-label="Let one person give every approval" />
                 </Row>
-                <Row title="Cashier voids and refunds need a second person"
-                  description="When on, a receipt void or refund asked for by a cashier waits under Accounting › Refunds until someone with approval rights signs it off. When off, it takes effect immediately."
-                  warn={!f.receipt_void_requires_approval && 'Cashiers can now void or refund their own receipts without anyone checking.'}>
+                <Row title="Voids & refunds need approval" description="Cashier requests"
+                  warn={!f.receipt_void_requires_approval && 'Cashiers can void/refund without a check.'}>
                   <Switch checked={f.receipt_void_requires_approval} disabled={!canFacility} onCheckedChange={(v) => setFacility('receipt_void_requires_approval', v)} aria-label="Cashier voids and refunds need a second person" />
                 </Row>
-                <Row title="Credit notes need a different approver" description="When on, the person who created a credit note cannot approve it themselves.">
+                <Row title="Credit notes: different approver" description="Creator can’t approve">
                   <Switch checked={f.credit_note_separate_approver} disabled={!canFacility} onCheckedChange={(v) => setFacility('credit_note_separate_approver', v)} aria-label="Credit notes need a different approver" />
                 </Row>
               </Section>
 
-              <Section id="registration" title="Registration & queue" description="What happens at the front desk when a patient is registered and queued.">
-                <Row title="Print queue receipt" description="Print a thermal slip with the queue number and patient number whenever a patient is queued at LIS Registration.">
+              <Section id="registration" title="Registration & queue" icon={UserPlus}>
+                <Row title="Print queue receipt" description="At registration">
                   <Switch checked={f.queue_receipt_enabled} disabled={!canFacility} onCheckedChange={(v) => setFacility('queue_receipt_enabled', v)} aria-label="Print queue receipt" />
                 </Row>
-                <Row title="Go straight to billing after queuing" description="After a patient is queued, open their bill. Turn this off if your front desk bills separately — the bill is still created either way.">
+                <Row title="Open bill after queuing" description="Go straight to billing">
                   <Switch checked={f.billing_redirect_after_queue_enabled} disabled={!canFacility} onCheckedChange={(v) => setFacility('billing_redirect_after_queue_enabled', v)} aria-label="Go straight to billing after queuing" />
                 </Row>
-                <Row title="Patient number format" description={<>Prefix and optional suffix around the 6-digit number. Example: <span className="font-mono font-medium text-foreground">{previewNumber}</span></>}>
+                <Row title="Patient number format" description={<span className="font-mono">{previewNumber}</span>} wide>
                   <div className="flex items-center gap-2">
                     <Input aria-label="Prefix" className="w-28" value={f.patient_number_prefix} maxLength={20} placeholder="PTN" disabled={!canFacility}
                       onChange={(e) => setFacility('patient_number_prefix', e.target.value.toUpperCase())} />
@@ -227,20 +213,20 @@ export default function FacilityConfigurations() {
               </Section>
 
               {(hr || roster !== null) && (
-                <Section id="hr" title="HR & attendance" description="Leave, salary advances and clock-in rules.">
+                <Section id="hr" title="HR & attendance" icon={Users}>
                   {hr && (
                     <>
-                      <Row title="Leave needs the head of department first" description="Leave requests go to the employee's head of department before HR.">
+                      <Row title="Leave: head of dept first" description="Before HR">
                         <Switch checked={!!hr.leave_require_hod} disabled={!canHr} onCheckedChange={(v) => setHrField('leave_require_hod', v)} aria-label="Leave needs the head of department first" />
                       </Row>
-                      <Row title="Salary advances need the head of department" description="Advance requests go to the head of department before HR.">
+                      <Row title="Advances: head of dept" description="Before HR">
                         <Switch checked={!!hr.advance_require_hod} disabled={!canHr} onCheckedChange={(v) => setHrField('advance_require_hod', v)} aria-label="Salary advances need the head of department" />
                       </Row>
-                      <Row title="Salary advances need finance approval" description="An extra Finance/Accounts sign-off before an advance can be paid out.">
+                      <Row title="Advances: finance approval" description="Before payout">
                         <Switch checked={!!hr.advance_require_finance} disabled={!canHr} onCheckedChange={(v) => setHrField('advance_require_finance', v)} aria-label="Salary advances need finance approval" />
                       </Row>
-                      <Row title="Salary advance limits" description="Largest advance as a share of basic salary, how many can be open at once, the longest repayment, and how long someone must have worked first.">
-                        <div className="grid grid-cols-2 gap-2 w-72">
+                      <Row title="Salary advance limits" wide>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                           {([
                             ['advance_max_percent_of_salary', '% of salary', 1, 100],
                             ['advance_max_open_advances', 'open at once', 1, 10],
@@ -258,15 +244,14 @@ export default function FacilityConfigurations() {
                     </>
                   )}
                   {roster !== null && (
-                    <Row title="Only allow clock-in for rostered staff" description="For departments whose duty roster for the month is approved, staff can clock in only around their rostered shift (HR › Duty Rosters).">
+                    <Row title="Clock-in only when rostered" description="Approved rosters only">
                       <Switch checked={roster} disabled={!canRoster} onCheckedChange={(v) => setRoster(v)} aria-label="Only allow clock-in for rostered staff" />
                     </Row>
                   )}
                 </Section>
               )}
 
-              {!canFacility && <p className="text-xs text-muted-foreground">You can view these settings; only an administrator can change them.</p>}
-            </div>
+              {!canFacility && <p className="text-xs text-muted-foreground">Only an administrator can change these settings.</p>}
           </div>
         )}
 
