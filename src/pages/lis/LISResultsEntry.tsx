@@ -709,6 +709,7 @@ export default function LISResultsEntry() {
                         )}
 
                         <AdvancedDataTable<any>
+                          toolbar="count"
                           data={selectedTestSchema.components}
                           keyExtractor={(comp) => comp.id}
                           columns={[

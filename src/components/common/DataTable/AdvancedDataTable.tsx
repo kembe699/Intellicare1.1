@@ -85,8 +85,13 @@ export interface AdvancedDataTableProps<T> {
    * the first date-valued column; pass false to hide the date filter.
    */
   dateFilterKey?: string | false;
-  /** Hide the whole toolbar (title, filters, CSV/PDF, search) — for small embedded tables such as line-item editors. */
-  toolbar?: boolean;
+  /**
+   * false hides the whole toolbar (title, filters, CSV/PDF, search) — for
+   * small embedded tables such as line-item editors. 'count' keeps only the
+   * title and record count, with no filters, search, export or paging — for
+   * working panels (e.g. LIS result entry) that show one patient's rows.
+   */
+  toolbar?: boolean | 'count';
   /** Set false when the page supplies its own filter dropdowns (via toolbarExtra), so status/type columns don't get a second one. */
   autoFilters?: boolean;
 
@@ -172,8 +177,9 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   }, []);
   const inDialog = React.useContext(InDialogContext) || inLegacyModal;
   const inReport = React.useContext(InReportContext);
-  const toolbar = toolbarProp ?? !inDialog;
-  const pagination = paginationProp ?? (maxRows || inDialog || inReport ? undefined : { enabled: true, pageSize: 20 });
+  const countOnly = toolbarProp === 'count';
+  const toolbar = countOnly ? false : (toolbarProp ?? !inDialog);
+  const pagination = paginationProp ?? (maxRows || inDialog || inReport || countOnly ? undefined : { enabled: true, pageSize: 20 });
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: 'asc' | 'desc';
@@ -412,7 +418,7 @@ export function AdvancedDataTable<T extends Record<string, any>>({
   // totals row over a double rule. All rows, no toolbar — the report page
   // owns the period, CSV and Print. A report can still ask for the
   // interactive list with toolbar={true}.
-  if (inReport && toolbarProp !== true) {
+  if (inReport && toolbarProp !== true && !countOnly) {
     const colCount = columns.length + (selectable ? 1 : 0);
     return (
       <div ref={rootRef} className={cn('bg-card border border-border rounded-lg shadow-sm overflow-hidden print:shadow-none break-inside-avoid-page', className)}>
@@ -556,6 +562,13 @@ export function AdvancedDataTable<T extends Record<string, any>>({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {countOnly && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border">
+          <div className="text-sm font-semibold text-foreground min-w-0">{title}</div>
+          <span className="text-xs text-muted-foreground">{sortedData.length} {sortedData.length === 1 ? countLabel[0] : countLabel[1]}</span>
         </div>
       )}
 

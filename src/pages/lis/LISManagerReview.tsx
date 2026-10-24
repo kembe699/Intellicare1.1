@@ -548,6 +548,7 @@ export default function LISManagerReview() {
                 <div className="flex-1 flex flex-col min-h-0">
                   <div className="flex-1 overflow-auto p-6">
                     <AdvancedDataTable<any>
+                      toolbar="count"
                       data={sortResultsByComponentOrder(selectedSpecimen.results)}
                       keyExtractor={(r) => r.id}
                       columns={[

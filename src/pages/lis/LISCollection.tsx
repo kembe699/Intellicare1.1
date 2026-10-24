@@ -448,6 +448,7 @@ export default function LISCollection() {
 
                   <div className="flex-1 overflow-auto p-4">
                     <AdvancedDataTable<any>
+                      toolbar="count"
                       data={selectedGroup.specimens}
                       keyExtractor={(s) => s.id}
                       columns={[
@@ -668,6 +669,7 @@ export default function LISCollection() {
                           </div>
                         </div>
                         <AdvancedDataTable<any>
+                          toolbar="count"
                           data={o.specimens}
                           keyExtractor={(s) => s.id}
                           columns={[

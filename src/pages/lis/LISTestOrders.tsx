@@ -3045,6 +3045,7 @@ export default function LISTestOrders() {
                             <span className="text-xs font-mono text-muted-foreground font-normal">Barcode: {s.barcode}</span>
                           </h4>
                           <AdvancedDataTable<any>
+                            toolbar="count"
                             data={results}
                             keyExtractor={(r) => r.id}
                             emptyMessage="No results recorded."
@@ -3380,6 +3381,7 @@ export default function LISTestOrders() {
                                       <div className="p-3 text-xs text-muted-foreground">Loading results...</div>
                                     ) : results.length > 0 ? (
                                       <AdvancedDataTable<any>
+                                        toolbar="count"
                                         data={[...results].sort((a: any, b: any) => (a.display_order ?? Infinity) - (b.display_order ?? Infinity))}
                                         keyExtractor={(r) => r.id}
                                         columns={[
