@@ -400,12 +400,11 @@ export default function AuditSummaryReport() {
         <div className="space-y-6">
           {/* ── Staff activity summary — clicking a row filters the activity log below to that user ── */}
           <div className="print:hidden">
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">Staff Activity Summary</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">{fmtCount(byUser.length)} staff member{byUser.length === 1 ? '' : 's'} with logged activity {fmtDate(dateFrom)} — {fmtDate(dateTo)} &middot; click a row to filter the activity log below</p>
             </div>
             <AdvancedDataTable<ByUserRow & { no: number }>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Staff Activity Summary"
               data={numberedByUser}
               keyExtractor={(row) => String(row.userId ?? row.userName)}
               searchable
@@ -449,15 +448,14 @@ export default function AuditSummaryReport() {
 
           {/* ── Chronological activity log — who did what, when, and whether it succeeded ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">Activity Log</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">
                 Most recent {fmtCount(activityRows.length)}
                 {data?.activity.truncated ? ` of ${fmtCount(data.activity.totalCount)}` : ''} entries, newest first
               </p>
             </div>
             <AdvancedDataTable<ActivityRow & { no: number }>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Activity Log"
               data={numberedActivity}
               keyExtractor={(row) => row.id}
               searchable

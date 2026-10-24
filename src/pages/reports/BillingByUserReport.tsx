@@ -209,11 +209,8 @@ export default function BillingByUserReport() {
           {/* ── Per-cashier table — cashier filter lives here (not the table's own built-in
               search) because it also drives what the page-level CSV export downloads. ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="text-sm font-semibold">Collections by Cashier</h3>
-            </div>
             <AdvancedDataTable<CashierRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Collections by Cashier"
               footerRow={(colSpan) => (
                 <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">

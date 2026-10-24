@@ -175,12 +175,8 @@ export default function PharmacyReport() {
           {/* ── Fast / Slow moving items ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <div className="mb-2 flex items-center gap-1.5">
-                <TrendingUp className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm">Fast Moving Items</h3>
-              </div>
               <AdvancedDataTable<MovementItem>
-                headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+                title="Fast Moving Items"
                 data={fastMoving}
                 keyExtractor={(row) => row.itemId}
                 emptyMessage="No items dispensed in this period."
@@ -192,12 +188,8 @@ export default function PharmacyReport() {
               />
             </div>
             <div>
-              <div className="mb-2 flex items-center gap-1.5">
-                <TrendingDown className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm">Slow Moving Items</h3>
-              </div>
               <AdvancedDataTable<MovementItem>
-                headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+                title="Slow Moving Items"
                 data={slowMoving}
                 keyExtractor={(row) => row.itemId}
                 emptyMessage="No active inventory items found."
@@ -212,12 +204,11 @@ export default function PharmacyReport() {
 
           {/* ── By-drug breakdown table ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">Dispensing by Drug</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">{fmtCount(byDrug.length)} drug{byDrug.length === 1 ? '' : 's'} dispensed or billed in period</p>
             </div>
             <AdvancedDataTable<ByDrugRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Dispensing by Drug"
               footerRow={(colSpan) => (
                 <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">

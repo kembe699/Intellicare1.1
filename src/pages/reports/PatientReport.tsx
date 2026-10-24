@@ -171,12 +171,11 @@ export default function PatientReport() {
 
           {/* ── Breakdown table ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">Bills in Period</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">{fmtCount(bills.length)} bill{bills.length === 1 ? '' : 's'} created {fmtDate(dateFrom)} — {fmtDate(dateTo)}</p>
             </div>
             <AdvancedDataTable<BillRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Bills in Period"
               footerRow={(colSpan) => (
                 <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">

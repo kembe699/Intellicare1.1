@@ -211,14 +211,13 @@ export default function DoctorPerformanceReport() {
 
           {/* ── Per-doctor table ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">Performance by Doctor</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">
                 {fmtCount(doctors.length)} doctor{doctors.length === 1 ? '' : 's'} with activity {fmtCount(data?.summary.totalVisits)} visit{data?.summary.totalVisits === 1 ? '' : 's'} total
               </p>
             </div>
             <AdvancedDataTable<DoctorRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Performance by Doctor"
               footerRow={(colSpan) => (
                 <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">

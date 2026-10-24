@@ -405,6 +405,85 @@ export function AdvancedDataTable<T extends Record<string, any>>({
     selectedRows.has(keyExtractor(row, index))
   );
 
+  // ── Report statement layout ────────────────────────────────────────
+  // Inside the Reports centre every list is drawn as a printable statement
+  // (the Income Statement by Department look): a tinted title band, a plain
+  // table with an uppercase header over a heavy rule, hairline rows, and a
+  // totals row over a double rule. All rows, no toolbar — the report page
+  // owns the period, CSV and Print. A report can still ask for the
+  // interactive list with toolbar={true}.
+  if (inReport && toolbarProp !== true) {
+    const colCount = columns.length + (selectable ? 1 : 0);
+    return (
+      <div ref={rootRef} className={cn('bg-card border border-border rounded-lg shadow-sm overflow-hidden print:shadow-none break-inside-avoid-page', className)}>
+        {title && (
+          <div className="bg-info-bg dark:bg-info/40 px-4 py-1.5 border-b border-border flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold tracking-wide">{title}</h3>
+            <span className="text-xs text-muted-foreground">{sortedData.length} {sortedData.length === 1 ? countLabel[0] : countLabel[1]}</span>
+          </div>
+        )}
+        <div className="px-4 py-3 overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b-2 border-foreground/70 text-xs uppercase tracking-wide text-muted-foreground">
+                {columns.map((column, index) => (
+                  <th
+                    key={index}
+                    scope="col"
+                    style={{ width: column.width }}
+                    onClick={() => column.sortable && handleSort(column.key as string)}
+                    className={cn(
+                      'font-semibold pb-1.5 pr-3 last:pr-0 whitespace-nowrap',
+                      column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : 'text-left',
+                      column.sortable && 'cursor-pointer select-none hover:text-foreground print:cursor-auto',
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {column.header}
+                      {column.sortable && sortConfig?.key === column.key && (sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 4 }).map((_, r) => (
+                  <tr key={`sk-${r}`} className="border-b border-border/70">
+                    {columns.map((_c, ci) => <td key={ci} className="py-2 pr-3"><Skeleton className="h-3" style={{ width: `${55 + ((r * 13 + ci * 19) % 35)}%` }} /></td>)}
+                  </tr>
+                ))
+              ) : sortedData.length === 0 ? (
+                <tr><td colSpan={colCount} className="py-6 text-center text-sm text-muted-foreground">{empty?.title || emptyMessage}</td></tr>
+              ) : sortedData.map((row, rowIndex) => (
+                <tr
+                  key={keyExtractor(row, rowIndex)}
+                  onClick={() => onRowClick?.(row, rowIndex)}
+                  className={cn('border-b border-border/70 align-top', onRowClick && 'cursor-pointer hover:bg-muted/40', rowClassName?.(row, rowIndex))}
+                >
+                  {columns.map((column, ci) => {
+                    const value = row[column.key];
+                    return (
+                      <td
+                        key={ci}
+                        className={cn('py-1.5 pr-3 last:pr-0', column.align === 'right' ? 'text-right tabular-nums' : column.align === 'center' ? 'text-center' : 'text-left')}
+                      >
+                        {column.render ? column.render(value, row, rowIndex) : value?.toString() || '-'}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+            {footerRow && !loading && sortedData.length > 0 && (
+              <tfoot className="border-t-2 border-foreground/70 font-semibold [&_tr]:bg-transparent [&_tr]:border-0 [&_td]:bg-transparent [&_td]:px-0 [&_td]:pr-3 [&_td:last-child]:pr-0 [&_td]:pt-1.5 [&_td]:pb-0.5">{footerRow(colCount)}</tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={rootRef} className={cn('bg-card rounded-md border border-border overflow-hidden', className)}>
       {/* Toolbar — one layout for every list: title + count on the left;

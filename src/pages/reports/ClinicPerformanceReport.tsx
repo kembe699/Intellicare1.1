@@ -198,12 +198,11 @@ export default function ClinicPerformanceReport() {
 
           {/* ── By Clinic (lightweight, 2 rows) ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">By Clinic</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">Visit volume and revenue collected per clinic for the selected period</p>
             </div>
             <AdvancedDataTable<ClinicRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="By Clinic"
               data={byClinic}
               keyExtractor={(c) => c.clinicId}
               emptyMessage="No clinics found."
@@ -217,12 +216,11 @@ export default function ClinicPerformanceReport() {
 
           {/* ── By Department / Category (main content) ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">By Department / Service Category</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground">Volume and revenue per service category — which service lines are generating money</p>
             </div>
             <AdvancedDataTable<CategoryRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="By Department / Service Category"
               data={byCategory}
               keyExtractor={(c) => c.category}
               emptyMessage="No billed services found for the selected period."

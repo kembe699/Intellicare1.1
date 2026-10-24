@@ -269,7 +269,8 @@ export default function WorkforceReport() {
         </div>
       ) : (
         <AdvancedDataTable
-          headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+          title={option.label}
+          countLabel={['row', 'rows']}
           data={numberedRows}
           keyExtractor={(r, i) => r.employeeId ? `${r.employeeId}-${i}` : i}
           columns={columnsWithNo}

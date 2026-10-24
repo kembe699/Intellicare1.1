@@ -230,14 +230,13 @@ export default function CancelledTransactionsReport() {
 
           {/* ── Section 1: Cancelled / Refunded Receipts ── */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-semibold text-sm">Cancelled / Refunded Receipts</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground mt-0.5">
                 Payment receipts whose status was changed away from <span className="font-mono">active</span> ({fmtDate(dateFrom)} — {fmtDate(dateTo)})
               </p>
             </div>
             <AdvancedDataTable<CancelledReceiptRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Cancelled / Refunded Receipts"
               footerRow={(colSpan) => (
                 <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">
@@ -284,10 +283,6 @@ export default function CancelledTransactionsReport() {
           <div>
             <div className="mb-2 flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-semibold text-sm flex items-center gap-1.5">
-                  <ListX className="h-4 w-4 text-muted-foreground" />
-                  Voided Line Items (Active Bills)
-                </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Individual service lines marked voided within otherwise-live bills — a different concept from a cancelled receipt above; the bill itself was not cancelled, only this line was removed from its total.
                 </p>
@@ -298,7 +293,7 @@ export default function CancelledTransactionsReport() {
               </div>
             </div>
             <AdvancedDataTable<VoidedLineItemRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Voided Line Items (Active Bills)"
               footerRow={(colSpan) => (
                 <tr className="border-t-2 border-foreground/30 bg-info-bg dark:bg-info/20 font-semibold">
                   <td colSpan={colSpan} className="px-4 py-2.5 text-sm">

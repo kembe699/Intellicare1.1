@@ -229,12 +229,11 @@ export default function OccupancyReport() {
 
           {/* By Ward */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-medium text-sm">Occupancy by Ward</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground mt-0.5">Current bed state, grouped by ward</p>
             </div>
             <AdvancedDataTable<WardRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Occupancy by Ward"
               data={byWard}
               keyExtractor={(w) => w.ward_id}
               searchable
@@ -266,12 +265,11 @@ export default function OccupancyReport() {
           {/* Full bed roster — search/status filter live here (not the table's own built-in
               search) because they also drive what the page-level CSV export downloads. */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-medium text-sm">Bed Roster</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground mt-0.5">Showing {filteredBeds.length} of {beds.length} beds</p>
             </div>
             <AdvancedDataTable<BedRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Bed Roster"
               data={filteredBeds}
               keyExtractor={(b) => b.id}
               emptyMessage="No beds match your filters."
@@ -352,7 +350,8 @@ export default function OccupancyReport() {
             </div>
 
             <AdvancedDataTable<DailyRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Admissions by Day"
+              className="border-0 rounded-none shadow-none"
               data={trend.daily}
               keyExtractor={(d) => d.day}
               emptyMessage="No admissions in this period."

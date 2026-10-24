@@ -453,7 +453,8 @@ export default function InventoryReport() {
         </div>
       ) : (
         <AdvancedDataTable
-          headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+          title={option.label}
+          countLabel={['row', 'rows']}
           data={numberedRows}
           keyExtractor={keyExtractor}
           columns={columnsWithNo}

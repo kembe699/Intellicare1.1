@@ -210,12 +210,11 @@ export default function ARAgingReport() {
 
           {/* Aging summary table */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-medium text-sm">Aging Summary</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground mt-0.5">As of {fmtDate(data?.asOf)}</p>
             </div>
             <AdvancedDataTable<AgingSummaryRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Aging Summary"
               data={agingSummary}
               keyExtractor={(row) => row.bucket}
               columns={[
@@ -238,14 +237,13 @@ export default function ARAgingReport() {
           {/* Detail table — search/bucket filter live here (not the table's own built-in
               search) because they also drive what the page-level CSV export downloads. */}
           <div>
-            <div className="mb-2">
-              <h3 className="font-medium text-sm">Outstanding Bills</h3>
+            <div className="mb-1.5 print:hidden">
               <p className="text-xs text-muted-foreground mt-0.5">
                 Sorted by days overdue, most overdue first &middot; showing {filteredItems.length} of {items.length} &middot; balance (filtered): {fmtCurrency(filteredItems.reduce((s, i) => s + i.balanceAmount, 0))}
               </p>
             </div>
             <AdvancedDataTable<AgingBillRow>
-              headerClassName="bg-info-bg dark:bg-info/40 border-b border-border"
+              title="Outstanding Bills"
               data={filteredItems}
               keyExtractor={(item) => item.id}
               emptyMessage="No outstanding bills found."
