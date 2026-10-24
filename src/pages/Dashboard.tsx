@@ -605,12 +605,14 @@ const Dashboard: React.FC = () => {
               keyExtractor={(row) => row.id}
               searchable
               searchPlaceholder="Search by patient or receipt number..."
+              // The From/To below reloads payments from the server, so the
+              // table's own automatic date filter would only duplicate it.
+              dateFilterKey={false}
               toolbarExtra={
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Label htmlFor="paymentsFrom" className="text-xs text-muted-foreground">From</Label>
-                  <Input id="paymentsFrom" type="date" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} className="h-9 w-auto" />
-                  <Label htmlFor="paymentsTo" className="text-xs text-muted-foreground">To</Label>
-                  <Input id="paymentsTo" type="date" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} className="h-9 w-auto" />
+                  <Input id="paymentsFrom" aria-label="From date" type="date" value={paymentsFrom} onChange={(e) => setPaymentsFrom(e.target.value)} className="h-8 w-[9.5rem] text-sm" />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <Input id="paymentsTo" aria-label="To date" type="date" value={paymentsTo} onChange={(e) => setPaymentsTo(e.target.value)} className="h-8 w-[9.5rem] text-sm" />
                   {isPaymentsRangeFiltered && (
                     <button
                       type="button"
