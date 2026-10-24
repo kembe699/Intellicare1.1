@@ -70,14 +70,6 @@ const EXPIRY_FILTER_OPTIONS = [
   { value: 'not_expired', label: 'Not Expired' },
 ];
 
-const USAGE_TYPE_OPTIONS = [
-  { value: 'clinical_use', label: 'Clinical Use' },
-  { value: 'pharmacy_dispense', label: 'Pharmacy Dispense' },
-  { value: 'lab_test', label: 'Lab Test' },
-  { value: 'waste', label: 'Waste' },
-  { value: 'damage', label: 'Damage' },
-];
-
 export default function BatchTracking() {
   const { user } = useAuth();
   const { fmt } = useCurrency();
@@ -96,10 +88,6 @@ export default function BatchTracking() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(defaultBatchForm());
 
-  const [showUseModal, setShowUseModal] = useState(false);
-  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
-  const [useData, setUseData] = useState({ quantity_used: 0, usage_type: 'clinical_use', notes: '' });
-  const [usingBatch, setUsingBatch] = useState(false);
 
   const [showRetireModal, setShowRetireModal] = useState(false);
   const [retireReason, setRetireReason] = useState('Expired stock write-off');
@@ -183,33 +171,6 @@ export default function BatchTracking() {
       toast.error(error.message || 'Failed to create batch');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const openUse = (batch: Batch) => {
-    setSelectedBatch(batch);
-    setUseData({ quantity_used: 0, usage_type: 'clinical_use', notes: '' });
-    setShowUseModal(true);
-  };
-
-  const handleUse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (usingBatch) return;
-    if (!selectedBatch || useData.quantity_used <= 0) { toast.error('Enter a valid quantity'); return; }
-    setUsingBatch(true);
-    try {
-      const res = await authFetch(`/api/inventory/batches/${selectedBatch.id}/use`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ ...useData, used_by: user?.uid }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to record usage');
-      toast.success('Usage recorded');
-      setShowUseModal(false);
-      fetchBatches(); fetchItems();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to record usage');
-    } finally {
-      setUsingBatch(false);
     }
   };
 
@@ -432,71 +393,11 @@ export default function BatchTracking() {
                 key: 'status', header: 'Status', sortable: true,
                 render: (v) => <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_CLASS[v] || 'bg-muted text-muted-foreground border-border'}`}>{v?.replace(/_/g, ' ')}</span>,
               },
-              {
-                key: '__actions', header: 'Actions',
-                render: (_v, batch) => (
-                  batch.quantity_available > 0 && batch.status !== 'expired' ? (
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openUse(batch)}>Use</Button>
-                  ) : null
-                ),
-              },
             ]}
           />
         </div>
       </div>
       </div>
-
-      {/* Use Batch Modal */}
-      {showUseModal && selectedBatch && (
-        <div className="ic-modal-overlay">
-          <div className="ic-modal max-w-md">
-            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
-              <div>
-                <h3 className="font-semibold text-lg">Record Batch Usage</h3>
-                <p className="text-xs text-muted-foreground">{selectedBatch.item_name} — Batch {selectedBatch.batch_number} (Available: {selectedBatch.quantity_available})</p>
-              </div>
-              <Button variant="ghost" size="icon" aria-label="Close" className="h-8 w-8" onClick={() => setShowUseModal(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <form onSubmit={handleUse}>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Quantity to Use</label>
-                    <Input required type="number" min="1" max={selectedBatch.quantity_available} value={useData.quantity_used || ''} onChange={e => setUseData({ ...useData, quantity_used: parseInt(e.target.value) || 0 })} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Usage Type</label>
-                    <Combobox
-                      options={USAGE_TYPE_OPTIONS}
-                      value={useData.usage_type}
-                      onChange={v => setUseData({ ...useData, usage_type: v })}
-                      searchPlaceholder="Search..."
-                      className="mt-1 h-9"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Notes</label>
-                  <textarea
-                    value={useData.notes}
-                    onChange={e => setUseData({ ...useData, notes: e.target.value })}
-                    className="w-full mt-1 p-3 border border-input rounded-md resize-none h-16 text-sm bg-transparent shadow-sm"
-                  />
-                </div>
-              </div>
-              <div className="p-4 border-t bg-muted/30 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowUseModal(false)}>Cancel</Button>
-                <Button type="submit" disabled={usingBatch}>
-                  {usingBatch ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-                  {usingBatch ? 'Recording...' : 'Record Usage'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Retire Confirmation Modal */}
       {showRetireModal && (

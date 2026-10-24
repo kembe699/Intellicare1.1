@@ -1385,55 +1385,78 @@ router.post('/adjustments/:id/approve', authorize('inventory.adjustments.approve
 
     if (adj.approval_status !== 'pending') return res.status(400).json({ error: 'Adjustment not pending' });
 
-    // Apply stock change. inventory_items.quantity_on_hand is the sum of
-    // every stock_by_location row for that item — a location-specific
-    // physical count (adj.location_id set) must only change the TOTAL by
-    // the variance OBSERVED AT THAT LOCATION, never be set equal to that
-    // one location's count outright. This used to SET quantity_on_hand to
-    // adj.physical_count unconditionally, which silently discarded every
-    // other location's stock the moment a multi-location item was counted
-    // at just one of them (e.g. an item with 50 at Pharmacy-A and 30 at
-    // Pharmacy-B: counting Pharmacy-A at 48 used to set the item's total to
-    // 48, erasing Pharmacy-B's 30 units). A whole-item count with no
-    // location (adj.location_id null) has no per-location breakdown to
-    // preserve, so setting the total directly to physical_count there is
-    // still correct.
-    if (adj.location_id) {
-      await sequelize.query(
-        'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand + :variance) WHERE id = :item_id',
-        { replacements: { variance: adj.variance, item_id: adj.item_id } }
-      );
-      await sequelize.query(
-        'UPDATE stock_by_location SET quantity_on_hand = :physical_count WHERE item_id = :item_id AND location_id = :loc_id',
-        { replacements: { physical_count: adj.physical_count, item_id: adj.item_id, loc_id: adj.location_id } }
-      );
-    } else {
-      await sequelize.query(
-        'UPDATE inventory_items SET quantity_on_hand = :physical_count WHERE id = :item_id',
-        { replacements: { physical_count: adj.physical_count, item_id: adj.item_id } }
-      );
+    // A count without a location used to change only inventory_items'
+    // total, leaving stock_by_location (what every store view, dispensing and
+    // transfers read) at the old figure — found on the demo tenant: Malaria
+    // RDT Kit total 30 vs 18 in its only store. Now:
+    //   - item held in exactly one store → that store is set to the count too
+    //   - item held in several stores → refused: the difference can't be
+    //     placed, so it must be counted per store
+    //   - item held in no store → total only, as before
+    let singleStoreId = null;
+    if (!adj.location_id) {
+      const [stores] = await sequelize.query('SELECT location_id FROM stock_by_location WHERE item_id = :item_id', { replacements: { item_id: adj.item_id } });
+      if (stores.length > 1) {
+        return res.status(400).json({ error: `This item is kept in ${stores.length} stores, so a count without a store can't be applied. Reject it and count the item per store (choose the location).` });
+      }
+      if (stores.length === 1) singleStoreId = stores[0].location_id;
     }
 
-    // Create transaction record
-    await sequelize.query(`
-      INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,
-        quantity_change, unit_cost, total_cost, reference_type, reference_id, transaction_date, notes, created_by)
-      VALUES (:id, :clinic_id, :txn, :item_id, 'adjustment', :qty, :cost, :total, 'adjustment', :adj_id, CURRENT_DATE, :notes, :created_by)
-    `, {
-      replacements: {
-        id: uuidv4(), clinic_id: adj.clinic_id,
-        txn: `TXN-ADJ-${adj.adjustment_number}`, item_id: adj.item_id,
-        qty: adj.variance, cost: 0, total: adj.variance_value,
-        adj_id: adj.id, notes: `Adjustment: ${adj.variance_reason || 'approved'}`,
-        created_by: approved_by || null
+    // Stock, transaction record and status change land together or not at all.
+    const t = await sequelize.transaction();
+    try {
+      // inventory_items.quantity_on_hand is the sum of every stock_by_location
+      // row for the item — a store-specific count must only move the TOTAL by
+      // the variance seen at that store (never set the total to one store's
+      // count, which used to erase every other store's stock).
+      if (adj.location_id) {
+        await sequelize.query(
+          'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand + :variance) WHERE id = :item_id',
+          { replacements: { variance: adj.variance, item_id: adj.item_id }, transaction: t }
+        );
+        await sequelize.query(
+          'UPDATE stock_by_location SET quantity_on_hand = :physical_count WHERE item_id = :item_id AND location_id = :loc_id',
+          { replacements: { physical_count: adj.physical_count, item_id: adj.item_id, loc_id: adj.location_id }, transaction: t }
+        );
+      } else {
+        await sequelize.query(
+          'UPDATE inventory_items SET quantity_on_hand = :physical_count WHERE id = :item_id',
+          { replacements: { physical_count: adj.physical_count, item_id: adj.item_id }, transaction: t }
+        );
+        if (singleStoreId) {
+          await sequelize.query(
+            'UPDATE stock_by_location SET quantity_on_hand = :physical_count WHERE item_id = :item_id AND location_id = :loc_id',
+            { replacements: { physical_count: adj.physical_count, item_id: adj.item_id, loc_id: singleStoreId }, transaction: t }
+          );
+        }
       }
-    });
 
-    // Update adjustment status
-    await sequelize.query(
-      'UPDATE inventory_adjustments SET approval_status = :status, approved_by = :by, approval_date = NOW() WHERE id = :id',
-      { replacements: { status: 'approved', by: approved_by || null, id: req.params.id } }
-    );
+      // Create transaction record
+      await sequelize.query(`
+        INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,
+          quantity_change, unit_cost, total_cost, reference_type, reference_id, transaction_date, notes, created_by)
+        VALUES (:id, :clinic_id, :txn, :item_id, 'adjustment', :qty, :cost, :total, 'adjustment', :adj_id, CURRENT_DATE, :notes, :created_by)
+      `, {
+        replacements: {
+          id: uuidv4(), clinic_id: adj.clinic_id,
+          txn: `TXN-ADJ-${adj.adjustment_number}`, item_id: adj.item_id,
+          qty: adj.variance, cost: 0, total: adj.variance_value,
+          adj_id: adj.id, notes: `Adjustment: ${adj.variance_reason || 'approved'}`,
+          created_by: approved_by || null
+        },
+        transaction: t,
+      });
+
+      // Update adjustment status
+      await sequelize.query(
+        'UPDATE inventory_adjustments SET approval_status = :status, approved_by = :by, approval_date = NOW() WHERE id = :id',
+        { replacements: { status: 'approved', by: approved_by || null, id: req.params.id }, transaction: t }
+      );
+      await t.commit();
+    } catch (e) {
+      await t.rollback();
+      throw e;
+    }
 
     // Auto-create GL entry for the adjustment
     const glTxnData = {
