@@ -562,47 +562,44 @@ const GoodsReceiptNotes: React.FC = () => {
                 {grnLines.length > 0 && (
                   <div className="border-t pt-4">
                     <Label className="text-xs font-semibold mb-2 block text-muted-foreground uppercase tracking-wider">Items to Receive</Label>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {grnLines.map((line, idx) => (
-                        <div key={idx} className="border rounded-lg p-3 space-y-2 bg-muted/20">
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-xs font-semibold flex-1 leading-tight">{line.item_description}</span>
-                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded flex-none">Exp: {line.quantity_expected} {line.unit_of_measure}</span>
+                        <div key={idx} className="border rounded-lg p-3 bg-muted/20 grid grid-cols-2 md:grid-cols-[minmax(0,1.6fr)_6.5rem_8.5rem_minmax(0,1fr)_10rem] gap-x-3 gap-y-2 items-end">
+                          {/* Item — then every field on the same row (wraps to two columns on narrow screens). */}
+                          <div className="col-span-2 md:col-span-1 min-w-0 self-center">
+                            <p className="text-xs font-semibold leading-tight truncate" title={line.item_description}>{line.item_description}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Expected: {line.quantity_expected} {line.unit_of_measure}</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1 block">Rcvd Qty</Label>
-                              <Input className="h-8 text-xs font-mono" type="number" min={0}
-                                max={line.quantity_expected}
-                                value={line.quantity_received}
-                                onChange={e => updateGRNLine(idx, 'quantity_received', parseInt(e.target.value) || 0)} />
-                            </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1 block">Condition</Label>
-                              <Combobox
-                                options={[
-                                  { value: 'good', label: 'Good' },
-                                  { value: 'damaged', label: 'Damaged' },
-                                  { value: 'expired', label: 'Expired' },
-                                ]}
-                                value={line.item_condition}
-                                onChange={v => updateGRNLine(idx, 'item_condition', v)}
-                                searchPlaceholder="Search..."
-                                className="h-8 text-xs"
-                              />
-                            </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Rcvd Qty</Label>
+                            <Input className="h-8 text-xs font-mono" type="number" min={0}
+                              max={line.quantity_expected}
+                              value={line.quantity_received}
+                              onChange={e => updateGRNLine(idx, 'quantity_received', parseInt(e.target.value) || 0)} />
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1 block">Batch #</Label>
-                              <Input className="h-8 text-xs font-mono placeholder:text-muted-foreground/50" placeholder="Optional" value={line.batch_number}
-                                onChange={e => updateGRNLine(idx, 'batch_number', e.target.value)} />
-                            </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1 block">Expiry Date</Label>
-                              <Input className="h-8 text-xs" type="date" value={line.expiry_date}
-                                onChange={e => updateGRNLine(idx, 'expiry_date', e.target.value)} />
-                            </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Condition</Label>
+                            <Combobox
+                              options={[
+                                { value: 'good', label: 'Good' },
+                                { value: 'damaged', label: 'Damaged' },
+                                { value: 'expired', label: 'Expired' },
+                              ]}
+                              value={line.item_condition}
+                              onChange={v => updateGRNLine(idx, 'item_condition', v)}
+                              searchPlaceholder="Search..."
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Batch #</Label>
+                            <Input className="h-8 text-xs font-mono placeholder:text-muted-foreground/50" placeholder="Optional" value={line.batch_number}
+                              onChange={e => updateGRNLine(idx, 'batch_number', e.target.value)} />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Expiry Date</Label>
+                            <Input className="h-8 text-xs" type="date" value={line.expiry_date}
+                              onChange={e => updateGRNLine(idx, 'expiry_date', e.target.value)} />
                           </div>
                         </div>
                       ))}
