@@ -76,7 +76,7 @@ const TOOLS = [
   },
   {
     name: 'get_department_breakdown',
-    description: "Billed revenue by category/department in a period — ONLY for bill line items that have a category captured at billing time; older bills predate that and are excluded (coveragePercent in the result says how much of the period's billing this actually represents). Requires financial access. There is deliberately NO equivalent tool for revenue per doctor — patient bills have no doctor attribution at all, so if asked, say plainly that isn't reliably trackable rather than estimating.",
+    description: "Billed revenue by DEPARTMENT in a period (rows[].department), worked out from each bill line's category and the department that category is linked to in Setup › Categories; voided lines excluded. coveragePercent says how much of the period's billing could be traced to a department. Requires financial access. There is deliberately NO equivalent tool for revenue per doctor — patient bills have no doctor attribution at all, so if asked, say plainly that isn't reliably trackable rather than estimating.",
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
   {

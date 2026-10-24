@@ -193,11 +193,11 @@ function departmentBreakdown({ rows, totalBilled, categorizedBilled }, label, cu
   const coveragePct = Math.round((categorizedBilled / totalBilled) * 100);
   const coverageNote = coveragePct >= 99
     ? ''
-    : ` (based on the ${coveragePct}% of billing ${phrase} that has a category captured; the rest predates category tracking)`;
+    : ` (based on the ${coveragePct}% of billing ${phrase} whose lines can be traced to a department)`;
   return {
     text: `${top.category} had the most billed activity ${phrase}, at ${formatMoney(top.amount, currencyCode)}${coverageNote}.`,
     table: {
-      columns: ['Category', 'Billed'],
+      columns: ['Department', 'Billed'],
       rows: rows.map((r) => [r.category, formatMoney(r.amount, currencyCode)]),
     },
   };

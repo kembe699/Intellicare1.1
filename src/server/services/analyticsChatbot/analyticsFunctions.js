@@ -219,7 +219,34 @@ async function getDepartmentBreakdown(sequelize, { req, clinicId, start, end }) 
     { replacements },
   );
 
-  const byCategory = new Map();
+  // Department comes live from Setup › Categories: a line's categoryId (or
+  // its category label matched to a category by name) → that category's
+  // department. 'Pharmacy / Inventory' lines follow the Drugs item category.
+  // A category with no department reports under its own name.
+  const deptByCategoryId = new Map();
+  const deptByServiceCategory = new Map();
+  let pharmacyDept = null;
+  try {
+    const [cats] = await sequelize.query(
+      `SELECT c.id::text AS id, c.type, c.name, d.department_name
+         FROM categories c LEFT JOIN departments d ON d.id::text = c.department_id::text
+        WHERE c.clinic_id = :clinicId`,
+      { replacements: { clinicId } },
+    );
+    for (const c of cats) {
+      if (c.department_name) deptByCategoryId.set(c.id, c.department_name);
+      if (c.type === 'service' && c.department_name) deptByServiceCategory.set(String(c.name).trim().toLowerCase(), c.department_name);
+      if (c.type === 'item' && String(c.name).toLowerCase() === 'drugs' && c.department_name) pharmacyDept = c.department_name;
+    }
+  } catch { /* categories not set up on this tenant yet — fall back to labels */ }
+  const departmentFor = (item) => {
+    if (item.categoryId && deptByCategoryId.has(String(item.categoryId))) return deptByCategoryId.get(String(item.categoryId));
+    const label = String(item.category).trim();
+    if (label === 'Pharmacy / Inventory') return pharmacyDept || 'Pharmacy';
+    return deptByServiceCategory.get(label.toLowerCase()) || label;
+  };
+
+  const byDept = new Map();
   let totalBilled = 0;
   let categorizedBilled = 0;
 
@@ -232,17 +259,20 @@ async function getDepartmentBreakdown(sequelize, { req, clinicId, start, end }) 
       continue; // malformed JSON on this bill — skip it, don't crash the request
     }
     for (const item of items) {
+      if (item?.isVoided) continue; // a voided line was never really billed
       const amount = parseFloat(item?.totalPrice ?? item?.total_price ?? 0) || 0;
       totalBilled += amount;
       if (item?.category) {
         categorizedBilled += amount;
-        byCategory.set(item.category, (byCategory.get(item.category) || 0) + amount);
+        const dept = departmentFor(item);
+        byDept.set(dept, (byDept.get(dept) || 0) + amount);
       }
     }
   }
 
-  const rows = [...byCategory.entries()]
-    .map(([category, amount]) => ({ category, amount }))
+  // `category` kept as the key name: the response template and LLM tool read it.
+  const rows = [...byDept.entries()]
+    .map(([category, amount]) => ({ category, department: category, amount }))
     .sort((a, b) => b.amount - a.amount);
 
   return { rows, totalBilled, categorizedBilled };
