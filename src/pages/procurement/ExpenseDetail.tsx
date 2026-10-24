@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useApprovalSettings } from '@/hooks/useApprovalSettings';
 import { useParams, useNavigate } from 'react-router-dom';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,6 +40,7 @@ const APPROVAL_LEVELS = ['Approval 1', 'Authorization'];
 
 /** payments: opened from Accounting › Payments (can pay); requests: from Procurement (view/approve only). */
 export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests' | 'payments' }) {
+  const { expReq, expLevels, expLevelNumbers } = useApprovalSettings();
   const listPath = mode === 'payments' ? '/accounting/payments/expenses' : '/procurement/daily-expenses';
   const { confirm, confirmDialog } = useConfirmDialog();
   const { id } = useParams<{ id: string }>();
@@ -111,7 +113,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
         }
         return;
       }
-      toast.success(`Approval ${data.approval_level}/2 recorded by ${data.approved_by}`);
+      toast.success(`Approval ${data.approval_level}/${expReq} recorded by ${data.approved_by}`);
       setForm(f => ({ ...f, approved_by_title: '', notes: '' }));
       await fetchAll(true);
     } catch { toast.error('Failed to submit approval'); }
@@ -123,15 +125,15 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
     const fi = { name: facilityInfo.facilityName, type: facilityInfo.facilityType, address: facilityInfo.facilityAddress, city: facilityInfo.facilityCity, phone: facilityInfo.facilityPhone, email: facilityInfo.facilityEmail, licenseNo: facilityInfo.facilityLicenseNo };
     const bi = { name: facilityInfo.branchName, address: facilityInfo.branchAddress, phone: facilityInfo.branchPhone };
 
-    const approvalsRows = [1, 2].map(level => {
+    const approvalsRows = expLevelNumbers.map(level => {
       const a = approvals.find(ap => ap.approval_level === level);
-      return { cells: [APPROVAL_LEVELS[level - 1], a ? a.approved_by : '—', a ? formatDate(a.approved_at) : '—', a ? '✓ Approved' : 'Pending'], bold: !!a };
+      return { cells: [expLevels[level - 1], a ? a.approved_by : '—', a ? formatDate(a.approved_at) : '—', a ? '✓ Approved' : 'Pending'], bold: !!a };
     });
     const signers = [
       { label: 'Prepared By', name: expense.created_by || '' },
-      ...([1, 2].map(level => {
+      ...(expLevelNumbers.map(level => {
         const a = approvals.find(ap => ap.approval_level === level);
-        return { label: APPROVAL_LEVELS[level - 1], name: a?.approved_by || '', signature: a?.signature || undefined };
+        return { label: expLevels[level - 1], name: a?.approved_by || '', signature: a?.signature || undefined };
       })),
     ];
     const itemRows = [
@@ -189,7 +191,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
   const isPaid = expense.status === 'paid';
   const approvalCount = approvals.length;
   const nextLevel = approvalCount + 1;
-  const fullyApproved = approvalCount >= 2;
+  const fullyApproved = approvalCount >= expReq;
   const amount = parseFloat(String(expense.amount || 0));
 
   return (
@@ -212,7 +214,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
           <div className="flex items-center gap-2">
             {isPending && (
               <Badge className="text-sm px-3 py-1 bg-warning-bg text-warning border-warning-border">
-                <Clock className="w-3.5 h-3.5 mr-1" /> Pending Approval ({approvalCount}/2)
+                <Clock className="w-3.5 h-3.5 mr-1" /> Pending Approval ({approvalCount}/{expReq})
               </Badge>
             )}
             {isApproved && (
@@ -287,7 +289,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
                 <CardTitle className="text-base">Approval Progress</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {[1, 2].map(level => {
+                {expLevelNumbers.map(level => {
                   const a = approvals.find(ap => ap.approval_level === level);
                   const isNext = level === nextLevel && isPending;
                   return (
@@ -296,7 +298,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
                         {a ? '✓' : level}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{APPROVAL_LEVELS[level - 1]}</p>
+                        <p className="font-medium text-sm">{expLevels[level - 1]}</p>
                         {a ? (
                           <p className="text-xs text-success">{a.approved_by} &nbsp;·&nbsp; {formatDate(a.approved_at)}</p>
                         ) : isNext ? (
@@ -333,7 +335,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
                 <CardHeader className="pb-3 bg-warning-bg rounded-t-xl">
                   <CardTitle className="text-base flex items-center gap-2 text-warning">
                     <ShieldCheck className="w-5 h-5" />
-                    {APPROVAL_LEVELS[nextLevel - 1]} Required
+                    {expLevels[nextLevel - 1]} Required
                   </CardTitle>
                   <p className="text-xs text-warning mt-0.5">
                     {2 - approvalCount} more approval{2 - approvalCount !== 1 ? 's' : ''} needed before the voucher is issued and payment is posted.
@@ -371,7 +373,7 @@ export default function ExpenseDetail({ mode = 'requests' }: { mode?: 'requests'
                     <Button type="submit" className="w-full bg-warning hover:bg-warning gap-2 h-11" disabled={submitting}>
                       {submitting
                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Approving...</>
-                        : <><ShieldCheck className="w-4 h-4" /> Approve ({nextLevel}/2)</>
+                        : <><ShieldCheck className="w-4 h-4" /> Approve ({nextLevel}/{expReq})</>
                       }
                     </Button>
                   </form>

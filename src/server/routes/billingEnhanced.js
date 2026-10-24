@@ -568,6 +568,16 @@ router.post('/credit-notes', authorize('billing.write'), async (req, res) => {
 router.put('/credit-notes/:id/approve', authorize('billing.write'), async (req, res) => {
   try {
     const { id } = req.params;
+    // Setup › Configurations: optionally the person who created a credit
+    // note may not approve it.
+    const [[cnRow]] = await sequelize.query('SELECT clinic_id, created_by FROM credit_notes WHERE id = :id', { replacements: { id } });
+    if (cnRow) {
+      const { getFacilitySettings } = require('../utils/facilitySettings');
+      const st = await getFacilitySettings(sequelize, cnRow.clinic_id);
+      if (st.credit_note_separate_approver && String(cnRow.created_by) === String(req.user?.id)) {
+        return res.status(400).json({ error: 'You created this credit note — a different person must approve it.' });
+      }
+    }
     const approveReplacements = { id, userId: req.user?.id || null };
     const approveBranchScope = branchScope(req, approveReplacements);
     await sequelize.query(`

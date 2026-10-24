@@ -28,6 +28,8 @@ function branchScope(req, replacements, alias = '') {
 // into being able to clear every level of expense/supplier-bill approval
 // alone, rather than this being a blanket bypass for anyone holding the
 // underlying expense_approve/supplier_bill_approve grant.
+const { getFacilitySettings } = require('../utils/facilitySettings');
+
 async function isSoleApprover(clinicId, userId, approvalType) {
   // A tenant missing the column (see config/ensureApprovalPermissionColumns.js)
   // simply has no sole approvers — never a reason to fail the approval.
@@ -384,16 +386,19 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
       'SELECT * FROM supplier_bill_approvals WHERE po_id = :po_id ORDER BY approval_level ASC',
       { replacements: { po_id: String(req.params.po_id) } }
     );
-    if (existing.length >= 3) return res.status(400).json({ error: 'This bill already has 3 approvals' });
+    const sbClinicId = BranchQueryFilter.resolveClinicId(req);
+    const sbSettings = await getFacilitySettings(sequelize, sbClinicId);
+    const sbRequired = sbSettings.supplier_bill_approvals_required;
+    if (existing.length >= sbRequired) return res.status(400).json({ error: `This bill already has its ${sbRequired} approval${sbRequired === 1 ? '' : 's'}` });
     // Segregation of duties: this only counted rows, never who they belonged
     // to — a single user holding supplier_bill_approve could call this
     // endpoint three times in a row and single-handedly supply every
     // required approval, unlocking the supplier payment alone. A user
     // explicitly granted sole_approver for supplier_bill_approve (see
     // isSoleApprover above) is deliberately exempted.
-    if (existing.some((a) => String(a.user_id) === String(req.user.id))) {
-      const clinicId = BranchQueryFilter.resolveClinicId(req);
-      if (!(await isSoleApprover(clinicId, req.user.id, 'supplier_bill_approve'))) {
+    // Setup › Configurations can allow one person to give every approval.
+    if (!sbSettings.approvals_allow_same_person && existing.some((a) => String(a.user_id) === String(req.user.id))) {
+      if (!(await isSoleApprover(sbClinicId, req.user.id, 'supplier_bill_approve'))) {
         return res.status(400).json({ error: 'You have already approved this bill — a different approver is required for the next level' });
       }
     }
@@ -404,7 +409,7 @@ router.post('/supplier-bills/:po_id/approve', requireApprovalPermission('supplie
       'INSERT INTO supplier_bill_approvals (id, po_id, user_id, approval_level, approved_by, approved_by_title, signature, notes, branch_id) VALUES (:id, :po_id, :user_id, :level, :approved_by, :title, :signature, :notes, :branchId)',
       { replacements: { id, po_id: req.params.po_id, user_id: req.user.id, level: nextLevel, approved_by, title: approved_by_title || null, signature, notes: notes || null, branchId: getCreateBranchId(req) } }
     );
-    res.status(201).json({ id, approval_level: nextLevel, approved_by, signature, total_approvals: nextLevel });
+    res.status(201).json({ id, approval_level: nextLevel, approved_by, signature, total_approvals: nextLevel, required_approvals: sbRequired });
   } catch (error) {
     console.error('Error submitting approval:', error);
     res.status(500).json({ error: 'Failed to submit approval' });
@@ -453,13 +458,14 @@ router.post('/supplier-bill-payment', authorize('supplier_bills.pay'), async (re
     if (!pos.length) return res.status(404).json({ error: 'PO not found' });
     const po = pos[0];
 
-    // Enforce 3-approval requirement
+    // Enforce the configured approval requirement (Setup › Configurations, default 3)
     const [approvals] = await sequelize.query(
       'SELECT COUNT(*) as cnt FROM supplier_bill_approvals WHERE po_id = :po_id',
       { replacements: { po_id: String(po_id) } }
     );
-    if (parseInt(approvals[0].cnt || 0) < 3) {
-      return res.status(403).json({ error: 'Payment requires 3 approvals. Currently approved: ' + approvals[0].cnt });
+    const payRequired = (await getFacilitySettings(sequelize, clinic_id)).supplier_bill_approvals_required;
+    if (parseInt(approvals[0].cnt || 0) < payRequired) {
+      return res.status(403).json({ error: `Payment requires ${payRequired} approval${payRequired === 1 ? '' : 's'}. Currently approved: ${approvals[0].cnt}` });
     }
 
     const payAmt = parseFloat(amount_paid);
@@ -863,15 +869,28 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
       'SELECT * FROM daily_expense_approvals WHERE expense_id = :id ORDER BY approval_level ASC',
       { replacements: { id: expenseId } }
     );
-    if (existing.length >= 2) return res.status(400).json({ error: 'This expense already has all required approvals' });
+    const expClinicId = BranchQueryFilter.resolveClinicId(req);
+    const expSettings = await getFacilitySettings(sequelize, expClinicId);
+    const expRequired = expSettings.expense_approvals_required;
+    if (existing.length >= expRequired) {
+      // The required count was lowered after this expense got its approvals:
+      // finish it now instead of leaving it stuck as pending.
+      const [[cur]] = await sequelize.query('SELECT status FROM daily_expenses WHERE id = :id', { replacements: { id: expenseId } });
+      if (cur?.status === 'pending_approval') {
+        const v = `EXP-${Date.now().toString().slice(-8)}`;
+        await sequelize.query(`UPDATE daily_expenses SET status='approved', voucher_number=:v WHERE id=:id`, { replacements: { v, id: expenseId } });
+        return res.status(200).json({ approval_level: existing.length, total_approvals: existing.length, required_approvals: expRequired, voucher_number: v, completed_existing: true });
+      }
+      return res.status(400).json({ error: 'This expense already has all required approvals' });
+    }
     // Segregation of duties: this only counted rows, never who they belonged
     // to — a single user holding expense_approve could call this endpoint
     // twice in a row and single-handedly supply both required approvals. A
     // user explicitly granted sole_approver for expense_approve (see
     // isSoleApprover above) is deliberately exempted.
-    if (existing.some((a) => String(a.user_id) === String(req.user.id))) {
-      const clinicId = BranchQueryFilter.resolveClinicId(req);
-      if (!(await isSoleApprover(clinicId, req.user.id, 'expense_approve'))) {
+    // Setup › Configurations can allow one person to give every approval.
+    if (!expSettings.approvals_allow_same_person && existing.some((a) => String(a.user_id) === String(req.user.id))) {
+      if (!(await isSoleApprover(expClinicId, req.user.id, 'expense_approve'))) {
         return res.status(400).json({ error: 'You have already approved this expense — a second, different approver is required' });
       }
     }
@@ -884,9 +903,10 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
     );
 
     let voucherNo = null;
-    // On 2nd (final) approval: mark as approved and assign voucher number
-    // Account deduction happens only when Pay Now is clicked
-    if (nextLevel === 2) {
+    // On the final approval (Setup › Configurations, default 2): mark as
+    // approved and assign the voucher number. Account deduction happens only
+    // when Pay Now is clicked.
+    if (nextLevel >= expRequired) {
       voucherNo = `EXP-${Date.now().toString().slice(-8)}`;
       await sequelize.query(
         `UPDATE daily_expenses SET status='approved', voucher_number=:v WHERE id=:id`,
@@ -894,8 +914,8 @@ router.post('/:id/approve', requireApprovalPermission('expense_approve'), async 
       );
     }
 
-    try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: dbUser.display_name, user_role: req.user?.role, module: 'Expenses', action: nextLevel === 2 ? 'EXPENSE_FINAL_APPROVED' : 'EXPENSE_APPROVED', entity_type: 'DailyExpense', entity_id: String(expenseId), description: `Expense approval level ${nextLevel} by ${dbUser.display_name}${voucherNo ? ` — voucher ${voucherNo}` : ''}`, ip_address: req.ip, status: 'success' }); } catch(e) {}
-    res.status(201).json({ id, approval_level: nextLevel, approved_by: dbUser.display_name, signature: dbUser.signature || null, total_approvals: nextLevel, voucher_number: voucherNo });
+    try { const rr = require('./reports'); await rr.logAudit({ req, user_id: req.user?.id, user_name: dbUser.display_name, user_role: req.user?.role, module: 'Expenses', action: nextLevel >= expRequired ? 'EXPENSE_FINAL_APPROVED' : 'EXPENSE_APPROVED', entity_type: 'DailyExpense', entity_id: String(expenseId), description: `Expense approval level ${nextLevel} by ${dbUser.display_name}${voucherNo ? ` — voucher ${voucherNo}` : ''}`, ip_address: req.ip, status: 'success' }); } catch(e) {}
+    res.status(201).json({ id, approval_level: nextLevel, approved_by: dbUser.display_name, signature: dbUser.signature || null, total_approvals: nextLevel, required_approvals: expRequired, voucher_number: voucherNo });
   } catch (error) {
     console.error('Error submitting expense approval:', error);
     res.status(500).json({ error: 'Failed to submit approval' });

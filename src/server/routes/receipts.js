@@ -669,8 +669,11 @@ router.put('/:receiptId/status', authorize('receipts.write'), async (req, res) =
     // everyone else, it does not remove the ability for an authorized person
     // to void/refund in one step.
     if (previousStatus === 'active' && ['voided', 'refunded'].includes(status)) {
-      const canActImmediately = (await userHasApprovalPermission(req, 'receipt_void_approve'))
-        && (await roleHasPrivilege(req, 'refunds.approve'));
+      // Setup › Configurations can switch the second-person step off.
+      const { getFacilitySettings } = require('../utils/facilitySettings');
+      const voidNeedsApproval = (await getFacilitySettings(sequelize, receipt.clinic_id)).receipt_void_requires_approval;
+      const canActImmediately = !voidNeedsApproval || ((await userHasApprovalPermission(req, 'receipt_void_approve'))
+        && (await roleHasPrivilege(req, 'refunds.approve')));
       if (!canActImmediately) {
         const pendingStatus = PENDING_FOR[status];
         const updatedReceipt = await receipt.update({

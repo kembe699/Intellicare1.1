@@ -18,6 +18,16 @@ async function ensureFacilitySettingsTable(sequelize) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Setup › Configurations › Approvals & controls. Every default is the
+  // behaviour the system had before the setting existed, so adding a column
+  // never changes how a facility works until an admin flips it.
+  const add = (col, ddl) => sequelize.query(`ALTER TABLE facility_settings ADD COLUMN IF NOT EXISTS ${col} ${ddl}`).catch(() => {});
+  await add('approvals_allow_same_person', 'BOOLEAN NOT NULL DEFAULT false');
+  await add('expense_approvals_required', 'INTEGER NOT NULL DEFAULT 2');
+  await add('supplier_bill_approvals_required', 'INTEGER NOT NULL DEFAULT 3');
+  await add('receipt_void_requires_approval', 'BOOLEAN NOT NULL DEFAULT true');
+  await add('credit_note_separate_approver', 'BOOLEAN NOT NULL DEFAULT false');
 }
 
 module.exports = { ensureFacilitySettingsTable };

@@ -25,6 +25,7 @@ import * as docTemplate from '@/utils/documentTemplate';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate, formatMoney } from '@/lib/format';
+import { useApprovalSettings } from '@/hooks/useApprovalSettings';
 
 interface CoAAccount { id: string | number; account_code: string; account_name: string; account_type: string; current_balance?: number; balance?: number; }
 interface DailyExpense { id: number; expense_date: string; description: string; amount: number; account_name: string; account_id: string; category: string; category_id?: string | null; notes: string; created_by: string; payment_method?: string; voucher_number?: string; status?: string; }
@@ -58,6 +59,8 @@ interface DailyExpensesProps {
 }
 
 const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initialTab = 'expenses', billsView = 'all' }) => {
+  // How many approvals expenses / supplier bills need (Setup › Configurations).
+  const { expReq, billReq, expLevels, billLevels, expLevelNumbers, billLevelNumbers } = useApprovalSettings();
   const { confirm, confirmDialog } = useConfirmDialog();
   const { fmt, currency } = useCurrency();
   const { user, hasPrivilege } = useAuth();
@@ -516,7 +519,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
         }
         return;
       }
-      toast.success(`Approval ${data.approval_level}/3 submitted by ${data.approved_by}`);
+      toast.success(`Approval ${data.approval_level}/${billReq} submitted by ${data.approved_by}`);
       await fetchApprovals(approveBill.id);
       setShowApproveModal(false);
       setApproveForm({ approved_by_title: '', notes: '' });
@@ -550,9 +553,9 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
         }
         return;
       }
-      toast.success(`Approval ${data.approval_level}/2 recorded`);
+      toast.success(`Approval ${data.approval_level}/${expReq} recorded`);
       await fetchExpApprovals(approveExpense.id);
-      if (data.total_approvals >= 2) {
+      if (data.total_approvals >= expReq) {
         toast.success('All approvals complete — voucher generated!');
         setShowExpApproveModal(false);
         fetchExpenses();
@@ -640,7 +643,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
   }), [expenses, searchExp, expView]);
   const filteredBills = useMemo(() => bills.filter(b => {
     if (billsView === 'ready') {
-      const fullyApproved = (billApprovals[b.id] || []).length >= 3;
+      const fullyApproved = (billApprovals[b.id] || []).length >= billReq;
       const owed = b.payment_status !== 'paid' && parseFloat(String(b.balance_due ?? 0)) > 0.01;
       if (!fullyApproved || !owed) return false;
     }
@@ -700,7 +703,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
         body: JSON.stringify({ ...expForm, amount: parseFloat(expForm.amount), clinic_id: clinicId, created_by: (user as any)?.display_name || (user as any)?.username || 'admin' }) });
       if (!r.ok) throw new Error();
       const data = await r.json();
-      toast.success('Expense submitted — awaiting 3 approvals before voucher is issued');
+      toast.success(`Expense submitted — awaiting ${expReq} approval${expReq === 1 ? '' : 's'} before the voucher is issued`);
       setShowExpModal(false);
       setExpForm({ expense_date: today(), description: '', amount: '', account_id: '', account_name: '', category: '', category_id: '', notes: '', payment_method: 'Cash' });
       fetchExpenses();
@@ -773,7 +776,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
           ['', 'TOTAL', '', '', '', '', fmtC(parseFloat(String(bill.total_amount || 0)))]
         )
       : '';
-    const approvalsTableRows = approvals.map(a => ({ cells: [PO_APPROVAL_LEVELS[a.approval_level - 1] || `Level ${a.approval_level}`, a.approved_by, formatDate(a.approved_at)] }));
+    const approvalsTableRows = approvals.map(a => ({ cells: [billLevels[a.approval_level - 1] || `Level ${a.approval_level}`, a.approved_by, formatDate(a.approved_at)] }));
     const approvalsTable = approvals.length > 0
       ? `<div class="ic-section-title">Approvals</div>` + docTemplate.buildTable(
           [{ label: 'Level' }, { label: 'Approved By' }, { label: 'Date' }],
@@ -782,9 +785,9 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
       : '';
     const signers = [
       { label: 'Prepared By', name: pay.paid_by || '' },
-      ...(approvals[0] ? [{ label: PO_APPROVAL_LEVELS[0], name: approvals[0].approved_by, signature: approvals[0].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[0], name: '' }]),
-      ...(approvals[1] ? [{ label: PO_APPROVAL_LEVELS[1], name: approvals[1].approved_by, signature: approvals[1].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[1], name: '' }]),
-      ...(approvals[2] ? [{ label: PO_APPROVAL_LEVELS[2], name: approvals[2].approved_by, signature: approvals[2].signature || undefined }] : [{ label: PO_APPROVAL_LEVELS[2], name: '' }]),
+      ...(approvals[0] ? [{ label: billLevels[0], name: approvals[0].approved_by, signature: approvals[0].signature || undefined }] : [{ label: billLevels[0], name: '' }]),
+      ...(approvals[1] ? [{ label: billLevels[1], name: approvals[1].approved_by, signature: approvals[1].signature || undefined }] : [{ label: billLevels[1], name: '' }]),
+      ...(approvals[2] ? [{ label: billLevels[2], name: approvals[2].approved_by, signature: approvals[2].signature || undefined }] : [{ label: billLevels[2], name: '' }]),
     ];
     const body = docTemplate.buildInfoGrid(
       { title: 'Payment Details', rows: [{ label: 'Voucher No', value: voucherNo, bold: true }, { label: 'PO Number', value: bill.po_number }, { label: 'Payment Date', value: formatDate(pay.payment_date) }, { label: 'Method', value: pay.payment_method }, { label: 'Reference', value: pay.reference_number || '-' }] },
@@ -799,7 +802,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
 
   const buildBillVoucher = (bill: SupplierBill, approvals: BillApproval[], opts: { autoPrint?: boolean } = {}, items?: POLineItem[]) => {
     const approvalCount = approvals.length;
-    const statusLabel = bill.payment_status === 'paid' ? 'PAID' : bill.payment_status === 'partial' ? 'PARTIALLY PAID' : approvalCount >= 3 ? 'APPROVED — AWAITING PAYMENT' : `PENDING APPROVAL (${approvalCount}/3)`;
+    const statusLabel = bill.payment_status === 'paid' ? 'PAID' : bill.payment_status === 'partial' ? 'PARTIALLY PAID' : approvalCount >= billReq ? 'APPROVED — AWAITING PAYMENT' : `PENDING APPROVAL (${approvalCount}/${billReq})`;
 
     // The PO's own currency labels these amounts — they're recorded in po_currency, not
     // the clinic's base currency — so it takes precedence over the system default.
@@ -807,11 +810,11 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
     const fmtC = (n: number) => `${cur} ${n.toFixed(2)}`;
 
     // Approvals progress table
-    const approvalsRows = [1, 2, 3].map(level => {
+    const approvalsRows = billLevelNumbers.map(level => {
       const a = approvals.find(ap => ap.approval_level === level);
       return {
         cells: [
-          PO_APPROVAL_LEVELS[level - 1],
+          billLevels[level - 1],
           a ? a.approved_by : '—',
           a ? formatDate(a.approved_at) : '—',
           a ? '✓ Approved' : 'Pending',
@@ -822,10 +825,10 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
 
     // Signature blocks: all 3 levels + supplier receipt
     const signers = [
-      ...[1, 2, 3].map(level => {
+      ...billLevelNumbers.map(level => {
         const a = approvals.find(ap => ap.approval_level === level);
         return {
-          label: PO_APPROVAL_LEVELS[level - 1],
+          label: billLevels[level - 1],
           name: a?.approved_by || '',
           signature: a?.signature || undefined,
         };
@@ -965,7 +968,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
             : tab === 'bills' ? (billsView === 'ready' ? 'Supplier Payments' : 'Supplier Bills')
             : tab === 'consultant-bills' ? 'Consultant Payments' : 'Expense Payments'}
           subtitle={mode === 'requests' ? 'Raise and approve expenses — approved expenses are paid in Accounting › Payments'
-            : tab === 'bills' ? (billsView === 'ready' ? 'Supplier bills with all 3 approvals, ready to pay' : 'Approve supplier bills (3 levels) and pay them')
+            : tab === 'bills' ? (billsView === 'ready' ? `Supplier bills with all ${billReq} approval${billReq === 1 ? '' : 's'}, ready to pay` : `Approve supplier bills (${billReq} level${billReq === 1 ? '' : 's'}) and pay them`)
             : tab === 'consultant-bills' ? 'Pay consultant bills generated from their profiles' : 'Approved expenses waiting to be paid'}
           actions={
             <div className="flex gap-2">
@@ -1032,7 +1035,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                       key: 'status', header: 'Status',
                       render: (v, exp) => {
                         const approvalCount = (expApprovals[exp.id] || []).length;
-                        if (v === 'pending_approval') return <Badge className="text-xs bg-warning-bg text-warning border-warning-border hover:bg-warning-bg">Pending {approvalCount}/2</Badge>;
+                        if (v === 'pending_approval') return <Badge className="text-xs bg-warning-bg text-warning border-warning-border hover:bg-warning-bg">Pending {approvalCount}/{expReq}</Badge>;
                         if (v === 'approved') return <Badge className="text-xs bg-primary/10 text-primary border-primary/40 hover:bg-primary/10">Approved</Badge>;
                         if (v === 'rejected') return <Badge className="text-xs bg-destructive/10 text-destructive border-destructive/40 hover:bg-destructive/10">Rejected</Badge>;
                         return <Badge className="text-xs bg-success-bg text-success border-success-border hover:bg-success-bg">Paid</Badge>;
@@ -1194,21 +1197,21 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                       // One compact pill instead of three numbered/ticked circles; who
                       // approved at each level is in the tooltip and the Approve dialog.
                       key: 'approval_count', header: 'Approvals', sortable: true, filterable: false,
-                      exportValue: (bill) => `${(billApprovals[bill.id] || []).length}/3`,
+                      exportValue: (bill) => `${(billApprovals[bill.id] || []).length}/${billReq}`,
                       render: (_v, bill) => {
                         const approvals = billApprovals[bill.id] || [];
                         const n = approvals.length;
-                        const who = [1, 2, 3].map(level => {
+                        const who = billLevelNumbers.map(level => {
                           const a = approvals.find(ap => ap.approval_level === level);
-                          return `${PO_APPROVAL_LEVELS[level - 1]}: ${a ? `${a.approved_by}${a.approved_by_title ? ` (${a.approved_by_title})` : ''}` : 'pending'}`;
+                          return `${billLevels[level - 1]}: ${a ? `${a.approved_by}${a.approved_by_title ? ` (${a.approved_by_title})` : ''}` : 'pending'}`;
                         }).join('\n');
-                        return n >= 3 ? (
+                        return n >= billReq ? (
                           <span title={who} className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success border border-success-border px-2 py-0.5 text-xs font-medium whitespace-nowrap">
                             <CheckCircle2 className="w-3 h-3" />Approved
                           </span>
                         ) : (
                           <span title={who} className="inline-flex items-center gap-1 rounded-full bg-warning-bg text-warning border border-warning-border px-2 py-0.5 text-xs font-medium whitespace-nowrap">
-                            <Clock className="w-3 h-3" />{n} of 3
+                            <Clock className="w-3 h-3" />{n} of {billReq}
                           </span>
                         );
                       },
@@ -1221,7 +1224,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                       key: '__actions', header: '', align: 'right',
                       render: (_v, bill) => {
                         const approvalCount = (billApprovals[bill.id] || []).length;
-                        const fullyApproved = approvalCount >= 3;
+                        const fullyApproved = approvalCount >= billReq;
                         // payment_status is the authoritative field, but a stale/missing
                         // value shouldn't leave Pay clickable on a bill with nothing left
                         // owed — balance_due backs it up.
@@ -1511,7 +1514,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   {/* Approval progress */}
                   <div className="rounded-md border p-3 bg-muted/30 space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approval Progress</p>
-                    {[1,2].map(level => {
+                    {expLevelNumbers.map(level => {
                       const a = approvals.find(ap => ap.approval_level === level);
                       const isNext = level === nextLevel;
                       return (
@@ -1520,7 +1523,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                             {a ? '✓' : level}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-xs">{APPROVAL_LEVELS[level - 1]}</span>
+                            <span className="font-medium text-xs">{expLevels[level - 1]}</span>
                             {a && <span className="text-xs text-success ml-2">— {a.approved_by}</span>}
                             {isNext && !a && <span className="text-xs text-warning ml-2">← Your approval</span>}
                           </div>
@@ -1538,11 +1541,11 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                     <div className="flex justify-between font-semibold border-t pt-1 mt-1"><span>Amount</span><span className="text-destructive">{fmt(parseFloat(String(approveExpense.amount || 0)))}</span></div>
                   </div>
 
-                  {nextLevel <= 2 ? (
+                  {nextLevel <= expReq ? (
                     <>
                       <div className="text-sm font-medium text-warning bg-warning-bg border border-warning-border rounded px-3 py-2 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 shrink-0" />
-                        Submitting: <strong>{APPROVAL_LEVELS[nextLevel - 1]}</strong>
+                        Submitting: <strong>{expLevels[nextLevel - 1]}</strong>
                       </div>
 
                       <div className="rounded-md border p-3 bg-muted/40 space-y-2">
@@ -1562,7 +1565,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
 
                       <div className="flex gap-2 pt-1">
                         <Button size="sm" type="submit" className="h-8 px-4 text-xs bg-warning hover:bg-warning text-white" disabled={submittingExpApproval}>
-                          {submittingExpApproval ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Approving...</> : <><ShieldCheck className="w-3 h-3 mr-2" />Approve ({nextLevel}/2)</>}
+                          {submittingExpApproval ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Approving...</> : <><ShieldCheck className="w-3 h-3 mr-2" />Approve ({nextLevel}/{expReq})</>}
                         </Button>
                         <Button size="sm" type="button" variant="outline" className="h-8 px-4 text-xs" onClick={() => setShowExpApproveModal(false)}>Cancel</Button>
                       </div>
@@ -1586,7 +1589,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
             <DialogHeader>
               <DialogTitle>{viewItemsBill?.po_number} — items</DialogTitle>
               <DialogDescription>
-                {viewItemsBill && `${viewItemsBill.supplier_name} · ordered ${formatDate(viewItemsBill.order_date)} · ${(billApprovals[viewItemsBill.id] || []).length} of 3 approvals · ${viewItemsBill.payment_status || 'unpaid'}`}
+                {viewItemsBill && `${viewItemsBill.supplier_name} · ordered ${formatDate(viewItemsBill.order_date)} · ${(billApprovals[viewItemsBill.id] || []).length} of ${billReq} approvals · ${viewItemsBill.payment_status || 'unpaid'}`}
               </DialogDescription>
             </DialogHeader>
             {viewItemsBill && renderBillItems(viewItemsBill)}
@@ -1612,7 +1615,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                   {/* Approval progress */}
                   <div className="rounded-md border p-3 bg-muted/30 space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approval Progress</p>
-                    {[1,2,3].map(level => {
+                    {billLevelNumbers.map(level => {
                       const a = approvals.find(ap => ap.approval_level === level);
                       const isNext = level === nextLevel;
                       return (
@@ -1621,7 +1624,7 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                             {a ? '✓' : level}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-xs">{PO_APPROVAL_LEVELS[level - 1]}</span>
+                            <span className="font-medium text-xs">{billLevels[level - 1]}</span>
                             {a && <span className="text-xs text-success ml-2">— {a.approved_by}{a.approved_by_title ? ` (${a.approved_by_title})` : ''}</span>}
                             {isNext && !a && <span className="text-xs text-primary ml-2">← Your approval</span>}
                           </div>
@@ -1630,11 +1633,11 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                     })}
                   </div>
 
-                  {nextLevel <= 3 ? (
+                  {nextLevel <= billReq ? (
                     <>
                       <div className="text-sm font-medium text-primary bg-primary/10 border border-primary/30 rounded px-3 py-2 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 shrink-0" />
-                        Submitting: <strong>{PO_APPROVAL_LEVELS[nextLevel - 1]}</strong>
+                        Submitting: <strong>{billLevels[nextLevel - 1]}</strong>
                       </div>
 
                       {/* Auto-captured identity */}
@@ -1662,13 +1665,13 @@ const DailyExpenses: React.FC<DailyExpensesProps> = ({ mode = 'requests', initia
                       <div className="flex justify-end gap-2 pt-1">
                         <Button type="button" variant="outline" onClick={() => setShowApproveModal(false)}>Cancel</Button>
                         <Button type="submit" disabled={submittingApproval}>
-                          {submittingApproval ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Approving...</> : <><ShieldCheck className="w-3 h-3 mr-2" />Approve ({nextLevel}/3)</>}
+                          {submittingApproval ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Approving...</> : <><ShieldCheck className="w-3 h-3 mr-2" />Approve ({nextLevel}/{billReq})</>}
                         </Button>
                       </div>
                     </>
                   ) : (
                     <div className="text-center py-4">
-                      <p className="text-success font-semibold">✓ All 3 approvals complete</p>
+                      <p className="text-success font-semibold">✓ All {billReq} approval{billReq === 1 ? '' : 's'} complete</p>
                       <p className="text-sm text-muted-foreground mt-1">This bill is ready for payment.</p>
                       {hasPrivilege('supplier_bills.pay') && <Button className="mt-3" onClick={() => { setShowApproveModal(false); openPayBill(approveBill); }}>Proceed to Payment</Button>}
                     </div>
