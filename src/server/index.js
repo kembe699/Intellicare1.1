@@ -882,6 +882,9 @@ async function runBackgroundMigrations() {
     ['Categories',        () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./config/ensureCategoriesTable').ensureCategoriesTable, 'Categories'
     )],
+    ['ApprovalColumns',   () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./config/ensureApprovalPermissionColumns').ensureApprovalPermissionColumns, 'Approval permission columns'
+    )],
     ['SuspenseAccount',   () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/ensureSuspenseAccount').ensureSuspenseAccount, 'Suspense Account'
     )],

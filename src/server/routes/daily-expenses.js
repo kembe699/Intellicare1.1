@@ -29,11 +29,18 @@ function branchScope(req, replacements, alias = '') {
 // alone, rather than this being a blanket bypass for anyone holding the
 // underlying expense_approve/supplier_bill_approve grant.
 async function isSoleApprover(clinicId, userId, approvalType) {
-  const [[row]] = await sequelize.query(
-    `SELECT 1 FROM approval_permissions WHERE clinic_id = :clinicId AND user_id = :userId AND approval_type = :approvalType AND sole_approver = true LIMIT 1`,
-    { replacements: { clinicId, userId, approvalType } }
-  );
-  return !!row;
+  // A tenant missing the column (see config/ensureApprovalPermissionColumns.js)
+  // simply has no sole approvers — never a reason to fail the approval.
+  try {
+    const [[row]] = await sequelize.query(
+      `SELECT 1 FROM approval_permissions WHERE clinic_id = :clinicId AND user_id = :userId AND approval_type = :approvalType AND sole_approver = true LIMIT 1`,
+      { replacements: { clinicId, userId, approvalType } }
+    );
+    return !!row;
+  } catch (e) {
+    console.error('isSoleApprover check failed — treating as not a sole approver:', e.message);
+    return false;
+  }
 }
 
 // Mirrors allowedRoles already enforced client-side for /procurement/daily-expenses in
