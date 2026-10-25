@@ -402,7 +402,7 @@ router.get('/', async (req, res) => {
     const movementItems = movementRows.map(r => ({
       itemId: r.itemId,
       itemName: r.itemName,
-      quantityOnHand: parseInt(r.quantityOnHand, 10) || 0,
+      quantityOnHand: parseFloat(r.quantityOnHand) || 0, // packs — can be fractional
       qtyDispensed: parseInt(r.qtyDispensed, 10) || 0,
       dispensingValue: num(r.dispensingValue),
     }));

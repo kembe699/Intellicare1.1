@@ -618,7 +618,8 @@ router.get('/stock-valuation-by-location', async (req, res) => {
        ORDER BY "stockValue" DESC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
-    res.json({ rows: rows.map(r => ({ ...r, quantityOnHand: parseInt(r.quantityOnHand, 10) || 0, stockValue: parseFloat(r.stockValue) || 0 })) });
+    // Stock is kept in packs and can be fractional (1.8 strips dispensed leaves 96.4) — never truncate it.
+    res.json({ rows: rows.map(r => ({ ...r, quantityOnHand: parseFloat(r.quantityOnHand) || 0, stockValue: parseFloat(r.stockValue) || 0 })) });
   } catch (err) {
     console.error('Inventory stock-valuation-by-location error:', err);
     res.status(500).json({ error: 'Failed to generate stock valuation by location' });
@@ -670,7 +671,7 @@ router.get('/below-reorder-level', async (req, res) => {
        ORDER BY (i.quantity_on_hand - i.minimum_stock_level) ASC`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
-    res.json({ rows: rows.map(r => ({ ...r, quantityOnHand: parseInt(r.quantityOnHand, 10) || 0, minimumStockLevel: parseInt(r.minimumStockLevel, 10) || 0 })) });
+    res.json({ rows: rows.map(r => ({ ...r, quantityOnHand: parseFloat(r.quantityOnHand) || 0, minimumStockLevel: parseFloat(r.minimumStockLevel) || 0 })) });
   } catch (err) {
     console.error('Inventory below-reorder-level error:', err);
     res.status(500).json({ error: 'Failed to generate below-reorder-level report' });
@@ -710,7 +711,7 @@ router.get('/material-consumption', async (req, res) => {
     );
     res.json({
       period: { dateFrom, dateTo },
-      rows: rows.map(r => ({ ...r, quantityConsumed: parseInt(r.quantityConsumed, 10) || 0, totalValue: parseFloat(r.totalValue) || 0, transactionCount: parseInt(r.transactionCount, 10) || 0 })),
+      rows: rows.map(r => ({ ...r, quantityConsumed: parseFloat(r.quantityConsumed) || 0, totalValue: parseFloat(r.totalValue) || 0, transactionCount: parseInt(r.transactionCount, 10) || 0 })),
     });
   } catch (err) {
     console.error('Inventory material-consumption error:', err);
