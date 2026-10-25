@@ -945,12 +945,71 @@ async function step6() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
+// Opening balance and exchange rates
+// ═════════════════════════════════════════════════════════════════════════
+const OPENING_DAY = '2026-10-24'; // the day before the demo day: the hospital's opening position
+
+/** Owner's capital of SSP 2,000,000 paid into the bank, posted as a journal entry through the app. */
+async function openingBalance() {
+  step('Opening balance — owner\'s capital into the bank');
+  if (done('openingBalance')) { log(`already posted: ${state.openingBalance}`); return; }
+  const coa = (await api(ADMIN, 'GET', `/accounting/chart-of-accounts?clinic_id=${CLINIC_ID}`)).body;
+  const acct = (code) => (Array.isArray(coa) ? coa : coa.data || []).find((a) => a.account_code === code);
+  const bank = acct('1110'); const capital = acct('3100');
+  if (!capital.is_active) {
+    await api(ADMIN, 'PUT', `/accounting/chart-of-accounts/${capital.id}`, { is_active: true });
+    log('3100 Owner\'s Capital switched on');
+  }
+  const je = (await api(as('accountant'), 'POST', '/accounting/journal-entries', {
+    clinic_id: CLINIC_ID, entry_date: OPENING_DAY, reference: 'DEMO-opening-balance',
+    description: 'Opening balance — owner\'s capital paid into Bank Account – Main',
+    narration: `The hospital's opening position before the demo day. ${TAG}`,
+    lines: [
+      { account_id: bank.id, debit_amount: 2000000, credit_amount: 0, description: 'Opening balance' },
+      { account_id: capital.id, debit_amount: 0, credit_amount: 2000000, description: 'Owner\'s capital' },
+    ],
+  })).body;
+  await api(as('accountant'), 'POST', `/accounting/journal-entries/${je.id}/submit`, {});
+  await api(ADMIN, 'POST', `/accounting/journal-entries/${je.id}/approve`, {});
+  await api(as('accountant'), 'POST', `/accounting/journal-entries/${je.id}/post`, {});
+  state.openingBalance = `${je.je_number} (${OPENING_DAY}): Dr 1110 Bank 2,000,000 / Cr 3100 Owner's Capital`; save();
+  mark('openingBalance'); log(`posted ${state.openingBalance}`);
+}
+
+/**
+ * Today's USD→SSP rate in force (7,800), and the stale SSP→USD 7,500 row switched off. Safe to run
+ * before every demo. A new rate is added only when none applies today: adding one switches off
+ * every earlier rate for the pair, which would change conversions for the demo day itself.
+ */
+async function rates() {
+  step('Exchange rates');
+  const list = (await api(ADMIN, 'GET', `/accounting/exchange-rates?clinic_id=${CLINIC_ID}`)).body;
+  const all = Array.isArray(list) ? list : list.data || [];
+  const t = today();
+  const live = all.filter((r) => r.from_currency === 'USD' && r.to_currency === 'SSP' && r.is_active
+    && String(r.effective_date).slice(0, 10) <= t && (!r.expiry_date || String(r.expiry_date).slice(0, 10) >= t))
+    .sort((a, b) => String(b.effective_date).localeCompare(String(a.effective_date)))[0];
+  if (live) {
+    log(`USD→SSP in force today: ${Number(live.rate)} (since ${String(live.effective_date).slice(0, 10)})${Number(live.rate) === 7800 ? '' : ' — not 7,800, check it'}`);
+  } else {
+    await api(ADMIN, 'POST', '/accounting/exchange-rates', { clinic_id: CLINIC_ID, from_currency: 'USD', to_currency: 'SSP', rate: 7800, effective_date: t, source: 'manual' });
+    log(`USD→SSP 7,800 added for ${t}`);
+  }
+  for (const r of all.filter((x) => x.from_currency === 'SSP' && x.to_currency === 'USD' && x.is_active && Number(x.rate) === 7500)) {
+    await api(ADMIN, 'PUT', `/accounting/exchange-rates/${r.id}`, { is_active: false });
+    log(`stale SSP→USD 7,500 (from ${String(r.effective_date).slice(0, 10)}) switched off`);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
 async function main() {
   await login(ADMIN, ADMIN_PW);
   // Demo users log in once their passwords are set (step 1 sets them on a fresh tenant).
   const loginUsers = async () => { for (const u of USERS) { if (state.users?.[u.key]?.passwordSet) await login(u.email, u.password); } };
   await loginUsers();
   if (want('step1')) await step1();
+  if (want('opening')) await openingBalance();
+  if (want('rates')) await rates();
   if (want('step2')) await step2();
   if (want('step3')) await step3();
   if (want('step4')) await step4();

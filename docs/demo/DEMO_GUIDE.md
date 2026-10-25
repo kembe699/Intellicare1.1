@@ -57,6 +57,7 @@ tablets of a 10-tablet strip is 1.8 strips.
 | Supplier bill — half paid (SSP 855,000, ref EFT-KCB-2611), half still owed | PO-2026-0001 |
 | Office stationery expense, SSP 35,000 | EXP-61457975 |
 | Cashier shift — Mary Ajak Bol, opened 50,000, counted 179,220, variance 0 | Shift 1 |
+| Opening balance — owner's capital SSP 2,000,000 into Bank Account – Main (24 Oct) | JE-202610-0006 |
 
 ## Staff (HR)
 
@@ -95,28 +96,49 @@ number and PIN).
 9. **End of day** — the cashier's closed shift (variance 0) and the stationery expense (requested,
    approved, paid).
 10. **HR** — log in as HR. Employees, salary structure, the approved rosters, Rebecca's clock-in.
-11. **Books** — log in as the accountant or admin. Trial balance (balanced, 1,839,220), Income
-    Statement with **basis = accrual**: revenue 299,890, cost of sales 25,200, expenses 35,000, net
-    239,690. Receivables nil; payables 855,000 to Juba Medical Supplies.
-12. **Analytics Assistant** — ask "Give me today's hospital summary", "How many patient visits
-    occurred today?", "Which doctor attended to the most patients today?".
+11. **Books** — log in as the accountant or admin. Trial balance (balanced, 3,167,910). Income
+    Statement for 25 October, cash or accrual basis (they agree for this day): revenue 299,890,
+    cost of sales 25,200, expenses 35,000, net 239,690, and VAT collected 13,020 shown apart as a
+    liability. Cash flow: opening 2,000,000 (owner's capital), in 312,910 (cash 129,220, CIC
+    183,690), out 890,000 (supplier 855,000, stationery 35,000), closing 1,422,910. Receivables nil;
+    payables 855,000 to Juba Medical Supplies.
+12. **Analytics Assistant** — ask "Give me yesterday's hospital summary" (or "today's" on the demo
+    day), "How much revenue was collected yesterday?" (SSP 299,890 across 3 payments), "How many
+    patient visits occurred yesterday?", "Which doctor attended to the most patients yesterday?".
 
-## Things to avoid on screen (known issues, fixes pending)
+## Before each demo
 
-- **Income Statement, cash basis** (the default) shows only the cashier's takings: CIC's payment is
-  missing and Deng's VAT is counted as consultation revenue. Use **accrual**.
-- **Gudele-only financial reports** show Medical Supplies Expense 2,500 that was reversed on the day,
-  and the **cash-flow report** leaves out CIC's bank payment. Use all branches.
-- **Laboratory and Pharmacy reports** add CIC's USD amounts to SSP without converting them.
-- **Dashboard "visits today"** and **Clinic Performance visits** show 0 (they count an older visits
-  table, not LIS visits).
-- **Bank Account – Main is negative** (−671,310): the demo has no opening balance, and the supplier
-  was paid from the bank.
+1. **Start from a known state.** Either restore the ready-made copy (below) or re-run the seed. A
+   rehearsal leaves extra patients, payments and stock movements behind, so reset after one.
+2. **Open a cashier shift.** The demo day's shift is closed. Log in as the cashier and start a shift
+   (opening float SSP 50,000) before taking any payment live.
+3. **Check today's exchange rate.** Run `DEMO_ADMIN_PASSWORD=… node scripts/demo/seedClientDemo.mjs
+   --only=rates`. It confirms a USD→SSP rate (7,800) is in force today, and adds one only if none is.
+   Accounting › Exchange Rates shows the same.
+4. **Use the demo day's dates** (25 October 2026) on reports, or "yesterday" in the Analytics
+   Assistant if you present the next day.
+
+## Restoring the ready-made copy
+
+A snapshot of the finished demo tenant (`tenant_demo`, fictional data only) is
+`demo-ready-20261026.dump`. Restoring it replaces everything in `tenant_demo` with that snapshot —
+nothing else in the database is touched:
+
+```bash
+docker run --rm -v /path/to/dumps:/dumps postgres:18 \
+  pg_restore --clean --if-exists --no-owner --no-privileges -n tenant_demo \
+  -d "postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require" /dumps/demo-ready-20261026.dump
+```
+
+Then do steps 2–4 above. (`demo-seeded-20261026.dump` is an earlier snapshot, taken before the
+ledger corrections, the opening balance and the cash-account flags — keep it, but restore the
+ready one.)
 
 ## Rebuilding or removing the demo
 
 - `scripts/demo/seedClientDemo.mjs` — rebuilds the day through the API (re-runnable: finished steps
-  are skipped). Needs `DEMO_ADMIN_PASSWORD`. Progress is kept in `scripts/demo/.demo-state.json`
+  are skipped), including the opening balance (`--only=opening`) and the exchange-rate check
+  (`--only=rates`). Needs `DEMO_ADMIN_PASSWORD`. Progress is kept in `scripts/demo/.demo-state.json`
   (not committed — keep it, the cleanup needs it).
 - `scripts/demo/correctDemoLedger.mjs` — the three one-off ledger corrections already applied to
   this demo (only needed for data seeded before the fixes).
