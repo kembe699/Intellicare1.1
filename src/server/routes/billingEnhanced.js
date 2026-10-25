@@ -648,6 +648,7 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
         updated_at = NOW()
       WHERE id = :billId
     `, { replacements: { newTotal, newBase, newBalance, newStatus, billId: targetBillId }, transaction: t });
+    await require('../services/AccountingService').stampBillBaseCurrency(targetBillId, { transaction: t });
 
     // Update credit note
     await sequelize.query(`
@@ -1458,6 +1459,7 @@ async function recalculateBillTotals(billId, transaction) {
         },
         transaction
       });
+      await require('../services/AccountingService').stampBillBaseCurrency(billId, { transaction });
     }
   } catch (error) {
     console.error('Error recalculating bill totals:', error);

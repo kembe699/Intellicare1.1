@@ -498,6 +498,7 @@ async function applyVoidReversal(receipt, status, reason, req, t, cancelItems = 
         status: newBillStatus,
         updated_at: new Date()
       }, { transaction: t });
+      await require('../services/AccountingService').stampBillBaseCurrency(bill.id, { transaction: t });
 
       if (reversedServices.length > 0) billForInventoryRestore = bill;
       // cancelItems's own revenue-side GL reversal (Dr Revenue / Cr

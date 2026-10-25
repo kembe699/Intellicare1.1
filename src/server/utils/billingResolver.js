@@ -193,6 +193,7 @@ async function addLineItemsToBill({ patientId, patientName, clinicId, branchId, 
         status: newBalance <= 0.01 ? 'paid' : paid > 0 ? 'partial' : 'pending',
         updated_at: new Date(),
       }, { transaction: t });
+      await require('../services/AccountingService').stampBillBaseCurrency(bill.id, { transaction: t });
       return bill;
     }
 
@@ -211,7 +212,7 @@ async function addLineItemsToBill({ patientId, patientName, clinicId, branchId, 
       notes: notes || null,
       created_by: createdBy || 'System',
       visit_id: resolvedVisitId,
-    }, { transaction: t });
+    }, { transaction: t }).then(async (created) => { await require('../services/AccountingService').stampBillBaseCurrency(created.id, { transaction: t }); return created; });
   });
 
   try {
@@ -292,7 +293,7 @@ async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId,
         notes: notes || null,
         created_by: createdBy || 'System',
         visit_id: resolvedVisitId,
-      }, { transaction: t });
+      }, { transaction: t }).then(async (created) => { await require('../services/AccountingService').stampBillBaseCurrency(created.id, { transaction: t }); return created; });
     }
 
     const services = normalizeServices(bill.services);
@@ -345,6 +346,7 @@ async function updateOrAddLineItem({ patientId, patientName, clinicId, branchId,
       status: newBalance <= 0.01 ? 'paid' : paid > 0 ? 'partial' : 'pending',
       updated_at: new Date(),
     }, { where: { id: bill.id }, transaction: t });
+    await require('../services/AccountingService').stampBillBaseCurrency(bill.id, { transaction: t });
     return PatientBill.findByPk(bill.id, { transaction: t });
   });
 

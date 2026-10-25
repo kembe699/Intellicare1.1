@@ -350,6 +350,49 @@ class AccountingService {
   }
 
   /**
+   * The rate a bill in a foreign currency was booked at: the rate on its first
+   * billing ledger entry, or — before anything is posted — the rate for its bill
+   * date. Everything that converts this bill (top-ups, voids, the revenue sync,
+   * payments) uses this one rate, so the bill and its ledger agree in base
+   * currency. Base-currency bills are 1.
+   */
+  async getBillBookedRate(bill, { transaction } = {}) {
+    const { code: base } = await CurrencyService.getBaseCurrency();
+    const cur = bill.bill_currency || base;
+    if (cur === base) return 1;
+    const [[first]] = await sequelize.query(
+      `SELECT exchange_rate FROM general_ledger
+        WHERE reference_id = :id AND reference_module = 'patient_billing' AND exchange_rate > 0
+        ORDER BY created_at ASC LIMIT 1`,
+      { replacements: { id: String(bill.id) }, transaction });
+    if (first && parseFloat(first.exchange_rate) > 0) return parseFloat(first.exchange_rate);
+    return parseFloat(await this.getExchangeRate(bill.clinic_id, cur, base, bill.bill_date || new Date()));
+  }
+
+  /**
+   * Record on the bill what it is worth in base currency: exchange_rate = the
+   * booked rate, base_currency_total = total_amount at that rate. Call after any
+   * change to a bill's total. Best-effort — a bill save never fails because of it
+   * (a foreign bill with no rate at all cannot post its revenue either, and that
+   * path reports the missing rate itself).
+   */
+  async stampBillBaseCurrency(billId, { transaction, rate } = {}) {
+    if (!billId) return;
+    try {
+      const [[bill]] = await sequelize.query(
+        'SELECT id, clinic_id, bill_currency, bill_date FROM patient_bills WHERE id = :id',
+        { replacements: { id: billId }, transaction });
+      if (!bill) return;
+      const r = parseFloat(rate) > 0 ? parseFloat(rate) : await this.getBillBookedRate(bill, { transaction });
+      await sequelize.query(
+        `UPDATE patient_bills SET exchange_rate = :r, base_currency_total = ROUND(total_amount * :r, 2) WHERE id = :id`,
+        { replacements: { r, id: billId }, transaction });
+    } catch (e) {
+      console.error(`Bill ${billId}: could not record its base-currency total —`, e.message);
+    }
+  }
+
+  /**
    * Create GL entry from patient bill
    * @param {Object} billData - Patient bill data
    * @param {string} userId - User creating the entry
@@ -473,6 +516,7 @@ class AccountingService {
       let glEntry;
       try {
         glEntry = await this.createGLEntry(glData, lineItems, userId, receivablesTransaction);
+        await this.stampBillBaseCurrency(billData.id, { transaction: receivablesTransaction, rate: glEntry.exchange_rate });
 
         if (ownsTransaction) await receivablesTransaction.commit();
       } catch (innerError) {
@@ -587,7 +631,12 @@ class AccountingService {
     const ownsTransaction = !externalTransaction;
     const txn = externalTransaction || await sequelize.transaction();
     try {
+      // Items added later are converted at the rate the bill was booked at, not
+      // today's: the bill's base-currency worth is total × that one rate, and the
+      // revenue sync compares the ledger with exactly that.
+      glData.exchange_rate = await this.getBillBookedRate(bill, { transaction: txn });
       const glEntry = await this.createGLEntry(glData, lineItems, userId, txn);
+      await this.stampBillBaseCurrency(bill.id, { transaction: txn, rate: glData.exchange_rate });
 
       if (ownsTransaction) {
         await txn.commit();
@@ -624,20 +673,31 @@ class AccountingService {
    *
    * Returns the adjustment posted, or 0.
    */
-  async syncBillRevenueToGL(billId, userId = 'system') {
+  async syncBillRevenueToGL(billId, userId = 'system', { dryRun = false } = {}) {
     // A taxed bill's total is revenue + the tax posted to its liability account
     // (utils/billTax.js), so both count as "posted" against the bill.
     const { REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
     if (!billId) return 0;
-    if (!revenueSyncEnabled()) return 0;
+    // dryRun (read-only: what would be posted) works even with the switch off.
+    if (!dryRun && !revenueSyncEnabled()) return 0;
 
     const [[bill]] = await sequelize.query(
-      `SELECT id, clinic_id, branch_id, scheme_id, bill_number, bill_date, status,
-              COALESCE(NULLIF(base_currency_total, 0), total_amount) AS worth
+      `SELECT id, clinic_id, branch_id, scheme_id, bill_number, bill_date, status, bill_currency, total_amount
          FROM patient_bills WHERE id = :id LIMIT 1`,
       { replacements: { id: billId } });
     // A cancelled bill's postings were fully reversed on purpose — never re-post them.
     if (!bill || bill.status === 'cancelled') return 0;
+
+    // Both sides in BASE currency. account_ledger holds base amounts; the bill's
+    // total and lines are in its own currency (USD for an insurance scheme), so
+    // they are converted at the bill's booked rate — never today's. Comparing a
+    // USD 23.55 bill with SSP 183,690 of ledger used to "correct" its revenue
+    // down to 23.55.
+    const rate = await this.getBillBookedRate(bill);
+    if (!dryRun) await this.stampBillBaseCurrency(bill.id, { rate });
+    const toBase = (v) => Math.round((parseFloat(v) || 0) * rate * 100) / 100;
+    // Converting per account and in total can differ by a cent per account.
+    const tolerance = rate === 1 ? 0.01 : 0.05;
 
     // Credit notes lower the bill's total AND reverse revenue under their own
     // reference (the note's id); counting them here keeps the two in step, so
@@ -653,10 +713,10 @@ class AccountingService {
                AND gl.reference_id::text IN (SELECT id::text FROM credit_notes WHERE applied_to_bill_id::text = :id))`,
       { replacements: { id: billId } });
 
-    const worth = parseFloat(bill.worth) || 0;
+    const worth = toBase(bill.total_amount);
     const posted = parseFloat(postedRow?.revenue) || 0;
     const delta = Math.round((worth - posted) * 100) / 100;
-    if (Math.abs(delta) < 0.01) return 0;
+    if (Math.abs(delta) < tolerance) return 0;
 
     // What each account should hold, taken from the bill's own lines.
     //
@@ -685,6 +745,7 @@ class AccountingService {
       if (!acct) continue;
       targetByAccount.set(acct, Math.round(((targetByAccount.get(acct) || 0) + amount) * 100) / 100);
     }
+    for (const [acct, amount] of targetByAccount) targetByAccount.set(acct, toBase(amount));
 
     const [byAccount] = await sequelize.query(
       `SELECT al.account_id, SUM(al.credit_amount) - SUM(al.debit_amount) AS amount
@@ -711,7 +772,11 @@ class AccountingService {
       }
       // Only trust this when it reconciles to the delta already computed; if the
       // bill's lines do not explain the gap, fall back rather than invent a split.
-      if (Math.abs(summed - delta) < 0.01) perAccount = diffs;
+      if (Math.abs(summed - delta) < tolerance) {
+        perAccount = diffs;
+        // Post the per-account differences exactly (they may differ from delta by rounding).
+        if (diffs.length === 0) return 0;
+      }
     }
 
     let targets = byAccount.filter((r) => Math.abs(Number(r.amount)) > 0.001);
@@ -733,8 +798,12 @@ class AccountingService {
       return 0;
     }
 
-    const adding = delta > 0;
-    const magnitude = Math.abs(delta);
+    // The receivable takes exactly what the revenue lines move, so the entry balances.
+    const net = perAccount
+      ? Math.round(perAccount.reduce((a, d) => a + d.diff, 0) * 100) / 100
+      : delta;
+    const adding = net > 0;
+    const magnitude = Math.abs(net);
     const lineItems = [];
 
     if (perAccount) {
@@ -786,6 +855,8 @@ class AccountingService {
       ? new Date(bill.bill_date).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
 
+    if (dryRun) return { billNumber: bill.bill_number, currency: bill.bill_currency, rate, worth, posted, net, billDay, lineItems };
+
     const glEntry = await this.createGLEntry({
       clinic_id: bill.clinic_id,
       branch_id: bill.branch_id,
@@ -796,8 +867,8 @@ class AccountingService {
       reference_module: 'bill_revenue_adjustment',
     }, lineItems, userId);
 
-    console.log(`Bill ${bill.bill_number}: revenue was out by ${delta}, corrected via ${glEntry.gl_number}.`);
-    return delta;
+    console.log(`Bill ${bill.bill_number}: revenue was out by ${net} (base), corrected via ${glEntry.gl_number}.`);
+    return net;
   }
 
   // N4: createGLFromPayment removed — confirmed unused (its one caller,

@@ -1235,6 +1235,7 @@ router.put('/:billId', authorize('bills.financial_action'), async (req, res) => 
     }
 
     const updatedBill = await currentBill.update(updateData);
+    if (updateData.total_amount !== undefined) await AccountingService.stampBillBaseCurrency(billId);
 
     // This endpoint can change total_amount and the service lines outright, and
     // posted nothing — so editing a bill here moved the books out of step with
@@ -1343,6 +1344,7 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
       balance_amount: newBalance,
       status: newStatus,
     });
+    await AccountingService.stampBillBaseCurrency(bill.id);
 
     if (autoRefundAmount > 0) {
       const receiptNumber = `REF-${Date.now().toString().slice(-8)}`;

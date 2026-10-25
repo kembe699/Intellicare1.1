@@ -265,6 +265,7 @@ router.post('/:id/convert', authorize('proforma.write'), async (req, res) => {
       });
     }
 
+    if (billId) await require('../services/AccountingService').stampBillBaseCurrency(billId, { transaction: t });
     await sequelize.query(`UPDATE proforma_invoices SET status = 'converted', converted_bill_id = :billId, updated_at = NOW() WHERE id = :id`,
       { replacements: { billId, id: proforma.id }, transaction: t });
 

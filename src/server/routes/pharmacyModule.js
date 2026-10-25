@@ -1021,6 +1021,7 @@ router.delete('/prescriptions/:id/lines/:lineId', authorize('pharmacy.prescribe'
             'UPDATE patient_bills SET services = :services, total_amount = :total, balance_amount = :balance, status = :status, updated_at = NOW() WHERE id = :billId',
             { replacements: { services: JSON.stringify(services), total: newTotal, balance: newBalance, status: newStatus, billId: bill.id } }
           );
+          await require('../services/AccountingService').stampBillBaseCurrency(bill.id);
           billAdjusted = true;
         }
       }
@@ -1104,6 +1105,7 @@ router.put('/prescriptions/:id/lines/:lineId', authorize('pharmacy.prescribe'), 
             'UPDATE patient_bills SET services = :services, total_amount = :total, balance_amount = :balance, status = :status, updated_at = NOW() WHERE id = :billId',
             { replacements: { services: JSON.stringify(services), total: newTotal, balance: newBalance, status: newStatus, billId: bill.id } }
           );
+          await require('../services/AccountingService').stampBillBaseCurrency(bill.id);
           billAdjusted = true;
         }
       }
@@ -1201,6 +1203,7 @@ router.put('/prescriptions/:id/lines/:lineId/reprice', authorize('pharmacy.presc
         'UPDATE patient_bills SET services = :services, total_amount = :total, balance_amount = :balance, status = :status, updated_at = NOW() WHERE id = :billId',
         { replacements: { services: JSON.stringify(services), total: newTotal, balance: newBalance, status: newStatus, billId: bill.id } }
       );
+      await require('../services/AccountingService').stampBillBaseCurrency(bill.id);
       billAdjusted = true;
     } catch (billError) {
       console.error('Error reconciling bill after repricing prescription line:', billError);

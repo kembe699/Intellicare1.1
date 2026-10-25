@@ -41,41 +41,45 @@ const MAX_PER_PASS = parseInt(process.env.LEDGER_SWEEP_LIMIT || '100', 10);
 const { REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
 // Revenue plus tax posted (a taxed bill's total includes its tax lines).
 const UNRECONCILED_BILLS = `
-  SELECT b.id,
-         b.bill_number,
-         COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount) AS worth,
-         COALESCE((
-           SELECT SUM(al.credit_amount) - SUM(al.debit_amount)
-             FROM account_ledger al
-             JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
-             JOIN general_ledger gl ON gl.id = al.transaction_id
-            WHERE gl.reference_id = b.id::text
-              AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
-         ), 0) AS posted
-    FROM patient_bills b
-   WHERE b.created_at > NOW() - (:days * INTERVAL '1 day')
-     AND COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount) > 0
-     -- Select on the drift itself, not on date.
-     --
-     -- Comparing in JavaScript after a LIMIT means the limit lands on the oldest
-     -- hundred bills in the window rather than on the hundred that are wrong. Once
-     -- a tenant bills more than that in the lookback — which nation does in days —
-     -- the sweep examines the same settled bills every pass and never reaches the
-     -- recent one that actually needs repairing. It reports "nothing to do" while
-     -- the health check reports a shortfall, and both are looking at the same data.
-     AND ABS(
-           COALESCE(NULLIF(b.base_currency_total, 0), b.total_amount)
-           - COALESCE((
-               SELECT SUM(al.credit_amount) - SUM(al.debit_amount)
-                 FROM account_ledger al
-                 JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
-                 JOIN general_ledger gl ON gl.id = al.transaction_id
-                WHERE gl.reference_id = b.id::text
-                  AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
-             ), 0)
-         ) >= 0.01
+  WITH b AS (
+    SELECT pb.id, pb.bill_number, pb.created_at, r.rate,
+           -- Worth in BASE currency: account_ledger is base, a scheme bill's total is
+           -- in its own currency (USD). Converted at the rate the bill was booked at
+           -- (its first billing entry); a foreign bill with no entry yet compares at 1,
+           -- which still flags it, and syncBillRevenueToGL then looks the rate up.
+           ROUND(pb.total_amount * r.rate, 2) AS worth,
+           COALESCE((
+             SELECT SUM(al.credit_amount) - SUM(al.debit_amount)
+               FROM account_ledger al
+               JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
+               JOIN general_ledger gl ON gl.id = al.transaction_id
+              WHERE gl.reference_id = pb.id::text
+                AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+           ), 0) AS posted
+      FROM patient_bills pb
+      CROSS JOIN LATERAL (
+        SELECT COALESCE((
+          SELECT NULLIF(gl.exchange_rate, 0) FROM general_ledger gl
+           WHERE gl.reference_id = pb.id::text AND gl.reference_module = 'patient_billing'
+           ORDER BY gl.created_at ASC LIMIT 1), 1) AS rate
+      ) r
+     WHERE pb.created_at > NOW() - (:days * INTERVAL '1 day')
+       AND pb.total_amount > 0
+  )
+  SELECT id, bill_number, rate, worth, posted
+    FROM b
+   -- Select on the drift itself, not on date.
+   --
+   -- Comparing in JavaScript after a LIMIT means the limit lands on the oldest
+   -- hundred bills in the window rather than on the hundred that are wrong. Once
+   -- a tenant bills more than that in the lookback — which nation does in days —
+   -- the sweep examines the same settled bills every pass and never reaches the
+   -- recent one that actually needs repairing. It reports "nothing to do" while
+   -- the health check reports a shortfall, and both are looking at the same data.
+   -- A foreign bill converted per account can be a cent out per account.
+   WHERE ABS(worth - posted) >= CASE WHEN rate = 1 THEN 0.01 ELSE 0.05 END
    -- Newest first: a bill that has just gone wrong is the one someone is looking at.
-   ORDER BY b.created_at DESC
+   ORDER BY created_at DESC
    LIMIT :limit
 `;
 
@@ -88,7 +92,7 @@ async function sweepCurrentTenant() {
   });
 
   const drifted = rows.filter(
-    (r) => Math.abs((parseFloat(r.worth) || 0) - (parseFloat(r.posted) || 0)) >= 0.01
+    (r) => Math.abs((parseFloat(r.worth) || 0) - (parseFloat(r.posted) || 0)) >= (parseFloat(r.rate) === 1 ? 0.01 : 0.05)
   );
 
   let repaired = 0;
