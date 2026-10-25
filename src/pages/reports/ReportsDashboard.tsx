@@ -29,7 +29,7 @@ const REPORT_CATEGORIES = [
   { id: 'clinical', label: 'Clinical Reports', icon: Stethoscope, desc: 'Registers, workload, morbidity, inpatient/outpatient', group: 'Clinical' },
   { id: 'theatre', label: 'Theatre Report', icon: Scissors, desc: 'Operations, outcomes, and team fee payouts', group: 'Clinical' },
   { id: 'inventory', label: 'Inventory Report', icon: Package, desc: 'Full stock & valuation', group: 'Inventory' },
-  { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Collections by user, department, scheme, or branch', group: 'Financial' },
+  { id: 'revenue', label: 'Revenue Report', icon: TrendingUp, desc: 'Revenue earned (paid + unpaid) and cash collected, by user, department, scheme or branch', group: 'Financial' },
   { id: 'procurement', label: 'Procurement Report', icon: Truck, desc: 'Supplier bills, A/P aging, consultant bills, purchases', group: 'Financial' },
   { id: 'accounting', label: 'Accounting Reports', icon: Landmark, desc: 'Trial balance, income statement, balance sheet, GL, expenses', group: 'Financial' },
   { id: 'workforce', label: 'Workforce Reports', icon: Users, desc: 'Attendance, leave, salary advances, and payroll', group: 'Human Resources' },

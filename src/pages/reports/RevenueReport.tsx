@@ -27,7 +27,7 @@ import { fmtCurrency, fmtCount, fmtDate, fmtNum, CsvColumn, getDatePresets, expo
 // capped to a fixed height so it scrolls inside itself rather than growing
 // the page.
 
-type Mode = 'group' | 'bills-group' | 'detail-only' | 'trend' | 'cancelled-receipts' | 'cancelled-invoices' | 'cost-analysis' | 'register';
+type Mode = 'earned' | 'earned-bills' | 'earned-trend' | 'group' | 'bills-group' | 'detail-only' | 'trend' | 'cancelled-receipts' | 'cancelled-invoices' | 'cost-analysis' | 'register';
 type PatientType = 'all' | 'outpatient' | 'inpatient' | 'discharged';
 
 interface ReportOption {
@@ -36,20 +36,28 @@ interface ReportOption {
   group: string;
   mode: Mode;
   billsGroupBy?: 'branch' | 'scheme' | 'status';
+  earnedGroupBy?: 'user' | 'department' | 'scheme' | 'branch' | 'item' | 'week' | 'month' | 'bill' | 'doctor';
   patientType?: PatientType;
 }
 
 const REPORT_OPTIONS: ReportOption[] = [
-  { value: 'user', label: 'Revenue by User (Cashier)', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'department', label: 'Revenue by Department / Category', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'scheme', label: 'Revenue by Scheme', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'branch', label: 'Revenue by Branch', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'payment_mode', label: 'Revenue by Payment Mode', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'doctor', label: 'Revenue by Doctor', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'item', label: 'Revenue Detailed (By Item)', group: 'Revenue Breakdowns', mode: 'group' },
-  { value: 'journal', label: 'Revenue Journal (All Receipts)', group: 'Revenue Breakdowns', mode: 'detail-only' },
-  { value: 'trend_week', label: 'Revenue — Weekly Trend', group: 'Revenue Breakdowns', mode: 'trend' },
-  { value: 'trend_month', label: 'Revenue — Monthly Trend', group: 'Revenue Breakdowns', mode: 'trend' },
+  // Revenue EARNED — every bill raised in the period, paid or still owed.
+  { value: 'user', label: 'Revenue by User (Billed By)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'user' },
+  { value: 'department', label: 'Revenue by Department / Category', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'department' },
+  { value: 'scheme', label: 'Revenue by Scheme', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'scheme' },
+  { value: 'branch', label: 'Revenue by Branch', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'branch' },
+  { value: 'doctor', label: 'Revenue by Doctor (Consultations)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'doctor' },
+  { value: 'item', label: 'Revenue Detailed (By Item)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'item' },
+  { value: 'journal', label: 'Revenue Journal (All Bills)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned-bills', earnedGroupBy: 'bill' },
+  { value: 'trend_week', label: 'Revenue — Weekly Trend', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned-trend', earnedGroupBy: 'week' },
+  { value: 'trend_month', label: 'Revenue — Monthly Trend', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned-trend', earnedGroupBy: 'month' },
+
+  // Collections — cash actually received (receipts), whichever bill it paid.
+  { value: 'collect_user', label: 'Collections by Cashier', group: 'Collections (Cash Received)', mode: 'group' },
+  { value: 'payment_mode', label: 'Collections by Payment Mode', group: 'Collections (Cash Received)', mode: 'group' },
+  { value: 'collect_journal', label: 'Collections Journal (All Receipts)', group: 'Collections (Cash Received)', mode: 'detail-only' },
+  { value: 'collect_trend_week', label: 'Collections — Weekly Trend', group: 'Collections (Cash Received)', mode: 'trend' },
+  { value: 'collect_trend_month', label: 'Collections — Monthly Trend', group: 'Collections (Cash Received)', mode: 'trend' },
 
   { value: 'bills_all_branch', label: 'All Patient Bills (By Branch)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'branch', patientType: 'all' },
   { value: 'bills_all_scheme', label: 'All Patient Bills (By Scheme)', group: 'Patient Bills', mode: 'bills-group', billsGroupBy: 'scheme', patientType: 'all' },
@@ -68,7 +76,7 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'patient_register', label: 'Patient Register (By Scheme)', group: 'Analysis', mode: 'register' },
 ];
 
-const OPTION_GROUPS = ['Revenue Breakdowns', 'Patient Bills', 'Cancelled / Voided', 'Analysis'];
+const OPTION_GROUPS = ['Revenue Earned (Paid + Unpaid)', 'Collections (Cash Received)', 'Patient Bills', 'Cancelled / Voided', 'Analysis'];
 
 function thisMonthRange() {
   const now = new Date();
@@ -133,7 +141,7 @@ export default function RevenueReport() {
   }, [user?.clinic]);
 
   const option = REPORT_OPTIONS.find(o => o.value === reportType)!;
-  const isGroupShaped = option.mode === 'group' || option.mode === 'bills-group';
+  const isGroupShaped = option.mode === 'group' || option.mode === 'bills-group' || option.mode === 'earned';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -143,8 +151,24 @@ export default function RevenueReport() {
       const params = new URLSearchParams({ dateFrom, dateTo });
       if (user?.clinic) params.append('clinic_id', user.clinic);
 
-      if (option.mode === 'group') {
-        if (option.value === 'user') {
+      if (option.mode === 'earned' && option.earnedGroupBy === 'doctor') {
+        // Consultation revenue attributed to each doctor (see Doctor Performance).
+        const res = await authFetch(`/api/reports-v2/doctor-performance?${params}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        setRows((json.doctors || []).map((d: any) => ({
+          key: d.doctorId, label: d.doctorName, count: d.visits,
+          earned: d.revenueBilled, paid: d.revenueCollected, outstanding: Math.max(0, (d.revenueBilled || 0) - (d.revenueCollected || 0)),
+        })));
+      } else if (option.mode === 'earned' || option.mode === 'earned-bills' || option.mode === 'earned-trend') {
+        const res = await authFetch(`/api/reports-v2/revenue/earned?${params}&groupBy=${option.earnedGroupBy}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const json = await res.json();
+        if (json.note) toast.warning(json.note);
+        const interval = option.earnedGroupBy === 'month' ? 'month' : 'week';
+        setRows((json.rows || []).map((r: any) => option.mode === 'earned-trend' ? { ...r, label: fmtBucket(r.bucket, interval), totalCollected: r.earned, transactionCount: r.count } : r));
+      } else if (option.mode === 'group') {
+        if (option.value === 'collect_user') {
           const res = await authFetch(`/api/reports-v2/billing-by-user?${params}`);
           if (!res.ok) throw new Error('Failed to load');
           const json = await res.json();
@@ -178,13 +202,13 @@ export default function RevenueReport() {
         const json = await res.json();
         setRows(json.rows || []);
       } else if (option.mode === 'detail-only') {
-        // 'journal' — the only other detail-only option.
+        // 'collect_journal' — the only other detail-only option.
         const res = await authFetch(`/api/reports-v2/revenue/detail?${params}&source=receipts`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
         setRows(json.rows || []);
       } else if (option.mode === 'trend') {
-        const interval = option.value === 'trend_month' ? 'month' : 'week';
+        const interval = option.value === 'collect_trend_month' ? 'month' : 'week';
         const res = await authFetch(`/api/reports-v2/revenue/trend?${params}&interval=${interval}`);
         if (!res.ok) throw new Error('Failed to load');
         const json = await res.json();
@@ -221,7 +245,7 @@ export default function RevenueReport() {
 
   const sortedGroupRows = useMemo(
     () => isGroupShaped
-      ? [...rows].sort((a, b) => (b.totalCollected ?? b.totalBilled ?? 0) - (a.totalCollected ?? a.totalBilled ?? 0))
+      ? [...rows].sort((a, b) => (b.earned ?? b.totalCollected ?? b.totalBilled ?? 0) - (a.earned ?? a.totalCollected ?? a.totalBilled ?? 0))
       : rows,
     [rows, isGroupShaped]
   );
@@ -234,9 +258,50 @@ export default function RevenueReport() {
   let keyExtractor: (row: any, i: number) => string | number = (r, i) => r.key ?? r.id ?? i;
   let emptyMessage = 'No activity in this period.';
 
-  if (option.mode === 'group') {
+  const money = (v: any) => <span className="font-mono">{fmtCurrency(v)}</span>;
+  if (option.mode === 'earned' || option.mode === 'earned-trend') {
+    const countHeader = option.earnedGroupBy === 'item' ? 'Lines' : option.earnedGroupBy === 'doctor' ? 'Visits' : 'Bills';
+    const firstHeader = option.mode === 'earned-trend' ? (option.earnedGroupBy === 'month' ? 'Month' : 'Week')
+      : ({ user: 'Billed By', department: 'Department', scheme: 'Scheme', branch: 'Branch', item: 'Item', doctor: 'Doctor' } as Record<string, string>)[option.earnedGroupBy!] || 'Group';
+    if (option.mode === 'earned-trend') keyExtractor = r => r.bucket;
     columns = [
-      { key: 'label', header: option.label.replace('Revenue by ', '').replace('Revenue Detailed (By ', '').replace(')', ''), sortable: true },
+      { key: 'label', header: firstHeader, sortable: option.mode !== 'earned-trend' },
+      { key: 'count', header: countHeader, align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{v != null ? fmtCount(v) : '—'}</span> },
+      { key: 'earned', header: 'Revenue Earned', align: 'right', sortable: true, render: v => <span className="font-mono font-semibold">{fmtCurrency(v)}</span> },
+      { key: 'paid', header: 'Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
+      { key: 'outstanding', header: 'Outstanding (Credit)', align: 'right', sortable: true, render: money },
+    ];
+    csvColumns = [
+      { header: firstHeader, key: 'label' }, { header: countHeader, key: 'count' },
+      { header: 'Revenue Earned', key: 'earned', transform: v => fmtCurrency(v) },
+      { header: 'Paid', key: 'paid', transform: v => fmtCurrency(v) },
+      { header: 'Outstanding (Credit)', key: 'outstanding', transform: v => fmtCurrency(v) },
+    ];
+  } else if (option.mode === 'earned-bills') {
+    keyExtractor = r => r.key;
+    columns = [
+      { key: 'date', header: 'Bill Date', sortable: true, render: v => <span className="text-muted-foreground">{fmtDate(v)}</span> },
+      { key: 'label', header: 'Bill #', sortable: true, render: v => <span className="font-mono text-primary">{v}</span> },
+      { key: 'patientName', header: 'Patient', sortable: true },
+      { key: 'scheme', header: 'Scheme', sortable: true },
+      { key: 'branch', header: 'Branch', sortable: true },
+      { key: 'billedBy', header: 'Billed By', sortable: true },
+      { key: 'status', header: 'Status', sortable: true, render: v => <span className="capitalize">{String(v || '').replace(/_/g, ' ')}</span> },
+      { key: 'earned', header: 'Revenue Earned', align: 'right', sortable: true, render: v => <span className="font-mono font-semibold">{fmtCurrency(v)}</span> },
+      { key: 'paid', header: 'Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
+      { key: 'outstanding', header: 'Outstanding', align: 'right', sortable: true, render: money },
+    ];
+    csvColumns = [
+      { header: 'Bill Date', key: 'date', transform: v => fmtDate(v) }, { header: 'Bill #', key: 'label' },
+      { header: 'Patient', key: 'patientName' }, { header: 'Scheme', key: 'scheme' }, { header: 'Branch', key: 'branch' },
+      { header: 'Billed By', key: 'billedBy' }, { header: 'Status', key: 'status' },
+      { header: 'Revenue Earned', key: 'earned', transform: v => fmtCurrency(v) },
+      { header: 'Paid', key: 'paid', transform: v => fmtCurrency(v) },
+      { header: 'Outstanding', key: 'outstanding', transform: v => fmtCurrency(v) },
+    ];
+  } else if (option.mode === 'group') {
+    columns = [
+      { key: 'label', header: option.value === 'collect_user' ? 'Cashier' : 'Payment Mode', sortable: true },
       { key: 'transactionCount', header: 'Transactions', align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{v != null ? fmtCount(v) : '—'}</span> },
       { key: 'totalCollected', header: 'Revenue Collected', align: 'right', sortable: true, render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
     ];
@@ -303,11 +368,11 @@ export default function RevenueReport() {
   } else if (option.mode === 'trend') {
     keyExtractor = r => r.bucket;
     columns = [
-      { key: 'label', header: option.value === 'trend_month' ? 'Month' : 'Week' },
+      { key: 'label', header: option.value === 'collect_trend_month' ? 'Month' : 'Week' },
       { key: 'transactionCount', header: 'Transactions', align: 'right', render: v => <span className="text-muted-foreground">{fmtCount(v)}</span> },
       { key: 'totalCollected', header: 'Revenue Collected', align: 'right', render: v => <span className="font-mono font-medium">{fmtCurrency(v)}</span> },
     ];
-    csvColumns = [{ header: option.value === 'trend_month' ? 'Month' : 'Week', key: 'label' }, { header: 'Transactions', key: 'transactionCount' }, { header: 'Revenue Collected', key: 'totalCollected', transform: v => fmtCurrency(v) }];
+    csvColumns = [{ header: option.value === 'collect_trend_month' ? 'Month' : 'Week', key: 'label' }, { header: 'Transactions', key: 'transactionCount' }, { header: 'Revenue Collected', key: 'totalCollected', transform: v => fmtCurrency(v) }];
   } else if (option.mode === 'cancelled-receipts') {
     keyExtractor = r => r.id;
     columns = [
@@ -487,7 +552,7 @@ export default function RevenueReport() {
         </div>
       )}
 
-      {option.mode === 'trend' && hasLoaded && rows.length > 0 && (
+      {(option.mode === 'trend' || option.mode === 'earned-trend') && hasLoaded && rows.length > 0 && (
         <div className="bg-card rounded-lg border shadow-sm p-4 mb-4">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
@@ -533,7 +598,27 @@ export default function RevenueReport() {
             searchable
             searchPlaceholder="Search this report..."
           />
-          {isGroupShaped && sortedGroupRows.length > 0 && (
+          {['earned', 'earned-bills', 'earned-trend'].includes(option.mode) && rows.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px border border-t-0 border-border rounded-b-md bg-border text-sm -mt-px overflow-hidden">
+              {[
+                { label: 'Total revenue earned', value: rows.reduce((s, r) => s + (r.earned || 0), 0), strong: true },
+                { label: 'Paid', value: rows.reduce((s, r) => s + (r.paid || 0), 0) },
+                { label: 'Outstanding (on credit)', value: rows.reduce((s, r) => s + (r.outstanding || 0), 0) },
+              ].map((t) => (
+                <div key={t.label} className="bg-muted/20 px-4 py-2.5">
+                  <p className="text-xs text-muted-foreground">{t.label}</p>
+                  <p className={`font-mono tabular-nums ${t.strong ? 'font-bold' : 'font-semibold'}`}>{fmtCurrency(t.value)}</p>
+                </div>
+              ))}
+              <div className="bg-muted/20 px-4 py-2.5">
+                <p className="text-xs text-muted-foreground">Collected so far</p>
+                <p className="font-mono tabular-nums font-semibold">
+                  {(() => { const e = rows.reduce((s, r) => s + (r.earned || 0), 0); return e > 0 ? `${fmtNum(rows.reduce((s, r) => s + (r.paid || 0), 0) / e * 100, 1)}%` : '—'; })()}
+                </p>
+              </div>
+            </div>
+          )}
+          {isGroupShaped && option.mode !== 'earned' && sortedGroupRows.length > 0 && (
             <div className="flex justify-between items-center px-4 py-2.5 border border-t-0 border-border rounded-b-md bg-muted/20 text-sm font-semibold -mt-px">
               <span>Total</span>
               <span className="flex gap-8">

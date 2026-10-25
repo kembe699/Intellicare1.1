@@ -563,4 +563,163 @@ router.get('/patient-register', async (req, res) => {
   }
 });
 
+// ── GET /earned — REVENUE EARNED (accrual): everything billed, paid or not ──
+// groupBy=user|department|scheme|branch|item|week|month|bill
+//
+// The other "Revenue by …" breakdowns above add up receipts — cash
+// collected — so a bill on credit, or the unpaid part of one, never showed
+// as revenue. This counts every bill raised in the period (the revenue the
+// ledger books when the bill is created), whatever has been paid, with what
+// was paid and what is still outstanding alongside.
+//
+//   - cancelled bills are left out; written-off bills still count (the
+//     revenue was earned — the write-off is a bad-debt expense)
+//   - amounts are converted from the bill's currency into the base currency
+//     at the bill-date rate
+//   - department and item split each bill's total across its lines (voided
+//     lines excluded) in proportion to their amounts, so every breakdown adds
+//     up to the same total
+router.get('/earned', async (req, res) => {
+  try {
+    const GROUPS = ['user', 'department', 'scheme', 'branch', 'item', 'week', 'month', 'bill'];
+    const groupBy = GROUPS.includes(req.query.groupBy) ? req.query.groupBy : 'scheme';
+    const today = todayISO();
+    const dateFrom = isValidDate(req.query.dateFrom) ? req.query.dateFrom : today;
+    const dateTo = isValidDate(req.query.dateTo) ? req.query.dateTo : today;
+    const clinicId = req.query.clinic_id ? parseInt(req.query.clinic_id, 10) : null;
+    const clinicSQL = clinicId ? ' AND pb.clinic_id = ?' : '';
+    const branch = getBranchConditionSQL(req, 'pb');
+
+    const [bills] = await sequelize.query(
+      `SELECT pb.id, pb.bill_number, pb.bill_date, pb.patient_name, pb.status, pb.services,
+              pb.total_amount, pb.paid_amount, pb.balance_amount, pb.bill_currency, pb.clinic_id,
+              pb.scheme_id, COALESCE(ps.scheme_name, pb.scheme_name) AS scheme_name,
+              pb.branch_id, b.name AS branch_name,
+              pb.created_by, u.display_name AS created_by_name
+       FROM patient_bills pb
+       LEFT JOIN patient_schemes ps ON ps.id = pb.scheme_id
+       LEFT JOIN branches b ON b.id = pb.branch_id
+       LEFT JOIN users u ON u.id::text = pb.created_by::text
+       WHERE DATE(pb.bill_date) BETWEEN ? AND ?
+         AND COALESCE(pb.status::text, '') NOT IN ('cancelled', 'void', 'voided')
+         ${clinicSQL} ${branch.sql}
+       ORDER BY pb.bill_date ASC`,
+      { replacements: [dateFrom, dateTo, ...(clinicId ? [clinicId] : []), ...branch.params] }
+    );
+
+    const AccountingService = require('../services/AccountingService');
+    const base = await getBaseCurrencyCode();
+    const rateCache = new Map();
+    let unconverted = 0;
+    const toBase = async (bill) => {
+      const cur = bill.bill_currency || base;
+      if (cur === base) return 1;
+      const day = String(bill.bill_date instanceof Date ? bill.bill_date.toISOString() : bill.bill_date).slice(0, 10);
+      const key = `${cur}|${day}`;
+      if (!rateCache.has(key)) {
+        let rate = null;
+        try { rate = parseFloat(await AccountingService.getExchangeRate(bill.clinic_id || clinicId || 1, cur, base, day)); } catch { rate = null; }
+        rateCache.set(key, Number.isFinite(rate) && rate > 0 ? rate : null);
+      }
+      const rate = rateCache.get(key);
+      if (rate == null) { unconverted++; return 1; }
+      return rate;
+    };
+
+    // Department lookup for lines billed before categories were stamped on them.
+    let nameToCategory = null;
+    if (groupBy === 'department') {
+      nameToCategory = new Map();
+      const add = (rows, cat) => rows.forEach((r) => { const n = normalizeName(r.name); if (n && !nameToCategory.has(n)) nameToCategory.set(n, cat(r)); });
+      add(await sequelize.query(`SELECT service_name AS name, category FROM services`, { type: QueryTypes.SELECT }).catch(() => []), (r) => r.category || 'Other');
+      add(await sequelize.query(`SELECT test_name AS name FROM lab_tests`, { type: QueryTypes.SELECT }).catch(() => []), () => 'Laboratory');
+      add(await sequelize.query(`SELECT item_name AS name FROM inventory_items`, { type: QueryTypes.SELECT }).catch(() => []), () => 'Pharmacy / Inventory');
+    }
+
+    const groups = new Map();
+    const bump = (key, label, earned, paid, outstanding, countKey, extra) => {
+      const g = groups.get(key) || { key, label, count: 0, earned: 0, paid: 0, outstanding: 0, _seen: new Set(), ...extra };
+      if (!g._seen.has(countKey)) { g._seen.add(countKey); g.count += 1; }
+      g.earned += earned; g.paid += paid; g.outstanding += outstanding;
+      groups.set(key, g);
+    };
+    const bucketOf = (d, interval) => {
+      const dt = new Date(d);
+      if (interval === 'month') return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01`;
+      const monday = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() - ((dt.getDay() + 6) % 7));
+      return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    };
+
+    const totals = { count: 0, earned: 0, paid: 0, outstanding: 0 };
+    for (const bill of bills) {
+      const rate = await toBase(bill);
+      // A discount reduces what the patient owes without always reducing
+      // total_amount; paid + balance is what was actually charged. A
+      // written-off bill keeps its full total (balance zeroed by the write-off).
+      const total = num(bill.total_amount);
+      const charged = num(bill.paid_amount) + num(bill.balance_amount);
+      const net = bill.status === 'written_off' || charged <= 0 ? total : Math.min(total, charged);
+      const earned = net * rate;
+      const paid = Math.min(num(bill.paid_amount) * rate, earned);
+      const outstanding = bill.status === 'written_off' ? 0 : Math.max(0, num(bill.balance_amount) * rate);
+      totals.count += 1; totals.earned += earned; totals.paid += paid; totals.outstanding += outstanding;
+
+      if (groupBy === 'user') {
+        // created_by holds a user id on some bills and the person's name on others.
+        const who = (bill.created_by_name || (bill.created_by != null ? String(bill.created_by) : '') || 'Unknown').trim();
+        bump(who.toLowerCase(), who, earned, paid, outstanding, bill.id);
+      } else if (groupBy === 'scheme') {
+        bump(bill.scheme_id || 'none', bill.scheme_id ? (bill.scheme_name || 'Scheme') : 'Cash / No Scheme', earned, paid, outstanding, bill.id);
+      } else if (groupBy === 'branch') {
+        bump(String(bill.branch_id ?? 'none'), bill.branch_name || (bill.branch_id ? `Branch ${bill.branch_id}` : 'No Branch Assigned'), earned, paid, outstanding, bill.id);
+      } else if (groupBy === 'week' || groupBy === 'month') {
+        const k = bucketOf(bill.bill_date, groupBy);
+        bump(k, k, earned, paid, outstanding, bill.id, { bucket: k });
+      } else if (groupBy === 'bill') {
+        bump(bill.id, bill.bill_number, earned, paid, outstanding, bill.id, {
+          date: bill.bill_date, patientName: bill.patient_name, scheme: bill.scheme_id ? bill.scheme_name : 'Cash / No Scheme',
+          branch: bill.branch_name || '—', billedBy: bill.created_by_name || (bill.created_by != null ? String(bill.created_by) : '—'), status: bill.status,
+        });
+      } else {
+        // department / item: split the bill across its live lines by amount
+        let lines = [];
+        try { const parsed = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services; if (Array.isArray(parsed)) lines = parsed; } catch { lines = []; }
+        lines = lines.filter((l) => l && !l.isVoided);
+        const weights = lines.map((l) => {
+          const qty = num(l.quantity) || 1;
+          return Math.max(0, l.totalPrice != null ? num(l.totalPrice) : l.total_price != null ? num(l.total_price) : num(l.unitPrice ?? l.unit_price ?? l.price) * qty);
+        });
+        const wSum = weights.reduce((a, w) => a + w, 0);
+        if (!lines.length || wSum <= 0) {
+          bump('__unitemised', 'Not itemised', earned, paid, outstanding, bill.id);
+          continue;
+        }
+        lines.forEach((l, i) => {
+          const share = weights[i] / wSum;
+          if (share <= 0) return;
+          const name = String(l.serviceName || l.name || l.service_name || 'Unnamed item').trim();
+          const label = groupBy === 'item' ? name : (l.category || nameToCategory.get(normalizeName(name)) || 'Other');
+          bump(label, label, earned * share, paid * share, outstanding * share, groupBy === 'item' ? `${bill.id}:${i}` : bill.id);
+        });
+      }
+    }
+
+    const rows = Array.from(groups.values()).map(({ _seen, ...g }) => ({
+      ...g, earned: Math.round(g.earned * 100) / 100, paid: Math.round(g.paid * 100) / 100, outstanding: Math.round(g.outstanding * 100) / 100,
+    }));
+    if (groupBy === 'week' || groupBy === 'month') rows.sort((a, b) => a.key.localeCompare(b.key));
+    else if (groupBy === 'bill') rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+    else rows.sort((a, b) => b.earned - a.earned);
+
+    res.json({
+      groupBy, period: { dateFrom, dateTo }, currency: base, rows,
+      totals: { count: totals.count, earned: Math.round(totals.earned * 100) / 100, paid: Math.round(totals.paid * 100) / 100, outstanding: Math.round(totals.outstanding * 100) / 100 },
+      note: unconverted ? `${unconverted} bill(s) in another currency had no exchange rate for their date and are shown unconverted.` : null,
+    });
+  } catch (err) {
+    console.error('Revenue earned report error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
