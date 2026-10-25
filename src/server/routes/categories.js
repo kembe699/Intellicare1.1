@@ -35,6 +35,11 @@ const REQUIRED_FIELDS_BY_TYPE = {
 };
 
 async function validateAccounts(sequelize, clinicId, type, fields) {
+  // An account picked here that is switched off (e.g. 1310 Pharmaceutical
+  // Inventory, off in four tenants' charts) is switched on once everything
+  // else checks out — the picker lists it and choosing it is deliberate;
+  // refusing with "account is not active" left no way to finish the form.
+  const toActivate = [];
   for (const field of Object.keys(ACCOUNT_FIELD_TYPE)) {
     const value = fields[field];
     if (value === undefined || value === null || value === '') continue;
@@ -46,7 +51,7 @@ async function validateAccounts(sequelize, clinicId, type, fields) {
       { replacements: { id: value, clinicId } }
     );
     if (!acct) return `${field}: account not found`;
-    if (!acct.is_active) return `${field}: account is not active`;
+    if (!acct.is_active) toActivate.push(value);
     if (acct.account_type !== ACCOUNT_FIELD_TYPE[field]) {
       return `${field} must be a ${ACCOUNT_FIELD_TYPE[field]}-type account (got ${acct.account_type})`;
     }
@@ -54,6 +59,9 @@ async function validateAccounts(sequelize, clinicId, type, fields) {
   const required = REQUIRED_FIELDS_BY_TYPE[type] || [];
   const missing = required.filter((f) => !fields[f]);
   if (missing.length) return `${type} category requires: ${missing.join(', ')}`;
+  for (const id of toActivate) {
+    await sequelize.query(`UPDATE chart_of_accounts SET is_active = true WHERE id = :id AND clinic_id = :clinicId`, { replacements: { id, clinicId } });
+  }
   return null;
 }
 

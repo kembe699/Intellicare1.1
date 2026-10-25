@@ -143,7 +143,8 @@ export default function Categories() {
 
   const accountOptions = (accountType: string) => accounts
     .filter((a) => a.account_type === accountType)
-    .map((a) => ({ value: a.id, label: `${a.account_code} · ${a.account_name}` }));
+    // A switched-off account is still offered; saving the category switches it on.
+    .map((a) => ({ value: a.id, label: `${a.account_code} · ${a.account_name}${(a as any).is_active === false ? ' (off — saving switches it on)' : ''}` }));
 
   const handleSave = async () => {
     if (tab === 'fixed_asset') return;
