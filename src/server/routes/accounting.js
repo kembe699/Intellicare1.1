@@ -309,7 +309,7 @@ router.get('/general-ledger', authorize('accounting.read'), async (req, res) => 
         include: [{
           model: ChartOfAccounts,
           as: 'account',
-          attributes: ['account_code', 'account_name']
+          attributes: ['account_code', 'account_name', 'account_type']
         }]
       }],
       order: [['transaction_date', 'DESC'], ['gl_number', 'DESC']]
@@ -855,7 +855,9 @@ router.get('/receivables', authorize('accounting.read'), async (req, res) => {
         COALESCE(pb.due_date, ((pb.bill_date) + INTERVAL '30 day')) AS due_date,
         pb.status,
         pb.bill_date,
-        pb.created_at
+        pb.created_at,
+        pb.scheme_id,
+        pb.scheme_name
       FROM patient_bills pb
       ${where}
       ORDER BY pb.bill_date DESC

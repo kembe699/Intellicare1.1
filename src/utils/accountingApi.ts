@@ -98,6 +98,7 @@ export interface GLLineItem {
   account: {
     account_code: string;
     account_name: string;
+    account_type?: string;
   };
 }
 

@@ -14,7 +14,7 @@ import { apiFetch, formatCurrency } from '@/utils/accountingApi';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 
 interface Receivable {
   id: string;
@@ -26,6 +26,10 @@ interface Receivable {
   balance: number;
   due_date: string;
   status: string;
+  bill_date?: string;
+  created_at?: string;
+  scheme_id?: string | null;
+  scheme_name?: string | null;
 }
 
 const RECEIVABLE_STATUS_MAP = { paid: 'success', overdue: 'danger', current: 'warning' } as const;
@@ -43,6 +47,19 @@ const getItemStatus = (item: Receivable) => {
   if (new Date(item.due_date) < new Date() && item.balance > 0) return 'overdue';
   return 'current';
 };
+
+// Aged from the bill date, the same way A/P ages from the order date.
+const AGE_BUCKETS = [
+  { key: 'current', label: '0–30 days', max: 30 },
+  { key: 'd31_60', label: '31–60 days', max: 60 },
+  { key: 'd61_90', label: '61–90 days', max: 90 },
+  { key: 'd90_plus', label: '90+ days', max: Infinity },
+] as const;
+type AgeKey = typeof AGE_BUCKETS[number]['key'];
+
+/** A bill still owed: something left to collect, and not cancelled or written off. */
+const isOpen = (item: Receivable) =>
+  Number(item.balance) > 0.009 && !['paid', 'cancelled', 'written_off', 'void'].includes(item.status);
 
 const getDaysOverdue = (dueDate: string) => {
   const diff = Math.floor((new Date().getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -89,6 +106,26 @@ const Receivables: React.FC = () => {
     () => receivables.filter((item) => statusFilter === 'all' || getItemStatus(item) === statusFilter),
     [receivables, statusFilter],
   );
+
+  const aging = useMemo(() => {
+    const t: Record<AgeKey, number> & { total: number; patients: number; schemes: number; bills: number; people: number } =
+      { current: 0, d31_60: 0, d61_90: 0, d90_plus: 0, total: 0, patients: 0, schemes: 0, bills: 0, people: 0 };
+    const people = new Set<string>();
+    const now = Date.now();
+    for (const r of receivables) {
+      if (!isOpen(r)) continue;
+      const bal = Number(r.balance) || 0;
+      const age = Math.max(0, Math.floor((now - new Date(r.bill_date || r.created_at || r.due_date).getTime()) / 86_400_000));
+      const bucket = AGE_BUCKETS.find((b) => age <= b.max)!;
+      t[bucket.key] += bal;
+      t.total += bal;
+      if (r.scheme_id) t.schemes += bal; else t.patients += bal;
+      t.bills += 1;
+      people.add(r.patient_id);
+    }
+    t.people = people.size;
+    return t;
+  }, [receivables]);
 
   const open = (bill: Receivable, action: 'discount' | 'follow_up' | 'write_off') => {
     setDiscountForm(EMPTY_DISCOUNT);
@@ -137,6 +174,26 @@ const Receivables: React.FC = () => {
             </Button>
           }
         />
+
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {AGE_BUCKETS.map((b) => (
+            <div key={b.key} className="bg-card rounded-lg border shadow-sm p-4">
+              <p className="text-xs text-muted-foreground">{b.label}</p>
+              <p className="text-lg font-semibold font-mono tabular-nums mt-1">{loading ? '—' : formatMoney(aging[b.key], baseCurrencyData.code)}</p>
+            </div>
+          ))}
+          <div className="bg-card rounded-lg border shadow-sm p-4 col-span-2 lg:col-span-1">
+            <p className="text-xs text-muted-foreground">Total owed</p>
+            <p className="text-lg font-semibold font-mono tabular-nums mt-1">{loading ? '—' : formatMoney(aging.total, baseCurrencyData.code)}</p>
+            {!loading && (
+              <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                <p className="flex justify-between gap-2"><span>Patients</span><span className="font-mono tabular-nums text-foreground">{formatMoney(aging.patients, baseCurrencyData.code)}</span></p>
+                <p className="flex justify-between gap-2"><span>Schemes</span><span className="font-mono tabular-nums text-foreground">{formatMoney(aging.schemes, baseCurrencyData.code)}</span></p>
+                <p>{aging.bills} open bill{aging.bills === 1 ? '' : 's'} · {aging.people} patient{aging.people === 1 ? '' : 's'}</p>
+              </div>
+            )}
+          </div>
+        </div>
 
         <AdvancedDataTable<Receivable>
           title="Bills"

@@ -23,6 +23,14 @@ const GL_STATUS_TONE_MAP: Record<string, StatusBadgeTone> = {
   reversed: 'danger',
 };
 
+const ACCOUNT_TYPES = [
+  { value: 'asset', label: 'Assets' },
+  { value: 'liability', label: 'Liabilities' },
+  { value: 'equity', label: 'Equity' },
+  { value: 'revenue', label: 'Revenue' },
+  { value: 'expense', label: 'Expenses' },
+];
+
 const GeneralLedger: React.FC = () => {
   const { user } = useAuth();
   const { currency: baseCurrencyData } = useCurrency();
@@ -31,6 +39,7 @@ const GeneralLedger: React.FC = () => {
   const [glEntries, setGlEntries] = useState<GLEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -57,19 +66,34 @@ const GeneralLedger: React.FC = () => {
     }
   };
 
+  const lineMatchesType = (li: { account?: { account_type?: string } }) =>
+    typeFilter === 'all' || li.account?.account_type === typeFilter;
+
+  // An entry shows under a type when any of its lines hits an account of that type.
   const filteredEntries = useMemo(() => {
-    if (!searchQuery) return glEntries;
     const q = searchQuery.toLowerCase();
     return glEntries.filter(e =>
-      e.gl_number?.toLowerCase().includes(q) ||
-      e.description?.toLowerCase().includes(q) ||
-      e.transaction_type?.toLowerCase().includes(q)
+      (typeFilter === 'all' || (e.lineItems || []).some(lineMatchesType)) &&
+      (!q ||
+        e.gl_number?.toLowerCase().includes(q) ||
+        e.description?.toLowerCase().includes(q) ||
+        e.transaction_type?.toLowerCase().includes(q))
     );
-  }, [glEntries, searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glEntries, searchQuery, typeFilter]);
 
+  // With a type chosen, totals count only that type's lines (e.g. revenue
+  // credits), not the whole of every entry that touched it.
   const summary = useMemo(() => {
-    const totalDebit = filteredEntries.reduce((s, e) => s + parseFloat(String(e.base_total_debit ?? 0)), 0);
-    const totalCredit = filteredEntries.reduce((s, e) => s + parseFloat(String(e.base_total_credit ?? 0)), 0);
+    const sumLines = (key: 'base_debit_amount' | 'base_credit_amount', fallback: 'debit_amount' | 'credit_amount') =>
+      filteredEntries.reduce((s, e) => s + (e.lineItems || []).filter(lineMatchesType)
+        .reduce((t, li: any) => t + parseFloat(String(li[key] ?? li[fallback] ?? 0)), 0), 0);
+    const totalDebit = typeFilter === 'all'
+      ? filteredEntries.reduce((s, e) => s + parseFloat(String(e.base_total_debit ?? 0)), 0)
+      : sumLines('base_debit_amount', 'debit_amount');
+    const totalCredit = typeFilter === 'all'
+      ? filteredEntries.reduce((s, e) => s + parseFloat(String(e.base_total_credit ?? 0)), 0)
+      : sumLines('base_credit_amount', 'credit_amount');
     const posted = filteredEntries.filter(e => e.status === 'posted').length;
     return { totalDebit, totalCredit, count: filteredEntries.length, posted };
   }, [filteredEntries]);
@@ -138,9 +162,17 @@ const GeneralLedger: React.FC = () => {
                 searchPlaceholder="Search..."
                 className="w-[130px]"
               />
-              {(searchQuery || startDate || endDate || statusFilter !== 'all') && (
+              <Combobox
+                options={[{ value: 'all', label: 'All types' }, ...ACCOUNT_TYPES]}
+                value={typeFilter}
+                onChange={(v) => setTypeFilter(v || 'all')}
+                placeholder="All types"
+                searchPlaceholder="Search..."
+                className="w-[150px]"
+              />
+              {(searchQuery || startDate || endDate || statusFilter !== 'all' || typeFilter !== 'all') && (
                 <Button variant="ghost" size="sm" onClick={() => {
-                  setSearchQuery(''); setStartDate(''); setEndDate(''); setStatusFilter('all');
+                  setSearchQuery(''); setStartDate(''); setEndDate(''); setStatusFilter('all'); setTypeFilter('all');
                 }}>Clear</Button>
               )}
               <span className="text-sm text-muted-foreground ml-auto">
@@ -240,7 +272,7 @@ const GeneralLedger: React.FC = () => {
                                   </thead>
                                   <tbody className="divide-y divide-border/60">
                                     {entry.lineItems.map((li: any, i: number) => (
-                                      <tr key={i}>
+                                      <tr key={i} className={typeFilter !== 'all' && !lineMatchesType(li) ? 'opacity-50' : ''}>
                                         <td className="px-4 py-2.5">
                                           <span className="font-mono text-xs">{li.account?.account_code}</span>{' '}
                                           {li.account?.account_name}
@@ -267,7 +299,9 @@ const GeneralLedger: React.FC = () => {
                 {filteredEntries.length > 0 && (
                   <tfoot className="border-t-2 font-bold bg-muted sticky bottom-0">
                     <tr>
-                      <td className="pl-5 pr-3 py-3.5" colSpan={6}>TOTALS</td>
+                      <td className="pl-5 pr-3 py-3.5" colSpan={6}>
+                        TOTALS{typeFilter !== 'all' && <span className="ml-2 text-xs font-normal text-muted-foreground">{ACCOUNT_TYPES.find((t) => t.value === typeFilter)?.label} lines only</span>}
+                      </td>
                       <td className="px-3 py-3.5 text-right font-mono text-sm whitespace-nowrap">{formatCurrency(summary.totalDebit)}</td>
                       <td className="px-3 py-3.5 text-right font-mono text-sm whitespace-nowrap">{formatCurrency(summary.totalCredit)}</td>
                       <td colSpan={2}></td>
