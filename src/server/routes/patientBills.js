@@ -425,8 +425,13 @@ async function applySchemePrice(patientId, services, schemeId, req = null) {
   });
 
   if (unpriced.length > 0) {
-    const err = new Error(`${unpriced.join(', ')} ${unpriced.length > 1 ? 'are' : 'is'} not priced under ${schemeName} — please choose a different item or bill it under Cash.`);
+    const err = new Error(`${unpriced.join(', ')} ${unpriced.length > 1 ? 'are' : 'is'} not priced under ${schemeName}.`);
     err.isSchemeError = true;
+    // Lets the screen offer to bill these at the normal cash price on the
+    // patient's cash bill instead (POST /patient-bills with bill_as_cash).
+    err.code = 'NOT_PRICED_UNDER_SCHEME';
+    err.unpricedItems = unpriced;
+    err.schemeName = schemeName;
     throw err;
   }
 
@@ -610,6 +615,18 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     // alone is not a safe way to identify "which line" later (void-item, payment).
     let parsedServices = ensureLineIds(normalizeServices(billData.services));
 
+    // Items not priced under the patient's scheme, billed at the normal cash
+    // price after the user agreed: they go on the patient's CASH bill (an open
+    // one for this visit, or a new one), never mixed into the insurance bill.
+    const billAsCash = !!billData.bill_as_cash;
+    delete billData.bill_as_cash;
+    if (billAsCash) {
+      billData.scheme_id = null;
+      billData.scheme_name = null;
+      parsedServices = parsedServices.map((l) => ({ ...l, billedAsCash: true }));
+      billData.notes = billData.notes || 'Cash bill — items not covered by the patient\'s scheme';
+    }
+
     // Frontend already blocks a typed negative quantity, but that's bypassable
     // via a direct API call — a negative quantity/price produces a negative
     // line total that silently reduces the bill, so reject it server-side too.
@@ -711,6 +728,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
       try {
         const { bill: existingBill } = await resolveActiveBill(billData.patient_id, billData.clinic_id, {
           transaction: createTxn, lock: createTxn.LOCK.UPDATE, visitId: billData.visit_id,
+          ...(billAsCash ? { cashOnly: true } : {}),
         });
 
         let result, isNew;
@@ -834,7 +852,7 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
     res.json(bill);
   } catch (error) {
     if (error.isSchemeError || error.isExchangeRateError) {
-      return res.status(400).json({ error: error.message });
+      return res.status(400).json({ error: error.message, ...(error.code ? { code: error.code, unpriced_items: error.unpricedItems, scheme_name: error.schemeName } : {}) });
     }
     console.error('Error creating patient bill:', error);
     console.error('Error details:', error.message);
@@ -874,6 +892,10 @@ router.get('/active/:patientId/:clinicId', authorize('bills.read'), async (req, 
     // so "View Bills" during a stay always finds the one bill accumulating charges for
     // it, and it stops being found here the moment the patient is discharged.
     const openVisitId = await getCurrentOpenVisitIdForBilling(patientId, clinicId);
+    // ?scheme_id=<id> → that scheme's bill; ?mode=cash → the cash bill. A
+    // patient can have both side by side (insurance + items billed as cash).
+    const modeWhere = req.query.scheme_id ? { scheme_id: String(req.query.scheme_id) }
+      : req.query.mode === 'cash' ? { scheme_id: null } : {};
 
     if (openVisitId) {
       const visitBill = await PatientBill.findOne({
@@ -882,6 +904,7 @@ router.get('/active/:patientId/:clinicId', authorize('bills.read'), async (req, 
           clinic_id: parseInt(clinicId),
           visit_id: openVisitId,
           ...branchWhere,
+          ...modeWhere,
           status: { [Op.in]: ['pending', 'partial', 'paid', 'active'] },
         },
         order: [['created_at', 'DESC']],
@@ -906,6 +929,7 @@ router.get('/active/:patientId/:clinicId', authorize('bills.read'), async (req, 
         patient_id: patientId,
         clinic_id: parseInt(clinicId),
         ...branchWhere,
+        ...modeWhere,
         status: { [Op.in]: ['pending', 'partial', 'paid', 'active'] },
       },
       order: [['created_at', 'DESC']],
@@ -1147,7 +1171,7 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
   } catch (error) {
     if (t && !t.finished) await t.rollback().catch(() => {});
     if (error.isSchemeError || error.isExchangeRateError) {
-      return res.status(400).json({ error: error.message });
+      return res.status(400).json({ error: error.message, ...(error.code ? { code: error.code, unpriced_items: error.unpricedItems, scheme_name: error.schemeName } : {}) });
     }
     console.error('Error adding services to bill:', error);
     res.status(500).json({ error: 'Failed to add services to bill' });

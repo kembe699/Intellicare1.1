@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { offerCashBilling } from '@/lib/schemeCashFallback';
 import { useSellingStore } from '@/hooks/useSellingStore';
 import { SellingStorePicker } from '@/components/inventory/SellingStorePicker';
 import { pairedLineIndex } from '@/lib/billTaxLines';
@@ -129,7 +130,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function BillDetails() {
-  const { confirmDialog } = useConfirmDialog();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { billId } = useParams<{ billId: string }>();
   const navigate = useNavigate();
   const { user, hasPrivilege } = useAuth();
@@ -457,8 +458,15 @@ export default function BillDetails() {
         setDiscountAmount('');
         fetchBill(true);
       } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to add service');
+        const err = await res.json().catch(() => ({}));
+        // Not priced under the bill's scheme: offer the cash price on the cash bill.
+        const handled = await offerCashBilling({
+          body: err, lines: [lineItem], confirm,
+          patientId: bill.patient_id, patientName: bill.patient_name, clinicId: user?.clinic || 1,
+          createdBy: user?.displayName,
+        });
+        if (handled === null) toast.error(err.error || 'Failed to add service');
+        else if (handled.billed) { setNewItemCatalogId(''); setNewItemQty('1'); setPriceOverride(''); setDiscountAmount(''); }
       }
     } catch {
       toast.error('Network error');
@@ -1022,7 +1030,7 @@ export default function BillDetails() {
             <h3 className="font-medium mb-4 text-lg border-b pb-2">Add Service / Product</h3>
             {patientSchemes.length > 0 && itemType === 'service' && (
               <p className="text-xs text-info mb-2">
-                Only services priced under this patient's insurance ({patientSchemes[0].scheme_name}) are shown.
+                Services not priced under {patientSchemes[0].scheme_name} can still be added — they are billed at the cash price on a separate cash bill.
               </p>
             )}
             <div className="flex gap-2 mb-3">
@@ -1051,7 +1059,9 @@ export default function BillDetails() {
             </div>
             {(() => {
               const catalog: any[] = itemType === 'service'
-                ? (patientSchemes.length > 0 ? services.filter((s: any) => schemeServicePricing.some((p: any) => p.service_id === s.id)) : services)
+                // Every service is offered; one the scheme doesn't price is billed at the
+                // cash price on the patient's separate cash bill (after asking).
+                ? services
                 : inventoryItems;
               const options = catalog
                 .map((c: any) => {
@@ -1061,7 +1071,9 @@ export default function BillDetails() {
                   const schemePricing = schemeServicePricing.find((p: any) => p.service_id === c.id);
                   const priceLabel = patientSchemes.length > 0 && schemePricing
                     ? `${schemeCurrencyCode} ${parseFloat(schemePricing.scheme_price).toFixed(2)} (insurance)`
-                    : amt(c.price).toFixed(2);
+                    : patientSchemes.length > 0
+                      ? `${amt(c.price).toFixed(2)} (not covered — cash price)`
+                      : amt(c.price).toFixed(2);
                   return { id: c.id, name: c.service_name || c.name, priceLabel };
                 })
                 .filter(o => !itemSearchQuery || o.name.toLowerCase().includes(itemSearchQuery.toLowerCase()));

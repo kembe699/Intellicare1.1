@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { offerCashBilling } from '@/lib/schemeCashFallback';
 import { useSellingStore } from '@/hooks/useSellingStore';
 import { SellingStorePicker } from '@/components/inventory/SellingStorePicker';
 import { useNavigate } from 'react-router-dom';
@@ -385,38 +386,50 @@ export default function PrescriptionManagement() {
       }
       const total = lineItems.reduce((sum, li) => sum + li.totalPrice, 0);
 
-      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${clinicId}`, { credentials: 'include' });
-      if (existingBillRes.ok) {
-        const existingBill = await existingBillRes.json();
-        const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-          body: JSON.stringify({ services: lineItems }),
-        });
-        if (addRes.ok) {
-          toast.success(`Added to bill ${existingBill.bill_number}`);
-        } else {
-          const err = await addRes.json().catch(() => ({}));
-          toast.error(`Failed to bill this prescription: ${err.error || 'unknown error'}. The patient will not be charged — please bill manually.`);
+      // The bill for this billing mode: the scheme's bill, or the cash bill.
+      const activeQuery = schemeIdToSend ? `?scheme_id=${schemeIdToSend}` : '?mode=cash';
+      const send = async (lines: any[]): Promise<{ ok: boolean; body: any; billNumber?: string }> => {
+        const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${clinicId}${activeQuery}`, { credentials: 'include' });
+        if (existingBillRes.ok) {
+          const existingBill = await existingBillRes.json();
+          const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ services: lines }),
+          });
+          return { ok: addRes.ok, body: await addRes.json().catch(() => ({})), billNumber: existingBill.bill_number };
         }
-      } else {
         const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+        const linesTotal = lines.reduce((sum, li) => sum + li.totalPrice, 0);
         const billRes = await authFetch('/api/patient-bills', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
           body: JSON.stringify({
             bill_number: billNumber, patient_id: patientId, patient_name: patientName,
-            clinic_id: parseInt(String(clinicId)), total_amount: total, paid_amount: 0,
-            balance_amount: total, status: 'pending', bill_date: new Date().toISOString(),
-            due_date: null, services: lineItems,
+            clinic_id: parseInt(String(clinicId)), total_amount: linesTotal, paid_amount: 0,
+            balance_amount: linesTotal, status: 'pending', bill_date: new Date().toISOString(),
+            due_date: null, services: lines,
             notes: 'Auto-generated from pharmacy prescription', created_by: user?.displayName || 'System',
             scheme_id: schemeIdToSend,
           }),
         });
-        if (billRes.ok) {
-          toast.success(`Bill ${billNumber} created`);
-        } else {
-          const err = await billRes.json().catch(() => ({}));
-          toast.error(`Failed to bill this prescription: ${err.error || 'unknown error'}. The patient will not be charged — please bill manually.`);
-        }
+        return { ok: billRes.ok, body: await billRes.json().catch(() => ({})), billNumber };
+      };
+      void total;
+      const r = await send(lineItems);
+      if (r.ok) {
+        toast.success(`Added to bill ${r.body?.bill_number || r.billNumber}`);
+      } else {
+        // Drugs the scheme doesn't price: offer the cash price on the cash bill.
+        const handled = await offerCashBilling({
+          body: r.body, lines: lineItems, confirm, patientId, patientName, clinicId,
+          createdBy: user?.displayName, notes: 'Auto-generated from pharmacy prescription',
+          retryCovered: async (covered) => {
+            const r2 = await send(covered);
+            if (r2.ok) toast.success(`Covered items added to bill ${r2.body?.bill_number || r2.billNumber}`);
+            else toast.error(`Billing the covered items failed: ${r2.body?.error || 'unknown error'}`);
+            return r2.ok;
+          },
+        });
+        if (handled === null) toast.error(`Failed to bill this prescription: ${r.body?.error || 'unknown error'}. The patient will not be charged — please bill manually.`);
       }
     } catch (e) {
       console.error('Error billing for prescription', e);

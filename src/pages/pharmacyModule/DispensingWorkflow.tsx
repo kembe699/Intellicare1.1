@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { offerCashBilling } from '@/lib/schemeCashFallback';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { useSellingStore } from '@/hooks/useSellingStore';
 import { SellingStorePicker } from '@/components/inventory/SellingStorePicker';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -196,6 +198,7 @@ export default function DispensingWorkflow() {
   // Dispensing and direct sales come out of one store: only its items are
   // listed and stock is taken from it.
   const sellingStore = useSellingStore();
+  const { confirm, confirmDialog } = useConfirmDialog();
   useEffect(() => {
     if (sellingStore.loaded) fetchDrugs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -409,7 +412,8 @@ export default function DispensingWorkflow() {
       }
       const total = lineItems.reduce((sum, li) => sum + li.totalPrice, 0);
 
-      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${clinicId}`, { credentials: 'include' });
+      // A direct sale is a cash sale: it goes on the cash bill, never an insurance bill.
+      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${clinicId}?mode=cash`, { credentials: 'include' });
       if (existingBillRes.ok) {
         const existingBill = await existingBillRes.json();
         const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
@@ -1117,7 +1121,13 @@ export default function DispensingWorkflow() {
               toast.success(`${drug.drug_name} added and billed`);
             }
           } else {
-            toast.error(`${drug.drug_name} added to the order, but billing it failed — please bill manually`);
+            const err = await addRes.json().catch(() => ({}));
+            // Not priced under the bill's scheme: offer the cash price on the cash bill.
+            const handled = await offerCashBilling({
+              body: err, lines: [lineItem], confirm, patientId: selectedRx.patient_id, patientName: selectedRx.patient_name,
+              clinicId, createdBy: user?.displayName, notes: 'Added during dispensing',
+            });
+            if (handled === null) toast.error(`${drug.drug_name} added to the order, but billing it failed — please bill manually`);
           }
         } else {
           const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
@@ -1275,6 +1285,7 @@ export default function DispensingWorkflow() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1600px] mx-auto w-full h-[calc(100vh-64px)] flex flex-col">
         <div className="flex justify-between items-start gap-4 flex-wrap">

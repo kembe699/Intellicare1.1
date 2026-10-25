@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Receipt } from 'lucide-react';
 import { authFetch } from '@/api/apiClient';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
@@ -39,6 +41,7 @@ interface Visit {
 }
 
 export default function PatientVisitsHistory() {
+  const navigate = useNavigate();
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -262,12 +265,13 @@ export default function PatientVisitsHistory() {
                     <th scope="col" className="text-left py-2.5 px-3 font-medium text-muted-foreground">Diagnosis</th>
                     <th scope="col" className="text-center py-2.5 px-3 font-medium text-muted-foreground">Status</th>
                     <th scope="col" className="text-right py-2.5 px-3 font-medium text-muted-foreground">Total Visits</th>
+                    <th scope="col" className="text-right py-2.5 px-3 font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visits.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-12 text-muted-foreground">
+                      <td colSpan={10} className="text-center py-12 text-muted-foreground">
                         <Calendar className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
                         No visits found for the selected period
                       </td>
@@ -331,10 +335,26 @@ export default function PatientVisitsHistory() {
                               {visit.total_visits || 1}
                             </span>
                           </td>
+                          <td className="py-2 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="inline-flex gap-1">
+                              {(visit as any).source === 'lis' && (
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" title="Open this visit (orders, results, prescriptions, notes)"
+                                  onClick={() => navigate(`/lis/orders/summary/${visit.patient_id}/${visit.visit_id}`)}>
+                                  <Eye className="h-3.5 w-3.5" /> Open visit
+                                </Button>
+                              )}
+                              {(visit as any).bill_id && (
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" title="The bill for this visit"
+                                  onClick={() => navigate(`/patients-bill/${(visit as any).bill_id}`)}>
+                                  <Receipt className="h-3.5 w-3.5" /> View bill
+                                </Button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                         {expandedRow === visit.visit_id && (
                           <tr className="bg-muted border-b">
-                            <td colSpan={9} className="px-6 py-4">
+                            <td colSpan={10} className="px-6 py-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {/* Patient Details */}
                                 <div className="space-y-3">

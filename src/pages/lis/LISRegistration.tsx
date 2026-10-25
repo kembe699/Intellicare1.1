@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { offerCashBilling } from '@/lib/schemeCashFallback';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { cn } from '@/lib/utils';
@@ -61,6 +63,7 @@ const calculateDobFromAge = (age: string): string => {
 
 export default function LISRegistration() {
   const { user } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const navigate = useNavigate();
   const facilityInfo = useFacilityInfo();
   // Setup > Configurations — was a hardcoded "kuelmc only" tenantCode check;
@@ -527,7 +530,9 @@ export default function LISRegistration() {
 
       const branchClinicId = user?.clinic || 1;
 
-      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${branchClinicId}`, { credentials: 'include' });
+      // The bill for this billing mode: the scheme's bill, or the cash bill.
+      const activeQuery = schemeId ? `?scheme_id=${schemeId}` : '?mode=cash';
+      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${branchClinicId}${activeQuery}`, { credentials: 'include' });
       if (existingBillRes.ok) {
         const existingBill = await existingBillRes.json();
         const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
@@ -541,7 +546,9 @@ export default function LISRegistration() {
           return existingBill.id;
         }
         const err = await addRes.json().catch(() => ({}));
-        toast.error(err.error || `Failed to bill ${service.service_name}`);
+        // Consultation not priced under the scheme: offer the cash price on the cash bill.
+        const handled = await offerCashBilling({ body: err, lines: [lineItem], confirm, patientId, patientName, clinicId: branchClinicId, createdBy: user?.displayName, notes: `Auto-generated on queueing to ${clinic.name}` });
+        if (handled === null) toast.error(err.error || `Failed to bill ${service.service_name}`);
         return null;
       } else {
         const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
@@ -565,7 +572,8 @@ export default function LISRegistration() {
           return newBill.id;
         }
         const err = await billRes.json().catch(() => ({}));
-        toast.error(err.error || `Failed to create bill for ${clinic.name}`);
+        const handled = await offerCashBilling({ body: err, lines: [lineItem], confirm, patientId, patientName, clinicId: branchClinicId, createdBy: user?.displayName, notes: `Auto-generated on queueing to ${clinic.name}` });
+        if (handled === null) toast.error(err.error || `Failed to create bill for ${clinic.name}`);
         return null;
       }
     } catch (e) {
@@ -589,6 +597,7 @@ export default function LISRegistration() {
 
   return (
     <AppLayout>
+      {confirmDialog}
       <div className="-m-3 lg:-m-4 p-6 bg-primary/20 min-h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="max-w-[1600px] mx-auto w-full flex flex-col">
         <PageHeader title="Patient Registration" icon={<Users />} className="mb-3" />

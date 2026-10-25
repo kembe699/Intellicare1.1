@@ -1132,7 +1132,9 @@ router.get('/patient-visits-history', async (req, res) => {
                v.status::text AS visit_status, v.created_at,
                p.id::text AS patient_id, p.patient_id AS patient_number, p.first_name, p.last_name,
                p.date_of_birth, p.gender, p.phone_number AS phone,
-               v.doctor_id::text AS doctor_id, u.display_name AS doctor_name, u.email AS doctor_email
+               v.doctor_id::text AS doctor_id, u.display_name AS doctor_name, u.email AS doctor_email,
+               'visit' AS source,
+               (SELECT pb.id::text FROM patient_bills pb WHERE pb.visit_id::text = v.id::text ORDER BY pb.created_at DESC LIMIT 1) AS bill_id
           FROM visits v
           LEFT JOIN patients p ON p.id::text = v.patient_id::text
           LEFT JOIN users u ON u.id::text = v.doctor_id::text
@@ -1148,7 +1150,12 @@ router.get('/patient-visits-history', async (req, res) => {
                o.created_at,
                lp.id::text, lp.participant_number, lp.first_name, lp.last_name,
                lp.date_of_birth, lp.gender, lp.phone,
-               COALESCE(o.doctor_id::text, o.consultant_id::text), du.display_name, du.email
+               COALESCE(o.doctor_id::text, o.consultant_id::text), du.display_name, du.email,
+               'lis',
+               -- The patient's bill from the visit day (LIS visits have no bill link of their own).
+               (SELECT pb.id::text FROM patient_bills pb WHERE pb.patient_id::text = o.participant_id::text
+                   AND DATE(pb.bill_date) = DATE(o.created_at) AND pb.status::text <> 'cancelled'
+                 ORDER BY pb.created_at DESC LIMIT 1)
           FROM lis_test_orders o
           LEFT JOIN lis_participants lp ON lp.id::text = o.participant_id::text
           LEFT JOIN users du ON du.id::text = COALESCE(o.doctor_id::text, o.consultant_id::text)

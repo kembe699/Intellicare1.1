@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { offerCashBilling } from '@/lib/schemeCashFallback';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
@@ -1700,7 +1701,10 @@ export default function LISTestOrders() {
         const branchClinicId = user?.clinic || 1;
         const schemeIdToSend = billingMode === 'scheme' ? selectedSchemeId : undefined;
 
-        const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${branchClinicId}`, { credentials: 'include' });
+        const activeQuery = schemeIdToSend ? `?scheme_id=${schemeIdToSend}` : '?mode=cash';
+        const forget = () => setBilledItemKeys(prev => { const next = new Set(prev); next.delete(dedupeKey); return next; });
+        let result: { ok: boolean; body: any; billNumber?: string };
+        const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${branchClinicId}${activeQuery}`, { credentials: 'include' });
         if (existingBillRes.ok) {
           const existingBill = await existingBillRes.json();
           const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
@@ -1709,13 +1713,7 @@ export default function LISTestOrders() {
             credentials: 'include',
             body: JSON.stringify({ services: [lineItem] }),
           });
-          if (addRes.ok) {
-            toast.success(`${label} added to bill ${existingBill.bill_number}`);
-          } else {
-            const err = await addRes.json().catch(() => ({}));
-            toast.error(`Failed to bill "${label}": ${err.error || 'unknown error'}`);
-            setBilledItemKeys(prev => { const next = new Set(prev); next.delete(dedupeKey); return next; });
-          }
+          result = { ok: addRes.ok, body: await addRes.json().catch(() => ({})), billNumber: existingBill.bill_number };
         } else {
           const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
           const billRes = await authFetch('/api/patient-bills', {
@@ -1731,13 +1729,18 @@ export default function LISTestOrders() {
               scheme_id: schemeIdToSend,
             }),
           });
-          if (billRes.ok) {
-            toast.success(`Bill ${billNumber} created with ${label}`);
-          } else {
-            const err = await billRes.json().catch(() => ({}));
-            toast.error(`Failed to bill "${label}": ${err.error || 'unknown error'}`);
-            setBilledItemKeys(prev => { const next = new Set(prev); next.delete(dedupeKey); return next; });
-          }
+          result = { ok: billRes.ok, body: await billRes.json().catch(() => ({})), billNumber };
+        }
+        if (result.ok) {
+          toast.success(`${label} added to bill ${result.body?.bill_number || result.billNumber}`);
+        } else {
+          // Not priced under the scheme: offer the cash price on the cash bill.
+          const handled = await offerCashBilling({
+            body: result.body, lines: [lineItem], confirm, patientId, patientName, clinicId: branchClinicId,
+            createdBy: user?.displayName, notes: 'Auto-generated from LIS order',
+          });
+          if (handled === null) toast.error(`Failed to bill "${label}": ${result.body?.error || 'unknown error'}`);
+          if (!handled?.billed) forget();
         }
       } catch (e) {
         console.error('Error adding bill item', e);
@@ -1788,45 +1791,56 @@ export default function LISTestOrders() {
     const lineItems = [...testLines, ...serviceLines];
     if (lineItems.length === 0) return;
 
-    try {
-      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${branchClinicId}`, { credentials: 'include' });
+    // The bill for this billing mode: the scheme's bill, or the cash bill.
+    const activeQuery = schemeIdToSend ? `?scheme_id=${schemeIdToSend}` : '?mode=cash';
+    const send = async (lines: any[]): Promise<{ ok: boolean; body: any; billNumber?: string }> => {
+      const existingBillRes = await authFetch(`/api/patient-bills/active/${patientId}/${branchClinicId}${activeQuery}`, { credentials: 'include' });
       if (existingBillRes.ok) {
         const existingBill = await existingBillRes.json();
         const addRes = await authFetch(`/api/patient-bills/${existingBill.id}/add-services`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ services: lineItems }),
+          body: JSON.stringify({ services: lines }),
         });
-        if (addRes.ok) {
-          toast.success(`${lineItems.length} item(s) added to bill ${existingBill.bill_number}`);
-        } else {
-          const err = await addRes.json().catch(() => ({}));
-          toast.error(`Order created, but billing failed: ${err.error || 'unknown error'}`);
-        }
-      } else {
-        const totalPrice = lineItems.reduce((sum, l) => sum + l.totalPrice, 0);
-        const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
-        const billRes = await authFetch('/api/patient-bills', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            bill_number: billNumber, patient_id: patientId, patient_name: patientName,
-            clinic_id: parseInt(String(branchClinicId)), total_amount: totalPrice, paid_amount: 0,
-            balance_amount: totalPrice, status: 'pending', bill_date: new Date().toISOString(),
-            due_date: null, services: lineItems,
-            notes: 'Auto-generated from LIS order', created_by: user?.displayName || 'System',
-            scheme_id: schemeIdToSend,
-          }),
-        });
-        if (billRes.ok) {
-          toast.success(`Bill ${billNumber} created with ${lineItems.length} item(s)`);
-        } else {
-          const err = await billRes.json().catch(() => ({}));
-          toast.error(`Order created, but billing failed: ${err.error || 'unknown error'}`);
-        }
+        return { ok: addRes.ok, body: await addRes.json().catch(() => ({})), billNumber: existingBill.bill_number };
       }
+      const totalPrice = lines.reduce((sum, l) => sum + l.totalPrice, 0);
+      const billNumber = `BILL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+      const billRes = await authFetch('/api/patient-bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          bill_number: billNumber, patient_id: patientId, patient_name: patientName,
+          clinic_id: parseInt(String(branchClinicId)), total_amount: totalPrice, paid_amount: 0,
+          balance_amount: totalPrice, status: 'pending', bill_date: new Date().toISOString(),
+          due_date: null, services: lines,
+          notes: 'Auto-generated from LIS order', created_by: user?.displayName || 'System',
+          scheme_id: schemeIdToSend,
+        }),
+      });
+      return { ok: billRes.ok, body: await billRes.json().catch(() => ({})), billNumber };
+    };
+
+    try {
+      const r = await send(lineItems);
+      if (r.ok) {
+        toast.success(`${lineItems.length} item(s) added to bill ${r.body?.bill_number || r.billNumber}`);
+        return;
+      }
+      // Items the scheme doesn't price: offer to bill them at the cash price on the cash bill.
+      const handled = await offerCashBilling({
+        body: r.body, lines: lineItems, confirm, patientId, patientName, clinicId: branchClinicId,
+        createdBy: user?.displayName, notes: 'Auto-generated from LIS order',
+        retryCovered: async (covered) => {
+          const r2 = await send(covered);
+          if (r2.ok) toast.success(`${covered.length} item(s) added to bill ${r2.body?.bill_number || r2.billNumber}`);
+          else toast.error(`Billing the covered items failed: ${r2.body?.error || 'unknown error'}`);
+          return r2.ok;
+        },
+      });
+      if (handled === null) toast.error(`Order created, but billing failed: ${r.body?.error || 'unknown error'}`);
     } catch (e) {
       console.error('Error billing order items', e);
       toast.error('Order created, but billing failed due to a network error');

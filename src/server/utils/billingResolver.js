@@ -110,16 +110,19 @@ async function hasAnyVisitHistory(patientId, { transaction } = {}) {
 // transaction + lock to hold the row (or the gap, if none exists yet) for the duration of
 // a read-modify-write so concurrent callers can't both read the same stale total and
 // silently drop one write (the "lost update" pattern that produced wrong bill totals).
-async function resolveActiveBill(patientId, clinicId, { transaction, lock, visitId } = {}) {
+async function resolveActiveBill(patientId, clinicId, { transaction, lock, visitId, cashOnly = false } = {}) {
   const { PatientBill } = require('../models');
   const { Op } = require('sequelize');
 
   const resolvedVisitId = visitId !== undefined ? visitId : await getCurrentOpenVisitIdForBilling(patientId, clinicId, { transaction });
   const statusFilter = { [Op.in]: ['pending', 'partial', 'paid', 'active'] };
+  // cashOnly: the patient's cash bill only — items billed as cash beside an
+  // insurance bill must not be merged into it.
+  const modeWhere = cashOnly ? { scheme_id: null } : {};
 
   if (resolvedVisitId) {
     const bill = await PatientBill.findOne({
-      where: { patient_id: patientId, clinic_id: clinicId, visit_id: resolvedVisitId, status: statusFilter },
+      where: { patient_id: patientId, clinic_id: clinicId, visit_id: resolvedVisitId, status: statusFilter, ...modeWhere },
       order: [['created_at', 'DESC']],
       transaction,
       lock,
@@ -135,7 +138,7 @@ async function resolveActiveBill(patientId, clinicId, { transaction, lock, visit
 
   // Truly never had a visit (pure walk-in) — fall back to the patient-wide lookup.
   const bill = await PatientBill.findOne({
-    where: { patient_id: patientId, clinic_id: clinicId, status: statusFilter },
+    where: { patient_id: patientId, clinic_id: clinicId, status: statusFilter, ...modeWhere },
     order: [['created_at', 'DESC']],
     transaction,
     lock,
