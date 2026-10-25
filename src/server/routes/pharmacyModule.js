@@ -1326,6 +1326,41 @@ router.get('/dispensing/:id', authorize('pharmacy.read'), async (req, res) => {
 });
 
 // DISPENSE - Main dispensing endpoint with full integration
+/**
+ * Whether the patient's bills already account for `doses` of this item, so a
+ * dispense must not charge (kind 'revenue') or cost (kind 'cogs') them again.
+ * Billed doses: non-voided lines for the item on the patient's non-cancelled
+ * bills (for 'cogs', only lines whose COGS billing posted — cogsPosted). A line
+ * billed by pack equivalent carries packQuantity and its quantity in doses;
+ * an older line's quantity is in packs. Less doses already dispensed without an
+ * entry of their own (dispensed on payment, or covered by an earlier bill).
+ */
+async function billedDosesCover(sequelize, transaction, { patientId, itemId, dispId, unitsPerPack, doses, kind }) {
+  if (!patientId || !itemId) return false;
+  const lineFilter = kind === 'cogs' ? "AND COALESCE((s->>'cogsPosted')::boolean, false) = true" : '';
+  const ownEntry = kind === 'cogs' ? 'd.cogs_gl_entry_id' : 'd.revenue_gl_entry_id';
+  const [[row]] = await sequelize.query(`
+    WITH billed AS (
+      SELECT COALESCE(SUM(
+               CASE WHEN s->>'quantity' ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                 (s->>'quantity')::numeric * CASE WHEN s->>'packQuantity' IS NOT NULL THEN 1 ELSE :upp END
+               ELSE 0 END), 0) AS doses
+        FROM patient_bills b, LATERAL jsonb_array_elements(b.services::jsonb) s
+       WHERE b.patient_id::text = :pid AND b.status <> 'cancelled'
+         AND s->>'serviceId' = :iid
+         AND COALESCE((s->>'isVoided')::boolean, false) = false
+         ${lineFilter}
+    ), used AS (
+      SELECT COALESCE(SUM(d.quantity_dispensed), 0) AS doses
+        FROM dispensing_records d
+       WHERE d.patient_id::text = :pid AND d.inventory_item_id::text = :iid AND d.id <> :dispId
+         AND ${ownEntry} IS NULL
+    )
+    SELECT (billed.doses - used.doses)::float AS available FROM billed, used`,
+    { replacements: { pid: String(patientId), iid: String(itemId), dispId, upp: parseFloat(unitsPerPack) || 1 }, transaction });
+  return (parseFloat(row?.available) || 0) >= parseFloat(doses) - 1e-9;
+}
+
 router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
   
   console.log('=== DISPENSING POST REQUEST START ===');
@@ -1757,10 +1792,22 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       }
     }
 
+    // Doses the patient's bill already accounts for. An insurance prescription is
+    // billed first (revenue booked, and COGS by utils/pharmacyCogsOnBill.js, which
+    // stamps the line cogsPosted) and dispensed here afterwards; charging, booking
+    // revenue or costing those doses again doubled them. Doses beyond what was
+    // billed are charged and costed as before.
+    const billCoveredRevenue = await billedDosesCover(sequelize, t, {
+      patientId: cleanPatientId, itemId: inventoryItemId, dispId, unitsPerPack, doses: quantity_dispensed, kind: 'revenue' });
+    const billCoveredCost = await billedDosesCover(sequelize, t, {
+      patientId: cleanPatientId, itemId: inventoryItemId, dispId, unitsPerPack, doses: quantity_dispensed, kind: 'cogs' });
+
     // 9. Auto-create billing charge
     console.log('Step 9: Creating billing charge');
     let chargeId = null;
-    if (totalPrice > 0) {
+    if (billCoveredRevenue) {
+      console.log(`Dispensing ${dispId}: no charge or revenue — ${drug.drug_name} is already on the patient's bill.`);
+    } else if (totalPrice > 0) {
       chargeId = uuidv4();
       const chargeNum = `CHG-${dispensingNumber}`;
       await sequelize.query(`
@@ -1825,7 +1872,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       const receivablesAcct = cfg?.pharmacy_receivables_account_id;
 
       // Revenue GL entry
-      if (totalPrice > 0) {
+      if (totalPrice > 0 && !billCoveredRevenue) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: cid,
           transaction_date: new Date(),
@@ -1856,38 +1903,6 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         : (drug.average_unit_cost > 0) ? parseFloat(drug.average_unit_cost)
         : (drug.current_unit_cost > 0) ? parseFloat(drug.current_unit_cost)
         : 0;
-
-      // Billing may already have posted this drug's cost of sale: the bill line
-      // is stamped cogsPosted / cogsGlEntryId by utils/pharmacyCogsOnBill.js. An
-      // insurance prescription is billed first and dispensed here afterwards, so
-      // posting again doubled COGS. Doses on the patient's cogs-posted bill lines
-      // for this drug, less doses already dispensed without their own COGS (e.g.
-      // dispensed on payment by autoDispense), are already costed — when this
-      // dispense fits inside that, nothing more is posted. Otherwise COGS posts as
-      // before, so the books are never left under-costed.
-      let billCoveredCost = false;
-      if (cleanPatientId) {
-        const [[cover]] = await sequelize.query(`
-          WITH billed AS (
-            SELECT COALESCE(SUM(
-                     CASE WHEN s->>'quantity' ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                       (s->>'quantity')::numeric * CASE WHEN s->>'packQuantity' IS NOT NULL THEN 1 ELSE :upp END
-                     ELSE 0 END), 0) AS doses
-              FROM patient_bills b, LATERAL jsonb_array_elements(b.services::jsonb) s
-             WHERE b.patient_id::text = :pid AND b.status <> 'cancelled'
-               AND s->>'serviceId' = :iid
-               AND COALESCE((s->>'isVoided')::boolean, false) = false
-               AND COALESCE((s->>'cogsPosted')::boolean, false) = true
-          ), used AS (
-            SELECT COALESCE(SUM(d.quantity_dispensed), 0) AS doses
-              FROM dispensing_records d
-             WHERE d.patient_id::text = :pid AND d.inventory_item_id::text = :iid AND d.id <> :dispId
-               AND d.cogs_gl_entry_id IS NULL
-          )
-          SELECT (billed.doses - used.doses)::float AS available FROM billed, used`,
-          { replacements: { pid: String(cleanPatientId), iid: String(inventoryItemId), dispId, upp: unitsPerPack }, transaction: t });
-        billCoveredCost = (parseFloat(cover?.available) || 0) >= parseFloat(quantity_dispensed) - 1e-9;
-      }
 
       if (billCoveredCost) {
         console.log(`Dispensing ${dispId}: COGS not posted — already posted when ${drug.drug_name} was billed.`);

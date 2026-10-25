@@ -1,6 +1,7 @@
-// A drug's cost of sale is posted once. Billing posts it (bill line stamped cogsPosted); dispensing
-// those doses at the counter afterwards — how an insurance prescription is billed then dispensed —
-// must not post it again. Doses beyond what was billed still get COGS.
+// A drug's revenue and cost of sale are posted once. Billing posts both (the bill line is stamped
+// cogsPosted); dispensing those doses at the counter afterwards — how an insurance prescription is
+// billed then dispensed — must not charge, book revenue or cost them again. The counter still sends
+// its selling price. Doses beyond what was billed are charged and costed as before.
 import { AFTER, call, q, done, newPatient, newBill, ensureShift, pay, check, summary } from './lib.mjs';
 
 const [item] = await q("SELECT id, item_name, quantity_on_hand, units_per_pack, selling_price, current_unit_cost, average_unit_cost, category_id FROM inventory_items WHERE is_active = true ORDER BY item_name LIMIT 1");
@@ -13,7 +14,11 @@ const dispenseCogs = async (pid) => Number((await q(`SELECT COALESCE(SUM(li.debi
   JOIN gl_line_items li ON li.gl_id = gl.id JOIN chart_of_accounts coa ON coa.id = li.account_id AND coa.account_type = 'expense'
   WHERE d.patient_id::text = $1`, [String(pid)]))[0].c);
 const dispense = (pid, qty) => call(AFTER, 'POST', '/pharmacy-module/dispensing', {
-  clinic_id: 1, patient_id: pid, drug_id: item.id, pharmacist_id: 1, quantity_dispensed: qty, unit_of_measure: 'tablet', unit_price: 0 });
+  clinic_id: 1, patient_id: pid, drug_id: item.id, pharmacist_id: 1, quantity_dispensed: qty, unit_of_measure: 'tablet', unit_price: 5000 });
+// Revenue entries and pharmacy charges raised by the patient's dispenses.
+const dispenseRevenue = async (pid) => (await q(`SELECT COUNT(gl.id)::int n, COUNT(c.id)::int charges, COALESCE(SUM(c.charge_amount),0)::float amt
+  FROM dispensing_records d LEFT JOIN general_ledger gl ON gl.id::text = d.revenue_gl_entry_id::text
+  LEFT JOIN pharmacy_charges c ON c.dispensing_record_id::text = d.id::text WHERE d.patient_id::text = $1`, [String(pid)]))[0];
 
 await q('UPDATE inventory_items SET quantity_on_hand = 100, units_per_pack = 10, selling_price = 5000, current_unit_cost = 2000, average_unit_cost = 2000, category_id = COALESCE($2, category_id) WHERE id = $1', [item.id, drugsCat?.id || null]);
 try {
@@ -26,10 +31,14 @@ try {
 
   const d1 = await dispense(pt.id, 18);
   check('dispensing the 18 billed tablets posts no second COGS', d1.ok && (await dispenseCogs(pt.id)) === 0, JSON.stringify({ s: d1.status, e: d1.body?.error, c: await dispenseCogs(pt.id) }));
+  const r1 = await dispenseRevenue(pt.id);
+  check('…and no second revenue entry or pharmacy charge', r1.n === 0 && r1.charges === 0, JSON.stringify(r1));
 
   const d2 = await dispense(pt.id, 10);
   // (costed at the dispensed batch's own cost when it has one, so only "posted" is checked)
   check('10 more tablets, never billed, get their own COGS', d2.ok && (await dispenseCogs(pt.id)) > 0, JSON.stringify({ s: d2.status, c: await dispenseCogs(pt.id) }));
+  const r2 = await dispenseRevenue(pt.id);
+  check('…and are charged as before: one revenue entry, one charge of 5,000', r2.n === 1 && r2.charges === 1 && r2.amt === 5000, JSON.stringify(r2));
 
   // A drug dispensed on payment (autoDispense, no COGS of its own) has used up its bill's coverage.
   const pt2 = await newPatient(AFTER, 'T27');
