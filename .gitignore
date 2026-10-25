@@ -104,3 +104,4 @@ src/server/uploads/*
 
 # Local build logs
 build.log
+scripts/demo/.demo-state.json
