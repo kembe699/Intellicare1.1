@@ -1856,7 +1856,42 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
         : (drug.average_unit_cost > 0) ? parseFloat(drug.average_unit_cost)
         : (drug.current_unit_cost > 0) ? parseFloat(drug.current_unit_cost)
         : 0;
-      if (unitCost > 0) {
+
+      // Billing may already have posted this drug's cost of sale: the bill line
+      // is stamped cogsPosted / cogsGlEntryId by utils/pharmacyCogsOnBill.js. An
+      // insurance prescription is billed first and dispensed here afterwards, so
+      // posting again doubled COGS. Doses on the patient's cogs-posted bill lines
+      // for this drug, less doses already dispensed without their own COGS (e.g.
+      // dispensed on payment by autoDispense), are already costed — when this
+      // dispense fits inside that, nothing more is posted. Otherwise COGS posts as
+      // before, so the books are never left under-costed.
+      let billCoveredCost = false;
+      if (cleanPatientId) {
+        const [[cover]] = await sequelize.query(`
+          WITH billed AS (
+            SELECT COALESCE(SUM(
+                     CASE WHEN s->>'quantity' ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                       (s->>'quantity')::numeric * CASE WHEN s->>'packQuantity' IS NOT NULL THEN 1 ELSE :upp END
+                     ELSE 0 END), 0) AS doses
+              FROM patient_bills b, LATERAL jsonb_array_elements(b.services::jsonb) s
+             WHERE b.patient_id::text = :pid AND b.status <> 'cancelled'
+               AND s->>'serviceId' = :iid
+               AND COALESCE((s->>'isVoided')::boolean, false) = false
+               AND COALESCE((s->>'cogsPosted')::boolean, false) = true
+          ), used AS (
+            SELECT COALESCE(SUM(d.quantity_dispensed), 0) AS doses
+              FROM dispensing_records d
+             WHERE d.patient_id::text = :pid AND d.inventory_item_id::text = :iid AND d.id <> :dispId
+               AND d.cogs_gl_entry_id IS NULL
+          )
+          SELECT (billed.doses - used.doses)::float AS available FROM billed, used`,
+          { replacements: { pid: String(cleanPatientId), iid: String(inventoryItemId), dispId, upp: unitsPerPack }, transaction: t });
+        billCoveredCost = (parseFloat(cover?.available) || 0) >= parseFloat(quantity_dispensed) - 1e-9;
+      }
+
+      if (billCoveredCost) {
+        console.log(`Dispensing ${dispId}: COGS not posted — already posted when ${drug.drug_name} was billed.`);
+      } else if (unitCost > 0) {
         // unitCost (batch cost, or item average/current cost) is "cost per
         // pack" same as selling_price — costed by the pack-equivalent of
         // quantity_dispensed, not the raw dose count, same fix as totalPrice above.
