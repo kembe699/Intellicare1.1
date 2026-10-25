@@ -6,7 +6,7 @@ import { AFTER, call, q, done, check, summary, today } from './lib.mjs';
 const [clinic] = await q('SELECT id, name FROM dr_clinics WHERE is_active IS NOT FALSE ORDER BY name LIMIT 1');
 const reg = await call(AFTER, 'POST', '/lis/participants', {
   first_name: 'T32', last_name: `Visit-${Math.random().toString(36).slice(2, 6)}`, gender: 'female', date_of_birth: '1995-01-01',
-  phone: '+211 900 000 032', residence: 'Juba', clinic_id: clinic?.id, clinic_name: clinic?.name, room_number: '',
+  phone: `+211 9${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`, residence: 'Juba', clinic_id: clinic?.id, clinic_name: clinic?.name, room_number: '',
 });
 check('setup: patient registered and queued', reg.ok, JSON.stringify({ s: reg.status, e: reg.body?.error }));
 const [{ n: lisToday }] = await q(`SELECT COUNT(*)::int n FROM lis_test_orders WHERE created_at::date = $1::date`, [today]);
