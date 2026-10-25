@@ -366,7 +366,9 @@ async function dispenseBilledProducts(sequelize, billId, pharmacistId = null) {
         replacements: {
           id: uuidv4(), cid: bill.clinic_id, branchId: bill.branch_id || null, dn: dispensingNumber,
           pid: bill.patient_id, iid: item.id, phid: pharmacist,
-          qty: packQty * Number(item.units_per_pack), uom: item.unit_of_measure || null,
+          // quantity_dispensed is a whole number of doses; a line split for a
+          // split payment can carry a fraction of a pack (0.13 + 0.87).
+          qty: Math.round(packQty * Number(item.units_per_pack)), uom: item.unit_of_measure || null,
           price: Number(line.unitPrice ?? 0) || 0, cur: item.cost_currency || null, total,
           notes: 'Dispensed on payment — billed on the patient bill',
         },
