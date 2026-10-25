@@ -66,6 +66,7 @@ const CATALOG = [
   ['proforma.write', 'Manage proforma invoices', 'billing', 'Create, delete, convert proforma invoices', ['admin', 'reception', 'doctor']],
   ['receipts.write', 'Change receipt status', 'billing', 'Void/update a receipt’s status', ['admin', 'reception', 'doctor', 'pharmacy', 'cashier']],
   ['schemes.write', 'Manage insurance schemes', 'billing', 'Scheme CRUD, memberships, pricing, discounts', ['admin', 'finance_manager', 'accountant']],
+  ['schemes.enroll_patient', 'Enrol patients in a scheme', 'billing', 'Add a patient to a scheme with their member number, at registration', ['admin', 'reception', 'nurse', 'cashier']],
   ['deposits.write', 'Take patient deposits', 'billing', 'Create a patient deposit', ['admin', 'cashier', 'reception', 'finance_manager', 'accountant']],
   ['deposits.read', 'View deposit balances', 'billing', 'View a patient’s deposit balance and history', ['admin', 'cashier', 'reception', 'finance_manager', 'accountant', 'doctor']],
 

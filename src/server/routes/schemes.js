@@ -1,6 +1,6 @@
 const express = require('express');
 const { getBaseCurrencyCode } = require('../utils/baseCurrency');
-const { authorize } = require('../middleware/authorize');
+const { authorize, getRolePrivileges } = require('../middleware/authorize');
 
 // Server-side role gate. These endpoints had none: any authenticated user of
 // any role could call them, regardless of what the UI shows. Mirrors the roles
@@ -495,7 +495,25 @@ router.get('/patient-schemes/:patientId', async (req, res) => {
 });
 
 // Assign scheme to patient
-router.post('/patient-schemes/:patientId', authorize('schemes.write'), async (req, res) => {
+// authorize() takes one privilege key or a ROLE array; enrolling needs either of
+// two keys — schemes.write (scheme managers) or the narrow schemes.enroll_patient
+// (front desk, at registration) — same OR-of-privileges shape as nursingProcedures.js.
+const authorizeAny = (keys) => async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (req.user.role === 'admin') return next();
+  const roles = [req.user.role, ...(req.user.additionalRoles || [])];
+  try {
+    const grants = await getRolePrivileges(req.models.sequelize, req.tenantSchema);
+    const ok = keys.some((key) => roles.some((r) => grants.get(r)?.has(key)));
+    if (!ok) return res.status(403).json({ error: 'Insufficient permissions', required: keys, current: req.user.role });
+    return next();
+  } catch (err) {
+    console.error('authorizeAny lookup failed:', err.message);
+    return res.status(503).json({ error: 'Could not verify permissions, please try again' });
+  }
+};
+
+router.post('/patient-schemes/:patientId', authorizeAny(['schemes.write', 'schemes.enroll_patient']), async (req, res) => {
   try {
     const { scheme_id, clinic_id, member_number, effective_from } = req.body;
     const id = uuidv4();

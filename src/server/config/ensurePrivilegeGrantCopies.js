@@ -16,6 +16,9 @@ const COPIES = [
   { key: 'consultant_bills.pay', from: ['expenses.write'] },
   { key: 'payroll.pay', from: ['hr.payroll.write'] },
   { key: 'salary_advances.disburse', from: ['hr.salary_advances.write'] },
+  // Enrolling a patient in a scheme happens at registration (it used to need
+  // schemes.write, which front desks don't hold): whoever registers patients.
+  { key: 'schemes.enroll_patient', from: ['lis.registration.write', 'pages.lis_registration.view'] },
   // Rosters are new HR/attendance work: whoever runs HR or attendance today.
   { key: 'roster.view', from: ['attendance.view', 'hr.employees.read'] },
   { key: 'roster.manage', from: ['attendance.manage_sites', 'hr.employees.write'] },
