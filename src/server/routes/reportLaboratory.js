@@ -89,6 +89,7 @@
 // legitimate records against sparse data.
 
 const express = require('express');
+const { bookedRateSql } = require('../utils/bookedRate');
 const router = express.Router();
 const { authorize } = require('../middleware/authorize');
 // Every reports-v2 route carries financial/clinical data and was previously
@@ -239,7 +240,8 @@ router.get('/', async (req, res) => {
     //      verified against this connection).
     const branchSqlNoAlias = repl.branchId ? ' AND branch_id = :branchId' : '';
     const bills = await sequelize.query(
-      `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services
+      `SELECT id, total_amount AS "totalAmount", paid_amount AS "paidAmount", status, bill_date AS "billDate", services,
+              ${bookedRateSql('patient_bills')} AS "bookedRate"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND bill_date BETWEEN :fromTs AND :toTs ${branchSqlNoAlias}`,
       { replacements: repl, type: QueryTypes.SELECT }
@@ -268,10 +270,11 @@ router.get('/', async (req, res) => {
         if (!match) continue;
 
         const qty = num(item.quantity) || 1;
-        const itemTotal =
+        // In base currency, at the bill's booked rate (a CIC bill is in USD).
+        const itemTotal = (
           item.totalPrice != null ? num(item.totalPrice)
           : item.total_price != null ? num(item.total_price)
-          : num(item.unitPrice ?? item.unit_price ?? item.price) * qty;
+          : num(item.unitPrice ?? item.unit_price ?? item.price) * qty) * (num(bill.bookedRate) || 1);
 
         let collected;
         if (typeof item.paid === 'boolean') {

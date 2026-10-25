@@ -36,6 +36,7 @@
 // by side (there are only 2 clinic_names rows in this system).
 
 const express = require('express');
+const { bookedRateSql } = require('../utils/bookedRate');
 const router = express.Router();
 const { authorize } = require('../middleware/authorize');
 // Every reports-v2 route carries financial/clinical data and was previously
@@ -170,7 +171,7 @@ router.get('/', async (req, res) => {
     // 4. Outstanding receivables — current-state (pending/partial), NOT
     //    period-bound.
     const [outstandingRow] = await sequelize.query(
-      `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount), 0) AS total
+      `SELECT COUNT(*) AS cnt, COALESCE(SUM(balance_amount * ${bookedRateSql('patient_bills')}), 0) AS total
        FROM patient_bills
        WHERE clinic_id = :clinicId AND status IN ('pending', 'partial') ${branchSql}`,
       { replacements: { clinicId, branchId: branchIdVal }, type: QueryTypes.SELECT }
@@ -178,9 +179,9 @@ router.get('/', async (req, res) => {
 
     // 5. Payments collected vs pending — bills created in the period.
     const [collectionRow] = await sequelize.query(
-      `SELECT COALESCE(SUM(total_amount), 0) AS "totalBilled",
-              COALESCE(SUM(paid_amount), 0) AS "totalPaid",
-              COALESCE(SUM(balance_amount), 0) AS "totalPending"
+      `SELECT COALESCE(SUM(total_amount * ${bookedRateSql('patient_bills')}), 0) AS "totalBilled",
+              COALESCE(SUM(paid_amount * ${bookedRateSql('patient_bills')}), 0) AS "totalPaid",
+              COALESCE(SUM(balance_amount * ${bookedRateSql('patient_bills')}), 0) AS "totalPending"
        FROM patient_bills
        WHERE clinic_id = :clinicId AND created_at BETWEEN :fromTs AND :toTs ${branchSql}`,
       { replacements: repl, type: QueryTypes.SELECT }
