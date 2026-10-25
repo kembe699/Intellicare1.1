@@ -29,6 +29,7 @@ const adjustments = async (billId) => Number((await q(`SELECT COUNT(*) n FROM ge
 const billRow = async (id) => (await q('SELECT total_amount::float t, base_currency_total::float b, exchange_rate::float r FROM patient_bills WHERE id = $1', [id]))[0];
 const near = (a, b, tol = 0.05) => Math.abs(a - b) < tol;
 
+await q("DELETE FROM exchange_rates WHERE notes = 't26'"); // left by an earlier run that crashed
 const [rateRow] = await q(`INSERT INTO exchange_rates (id, clinic_id, from_currency, to_currency, rate, effective_date, is_active, notes, created_at, updated_at)
   VALUES (gen_random_uuid(), 1, 'USD', 'SSP', $1, $2, true, 't26', NOW(), NOW()) RETURNING id`, [RATE, today]);
 const svc = {

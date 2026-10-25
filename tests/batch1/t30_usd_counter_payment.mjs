@@ -6,6 +6,7 @@ import { AFTER, call, q, done, newPatient, serviceByName, line, ensureShift, led
 
 const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 const BOOKED = 2700, TODAY = 2799.37;
+await q("DELETE FROM exchange_rates WHERE notes = 't30'"); // left by an earlier run that crashed
 const rates = await q(`INSERT INTO exchange_rates (id, clinic_id, from_currency, to_currency, rate, effective_date, is_active, notes, created_at, updated_at)
   VALUES (gen_random_uuid(), 1, 'USD', 'SSP', $1, $2, true, 't30', NOW(), NOW()), (gen_random_uuid(), 1, 'USD', 'SSP', $3, $4, true, 't30', NOW(), NOW()) RETURNING id`,
   [BOOKED, yesterday, TODAY, today]);

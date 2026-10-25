@@ -4,6 +4,7 @@
 import { AFTER, call, q, done, newPatient, newBill, serviceByName, line, check, summary, today } from './lib.mjs';
 
 const RATE = 2799.37;
+await q("DELETE FROM exchange_rates WHERE notes = 't33'"); // left by an earlier run that crashed
 const [rateRow] = await q(`INSERT INTO exchange_rates (id, clinic_id, from_currency, to_currency, rate, effective_date, is_active, notes, created_at, updated_at)
   VALUES (gen_random_uuid(), 1, 'USD', 'SSP', $1, $2, true, 't33', NOW(), NOW()) RETURNING id`, [RATE, today]);
 const cbc = await serviceByName('Complete Blood Count');

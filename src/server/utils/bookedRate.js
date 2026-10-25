@@ -6,7 +6,8 @@
  *
  * Same rule as AccountingService.getBillBookedRate: 1 for a bill in the base
  * currency; otherwise the rate stamped on the bill (exchange_rate, set with
- * base_currency_total), else the rate of its first billing ledger entry, else 1.
+ * base_currency_total), else the rate of its first billing ledger entry, else the
+ * exchange rate in force on its bill date (or the inverse rate), else 1.
  *
  * @param {string} alias - the patient_bills alias (or table name) in the query
  */
@@ -18,6 +19,14 @@ function bookedRateSql(alias = 'pb') {
        (SELECT gl.exchange_rate FROM general_ledger gl
          WHERE gl.reference_id = ${alias}.id::text AND gl.reference_module = 'patient_billing' AND gl.exchange_rate > 0
          ORDER BY gl.created_at LIMIT 1),
+       (SELECT er.rate FROM exchange_rates er
+         WHERE er.from_currency = ${alias}.bill_currency AND er.to_currency = ${base} AND er.is_active = true AND er.rate > 0
+           AND er.effective_date <= COALESCE(${alias}.bill_date, NOW())::date
+         ORDER BY er.effective_date DESC LIMIT 1),
+       (SELECT 1 / er.rate FROM exchange_rates er
+         WHERE er.from_currency = ${base} AND er.to_currency = ${alias}.bill_currency AND er.is_active = true AND er.rate > 0
+           AND er.effective_date <= COALESCE(${alias}.bill_date, NOW())::date
+         ORDER BY er.effective_date DESC LIMIT 1),
        1) END)::float`;
 }
 
