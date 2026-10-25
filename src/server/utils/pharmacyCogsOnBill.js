@@ -28,6 +28,9 @@
 //     line item's name is a FUZZY match (ILIKE) against the inventory
 //     catalog, and auto-adjusting real stock counts off a fuzzy text match
 //     is a materially riskier class of mistake than a GL misclassification.
+//   - Only product lines: matched by inventory item id first; a service or
+//     lab-test line is never costed, even if its name is inside an item's
+//     (see inventoryItemForLine).
 //   - Only categories with a real inventory asset account to credit
 //     (drugs/reagents/consumables/supplies/surgical) post anything —
 //     'equipment'/'general'/no-match items are skipped, same reasoning as
@@ -88,6 +91,45 @@ function normalizeName(s) {
 
 const PHARMACY_DIRECT_SALE_NOTE = 'Auto-generated from pharmacy direct sale';
 
+const ITEM_COLUMNS = 'id, item_name, item_category, category_id, current_unit_cost, average_unit_cost, cogs_account_id, inventory_account_id';
+// What the bill screens write on a product/drug line (BillDetails, the pharmacy screens).
+const PRODUCT_LINE = /pharmacy|inventory|drug|consumable|supplies|product/i;
+
+/**
+ * The inventory item a bill line sold — or null for anything that is not a
+ * product. Only inventory/drug lines carry a cost of sale: a service or lab
+ * test line never does, even when its name sits inside an item's name (the
+ * "Malaria RDT" test matched "Malaria RDT kits" and posted the kit's cost,
+ * while the kit never left the shelf).
+ *  1. serviceId is an inventory item → that item.
+ *  2. serviceId is a service or lab test, or the name is exactly one → none.
+ *  3. Otherwise a name match against the inventory catalog, as before — for a
+ *     line typed as a product, or an old free-text line (staff billing drugs
+ *     by name, which is why this file exists).
+ */
+async function inventoryItemForLine(sequelize, item, rawName) {
+  const id = item.serviceId || item.service_id || item.inventory_item_id || null;
+  if (id) {
+    const [[byId]] = await sequelize.query(
+      `SELECT ${ITEM_COLUMNS} FROM inventory_items WHERE id::text = :id AND is_active = true`, { replacements: { id: String(id) } });
+    if (byId) return byId;
+  }
+  const isProductLine = PRODUCT_LINE.test(String(item.category || ''));
+  if (!isProductLine) {
+    const [[service]] = await sequelize.query(`
+      SELECT 1 AS hit FROM services WHERE (:id IS NOT NULL AND id::text = :id) OR lower(service_name) = lower(:name)
+      UNION ALL
+      SELECT 1 FROM lab_tests WHERE (:id IS NOT NULL AND id::text = :id) OR lower(test_name) = lower(:name)
+      LIMIT 1`, { replacements: { id: id ? String(id) : null, name: rawName } });
+    if (service) return null;
+  }
+  const [[byName]] = await sequelize.query(
+    `SELECT ${ITEM_COLUMNS} FROM inventory_items WHERE is_active = true AND item_name ILIKE :pattern
+     ORDER BY length(item_name) DESC LIMIT 1`,
+    { replacements: { pattern: `%${rawName}%` } });
+  return byName || null;
+}
+
 /**
  * @param {object} sequelize - the tenant-scoped connection (caller's
  *   responsibility to be running inside the right tenant context already —
@@ -128,13 +170,7 @@ async function postPharmacyCogsForBill(sequelize, { clinicId, branchId, billId, 
     const n = normalizeName(rawName);
     if (!n) continue;
 
-    const [matches] = await sequelize.query(
-      `SELECT id, item_name, item_category, category_id, current_unit_cost, average_unit_cost, cogs_account_id, inventory_account_id
-       FROM inventory_items WHERE is_active = true AND item_name ILIKE :pattern
-       ORDER BY length(item_name) DESC LIMIT 1`,
-      { replacements: { pattern: `%${rawName}%` } }
-    );
-    const invItem = matches[0];
+    const invItem = await inventoryItemForLine(sequelize, item, rawName);
     if (!invItem) continue;
 
     const unitCost = parseFloat(invItem.current_unit_cost) > 0 ? parseFloat(invItem.current_unit_cost)
