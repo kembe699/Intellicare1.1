@@ -193,6 +193,26 @@ router.get('/income-statement-by-department', async (req, res) => {
   }
 });
 
+// One key per transaction: its GL entry, else its journal entry number (cash
+// payments and transfers post through journal_entries with no GL entry).
+const TXN_KEY = `COALESCE(al.transaction_id::text, 'je:' || al.reference_number, 'row:' || al.id::text)`;
+// Each transaction's net movement across ALL cash and bank accounts. Money
+// moved between two of them (1100 Cash → 1105 Cash at Hand, cash banked) nets
+// to zero and is not cash flow; it used to show as an outflow from one account
+// with the matching inflow missing or counted again.
+const CASH_TXNS_CTE = (branchSql) => `
+  cash_rows AS (
+    SELECT ${TXN_KEY} AS txn, COALESCE(al.source_module, 'Other') AS module, al.debit_amount - al.credit_amount AS net
+      FROM account_ledger al
+      JOIN chart_of_accounts coa ON coa.id = al.account_id
+     WHERE al.clinic_id = :clinicId AND al.is_posted = true
+       AND coa.is_bank_account = true
+       AND al.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
+  ),
+  per_txn AS (
+    SELECT txn, MIN(module) AS module, SUM(net) AS net FROM cash_rows GROUP BY txn HAVING ABS(SUM(net)) >= 0.005
+  )`;
+
 // ── GET /cash-flow ───────────────────────────────────────────────────────
 // Direct method over the real cash/bank accounts (is_bank_account = true) —
 // a cash account is a debit-balance asset, so a DEBIT is cash IN and a
@@ -242,13 +262,15 @@ router.get('/cash-flow', async (req, res) => {
 
     if (detail) {
       const rows = await sequelize.query(
-        `SELECT al.id, al.transaction_date AS "transactionDate", al.description,
+        `WITH ${CASH_TXNS_CTE(branchSql2)}
+         SELECT al.id, al.transaction_date AS "transactionDate", al.description,
                 al.debit_amount AS "cashIn", al.credit_amount AS "cashOut",
                 al.source_module AS "sourceModule", al.reference_number AS "referenceNumber",
                 coa.account_name AS "accountName", b.name AS "branchName"
          FROM account_ledger al
          JOIN chart_of_accounts coa ON coa.id = al.account_id
          LEFT JOIN branches b ON b.id = al.branch_id
+         JOIN per_txn t ON t.txn = ${TXN_KEY}
          WHERE al.clinic_id = :clinicId AND al.is_posted = true
            AND coa.is_bank_account = true
            AND al.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql2}
@@ -261,14 +283,11 @@ router.get('/cash-flow', async (req, res) => {
       res.json({ period: { dateFrom, dateTo }, openingBalance, closingBalance: openingBalance + netChange, rows: mapped });
     } else {
       const rows = await sequelize.query(
-        `SELECT COALESCE(al.source_module, 'Other') AS "sourceModule",
-                SUM(al.debit_amount) AS "cashIn", SUM(al.credit_amount) AS "cashOut", COUNT(*) AS "transactionCount"
-         FROM account_ledger al
-         JOIN chart_of_accounts coa ON coa.id = al.account_id
-         WHERE al.clinic_id = :clinicId AND al.is_posted = true
-           AND coa.is_bank_account = true
-           AND al.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql2}
-         GROUP BY al.source_module ORDER BY "cashIn" DESC`,
+        `WITH ${CASH_TXNS_CTE(branchSql2)}
+         SELECT module AS "sourceModule",
+                SUM(GREATEST(net, 0)) AS "cashIn", SUM(GREATEST(-net, 0)) AS "cashOut", COUNT(*) AS "transactionCount"
+         FROM per_txn
+         GROUP BY module ORDER BY "cashIn" DESC`,
         { replacements: repl2, type: QueryTypes.SELECT }
       );
       const mapped = rows.map(r => ({ ...r, cashIn: parseFloat(r.cashIn) || 0, cashOut: parseFloat(r.cashOut) || 0, transactionCount: parseInt(r.transactionCount, 10) || 0, netChange: (parseFloat(r.cashIn) || 0) - (parseFloat(r.cashOut) || 0) }));

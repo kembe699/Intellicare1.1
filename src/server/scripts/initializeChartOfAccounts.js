@@ -60,7 +60,7 @@ const healthcareChartOfAccounts = [
     account_type: 'asset',
     sub_account_type: 'current_asset',
     balance_type: 'debit',
-    is_bank_account: false,
+    is_bank_account: true,
     description: 'Cash held by cashiers at the counter'
   },
   {
@@ -69,7 +69,7 @@ const healthcareChartOfAccounts = [
     account_type: 'asset',
     sub_account_type: 'current_asset',
     balance_type: 'debit',
-    is_bank_account: false,
+    is_bank_account: true,
     description: 'Petty cash fund for small expenses'
   },
   {
