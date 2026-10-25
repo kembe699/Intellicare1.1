@@ -458,9 +458,11 @@ export default function Receipts() {
                     paidAmount: Number.isFinite(billMeta?.paid_amount) ? (billMeta!.paid_amount as number) : toAmount(selectedReceipt.payment_amount),
                     balanceAmount: 0,
                     billDate: selectedReceipt.payment_date,
-                    services: displayServices.map(s => ({
+                    services: displayServices.map((s: any) => ({
                       id: String(s.index), serviceName: s.serviceName, quantity: s.quantity,
                       unitPrice: s.unitPrice, totalPrice: s.totalPrice, discountLabel: s.discountLabel,
+                      // Tax lines go in the receipt's VAT block, not the item list.
+                      line_id: s.line_id, isTax: s.isTax, taxFor: s.taxFor, taxName: s.taxName, taxRate: s.taxRate,
                     })),
                   }}
                   payment={{

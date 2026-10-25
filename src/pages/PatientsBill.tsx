@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { pairedLineIndex } from '@/lib/billTaxLines';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
@@ -490,7 +491,11 @@ export default function PatientsBill() {
     const services = parseServices(selectedBill.services);
     setSelectedItems(prev => {
       const next = new Set(prev);
-      if (next.has(index)) next.delete(index); else next.add(index);
+      const adding = !next.has(index);
+      if (adding) next.add(index); else next.delete(index);
+      // An item and its tax line are paid together.
+      const paired = pairedLineIndex(services, index);
+      if (paired >= 0 && isPayableLine(services[paired])) { if (adding) next.add(paired); else next.delete(paired); }
 
       const payableBalance = services.filter(isPayableLine).reduce((sum, s) => sum + amt(s.totalPrice), 0);
       const selectedTotal = services.reduce((sum, s, i) => next.has(i) ? sum + amt(s.totalPrice) : sum, 0);

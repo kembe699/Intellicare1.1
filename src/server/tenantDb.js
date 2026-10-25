@@ -140,6 +140,10 @@ async function buildTenantConnection(schemaName) {
   const { ensureFacilitySettingsTable } = require('./config/ensureFacilitySettingsTable');
   ensureFacilitySettingsTable(sequelize).catch(() => {});
 
+  // tax_rates + the tax_rate_id / tax_exempt columns (Accounting › Taxes).
+  const { ensureTaxTables } = require('./config/ensureTaxTables');
+  ensureTaxTables(sequelize).catch(() => {});
+
   // patient_number_counters (6-digit sequential patient numbers), ensured
   // per-tenant the same way.
   const { ensurePatientNumberCounterTable } = require('./config/ensurePatientNumberCounterTable');

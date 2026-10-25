@@ -87,7 +87,22 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
     : '';
   const address = [facility.branchAddress || facility.facilityAddress, facility.facilityCity].filter(Boolean).join(', ');
   const phone = facility.branchPhone || facility.facilityPhone;
-  const items = bill.services || [];
+  // Tax lines (isTax, added on top of a taxed item) go in the VAT block, not the item list.
+  const allLines = bill.services || [];
+  const items = allLines.filter((svc) => !(svc as any).isTax);
+  const taxLines = allLines.filter((svc) => (svc as any).isTax);
+  const lineAmount = (svc: any) => Number(svc.totalPrice ?? svc.total_price ?? 0) || 0;
+  const vatAmount = taxLines.reduce((t, svc) => t + lineAmount(svc), 0);
+  const netOfVat = items.reduce((t, svc) => t + lineAmount(svc), 0);
+  const vatGroups = Object.values(taxLines.reduce((acc: Record<string, { label: string; tax: number; base: number }>, svc: any) => {
+    const label = `${svc.taxName || 'VAT'} ${Number(svc.taxRate) || 0}%`;
+    const parent = items.find((it: any) => it.line_id && it.line_id === svc.taxFor);
+    acc[label] = acc[label] || { label, tax: 0, base: 0 };
+    acc[label].tax += lineAmount(svc);
+    acc[label].base += parent ? lineAmount(parent) : 0;
+    return acc;
+  }, {}));
+  const untaxedBase = Math.max(0, netOfVat - vatGroups.reduce((t, g) => t + g.base, 0));
   const totalItems = items.reduce((t, svc) => t + (Number(svc.quantity) || 1), 0);
   const paidAt = new Date(payment.date);
 
@@ -191,6 +206,7 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       )}
       <div style={row}><span>Balance Due :</span><span>{money(balanceDue)}</span></div>
       <div style={row}><span>Total Items :</span><span>{num(totalItems)}</span></div>
+      {vatAmount > 0 && <div style={row}><span>VAT Included :</span><span>{money(vatAmount)}</span></div>}
 
       <div style={dashed} />
 
@@ -205,12 +221,22 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style={cell}>Exempt</td>
-            <td style={{ ...cell, textAlign: 'right' }}>{num(bill.totalAmount || 0)}</td>
-            <td style={{ ...cell, textAlign: 'right' }}>0</td>
-            <td style={{ ...cell, textAlign: 'right' }}>{num(bill.totalAmount || 0)}</td>
-          </tr>
+          {vatGroups.map((g) => (
+            <tr key={g.label}>
+              <td style={cell}>{g.label}</td>
+              <td style={{ ...cell, textAlign: 'right' }}>{num(g.base)}</td>
+              <td style={{ ...cell, textAlign: 'right' }}>{num(g.tax)}</td>
+              <td style={{ ...cell, textAlign: 'right' }}>{num(g.base + g.tax)}</td>
+            </tr>
+          ))}
+          {(untaxedBase > 0.004 || vatGroups.length === 0) && (
+            <tr>
+              <td style={cell}>Exempt</td>
+              <td style={{ ...cell, textAlign: 'right' }}>{num(vatGroups.length ? untaxedBase : netOfVat || bill.totalAmount || 0)}</td>
+              <td style={{ ...cell, textAlign: 'right' }}>0</td>
+              <td style={{ ...cell, textAlign: 'right' }}>{num(vatGroups.length ? untaxedBase : netOfVat || bill.totalAmount || 0)}</td>
+            </tr>
+          )}
         </tbody>
       </table>
 

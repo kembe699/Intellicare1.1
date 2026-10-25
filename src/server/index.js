@@ -114,6 +114,7 @@ app.use((err, req, res, next) => {
 const currenciesRouter = require('./routes/currencies');
 const facilitiesRouter = require('./routes/facilities');
 const facilitySettingsRouter = require('./routes/facilitySettings');
+const taxRatesRouter = require('./routes/taxRates');
 
 // NOTE: /api/facilities/branches/all and /api/facilities/name used to be
 // declared here, ahead of `app.use('/api', authenticateToken)`, so that the
@@ -642,6 +643,7 @@ app.use('/api/rosters', require('./routes/rosters'));
 app.use('/api/hr/workflow-settings', require('./routes/hrWorkflowSettings'));
 app.use('/api/facilities', facilitiesRouter);
 app.use('/api/facility-settings', facilitySettingsRouter);
+app.use('/api/tax-rates', taxRatesRouter);
 
 // Was mounted before authenticateToken (see the facilities note above for the
 // exact same bug, already diagnosed and fixed there): with no tenant context,
@@ -884,6 +886,9 @@ async function runBackgroundMigrations() {
     )],
     ['ApprovalColumns',   () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./config/ensureApprovalPermissionColumns').ensureApprovalPermissionColumns, 'Approval permission columns'
+    )],
+    ['Taxes',             () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
+      require('./config/ensureTaxTables').ensureTaxTables, 'Tax rates'
     )],
     ['SuspenseAccount',   () => require('./scripts/migrateAcrossTenants').migrateAcrossTenants(
       require('./scripts/ensureSuspenseAccount').ensureSuspenseAccount, 'Suspense Account'

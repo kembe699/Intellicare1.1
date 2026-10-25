@@ -38,6 +38,8 @@ const MAX_PER_PASS = parseInt(process.env.LEDGER_SWEEP_LIMIT || '100', 10);
  * "no entry at all" and "posted, but for the wrong amount" — a partial post is
  * as wrong as a missing one, and only the second is visible in the entry count.
  */
+const { REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
+// Revenue plus tax posted (a taxed bill's total includes its tax lines).
 const UNRECONCILED_BILLS = `
   SELECT b.id,
          b.bill_number,
@@ -45,7 +47,7 @@ const UNRECONCILED_BILLS = `
          COALESCE((
            SELECT SUM(al.credit_amount) - SUM(al.debit_amount)
              FROM account_ledger al
-             JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+             JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
              JOIN general_ledger gl ON gl.id = al.transaction_id
             WHERE gl.reference_id = b.id::text
               AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
@@ -66,7 +68,7 @@ const UNRECONCILED_BILLS = `
            - COALESCE((
                SELECT SUM(al.credit_amount) - SUM(al.debit_amount)
                  FROM account_ledger al
-                 JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+                 JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
                  JOIN general_ledger gl ON gl.id = al.transaction_id
                 WHERE gl.reference_id = b.id::text
                   AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')

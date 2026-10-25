@@ -9,6 +9,7 @@ const BillingIntegrationService = require('../services/BillingIntegrationService
 const { getBranchCondition, getCreateBranchId } = require('../middleware/branchFilter');
 const BranchQueryFilter = require('../services/BranchQueryFilter');
 const { normalizeServices, ensureLineIds } = require('../utils/normalizeServices');
+const { addTaxLines, REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
 const AccountingService = require('../services/AccountingService');
 const { authorize } = require('../middleware/authorize');
 const { adjustDepositBalance, getDepositBalance, postDepositGL } = require('./patientDeposits');
@@ -622,7 +623,9 @@ router.post('/', authorize('bills.write_charge'), async (req, res) => {
 
     if (parsedServices.length > 0) {
       const result = await applySchemePrice(billData.patient_id, parsedServices, billData.scheme_id, req);
-      parsedServices = result.services;
+      // Tax on top of the final (scheme or cash) price — a companion line per
+      // taxable item, so the totals below include it (utils/billTax.js).
+      parsedServices = await addTaxLines(sequelize, result.services);
       if (result.schemeId) {
         // A scheme-mode bill is always priced entirely in that scheme's own currency —
         // add-services enforces the same "wholly cash or wholly scheme" rule later, so
@@ -954,7 +957,8 @@ router.put('/:billId/add-services', authorize('bills.write_charge'), async (req,
     }
     // B1: give every newly-added line a stable id, same as bill creation.
     const schemeResult = await applySchemePrice(billPeek.patient_id, ensureLineIds(services), billPeek.scheme_id, req);
-    let pricedServices = schemeResult.services;
+    // Tax on top of the final price, same as bill creation (utils/billTax.js).
+    let pricedServices = await addTaxLines(sequelize, schemeResult.services);
 
     // Locking the row for the rest of this handler closes the "lost update" race: without
     // it, two add-services calls landing close together (a double-click, or two staff
@@ -1260,20 +1264,32 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
     if (item.isVoided) {
       return res.status(400).json({ error: 'This line item is already voided' });
     }
+    if (item.isTax) {
+      return res.status(400).json({ error: 'A tax line goes with its item — void the item and its tax is voided with it.' });
+    }
 
+    // The item's tax line (utils/billTax.js) is voided or removed with it.
+    const taxItem = item.line_id ? services.find((s) => s.isTax && !s.isVoided && s.taxFor === item.line_id) || null : null;
+    const voidMark = {
+      isVoided: true,
+      voidedAt: new Date().toISOString(),
+      voidedBy: req.user?.displayName || req.user?.email || null,
+      voidReason: reason || null,
+    };
     const wasPaid = !!item.paid;
     if (wasPaid) {
-      services[index] = {
-        ...item,
-        isVoided: true,
-        voidedAt: new Date().toISOString(),
-        voidedBy: req.user?.displayName || req.user?.email || null,
-        voidReason: reason || null,
-      };
+      services[index] = { ...item, ...voidMark };
     } else {
       // If the item wasn't paid yet, completely remove it from the list
       // as it was likely just a mistake.
       services.splice(index, 1);
+    }
+    if (taxItem) {
+      const ti = services.findIndex((s) => s.line_id === taxItem.line_id);
+      if (ti >= 0) {
+        if (taxItem.paid) services[ti] = { ...taxItem, ...voidMark };
+        else services.splice(ti, 1);
+      }
     }
 
     const newTotal = services.filter(s => !s.isVoided).reduce((sum, s) => sum + (parseFloat(s.totalPrice) || 0), 0);
@@ -1336,6 +1352,7 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
     // the money leaving is posted too — otherwise the refund would clear a
     // receivable that the reversal has just written off.
     const voidedAmount = parseFloat(item.totalPrice) || 0;
+    const voidedTax = taxItem ? (parseFloat(taxItem.totalPrice) || 0) : 0;
     if (voidedAmount > 0) {
       try {
         const { ChartOfAccounts: COA } = require('../models');
@@ -1351,10 +1368,14 @@ router.post('/:billId/void-item', authorize('bills.financial_action'), async (re
         }) || await COA.findOne({ where: { clinic_id: clinicIdForVoid, account_code: '1200', is_active: true } });
 
         if (revenueAccount && receivableAccount) {
+          // The item's tax comes back out of the tax account it was owed on.
+          const taxAccountId = voidedTax > 0 ? taxItem.revenue_account_id : null;
           const lineItems = [
             { account_id: revenueAccount.id, debit_amount: voidedAmount, credit_amount: 0,
               description: `Reversal - voided "${item.serviceName || item.name || 'item'}" on ${bill.bill_number}` },
-            { account_id: receivableAccount.id, debit_amount: 0, credit_amount: voidedAmount,
+            ...(taxAccountId ? [{ account_id: taxAccountId, debit_amount: voidedTax, credit_amount: 0,
+              description: `Tax reversed - voided "${item.serviceName || item.name || 'item'}" on ${bill.bill_number}` }] : []),
+            { account_id: receivableAccount.id, debit_amount: 0, credit_amount: voidedAmount + (taxAccountId ? voidedTax : 0),
               description: `Receivable reversed - voided item on ${bill.bill_number}` },
           ];
 
@@ -1949,6 +1970,9 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
             totalPrice: service.totalPrice || service.total_price || service.price || 0,
             department: service.department || 'General',
             discountLabel: service.discountLabel || null,
+            // So the receipt can put tax lines in its VAT block (utils/billTax.js).
+            line_id: service.line_id || null,
+            ...(service.isTax ? { isTax: true, taxFor: service.taxFor, taxName: service.taxName, taxRate: service.taxRate } : {}),
           } : null;
         }).filter(Boolean);
       } catch (error) {

@@ -615,6 +615,9 @@ class AccountingService {
    * Returns the adjustment posted, or 0.
    */
   async syncBillRevenueToGL(billId, userId = 'system') {
+    // A taxed bill's total is revenue + the tax posted to its liability account
+    // (utils/billTax.js), so both count as "posted" against the bill.
+    const { REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
     if (!billId) return 0;
 
     const [[bill]] = await sequelize.query(
@@ -631,7 +634,7 @@ class AccountingService {
     const [[postedRow]] = await sequelize.query(
       `SELECT COALESCE(SUM(al.credit_amount) - SUM(al.debit_amount), 0) AS revenue
          FROM account_ledger al
-         JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+         JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
          JOIN general_ledger gl ON gl.id = al.transaction_id
         WHERE (gl.reference_id = :id
                AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment'))
@@ -675,7 +678,7 @@ class AccountingService {
     const [byAccount] = await sequelize.query(
       `SELECT al.account_id, SUM(al.credit_amount) - SUM(al.debit_amount) AS amount
          FROM account_ledger al
-         JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+         JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
          JOIN general_ledger gl ON gl.id = al.transaction_id
         WHERE gl.reference_id = :id
           AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')

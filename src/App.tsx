@@ -126,6 +126,7 @@ const JournalEntriesPage = lazyWithRetry(() => import('./pages/accounting/Journa
 const ReceivablesPage = lazyWithRetry(() => import('./pages/accounting/Receivables'));
 const InsuranceClaims = lazyWithRetry(() => import('./pages/accounting/InsuranceClaims'));
 const ExchangeRatesPage = lazyWithRetry(() => import('./pages/accounting/ExchangeRates'));
+const TaxesPage = lazyWithRetry(() => import('./pages/accounting/Taxes'));
 const ItemMaster = lazyWithRetry(() => import('./pages/inventory/ItemMaster'));
 const StockLocations = lazyWithRetry(() => import('./pages/inventory/StockLocations'));
 const LabTestConsumables = lazyWithRetry(() => import('./pages/inventory/LabTestConsumables'));
@@ -837,6 +838,11 @@ const AppRoutes = () => {
       <Route path="/accounting/exchange-rates" element={
         <ProtectedRoute requiredPrivilege="accounting.rates.write">
           <ExchangeRatesPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting/taxes" element={
+        <ProtectedRoute requiredPrivilege="accounting.write">
+          <TaxesPage />
         </ProtectedRoute>
       } />
       <Route path="/inventory" element={<Navigate to="/inventory/items" replace />} />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { pairedLineIndex } from '@/lib/billTaxLines';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -492,7 +493,11 @@ export default function BillDetails() {
     if (!bill) return;
     setSelectedItems(prev => {
       const next = new Set(prev);
-      if (next.has(index)) next.delete(index); else next.add(index);
+      const adding = !next.has(index);
+      if (adding) next.add(index); else next.delete(index);
+      // An item and its tax line are paid together.
+      const paired = pairedLineIndex(bill.services, index);
+      if (paired >= 0 && isPayableLine(bill.services[paired])) { if (adding) next.add(paired); else next.delete(paired); }
 
       const payableBalance = bill.services.filter(isPayableLine).reduce((sum, s) => sum + amt(s.totalPrice), 0);
       const selectedTotal = bill.services.reduce((sum, s, i) => next.has(i) ? sum + amt(s.totalPrice) : sum, 0);
@@ -1447,7 +1452,7 @@ export default function BillDetails() {
                 key: '__actions', header: '', width: '2rem',
                 render: (_v, s) => {
                   const realIndex = bill.services.indexOf(s);
-                  return !s.paid && !s.isVoided && !s.invoiced ? (
+                  return !s.paid && !s.isVoided && !s.invoiced && !(s as any).isTax ? (
                     <Button variant="ghost" size="icon" aria-label="Void item" className="h-6 w-6" onClick={() => setVoidPromptIndex(realIndex)} disabled={voidingIndex !== null} title="Void item">
                       {voidingIndex === realIndex ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : <X className="w-3.5 h-3.5 text-muted-foreground" />}
                     </Button>

@@ -659,8 +659,16 @@ router.get('/earned', async (req, res) => {
       // was formally invoiced (an invoice raised, a scheme/insurer bill, or a
       // credit bill). A bill nobody has paid or invoiced yet — still just an
       // open bill — isn't revenue earned yet and adds nothing here.
-      const paid = Math.max(0, num(bill.paid_amount) * rate);
-      const outstanding = bill.invoiced && bill.status !== 'written_off' ? Math.max(0, num(bill.balance_amount) * rate) : 0;
+      // Tax on the bill (its tax lines, utils/billTax.js) is owed to the tax
+      // authority, not earned — each figure is scaled to the pre-tax share.
+      let billLines = [];
+      try { const parsed = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services; if (Array.isArray(parsed)) billLines = parsed; } catch { billLines = []; }
+      const liveLines = billLines.filter((l) => l && !l.isVoided);
+      const linesTotal = liveLines.reduce((t, l) => t + num(l.totalPrice ?? l.total_price), 0);
+      const taxLines = liveLines.filter((l) => l.isTax).reduce((t, l) => t + num(l.totalPrice), 0);
+      const netShare = linesTotal > 0 ? Math.max(0, 1 - taxLines / linesTotal) : 1;
+      const paid = Math.max(0, num(bill.paid_amount) * rate) * netShare;
+      const outstanding = bill.invoiced && bill.status !== 'written_off' ? Math.max(0, num(bill.balance_amount) * rate) * netShare : 0;
       const earned = paid + outstanding;
       if (earned <= 0) continue;
       totals.count += 1; totals.earned += earned; totals.paid += paid; totals.outstanding += outstanding;
@@ -685,7 +693,7 @@ router.get('/earned', async (req, res) => {
         // department / item: split the bill across its live lines by amount
         let lines = [];
         try { const parsed = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services; if (Array.isArray(parsed)) lines = parsed; } catch { lines = []; }
-        lines = lines.filter((l) => l && !l.isVoided);
+        lines = lines.filter((l) => l && !l.isVoided && !l.isTax);
         const weights = lines.map((l) => {
           const qty = num(l.quantity) || 1;
           return Math.max(0, l.totalPrice != null ? num(l.totalPrice) : l.total_price != null ? num(l.total_price) : num(l.unitPrice ?? l.unit_price ?? l.price) * qty);

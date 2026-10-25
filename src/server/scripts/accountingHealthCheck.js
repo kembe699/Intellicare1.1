@@ -18,6 +18,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 require('dotenv').config({ path: path.resolve(__dirname, '../production.env') });
 
 const { Client } = require('pg');
+const { REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
 
 const DB_ENV = {
   host: process.env.DB_HOST === 'localhost' ? '127.0.0.1' : (process.env.DB_HOST || '127.0.0.1'),
@@ -77,7 +78,7 @@ const CHECKS = [
     sql: `WITH posted AS (
             SELECT gl.reference_id AS bill_id, SUM(al.credit_amount) - SUM(al.debit_amount) AS revenue
               FROM account_ledger al
-              JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+              JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
               JOIN general_ledger gl ON gl.id = al.transaction_id
              WHERE gl.reference_module IN ('patient_billing','bill_item_void','bill_revenue_adjustment')
              GROUP BY 1)
@@ -106,7 +107,7 @@ const CHECKS = [
     sql: `WITH rev AS (
             SELECT c.account_code, SUM(al.credit_amount) - SUM(al.debit_amount) AS net
               FROM account_ledger al
-              JOIN chart_of_accounts c ON c.id = al.account_id AND c.account_type = 'revenue'
+              JOIN chart_of_accounts c ON c.id = al.account_id AND ${REVENUE_OR_TAX_ACCOUNT_SQL}
              GROUP BY 1)
           SELECT (SELECT COALESCE(net,0) FROM rev WHERE account_code='4100') AS catch_all,
                  (SELECT COALESCE(SUM(net),0) FROM rev) AS total
