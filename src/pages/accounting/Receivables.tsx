@@ -10,7 +10,7 @@ import { RefreshCw, Clock, AlertTriangle, CheckCircle2, BarChart3, BadgePercent,
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, StatusBadge } from '@/components/common';
-import { apiFetch, formatCurrency } from '@/utils/accountingApi';
+import { apiFetch } from '@/utils/accountingApi';
 import { authFetch } from '@/api/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
@@ -30,6 +30,13 @@ interface Receivable {
   created_at?: string;
   scheme_id?: string | null;
   scheme_name?: string | null;
+  // Set when the bill is in another currency: amount/paid_amount/balance are
+  // already converted to the base currency; these are the bill's own figures.
+  original_currency?: string;
+  original_amount?: number;
+  original_balance?: number;
+  exchange_rate?: number | null;
+  unconverted?: boolean;
 }
 
 const RECEIVABLE_STATUS_MAP = { paid: 'success', overdue: 'danger', current: 'warning' } as const;
@@ -65,6 +72,15 @@ const getDaysOverdue = (dueDate: string) => {
   const diff = Math.floor((new Date().getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24));
   return diff > 0 ? diff : 0;
 };
+
+/** A converted foreign-currency bill shows its own figure under the base amount. */
+const Original = ({ item, value }: { item: Receivable; value?: number }) =>
+  item.original_currency ? (
+    <p className={`text-[11px] font-normal ${item.unconverted ? 'text-destructive' : 'text-muted-foreground'}`}>
+      {formatMoney(Number(value) || 0, item.original_currency)}
+      {item.unconverted ? ' · no rate' : item.exchange_rate ? ` @ ${Number(item.exchange_rate).toLocaleString()}` : ''}
+    </p>
+  ) : null;
 
 const Receivables: React.FC = () => {
   const { user, hasPrivilege } = useAuth();
@@ -223,18 +239,18 @@ const Receivables: React.FC = () => {
           footerRow={(colSpan) => (
             <tr className="bg-muted/40 font-semibold text-sm">
               <td className="px-4 py-2.5" colSpan={2}>Totals</td>
-              <td className="px-4 py-2.5 text-right font-mono tabular-nums">{formatCurrency(filteredReceivables.reduce((s, r) => s + Number(r.amount || 0), 0))}</td>
-              <td className="px-4 py-2.5 text-right font-mono tabular-nums text-success">{formatCurrency(filteredReceivables.reduce((s, r) => s + Number(r.paid_amount || 0), 0))}</td>
-              <td className="px-4 py-2.5 text-right font-mono tabular-nums">{formatCurrency(filteredReceivables.reduce((s, r) => s + Number(r.balance || 0), 0))}</td>
+              <td className="px-4 py-2.5 text-right font-mono tabular-nums">{formatMoney(filteredReceivables.reduce((s, r) => s + Number(r.amount || 0), 0), baseCurrencyData.code)}</td>
+              <td className="px-4 py-2.5 text-right font-mono tabular-nums text-success">{formatMoney(filteredReceivables.reduce((s, r) => s + Number(r.paid_amount || 0), 0), baseCurrencyData.code)}</td>
+              <td className="px-4 py-2.5 text-right font-mono tabular-nums">{formatMoney(filteredReceivables.reduce((s, r) => s + Number(r.balance || 0), 0), baseCurrencyData.code)}</td>
               <td colSpan={colSpan - 5} />
             </tr>
           )}
           columns={[
             { key: 'invoice_number', header: 'Invoice #', sortable: true, render: (v) => <span className="font-mono font-medium">{v}</span> },
             { key: 'patient_name', header: 'Patient', render: (v, item) => <p className="font-medium">{v || item.patient_id}</p> },
-            { key: 'amount', header: 'Amount', align: 'right', sortable: true, render: (v) => <span className="font-mono tabular-nums">{formatCurrency(v)}</span> },
-            { key: 'paid_amount', header: 'Paid', align: 'right', sortable: true, render: (v) => <span className="font-mono tabular-nums text-success">{formatCurrency(v)}</span> },
-            { key: 'balance', header: 'Balance', align: 'right', sortable: true, render: (v) => <span className="font-mono tabular-nums font-medium">{formatCurrency(v)}</span> },
+            { key: 'amount', header: 'Amount', align: 'right', sortable: true, exportValue: (item) => Number(item.amount) || 0, render: (v, item) => <div className="font-mono tabular-nums whitespace-nowrap">{formatMoney(Number(v) || 0, baseCurrencyData.code)}<Original item={item} value={item.original_amount} /></div> },
+            { key: 'paid_amount', header: 'Paid', align: 'right', sortable: true, exportValue: (item) => Number(item.paid_amount) || 0, render: (v) => <span className="font-mono tabular-nums text-success whitespace-nowrap">{formatMoney(Number(v) || 0, baseCurrencyData.code)}</span> },
+            { key: 'balance', header: 'Balance', align: 'right', sortable: true, exportValue: (item) => Number(item.balance) || 0, render: (v, item) => <div className="font-mono tabular-nums font-medium whitespace-nowrap">{formatMoney(Number(v) || 0, baseCurrencyData.code)}<Original item={item} value={item.original_balance} /></div> },
             {
               key: '__progress', header: 'Payment Progress', width: '9rem',
               render: (_v, item) => {
@@ -300,7 +316,7 @@ const Receivables: React.FC = () => {
               {target?.action === 'discount' ? 'Apply discount' : target?.action === 'follow_up' ? 'Record follow-up' : 'Write off as bad debt'}
             </DialogTitle>
             <DialogDescription>
-              {target && `${target.bill.invoice_number} · ${target.bill.patient_name || target.bill.patient_id} · balance ${formatCurrency(target.bill.balance)}`}
+              {target && `${target.bill.invoice_number} · ${target.bill.patient_name || target.bill.patient_id} · balance ${formatMoney(Number(target.bill.balance) || 0, baseCurrencyData.code)}`}
             </DialogDescription>
           </DialogHeader>
 

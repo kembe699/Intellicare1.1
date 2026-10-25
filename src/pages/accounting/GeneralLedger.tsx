@@ -31,6 +31,23 @@ const ACCOUNT_TYPES = [
   { value: 'expense', label: 'Expenses' },
 ];
 
+/**
+ * A line's amount in the base currency (what was posted), with the original
+ * transaction-currency figure underneath for a foreign entry. Lines used to
+ * show the USD figure under a "(SSP)" heading while the totals were SSP.
+ */
+const LineAmount = ({ base, original, currency, baseCurrency }: { base: any; original: any; currency?: string | null; baseCurrency: string }) => {
+  const b = parseFloat(base ?? original);
+  if (!(b > 0)) return <>{'\u2014'}</>;
+  const foreign = currency && currency !== baseCurrency;
+  return (
+    <div className="whitespace-nowrap">
+      {formatCurrency(b)}
+      {foreign && <p className="text-[11px] font-normal text-muted-foreground">{currency} {formatCurrency(parseFloat(original) || 0)}</p>}
+    </div>
+  );
+};
+
 const GeneralLedger: React.FC = () => {
   const { user } = useAuth();
   const { currency: baseCurrencyData } = useCurrency();
@@ -265,8 +282,8 @@ const GeneralLedger: React.FC = () => {
                                   <thead className="bg-muted/40 border-b border-border/70">
                                     <tr className="text-xs text-muted-foreground">
                                       <th scope="col" className="px-4 py-2.5 text-left font-medium">Account</th>
-                                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Debit</th>
-                                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Credit</th>
+                                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Debit ({BASE_CURRENCY})</th>
+                                      <th scope="col" className="px-4 py-2.5 text-right font-medium">Credit ({BASE_CURRENCY})</th>
                                       <th scope="col" className="px-4 py-2.5 text-left font-medium">Description</th>
                                     </tr>
                                   </thead>
@@ -278,10 +295,10 @@ const GeneralLedger: React.FC = () => {
                                           {li.account?.account_name}
                                         </td>
                                         <td className="px-4 py-2.5 text-right font-mono">
-                                          {parseFloat(li.debit_amount) > 0 ? formatCurrency(li.debit_amount) : '\u2014'}
+                                          <LineAmount base={li.base_debit_amount} original={li.debit_amount} currency={entry.transaction_currency} baseCurrency={BASE_CURRENCY} />
                                         </td>
                                         <td className="px-4 py-2.5 text-right font-mono">
-                                          {parseFloat(li.credit_amount) > 0 ? formatCurrency(li.credit_amount) : '\u2014'}
+                                          <LineAmount base={li.base_credit_amount} original={li.credit_amount} currency={entry.transaction_currency} baseCurrency={BASE_CURRENCY} />
                                         </td>
                                         <td className="px-4 py-2.5 text-muted-foreground">{li.description || '\u2014'}</td>
                                       </tr>
@@ -364,8 +381,8 @@ const GeneralLedger: React.FC = () => {
                               </>
                             ),
                           },
-                          { key: 'debit_amount', header: `Debit (${BASE_CURRENCY})`, align: 'right', render: (v) => <span className="font-mono">{parseFloat(v) > 0 ? formatCurrency(v) : '\u2014'}</span> },
-                          { key: 'credit_amount', header: `Credit (${BASE_CURRENCY})`, align: 'right', render: (v) => <span className="font-mono">{parseFloat(v) > 0 ? formatCurrency(v) : '\u2014'}</span> },
+                          { key: 'base_debit_amount', header: `Debit (${BASE_CURRENCY})`, align: 'right', render: (v, li: any) => <span className="font-mono"><LineAmount base={v} original={li.debit_amount} currency={viewEntry.transaction_currency} baseCurrency={BASE_CURRENCY} /></span> },
+                          { key: 'base_credit_amount', header: `Credit (${BASE_CURRENCY})`, align: 'right', render: (v, li: any) => <span className="font-mono"><LineAmount base={v} original={li.credit_amount} currency={viewEntry.transaction_currency} baseCurrency={BASE_CURRENCY} /></span> },
                           { key: 'description', header: 'Description', render: (v) => <span className="text-muted-foreground">{v || '\u2014'}</span> },
                         ]}
                       />

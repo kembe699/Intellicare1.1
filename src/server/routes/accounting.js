@@ -857,11 +857,40 @@ router.get('/receivables', authorize('accounting.read'), async (req, res) => {
         pb.bill_date,
         pb.created_at,
         pb.scheme_id,
-        pb.scheme_name
+        pb.scheme_name,
+        pb.bill_currency
       FROM patient_bills pb
       ${where}
       ORDER BY pb.bill_date DESC
     `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    // Amounts come back in the base currency so the list, its totals and the
+    // aging cards never add a USD bill's "6" to SSP thousands. A bill in
+    // another currency is converted at the rate for its bill date (the stored
+    // patient_bills.exchange_rate is 1.0 on such bills, so it can't be used);
+    // its own-currency figures ride along for display.
+    const { getBaseCurrencyCode } = require('../utils/baseCurrency');
+    const base = await getBaseCurrencyCode();
+    const rates = new Map();
+    for (const r of rows) {
+      const cur = r.bill_currency || base;
+      r.currency = base;
+      if (cur === base) continue;
+      const day = new Date(r.bill_date || r.created_at || Date.now()).toISOString().slice(0, 10);
+      const key = `${cur}|${day}`;
+      if (!rates.has(key)) {
+        let rate = null;
+        try { rate = parseFloat(await AccountingService.getExchangeRate(parseInt(clinic_id), cur, base, day)); } catch { rate = null; }
+        rates.set(key, Number.isFinite(rate) && rate > 0 ? rate : null);
+      }
+      const rate = rates.get(key);
+      r.original_currency = cur;
+      r.original_amount = r.amount; r.original_paid_amount = r.paid_amount; r.original_balance = r.balance;
+      r.exchange_rate = rate;
+      if (rate == null) { r.unconverted = true; continue; }
+      const conv = (v) => Math.round((parseFloat(v) || 0) * rate * 100) / 100;
+      r.amount = conv(r.amount); r.paid_amount = conv(r.paid_amount); r.balance = conv(r.balance);
+    }
 
     res.json(rows);
   } catch (error) {
