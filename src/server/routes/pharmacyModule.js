@@ -1408,6 +1408,40 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       }
     }
 
+    // Never dispense a prescription line beyond what was prescribed. Paying a
+    // bill auto-dispenses its paid lines (services/autoDispense.js), and the
+    // counter screen still had its Dispense button armed for the same line, so
+    // one hand-off became two dispensing records and twice the stock out (demo:
+    // 16 prescribed, 32 dispensed). The line row is locked so the two paths
+    // can't both read "still outstanding" at the same moment.
+    if (cleanPrescriptionLineId) {
+      const [[lineRow]] = await sequelize.query(
+        `SELECT quantity_prescribed, COALESCE(total_quantity_dispensed, 0) AS dispensed
+           FROM prescription_lines WHERE id = :id FOR UPDATE`,
+        { replacements: { id: cleanPrescriptionLineId }, transaction: t }
+      );
+      if (lineRow) {
+        const outstanding = Number(lineRow.quantity_prescribed) - Number(lineRow.dispensed);
+        if (outstanding <= 1e-6) {
+          const [[prev]] = await sequelize.query(
+            `SELECT dispensing_number, created_at FROM dispensing_records
+              WHERE prescription_line_id = :id ORDER BY created_at DESC LIMIT 1`,
+            { replacements: { id: cleanPrescriptionLineId }, transaction: t }
+          );
+          await t.rollback();
+          return res.status(409).json({
+            already_dispensed: true,
+            dispensing_number: prev?.dispensing_number || null,
+            error: `Already dispensed${prev?.dispensing_number ? ` (${prev.dispensing_number})` : ''} — nothing left to dispense on this line.`,
+          });
+        }
+        if (Number(quantity_dispensed) > outstanding + 1e-6) {
+          await t.rollback();
+          return res.status(400).json({ error: `Only ${outstanding} left to dispense on this line (${lineRow.dispensed} of ${lineRow.quantity_prescribed} already dispensed).` });
+        }
+      }
+    }
+
     // 1. Get inventory item info
     console.log('Step 1: Fetching inventory item info for ID:', inventoryItemId);
     let itemRows;
@@ -1646,6 +1680,12 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
           'UPDATE stock_by_location SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE item_id = :iid AND location_id = :lid',
           { replacements: { qty: packQty, iid: inventoryItemId, lid: from_location_id }, transaction: t }
         );
+      } else {
+        // No store chosen (the counter screen never sends one): an item kept
+        // in a single store comes off that store, so store stock and the
+        // item total don't drift apart.
+        const { deductSingleStore } = require('../services/autoDispense');
+        await deductSingleStore(sequelize, inventoryItemId, packQty, t);
       }
 
       // Link inventory transaction to dispensing

@@ -1186,6 +1186,7 @@ export default function DispensingWorkflow() {
   // cleared by the payment that triggered it, so the caller decides when this runs).
   const dispenseLines = async (lines: any[]) => {
     let successCount = 0;
+    let alreadyCount = 0;
     for (const line of lines) {
       const qty = parseInt(lineQty[line.id], 10);
       const res = await authFetch(`${API}/dispensing`, {
@@ -1211,6 +1212,11 @@ export default function DispensingWorkflow() {
       });
       if (res.ok) {
         successCount++;
+      } else if (res.status === 409) {
+        // Paying the bill already dispensed this line automatically — the
+        // server refuses a second dispense, which is the outcome we want, so
+        // it counts as handed out rather than as a failure.
+        alreadyCount++;
       } else {
         const err = await res.json().catch(() => ({}));
         const detail = err.error === 'Insufficient stock' && err.available != null
@@ -1219,7 +1225,7 @@ export default function DispensingWorkflow() {
         toast.error(`${line.drug_name}: ${detail}`);
       }
     }
-    return successCount;
+    return successCount + alreadyCount;
   };
 
   const handleDispense = async () => {

@@ -391,6 +391,9 @@ export default function BillDetails() {
         // exactly so a line item category coming from either path reads the same way.
         serviceId: product.id, serviceName: product.item_name, quantity: qty,
         unitPrice, totalPrice: unitPrice * qty, category: 'Pharmacy / Inventory',
+        // Recorded as dispensed (and taken off stock) once this line is paid —
+        // see services/autoDispense.js dispenseBilledProducts.
+        dispenseOnPayment: true,
       };
     } else {
       const service = services.find(s => s.id === newItemCatalogId);

@@ -117,6 +117,21 @@ async function resolveItemAccounts(item, ctx = {}) {
     if (wants('cogs') && !cogs && pharmSettings?.pharmacy_cogs_account_id) cogs = await getAccountById(db, pharmSettings.pharmacy_cogs_account_id);
   }
 
+  // Last step before suspense for COGS: the clinic's own cost-of-sales
+  // account. An item in a category with no COGS account set (General,
+  // Equipment, a Drugs category nobody configured) still has a cost of sale,
+  // and parking it in 9999 Suspense kept it off the income statement's Cost
+  // of Goods Sold entirely (demo: every dispensed drug's COGS sat in 9999).
+  if (wants('cogs') && !cogs) {
+    const [[cos]] = await db.query(
+      `SELECT * FROM chart_of_accounts
+        WHERE clinic_id = :clinicId AND is_active = true AND account_type = 'expense' AND sub_account_type = 'cost_of_sales'
+        ORDER BY (account_code = '5210') DESC, account_code LIMIT 1`,
+      { replacements: { clinicId } }
+    );
+    if (cos) cogs = cos;
+  }
+
   const missing = [];
   if (wants('inventory') && !inventory) missing.push('inventory');
   if (wants('cogs') && !cogs) missing.push('cogs');
