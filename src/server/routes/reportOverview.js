@@ -66,12 +66,19 @@ function asDateStr(v) {
 }
 
 /** Inclusive list of YYYY-MM-DD strings from `from` to `to`. */
+// A calendar day as YYYY-MM-DD in the server's own time zone. toISOString()
+// gives the UTC date, which is the day before for local midnight east of UTC,
+// so every trend point landed on the wrong day.
+function localDay(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function dateRange(from, to) {
   const out = [];
   const cur = new Date(`${from}T00:00:00`);
   const end = new Date(`${to}T00:00:00`);
   while (cur <= end) {
-    out.push(cur.toISOString().split('T')[0]);
+    out.push(localDay(cur));
     cur.setDate(cur.getDate() + 1);
   }
   return out;
@@ -121,16 +128,18 @@ router.get('/', async (req, res) => {
     // The sign decides, not the status. A refund recorded by flipping the
     // original receipt in place is positive and already absent from 'active';
     // counting that too would subtract it twice.
-    const [revenueRow] = await sequelize.query(
-      `SELECT COUNT(*) FILTER (WHERE status = 'active') AS cnt,
-              COALESCE(SUM(CASE WHEN status = 'active' THEN payment_amount
-                       WHEN status = 'refunded' AND payment_amount < 0 THEN payment_amount
-                       ELSE 0 END), 0) AS total
-       FROM receipts
-       WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
-         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}`,
-      { replacements: repl, type: QueryTypes.SELECT }
-    );
+    // Revenue = every payment received against bills in the period — counter
+    // receipts (refunds net off), invoice payments and insurer claim payments —
+    // in base currency with tax taken out (services/cashRevenue.js): the same
+    // figure as the cash-basis income statement and the Revenue report. The
+    // headline, the daily trend, the payment-method split and revenue by clinic
+    // below all come from these movements, so they agree with each other.
+    const { cashReceived, round2 } = require('../services/cashRevenue');
+    const { movements: cashMoves } = await cashReceived(sequelize, { clinicId, dateFrom: fromTs.slice(0, 10), dateTo: toTs.slice(0, 10), branchId: repl.branchId || null });
+    const revenueRow = {
+      cnt: cashMoves.filter((m) => m.amount > 0).length,
+      total: round2(cashMoves.reduce((s, m) => s + m.revenue, 0)),
+    };
 
     // 2. Patients registered in the period — merged patients + lis_participants.
     const [patientsRow] = await sequelize.query(
@@ -201,20 +210,8 @@ router.get('/', async (req, res) => {
     );
 
     // 7. Daily revenue trend, net of refunds (see note on the headline total).
-    const revenueByDay = await sequelize.query(
-      `SELECT DATE(payment_date) AS day, COALESCE(SUM(CASE WHEN status = 'active' THEN payment_amount
-                       WHEN status = 'refunded' AND payment_amount < 0 THEN payment_amount
-                       ELSE 0 END), 0) AS total
-       FROM receipts
-       WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
-         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}
-       GROUP BY DATE(payment_date)`,
-      { replacements: repl, type: QueryTypes.SELECT }
-    );
-    const revenueMap = new Map(revenueByDay.map(r => [
-      (r.day instanceof Date ? r.day.toISOString().split('T')[0] : String(r.day)),
-      parseFloat(r.total) || 0,
-    ]));
+    const revenueMap = new Map();
+    for (const m of cashMoves) revenueMap.set(m.day, round2((revenueMap.get(m.day) || 0) + m.revenue));
     const revenueTrend = days.map(day => ({ day, revenue: revenueMap.get(day) || 0 }));
 
     // 8. Daily patient-registration trend — merged patients + lis_participants.
@@ -232,7 +229,7 @@ router.get('/', async (req, res) => {
        GROUP BY DATE(created_at)`,
       { replacements: repl, type: QueryTypes.SELECT }
     );
-    const toDayKey = r => (r.day instanceof Date ? r.day.toISOString().split('T')[0] : String(r.day));
+    const toDayKey = r => (r.day instanceof Date ? localDay(r.day) : String(r.day));
     const patientsMap = new Map(patientsByDay.map(r => [toDayKey(r), parseInt(r.cnt, 10) || 0]));
     const lisMap = new Map(lisByDay.map(r => [toDayKey(r), parseInt(r.cnt, 10) || 0]));
     const patientTrend = days.map(day => ({
@@ -242,42 +239,27 @@ router.get('/', async (req, res) => {
 
     // 9. Payment-method breakdown (clinic-scoped, active receipts).
     //    Real enum values, verified live: cash, card, check, lease, insurance.
-    const paymentMethodRows = await sequelize.query(
-      `SELECT payment_method AS method,
-              COUNT(*) FILTER (WHERE status = 'active') AS cnt,
-              COALESCE(SUM(CASE WHEN status = 'active' THEN payment_amount
-                       WHEN status = 'refunded' AND payment_amount < 0 THEN payment_amount
-                       ELSE 0 END), 0) AS total
-       FROM receipts
-       WHERE clinic_id = :clinicId AND status IN ('active', 'refunded')
-         AND payment_date BETWEEN :fromTs AND :toTs ${branchSql}
-       GROUP BY payment_method
-       ORDER BY total DESC`,
-      { replacements: repl, type: QueryTypes.SELECT }
-    );
-    const paymentMethodBreakdown = paymentMethodRows.map(r => ({
-      method: r.method,
-      count: parseInt(r.cnt, 10) || 0,
-      total: parseFloat(r.total) || 0,
-    }));
+    const byMethod = new Map();
+    for (const m of cashMoves) {
+      const g = byMethod.get(m.method) || { method: m.method, count: 0, total: 0 };
+      if (m.amount > 0) g.count += 1;
+      g.total = round2(g.total + m.revenue);
+      byMethod.set(m.method, g);
+    }
+    const paymentMethodBreakdown = [...byMethod.values()].sort((a, b) => b.total - a.total);
 
     // 10. Revenue by clinic — deliberately UNSCOPED (all clinics), since this
     //     system only has 2 clinic_names rows and the whole point of this
     //     section is to compare them side by side.
-    const clinicRevenueRepl = { fromTs, toTs };
-    const branchSqlClinicRevenue = branchScope(req, clinicRevenueRepl, 'r');
-    const clinicRevenueRows = await sequelize.query(
-      `SELECT cn.id AS "clinicId", cn.name AS "clinicName",
-              COALESCE(SUM(CASE WHEN r.status = 'active' THEN r.payment_amount
-                                WHEN r.status = 'refunded' AND r.payment_amount < 0 THEN r.payment_amount
-                                ELSE 0 END), 0) AS revenue,
-              COUNT(DISTINCT CASE WHEN r.status = 'active' THEN r.id END) AS "receiptCount"
-       FROM clinic_names cn
-       LEFT JOIN receipts r ON r.clinic_id = cn.id AND r.payment_date BETWEEN :fromTs AND :toTs ${branchSqlClinicRevenue}
-       GROUP BY cn.id, cn.name
-       ORDER BY cn.id`,
-      { replacements: clinicRevenueRepl, type: QueryTypes.SELECT }
-    );
+    //     Same money as the headline (all payments, tax excluded), by the facility of the bill paid.
+    const clinicRevenueRepl = {};
+    branchScope(req, clinicRevenueRepl);
+    const { movements: allClinicMoves } = await cashReceived(sequelize, { clinicId: null, dateFrom: fromTs.slice(0, 10), dateTo: toTs.slice(0, 10), branchId: clinicRevenueRepl.branchId || null });
+    const clinicNames = await sequelize.query(`SELECT id AS "clinicId", name AS "clinicName" FROM clinic_names ORDER BY id`, { type: QueryTypes.SELECT });
+    const clinicRevenueRows = clinicNames.map((cn) => {
+      const mine = allClinicMoves.filter((m) => parseInt(m.clinicId, 10) === parseInt(cn.clinicId, 10));
+      return { ...cn, revenue: round2(mine.reduce((t, m) => t + m.revenue, 0)), receiptCount: mine.filter((m) => m.amount > 0).length };
+    });
     // Per-facility visits: LIS visits belong to this facility (lis_test_orders
     // .clinic_id is the consulting clinic, a dr_clinics UUID, not clinic_names),
     // the legacy `visits` table only for a period LIS has none — utils/visitCounts.js.

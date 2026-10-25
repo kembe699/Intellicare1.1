@@ -29,7 +29,7 @@ const isTaxLine = (l) => l?.isTax === true || String(l?.category || '').toLowerC
 
 /**
  * Money received in [dateFrom, dateTo] against bills, one row per movement:
- * { billId, source, method, branchId, amount (base) }.
+ * { billId, source, method, branchId, clinicId, day, amount (base) }.
  */
 async function cashMovements(sequelize, { clinicId = null, dateFrom, dateTo, branchId = null }) {
   const rate = bookedRateSql('pb');
@@ -38,21 +38,22 @@ async function cashMovements(sequelize, { clinicId = null, dateFrom, dateTo, bra
   const branch = (col) => (branchId ? ` AND ${col} = :branchId` : '');
   const [rows] = await sequelize.query(`
     SELECT rc.bill_id::text AS bill_id, 'receipt' AS source, COALESCE(rc.payment_method::text, 'unknown') AS method, rc.branch_id,
-           COALESCE(NULLIF(rc.base_currency_amount, 0), rc.payment_amount * ${rate}) AS amount
+           COALESCE(NULLIF(rc.base_currency_amount, 0), rc.payment_amount * ${rate}) AS amount, rc.payment_date::date AS day, pb.clinic_id
       FROM receipts rc JOIN patient_bills pb ON pb.id::text = rc.bill_id::text
      WHERE rc.status = 'active' AND rc.payment_date::date BETWEEN :dateFrom AND :dateTo${clinic('rc.clinic_id')}${branch('rc.branch_id')}
     UNION ALL
-    SELECT rc.bill_id::text, 'refund', 'refund'::text, rc.branch_id, -COALESCE(rc.refund_amount, 0) * ${rate}
+    SELECT rc.bill_id::text, 'refund', 'refund'::text, rc.branch_id, -COALESCE(rc.refund_amount, 0) * ${rate}, rc.refund_date::date, pb.clinic_id
       FROM receipts rc JOIN patient_bills pb ON pb.id::text = rc.bill_id::text
      WHERE COALESCE(rc.refund_amount, 0) > 0 AND rc.refund_date::date BETWEEN :dateFrom AND :dateTo${clinic('rc.clinic_id')}${branch('rc.branch_id')}
     UNION ALL
-    SELECT pb.id::text, 'invoice_payment', COALESCE(ip.payment_method::text, 'unknown'), pb.branch_id, ip.amount * ${rate}
+    SELECT pb.id::text, 'invoice_payment', COALESCE(ip.payment_method::text, 'unknown'), pb.branch_id, ip.amount * ${rate}, ip.payment_date::date, pb.clinic_id
       FROM invoice_payments ip JOIN invoices i ON i.id::text = ip.invoice_id::text JOIN patient_bills pb ON pb.id::text = i.bill_id::text
      WHERE ip.payment_date::date BETWEEN :dateFrom AND :dateTo${clinic('pb.clinic_id')}${branch('pb.branch_id')}
     UNION ALL
     SELECT pb.id::text, 'claim_payment', 'insurance'::text, pb.branch_id,
-           cp.amount * COALESCE(ci.amount, pb.total_amount) / NULLIF(SUM(COALESCE(ci.amount, pb.total_amount)) OVER (PARTITION BY cp.claim_id), 0)
-      FROM (SELECT gl.reference_id AS claim_id, SUM(gl.base_total_debit) AS amount
+           cp.amount * COALESCE(ci.amount, pb.total_amount) / NULLIF(SUM(COALESCE(ci.amount, pb.total_amount)) OVER (PARTITION BY cp.claim_id), 0),
+           cp.day, pb.clinic_id
+      FROM (SELECT gl.reference_id AS claim_id, SUM(gl.base_total_debit) AS amount, MIN(gl.transaction_date::date) AS day
               FROM general_ledger gl
              WHERE gl.reference_module = 'insurance_claims' AND gl.transaction_date::date BETWEEN :dateFrom AND :dateTo
              GROUP BY 1) cp
@@ -62,7 +63,8 @@ async function cashMovements(sequelize, { clinicId = null, dateFrom, dateTo, bra
       JOIN patient_bills pb ON pb.id::text = COALESCE(ci.bill_id::text, ciinv.bill_id::text)
      WHERE TRUE${clinic('pb.clinic_id')}${branch('pb.branch_id')}`,
     { replacements: r });
-  return rows.map((m) => ({ billId: m.bill_id, source: m.source, method: m.method, branchId: m.branch_id, amount: round2(m.amount) }))
+  const dayOf = (d) => (d instanceof Date ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : String(d || '').slice(0, 10));
+  return rows.map((m) => ({ billId: m.bill_id, source: m.source, method: m.method, branchId: m.branch_id, clinicId: m.clinic_id, day: dayOf(m.day), amount: round2(m.amount) }))
     .filter((m) => m.amount !== 0);
 }
 

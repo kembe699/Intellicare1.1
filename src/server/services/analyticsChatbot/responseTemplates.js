@@ -73,7 +73,7 @@ function revenue({ total, count }, label, currencyCode) {
   const phrase = periodPhrase(label);
   if (count === 0) return { text: `No revenue was collected ${phrase}.` };
   return {
-    text: `The hospital collected ${formatMoney(total, currencyCode)} ${phrase}, across ${count} ${plural(count, 'receipt')}.`,
+    text: `The hospital collected ${formatMoney(total, currencyCode)} ${phrase}, across ${count} ${plural(count, 'payment')}.`,
   };
 }
 
@@ -104,7 +104,7 @@ function incomeStatement(rev, exp, label, currencyCode) {
   return {
     text: [
       `For ${phrase}: ${formatMoney(rev.total, currencyCode)} collected, ${formatMoney(exp.total, currencyCode)} paid out in expenses, for ${verb} ${formatMoney(Math.abs(net), currencyCode)}.`,
-      "This is a simplified view (receipts collected minus paid expense vouchers), not the full general ledger income statement. See the Income Statement report under Reports for the complete accrual figures.",
+      "This is a simplified view (money received, tax excluded, minus paid expense vouchers), not the full general ledger income statement. See the Income Statement report under Reports for the complete figures.",
     ].join('\n'),
   };
 }
@@ -138,7 +138,7 @@ function summary({ registrations: reg, visits: vis, revenue: rev, topDoctor }, l
     `• ${vis.count} patient ${plural(vis.count, 'visit')}`,
   ];
   if (canSeeRevenue && rev) {
-    lines.push(`• ${formatMoney(rev.total, currencyCode)} collected across ${rev.count} ${plural(rev.count, 'receipt')}`);
+    lines.push(`• ${formatMoney(rev.total, currencyCode)} collected across ${rev.count} ${plural(rev.count, 'payment')}`);
   }
   if (topDoctor) {
     lines.push(`• ${topDoctor.displayName} attended to the most patients, with ${topDoctor.visits} ${plural(topDoctor.visits, 'visit')}`);

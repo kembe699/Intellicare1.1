@@ -59,7 +59,7 @@ const TOOLS = [
   },
   {
     name: 'get_revenue',
-    description: "Total cash revenue actually COLLECTED (from payment receipts, not amounts billed) in a period. Requires the user to have financial access — the result will say so if they don't; relay that honestly rather than guessing a figure.",
+    description: "Total revenue actually RECEIVED in a period (not amounts billed): counter receipts, invoice payments and insurer claim payments, in base currency, tax excluded. Requires the user to have financial access — the result will say so if they don't; relay that honestly rather than guessing a figure.",
     input_schema: { type: 'object', properties: { period: PERIOD_SCHEMA }, required: ['period'] },
   },
   {
@@ -287,7 +287,7 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
       }
       const baseCurrency = await CurrencyService.getBaseCurrency();
       const data = await analytics.getRevenueTotal(sequelize, ctx);
-      return { period, total: data.total, currency: baseCurrency.code, receiptCount: data.count };
+      return { period, total: data.total, taxCollected: data.tax, currency: baseCurrency.code, paymentCount: data.count };
     }
     case 'get_doctor_activity': {
       const doctors = await analytics.listDoctors(sequelize, { req, clinicId });
@@ -330,7 +330,7 @@ async function executeTool(name, input, { sequelize, req, clinicId }) {
       if (canSeeRevenue) {
         const baseCurrency = await CurrencyService.getBaseCurrency();
         const data = await analytics.getRevenueTotal(sequelize, ctx);
-        revenue = { total: data.total, currency: baseCurrency.code, receiptCount: data.count };
+        revenue = { total: data.total, currency: baseCurrency.code, paymentCount: data.count };
       }
       return {
         period,

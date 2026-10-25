@@ -147,17 +147,23 @@ async function getVisitsCount(sequelize, { req, start, end }) {
   return { count: parseInt(row?.cnt || 0, 10) };
 }
 
+// Revenue received in [start, end): every payment against bills — counter
+// receipts, invoice payments, insurer claim payments — in base currency, tax
+// excluded (services/cashRevenue.js), the same figure as the cash-basis income
+// statement and the Revenue report. Counting receipts alone missed an
+// insurer's payment and counted the tax.
 async function getRevenueTotal(sequelize, { req, clinicId, start, end }) {
-  const replacements = { clinicId, start, end };
-  const branchSQL = branchScope(req, replacements);
-  const [[row]] = await sequelize.query(
-    `SELECT COALESCE(SUM(payment_amount), 0) AS total, COUNT(*) AS cnt
-       FROM receipts
-      WHERE clinic_id = :clinicId AND status = 'active'
-        AND payment_date >= :start AND payment_date < :end${branchSQL}`,
-    { replacements },
-  );
-  return { total: parseFloat(row?.total || 0), count: parseInt(row?.cnt || 0, 10) };
+  const scope = {};
+  branchScope(req, scope);
+  const day = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  const { cashReceived, round2 } = require('../cashRevenue');
+  const { movements } = await cashReceived(sequelize, {
+    clinicId, dateFrom: day(start), dateTo: day(new Date(new Date(end).getTime() - 1)), branchId: scope.branchId || null });
+  return {
+    total: round2(movements.reduce((s, m) => s + m.revenue, 0)),
+    tax: round2(movements.reduce((s, m) => s + m.tax, 0)),
+    count: movements.filter((m) => m.amount > 0).length,
+  };
 }
 
 /** Doctors visible to this tenant/branch — used both for entity extraction and the full ranking. */
