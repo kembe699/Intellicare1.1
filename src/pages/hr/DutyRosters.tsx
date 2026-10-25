@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, CalendarRange, CheckCircle2, Copy, Download, Eraser, FileWarning, Loader2, RotateCcw, Save, Send, Settings2, Undo2, Upload,
+  ArrowLeft, CalendarRange, CheckCircle2, Copy, Download, Eraser, FileWarning, Loader2, Plus, RotateCcw, Save, Send, Settings2, Undo2, Upload,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, AdvancedDataTable } from '@/components/common';
@@ -36,6 +36,12 @@ interface Detail {
 
 const STATUS_MAP = { draft: 'neutral', submitted: 'warning', approved: 'success', returned: 'danger', none: 'neutral' } as const;
 const STATUS_LABEL: Record<string, string> = { draft: 'Draft', submitted: 'Awaiting approval', approved: 'Approved', returned: 'Returned', none: 'Not started' };
+const STANDARD_SHIFTS = [
+  { name: 'Day', code: 'D', start_time: '08:00', end_time: '17:00', kind: 'work', color: '#0F766E' },
+  { name: 'Morning', code: 'M', start_time: '07:00', end_time: '14:00', kind: 'work', color: '#2563EB' },
+  { name: 'Evening', code: 'E', start_time: '14:00', end_time: '21:00', kind: 'work', color: '#7C3AED' },
+  { name: 'Night', code: 'N', start_time: '21:00', end_time: '07:00', kind: 'work', color: '#475569' },
+];
 const PALETTE = ['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#EA580C', '#CA8A04', '#16A34A', '#475569'];
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const monthLabel = (p: string) => new Date(`${p}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -58,6 +64,9 @@ export default function DutyRosters() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [metaError, setMetaError] = useState('');
   const [shiftsOpen, setShiftsOpen] = useState(false);
+  // Bumped whenever shifts are added/changed so an open roster re-reads them.
+  const [shiftsVersion, setShiftsVersion] = useState(0);
+  const shiftsChanged = () => { loadMeta(); setShiftsVersion((v) => v + 1); };
 
   const loadMeta = useCallback(() => {
     api('/meta').then(setMeta).catch((e) => setMetaError(e.message));
@@ -91,7 +100,7 @@ export default function DutyRosters() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Input type="month" aria-label="Month" className="w-52" value={period} onChange={(e) => e.target.value && go({ period: e.target.value })} />
                 {meta?.permissions.manage && (
-                  <Button variant="outline" onClick={() => setShiftsOpen(true)}><Settings2 className="w-4 h-4 mr-2" />Shift codes</Button>
+                  <Button variant="outline" onClick={() => setShiftsOpen(true)}><Settings2 className="w-4 h-4 mr-2" />Shifts</Button>
                 )}
               </div>
             }
@@ -102,13 +111,14 @@ export default function DutyRosters() {
           ) : !meta ? (
             <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : department ? (
-            <RosterEditor key={`${department}|${period}`} meta={meta} department={department} period={period} onBack={() => go({ department: null })} />
+            <RosterEditor key={`${department}|${period}`} meta={meta} department={department} period={period} onBack={() => go({ department: null })}
+              shiftsVersion={shiftsVersion} onManageShifts={() => setShiftsOpen(true)} onShiftsChanged={shiftsChanged} />
           ) : (
             <MonthOverview meta={meta} period={period} onOpen={(d) => go({ department: d })} onToggleRule={toggleRule} />
           )}
         </div>
       </div>
-      {meta && <ShiftCodesDialog open={shiftsOpen} onOpenChange={setShiftsOpen} shifts={meta.shifts} onSaved={loadMeta} />}
+      {meta && <ShiftCodesDialog open={shiftsOpen} onOpenChange={setShiftsOpen} shifts={meta.shifts} onSaved={shiftsChanged} />}
     </AppLayout>
   );
 }
@@ -170,7 +180,10 @@ function MonthOverview({ meta, period, onOpen, onToggleRule }: { meta: Meta; per
 }
 
 // ── One department's month ─────────────────────────────────────────────
-function RosterEditor({ meta, department, period, onBack }: { meta: Meta; department: string; period: string; onBack: () => void }) {
+function RosterEditor({ meta, department, period, onBack, shiftsVersion, onManageShifts, onShiftsChanged }: {
+  meta: Meta; department: string; period: string; onBack: () => void;
+  shiftsVersion: number; onManageShifts: () => void; onShiftsChanged: () => void;
+}) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<Map<string, string | null>>(new Map());
@@ -194,7 +207,7 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
       setBrush((b) => b ?? d.shifts.find((s) => s.is_active !== false)?.id ?? null);
     } catch (e: any) { toast.error(e.message); } finally { setLoading(false); }
   }, [base]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, shiftsVersion]);
   useEffect(() => { const up = () => { painting.current = false; }; window.addEventListener('mouseup', up); return () => window.removeEventListener('mouseup', up); }, []);
 
   const shifts = useMemo(() => (detail?.shifts || []).filter((s) => s.is_active !== false), [detail]);
@@ -243,9 +256,26 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
 
   const submit = async () => { if (await save()) await action('submit', {}, 'Roster submitted for approval').catch(() => {}); };
 
+  // One click to get going: the usual hospital shifts, each with its roster code.
+  const addStandardShifts = async () => {
+    setBusy(true);
+    try {
+      for (const sh of STANDARD_SHIFTS) {
+        await api('/shifts', { method: 'POST', body: JSON.stringify(sh) }).catch((e: any) => { if (!/already/.test(e.message)) throw e; });
+      }
+      toast.success('Shifts added — Day (D), Morning (M), Evening (E), Night (N). Change them under Shifts.');
+      onShiftsChanged();
+    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+  };
+
   // ── Excel template & upload ──
   const downloadTemplate = async () => {
     if (!detail) return;
+    if (!shifts.some((sh) => sh.code)) {
+      toast.error('Add shifts with codes first (Shifts) — the template is filled with those codes.');
+      onManageShifts();
+      return;
+    }
     const XLSX = await import('xlsx');
     const header = ['Employee No', 'Name', ...detail.days.map((d) => Number(d.slice(8)))];
     const weekdays = ['', '', ...detail.days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow(d)])];
@@ -259,7 +289,25 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
       ['Leave a cell blank (or write OFF) for a day off.'],
       ['Shift names also work instead of codes. Do not change the Employee No column or the day numbers.'],
     ]);
+    const coded = shifts.filter((sh) => sh.code);
+    const firstCode = coded[0]?.code || 'D';
+    const howTo = XLSX.utils.aoa_to_sheet([
+      [`How to fill the ${department} roster for ${monthLabel(period)}`],
+      [],
+      ['1.', 'Open the "Roster" sheet. Each row is one staff member; each numbered column is a day of the month.'],
+      ['2.', `In each day's cell type the shift CODE that person works that day — e.g. ${firstCode}. The codes are listed below and on the "Shift codes" sheet.`],
+      ['3.', 'Leave the cell empty (or type OFF) for a day off.'],
+      ['4.', 'Do not change the Employee No column, the names or the day numbers, and do not add or remove columns.'],
+      ['5.', 'Save the file, then on the roster page click "Upload roster" and choose it. Check the grid, then Save and Submit for approval.'],
+      [],
+      ['Code', 'Shift', 'Hours'],
+      ...coded.map((sh) => [sh.code, sh.name, `${hm(sh.start_time)}–${hm(sh.end_time)}`]),
+      [],
+      ['Example row:', 'EMP-001 · Jane Doe', `1=${firstCode}  2=${firstCode}  3=(empty, day off)  4=${coded[1]?.code || firstCode} ...`],
+    ]);
+    howTo['!cols'] = [{ wch: 14 }, { wch: 60 }, { wch: 40 }];
     const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, howTo, 'How to fill');
     XLSX.utils.book_append_sheet(wb, ws, 'Roster');
     XLSX.utils.book_append_sheet(wb, legend, 'Shift codes');
     XLSX.writeFile(wb, `roster-${department.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${period}.xlsx`);
@@ -375,9 +423,22 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
         </TabsList>
 
         <TabsContent value="grid" className="mt-4 space-y-3">
-          {editable && (
+          {editable && shifts.length === 0 && (
+            <div className="bg-card border rounded-lg shadow-sm px-4 py-4 space-y-3">
+              <div>
+                <p className="font-medium">First, add the shifts your staff work</p>
+                <p className="text-sm text-muted-foreground">A roster puts a shift on each person's days, so there must be shifts to choose from. None are set up yet.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={busy} onClick={addStandardShifts}><Plus className="w-4 h-4 mr-1.5" />Add standard shifts</Button>
+                <Button size="sm" variant="outline" onClick={onManageShifts}><Settings2 className="w-4 h-4 mr-1.5" />Add my own shifts</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Standard: Day D 08:00–17:00 · Morning M 07:00–14:00 · Evening E 14:00–21:00 · Night N 21:00–07:00.</p>
+            </div>
+          )}
+          {editable && shifts.length > 0 && (
             <div className="bg-card border rounded-lg shadow-sm px-4 py-3 flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground mr-1 whitespace-nowrap">1. Pick a shift → 2. click or drag across days:</span>
+              <span className="text-sm text-muted-foreground mr-1 whitespace-nowrap">1. Pick a shift → 2. click or drag across the days → 3. Save → 4. Submit for approval:</span>
               {shifts.map((s) => {
                 const i = shiftById.get(s.id)?._i ?? 0;
                 return (
@@ -389,9 +450,11 @@ function RosterEditor({ meta, department, period, onBack }: { meta: Meta; depart
                   </button>
                 );
               })}
-              <button type="button" onClick={() => setBrush(null)} className={cn('h-8 px-2.5 rounded-md text-xs font-semibold border flex items-center gap-1.5', brush === null ? 'ring-2 ring-offset-1 ring-primary' : '')}>
-                <Eraser className="w-3.5 h-3.5" />Off
+              <button type="button" onClick={() => setBrush(null)} title="Pick this, then click a day to clear it (day off)"
+                className={cn('h-8 px-2.5 rounded-md text-xs font-semibold border flex items-center gap-1.5', brush === null ? 'ring-2 ring-offset-1 ring-primary' : '')}>
+                <Eraser className="w-3.5 h-3.5" />Day off (clear)
               </button>
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={onManageShifts}><Settings2 className="w-3.5 h-3.5 mr-1" />Shifts</Button>
             </div>
           )}
           <div className="bg-card border rounded-lg shadow-sm overflow-x-auto select-none">
@@ -565,6 +628,19 @@ function ShiftCodesDialog({ open, onOpenChange, shifts, onSaved }: { open: boole
   useEffect(() => { if (open) setRows(shifts.filter((s) => s.is_active !== false).map((s, i) => ({ ...s, color: s.color || PALETTE[i % PALETTE.length] }))); }, [open, shifts]);
   const set = (id: string, patch: Partial<Shift>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
+  const [add, setAdd] = useState({ name: '', code: '', start_time: '08:00', end_time: '17:00', kind: 'work' });
+  const [adding, setAdding] = useState(false);
+  const addShift = async () => {
+    setAdding(true);
+    try {
+      const created = await api('/shifts', { method: 'POST', body: JSON.stringify({ ...add, color: PALETTE[rows.length % PALETTE.length] }) });
+      setRows((r) => [...r, { ...created, color: created.color || PALETTE[r.length % PALETTE.length] }]);
+      setAdd({ name: '', code: '', start_time: '08:00', end_time: '17:00', kind: 'work' });
+      toast.success(`${created.name} (${created.code}) added`);
+      onSaved();
+    } catch (e: any) { toast.error(e.message); } finally { setAdding(false); }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -581,11 +657,11 @@ function ShiftCodesDialog({ open, onOpenChange, shifts, onSaved }: { open: boole
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Shift codes</DialogTitle>
-          <DialogDescription>The short code each shift has on the roster and in the Excel template. Shifts themselves (times) are set up under HR › Attendance.</DialogDescription>
+          <DialogTitle>Shifts</DialogTitle>
+          <DialogDescription>The shifts staff can be rostered on. Each shift's code is what goes in a roster cell and in the Excel template.</DialogDescription>
         </DialogHeader>
         {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No shifts yet — create them under HR › Attendance first.</p>
+          <p className="text-sm text-muted-foreground">No shifts yet — add the first one below.</p>
         ) : (
           <div className="space-y-3">
             {rows.map((r) => (
@@ -614,6 +690,19 @@ function ShiftCodesDialog({ open, onOpenChange, shifts, onSaved }: { open: boole
             <p className="text-xs text-muted-foreground">"Clock-in from" is how many minutes before the start staff may clock in when the roster rule is on.</p>
           </div>
         )}
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          <p className="text-sm font-medium">Add a shift</p>
+          <div className="grid grid-cols-[1fr_5rem_6.5rem_6.5rem_7.5rem] gap-2 items-end">
+            <div><Label className="text-xs">Name</Label><Input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="Day" /></div>
+            <div><Label className="text-xs">Code</Label><Input value={add.code} maxLength={10} onChange={(e) => setAdd({ ...add, code: e.target.value.toUpperCase() })} placeholder="D" /></div>
+            <div><Label className="text-xs">Starts</Label><Input type="time" value={add.start_time} onChange={(e) => setAdd({ ...add, start_time: e.target.value })} /></div>
+            <div><Label className="text-xs">Ends</Label><Input type="time" value={add.end_time} onChange={(e) => setAdd({ ...add, end_time: e.target.value })} /></div>
+            <div><Label className="text-xs">Kind</Label><Combobox options={[{ value: 'work', label: 'Work' }, { value: 'on_call', label: 'On call' }]} value={add.kind} onChange={(v) => setAdd({ ...add, kind: v || 'work' })} /></div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={addShift} loading={adding} disabled={!add.name.trim() || !add.code.trim()}><Plus className="w-4 h-4 mr-1" />Add shift</Button>
+          </div>
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} loading={saving} disabled={!rows.length}>Save codes</Button>

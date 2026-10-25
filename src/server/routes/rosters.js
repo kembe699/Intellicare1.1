@@ -225,6 +225,41 @@ router.get('/', async (req, res) => {
 });
 
 // ── shift codes/colours used on rosters ────────────────────────────────
+// Add a shift straight from the roster page. Rostering is impossible with no
+// shifts at all — every tenant had none, so the roster showed only an "Off"
+// brush that did nothing and the Excel template had no codes to type.
+router.post('/shifts', async (req, res) => {
+  try {
+    const acc = await access(req);
+    if (!acc.manage) return res.status(403).json({ error: 'Only roster managers can add shifts.' });
+    const { name, code, start_time, end_time, kind, color } = req.body || {};
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const cleanName = String(name || '').trim();
+    const cleanCode = String(code || '').trim().toUpperCase().slice(0, 10);
+    const t = (v) => (/^\d{1,2}:\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : null);
+    if (!cleanName) return res.status(400).json({ error: 'Give the shift a name (e.g. Day).' });
+    if (!cleanCode) return res.status(400).json({ error: 'Give the shift a short code (e.g. D) — it is what goes in each roster cell.' });
+    if (OFF_CODES.has(cleanCode)) return res.status(400).json({ error: `"${cleanCode}" means off duty on a roster — pick another code.` });
+    if (!t(start_time) || !t(end_time)) return res.status(400).json({ error: 'Start and end times are needed (e.g. 08:00 and 17:00).' });
+    if (kind && !['work', 'on_call'].includes(kind)) return res.status(400).json({ error: 'kind must be work or on_call.' });
+    const [[dup]] = await sequelize.query(
+      `SELECT name FROM shifts WHERE clinic_id = :clinicId AND (UPPER(code) = :code OR LOWER(name) = LOWER(:name))`,
+      { replacements: { clinicId, code: cleanCode, name: cleanName } }
+    );
+    if (dup) return res.status(400).json({ error: `There is already a shift called ${dup.name} or using code ${cleanCode}.` });
+    const id = require('uuid').v4();
+    await sequelize.query(
+      `INSERT INTO shifts (id, clinic_id, branch_id, name, start_time, end_time, working_days, is_active, code, kind, color)
+       VALUES (:id, :clinicId, :branchId, :name, :start, :end, '0,1,2,3,4,5,6', TRUE, :code, :kind, :color)`,
+      { replacements: { id, clinicId, branchId: req.user?.branchId || null, name: cleanName, start: t(start_time), end: t(end_time), code: cleanCode, kind: kind || 'work', color: color || null } }
+    );
+    res.status(201).json((await activeShifts(clinicId)).find((x) => x.id === id) || { id });
+  } catch (error) {
+    console.error('Roster shift create error:', error);
+    res.status(500).json({ error: 'Could not add the shift' });
+  }
+});
+
 router.put('/shifts/:id', async (req, res) => {
   try {
     const acc = await access(req);
