@@ -185,9 +185,9 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
       {hasSecondary && (
         <div style={{ ...row, fontSize: SMALL, fontStyle: 'italic' }}><span>Total ({secondaryCurrency!.code}) :</span><span>{secondary(bill.totalAmount || 0)}</span></div>
       )}
-      <div style={row}><span>{method}</span><span>{money(payment.amount)}</span></div>
+      <div style={row}><span>Amount Paid ({method}) :</span><span>{money(payment.amount)}</span></div>
       {hasSecondary && (
-        <div style={{ ...row, fontSize: SMALL, fontStyle: 'italic' }}><span>{method} ({secondaryCurrency!.code})</span><span>{secondary(payment.amount)}</span></div>
+        <div style={{ ...row, fontSize: SMALL, fontStyle: 'italic' }}><span>Amount Paid ({secondaryCurrency!.code}) :</span><span>{secondary(payment.amount)}</span></div>
       )}
       <div style={row}><span>Balance Due :</span><span>{money(balanceDue)}</span></div>
       <div style={row}><span>Total Items :</span><span>{num(totalItems)}</span></div>
