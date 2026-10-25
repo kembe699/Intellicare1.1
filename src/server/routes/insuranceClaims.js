@@ -23,6 +23,15 @@ async function generateClaimNumber() {
   return `${prefix}-${String((rows[0]?.cnt || 0) + 1).padStart(4, '0')}`;
 }
 
+// Accounts an insurer's money can land in: active cash/bank accounts (the
+// 11xx range, or anything flagged as a bank account) in the claim's clinic.
+const DEPOSIT_ACCOUNTS_SQL = `
+  SELECT id, account_code, account_name, is_bank_account, currency_code
+  FROM chart_of_accounts
+  WHERE clinic_id = ? AND is_active = true AND account_type = 'asset'
+    AND (account_code LIKE '11%' OR is_bank_account = true)
+  ORDER BY account_code`;
+
 // ══════════════════════════════════════════════════════════════
 // GET /insurance-schemes — List insurance schemes
 // ══════════════════════════════════════════════════════════════
@@ -381,12 +390,29 @@ router.get('/:id', authorize('claims.write'), async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// GET /:id/deposit-accounts — Cash/bank accounts a claim payment can be received into
+// ══════════════════════════════════════════════════════════════
+// Served here (claims.write) rather than read from the Chart of Accounts
+// endpoint, which needs an accounting privilege claims staff may not have.
+router.get('/:id/deposit-accounts', authorize('claims.write'), async (req, res) => {
+  try {
+    const [claims] = await sequelize.query(`SELECT clinic_id FROM insurance_batch_claims WHERE id = ?`, { replacements: [req.params.id] });
+    if (!claims.length) return res.status(404).json({ error: 'Claim not found' });
+    const [rows] = await sequelize.query(DEPOSIT_ACCOUNTS_SQL, { replacements: [claims[0].clinic_id] });
+    res.json({ data: rows });
+  } catch (err) {
+    console.error('List deposit accounts error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
 // PUT /:id/status — Update claim status
 // ══════════════════════════════════════════════════════════════
 router.put('/:id/status', authorize('claims.write'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { status, notes, paid_amount, rejected_reason } = req.body;
+    const { status, notes, paid_amount, rejected_reason, deposit_account_id } = req.body;
     const [claims] = await sequelize.query(`SELECT * FROM insurance_batch_claims WHERE id = ?`, { replacements: [req.params.id], transaction: t });
     if (!claims.length) { await t.rollback(); return res.status(404).json({ error: 'Claim not found' }); }
     const oldStatus = claims[0].status;
@@ -404,9 +430,10 @@ router.put('/:id/status', authorize('claims.write'), async (req, res) => {
       actualPaidAmount = paid_amount !== undefined && paid_amount !== null
         ? parseFloat(paid_amount)
         : (status === 'paid' ? claimAmount : 0);
-      if (actualPaidAmount < claimAmount - 0.01) {
-        effectiveStatus = 'partially_paid';
-      }
+      // Compare the running total, not this one payment: a claim settled in
+      // two instalments is fully paid once the second lands.
+      const alreadyPaid = parseFloat(claims[0].paid_amount) || 0;
+      effectiveStatus = alreadyPaid + actualPaidAmount < claimAmount - 0.01 ? 'partially_paid' : 'paid';
     }
 
     let updateFields = 'status = ?, updated_at = NOW()';
@@ -484,13 +511,22 @@ router.put('/:id/status', authorize('claims.write'), async (req, res) => {
       // Post the cash/bank receipt against the receivable the claim's bills were booked to,
       // in the SAME transaction as the claim/invoice/bill updates: money recorded as received
       // must reach the ledger, or nothing is recorded at all.
+      // The person recording the payment says which cash/bank account the money
+      // landed in, so it can be traced to that account's statement. It used to
+      // always go to 1110 (or 1100), whatever account actually received it.
       const AccountingService = require('../services/AccountingService');
       const clinicId = claims[0].clinic_id;
-      const bankAccount = await AccountingService.getAccountByCode(clinicId, '1110')
-        || await AccountingService.getAccountByCode(clinicId, '1100');
+      if (!deposit_account_id) {
+        throw Object.assign(new Error('Choose the account the payment was received into.'), { statusCode: 400 });
+      }
+      const [depositRows] = await sequelize.query(DEPOSIT_ACCOUNTS_SQL, { replacements: [clinicId], transaction: t });
+      const bankAccount = depositRows.find((a) => String(a.id) === String(deposit_account_id));
+      if (!bankAccount) {
+        throw Object.assign(new Error('That account can\'t receive claim payments — choose an active cash or bank account.'), { statusCode: 400 });
+      }
       const receivableAccount = await AccountingService.getReceivableAccount(clinicId, claims[0].scheme_id);
-      if (!bankAccount || !receivableAccount) {
-        throw Object.assign(new Error(`Payment not recorded: the ${!bankAccount ? 'bank (1110) / cash (1100)' : 'receivable (1210/1200)'} account is missing or inactive in the Chart of Accounts. Nothing was changed.`), { statusCode: 422 });
+      if (!receivableAccount) {
+        throw Object.assign(new Error('Payment not recorded: the receivable (1210/1200) account is missing or inactive in the Chart of Accounts. Nothing was changed.'), { statusCode: 422 });
       }
       try {
         await AccountingService.createGLEntry({
@@ -503,7 +539,7 @@ router.put('/:id/status', authorize('claims.write'), async (req, res) => {
           // The claim is in the scheme's own currency (often USD) — convert, never post raw.
           transaction_currency: claims[0].currency,
         }, [
-          { account_id: bankAccount.id, debit_amount: actualPaidAmount, credit_amount: 0, description: `Insurer payment received - claim ${claims[0].claim_number}` },
+          { account_id: bankAccount.id, debit_amount: actualPaidAmount, credit_amount: 0, description: `Insurer payment received into ${bankAccount.account_name} - claim ${claims[0].claim_number}` },
           { account_id: receivableAccount.id, debit_amount: 0, credit_amount: actualPaidAmount, description: `Insurance receivable cleared - claim ${claims[0].claim_number}` }
         ], req.user?.userId || req.user?.id || 'system', t);
       } catch (glErr) {

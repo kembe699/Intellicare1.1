@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import CreateClaimModal from '@/components/insurance/CreateClaimModal';
+import { ClaimPaymentDialog } from '@/components/claims/ClaimPaymentDialog';
 import { authFetch } from '@/api/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -18,6 +19,7 @@ interface Claim {
   scheme_name: string;
   scheme_code?: string;
   claim_amount: string | number;
+  paid_amount?: string | number | null;
   currency?: string;
   invoice_count?: number;
   created_at: string;
@@ -33,7 +35,8 @@ const STATUS_MAP = {
 const NEXT_STEPS: Record<string, { to: string; label: string; tone?: 'danger' }[]> = {
   pending: [{ to: 'submitted', label: 'Submit' }],
   submitted: [{ to: 'accepted', label: 'Accept' }, { to: 'rejected', label: 'Reject', tone: 'danger' }],
-  accepted: [{ to: 'paid', label: 'Mark paid' }],
+  accepted: [{ to: 'paid', label: 'Record payment' }],
+  partially_paid: [{ to: 'paid', label: 'Record payment' }],
 };
 
 /** Insurance claims: invoices batched per scheme, taken from pending to paid. */
@@ -44,6 +47,7 @@ export default function InsuranceClaims() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [paying, setPaying] = useState<Claim | null>(null);
   const [pending, setPending] = useState<{ claim: Claim; to: string; label: string; tone?: 'danger' } | null>(null);
 
   const load = useCallback(async () => {
@@ -144,7 +148,7 @@ export default function InsuranceClaims() {
                   <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                     {canWrite && (NEXT_STEPS[c.status] || []).map((step) => (
                       <Button key={step.to} variant="outline" className={step.tone === 'danger' ? 'text-destructive' : ''}
-                        onClick={() => setPending({ claim: c, ...step })}>
+                        onClick={() => (step.to === 'paid' ? setPaying(c) : setPending({ claim: c, ...step }))}>
                         {step.label}
                       </Button>
                     ))}
@@ -169,6 +173,13 @@ export default function InsuranceClaims() {
           onSuccess={() => { setCreateOpen(false); load(); toast.success('Insurance claim created'); }}
         />
       )}
+
+      <ClaimPaymentDialog
+        claim={paying}
+        open={!!paying}
+        onOpenChange={(o) => !o && setPaying(null)}
+        onPaid={load}
+      />
 
       <ConfirmDialog
         open={!!pending}

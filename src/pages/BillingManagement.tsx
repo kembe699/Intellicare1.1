@@ -9,6 +9,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader, LoadingState } from '@/components/common';
 import { toast } from '@/lib/notify';
 import CreateClaimModal from '@/components/insurance/CreateClaimModal';
+import { ClaimPaymentDialog, type PayableClaim } from '@/components/claims/ClaimPaymentDialog';
 import {
   Plus, Eye, DollarSign,
   Loader2, X,
@@ -477,6 +478,7 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
   const navigate = useNavigate();
   const { fmt, currency: baseCurrency } = useCurrency();
   const [batchClaims, setBatchClaims] = useState<any[]>([]);
+  const [payingClaim, setPayingClaim] = useState<PayableClaim | null>(null);
   const [stats, setStats] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -543,6 +545,12 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
 
   return (
     <div className="space-y-6">
+      <ClaimPaymentDialog
+        claim={payingClaim}
+        open={!!payingClaim}
+        onOpenChange={(o) => !o && setPayingClaim(null)}
+        onPaid={loadBatchClaims}
+      />
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -684,11 +692,10 @@ function InsuranceTab({ claims: _legacyClaims, onRefresh: _legacyRefresh }: any)
                           </Button>
                         </>
                       )}
-                      {claim.status === 'accepted' && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-success" disabled={updatingClaimId === claim.id}
-                          onClick={() => handleUpdateStatus(claim.id, 'paid')}>
-                          {updatingClaimId === claim.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                          {updatingClaimId === claim.id ? 'Marking Paid...' : 'Mark Paid'}
+                      {['accepted', 'partially_paid'].includes(claim.status) && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2 text-success"
+                          onClick={() => setPayingClaim({ ...claim, currency: claim.currency || claim.scheme_currency })}>
+                          Record Payment
                         </Button>
                       )}
                     </div>

@@ -21,6 +21,7 @@ import {
   Calendar, User, Shield, History, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { toast } from '@/lib/notify';
+import { ClaimPaymentDialog } from '@/components/claims/ClaimPaymentDialog';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDate } from '@/lib/format';
 
@@ -34,7 +35,7 @@ export default function ClaimDetails() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusAction, setStatusAction] = useState('');
   const [statusNotes, setStatusNotes] = useState('');
-  const [paidAmount, setPaidAmount] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [rejectedReason, setRejectedReason] = useState('');
   const [updating, setUpdating] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -97,7 +98,6 @@ export default function ClaimDetails() {
     setUpdating(true);
     try {
       const body: any = { status: statusAction, notes: statusNotes };
-      if (statusAction === 'paid' && paidAmount) body.paid_amount = parseFloat(paidAmount);
       if (statusAction === 'rejected' && rejectedReason) body.rejected_reason = rejectedReason;
 
       const res = await authFetch(`/api/insurance-claims/${claimId}/status`, {
@@ -109,7 +109,6 @@ export default function ClaimDetails() {
         toast.success(`Claim ${statusAction} successfully`);
         setShowStatusModal(false);
         setStatusNotes('');
-        setPaidAmount('');
         setRejectedReason('');
         loadClaim(true);
       } else {
@@ -181,7 +180,6 @@ export default function ClaimDetails() {
   const openStatusModal = (action: string) => {
     setStatusAction(action);
     setStatusNotes('');
-    setPaidAmount(claim?.claim_amount?.toString() || '');
     setRejectedReason('');
     setShowStatusModal(true);
   };
@@ -306,8 +304,8 @@ export default function ClaimDetails() {
                       </Button>
                     </>
                   )}
-                  {claim.status === 'accepted' && (
-                    <Button size="sm" onClick={() => openStatusModal('paid')} className="gap-1.5 bg-success hover:bg-success">
+                  {['accepted', 'partially_paid'].includes(claim.status) && (
+                    <Button size="sm" onClick={() => setShowPaymentModal(true)} className="gap-1.5 bg-success hover:bg-success">
                       <DollarSign className="h-3.5 w-3.5" /> Record Payment
                     </Button>
                   )}
@@ -534,22 +532,14 @@ export default function ClaimDetails() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="capitalize">
-              {statusAction === 'submitted' ? 'Submit Claim' : statusAction === 'accepted' ? 'Accept Claim' : statusAction === 'rejected' ? 'Reject Claim' : statusAction === 'paid' ? 'Record Payment' : 'Update Status'}
+              {statusAction === 'submitted' ? 'Submit Claim' : statusAction === 'accepted' ? 'Accept Claim' : statusAction === 'rejected' ? 'Reject Claim' : 'Update Status'}
             </DialogTitle>
             <DialogDescription>
-              {statusAction === 'paid' ? 'Record insurance payment for this claim' :
-               statusAction === 'rejected' ? 'Provide a reason for rejection' :
+              {statusAction === 'rejected' ? 'Provide a reason for rejection' :
                `Update claim status to ${statusAction}`}
             </DialogDescription>
           </DialogHeader>
           <div className="px-5 py-4 space-y-4">
-            {statusAction === 'paid' && (
-              <div>
-                <Label>Payment Amount ({claimCurrency})</Label>
-                <Input type="number" value={paidAmount} onChange={e => setPaidAmount(e.target.value)}
-                  placeholder="Enter paid amount" className="mt-1" />
-              </div>
-            )}
             {statusAction === 'rejected' && (
               <div>
                 <Label>Rejection Reason *</Label>
@@ -562,11 +552,6 @@ export default function ClaimDetails() {
               <Textarea value={statusNotes} onChange={e => setStatusNotes(e.target.value)}
                 placeholder="Add notes about this status change..." rows={2} className="mt-1" />
             </div>
-            {statusAction === 'paid' && (
-              <div className="p-3 bg-success-bg border border-success-border rounded-lg text-sm text-success">
-                <p className="font-medium">This will mark all {invoices.length} invoices as paid.</p>
-              </div>
-            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowStatusModal(false)}>Cancel</Button>
@@ -577,6 +562,13 @@ export default function ClaimDetails() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ClaimPaymentDialog
+        claim={claim ? { id: claim.id, claim_number: claim.claim_number, claim_amount: claim.claim_amount, paid_amount: claim.paid_amount, currency: claimCurrency } : null}
+        open={showPaymentModal}
+        onOpenChange={setShowPaymentModal}
+        onPaid={() => loadClaim(true)}
+      />
 
       {/* Edit Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>

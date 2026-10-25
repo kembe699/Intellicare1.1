@@ -56,9 +56,11 @@ async function scenario(base) {
   const claim = await call(base, 'POST', '/insurance-claims', { scheme_id: schemeId, invoice_ids: [inv.body.data.id], claim_amount: 30000 });
   const claimId = claim.body.data?.id || claim.body.id;
   for (const st of ['submitted', 'accepted']) await call(base, 'PUT', `/insurance-claims/${claimId}/status`, { status: st });
+  // The payment names the account it landed in (required since claim payments ask for it).
+  const bankId = (await q("SELECT id FROM chart_of_accounts WHERE account_code = '1110'"))[0].id;
   await setActive(['1110', '1100'], false);
   try {
-    const r = await call(base, 'PUT', `/insurance-claims/${claimId}/status`, { status: 'paid', paid_amount: 30000 });
+    const r = await call(base, 'PUT', `/insurance-claims/${claimId}/status`, { status: 'paid', paid_amount: 30000, deposit_account_id: bankId });
     o.claim = { status: r.status, error: r.body.error, claimStatus: (await q('SELECT status FROM insurance_batch_claims WHERE id = $1', [claimId]))[0].status,
       invoice: (await q('SELECT status, amount_paid::float p FROM invoices WHERE id = $1', [inv.body.data.id]))[0], gl: await glCount('insurance_claims', [claimId]) };
   } finally { await setActive(['1110', '1100'], true); }
@@ -67,7 +69,7 @@ async function scenario(base) {
   const b4 = await freshBill(base);
   const okDisc = await call(base, 'POST', `/billing/bills/${b4.id}/discounts`, { discount_type: 'fixed_amount', discount_amount: 2000, reason: 'T09 ok' });
   o.okDiscount = { status: okDisc.status, gl: await glCount('billing_discount', [okDisc.body.id || '']), bill: await bill(b4.id) };
-  const okClaim = await call(base, 'PUT', `/insurance-claims/${claimId}/status`, { status: 'paid', paid_amount: 30000 });
+  const okClaim = await call(base, 'PUT', `/insurance-claims/${claimId}/status`, { status: 'paid', paid_amount: 30000, deposit_account_id: bankId });
   o.okClaim = { status: okClaim.status, gl: await glCount('insurance_claims', [claimId]) };
   return o;
 }
@@ -86,8 +88,8 @@ check('after: write-off refused (422), bill still open, no write-off row',
   after.writeOff.status === 422 && after.writeOff.rows === 0 && after.writeOff.bill.b === 20000 && after.writeOff.bill.s !== 'written_off', after.writeOff.error);
 check('after: credit note refused (422), bill unchanged, note still approved (not applied)',
   after.creditNote.status === 422 && after.creditNote.bill.t === 20000 && after.creditNote.noteStatus === 'approved' && after.creditNote.gl === 0, after.creditNote.error);
-check('after: claim payment refused (422), claim not paid, invoice untouched',
-  after.claim.status === 422 && after.claim.claimStatus !== 'paid' && after.claim.invoice.p === 0 && after.claim.gl === 0, after.claim.error);
+check('after: claim payment refused (inactive bank account), claim not paid, invoice untouched',
+  [400, 422].includes(after.claim.status) && after.claim.claimStatus !== 'paid' && after.claim.invoice.p === 0 && after.claim.gl === 0, after.claim.error);
 check('after: with accounts available, discount posts in the same step', after.okDiscount.status === 200 && after.okDiscount.gl === 1 && after.okDiscount.bill.b === 18000, JSON.stringify(after.okDiscount));
 check('after: with accounts available, claim payment posts', after.okClaim.status === 200 && after.okClaim.gl === 1, JSON.stringify(after.okClaim));
 
