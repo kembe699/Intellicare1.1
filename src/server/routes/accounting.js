@@ -12,6 +12,7 @@ const {
   sequelize 
 } = require('../models');
 const AccountingService = require('../services/AccountingService');
+const { getNextDocumentNumber } = require('../services/DocumentNumberService');
 const CurrencyService = require('../services/CurrencyService');
 const { initializeChartOfAccounts } = require('../scripts/initializeChartOfAccounts');
 const { v4: uuidv4 } = require('uuid');
@@ -441,28 +442,12 @@ router.post('/journal-entries', authorize('accounting.write'), async (req, res) 
     const transaction = await sequelize.transaction();
     
     try {
-      // Generate JE number
-      const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, '0');
-      
-      const lastJE = await JournalEntries.findOne({
-        where: {
-          clinic_id,
-          je_number: {
-            [Op.like]: `JE-${year}${month}-%`
-          }
-        },
-        order: [['je_number', 'DESC']],
-        transaction
-      });
-      
-      let sequence = 1;
-      if (lastJE) {
-        const lastSequence = parseInt(lastJE.je_number.split('-').pop());
-        sequence = lastSequence + 1;
-      }
-      
-      const jeNumber = `JE-${year}${month}-${String(sequence).padStart(4, '0')}`;
+      // Numbered by the same allocator as every automatic journal entry (cash
+      // payments, transfers, deposits — JournalPostingService). Counting the
+      // highest existing number + 1 here left that allocator's counter behind:
+      // the next payment was handed a number a manual entry already held, hit
+      // the unique index on je_number, and failed.
+      const jeNumber = await getNextDocumentNumber('JE', clinic_id, transaction, { date: entry_date });
       const branchId = getCreateBranchId(req);
 
       // Create journal entry with currency info
