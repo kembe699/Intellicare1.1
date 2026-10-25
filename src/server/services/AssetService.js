@@ -122,6 +122,7 @@ class AssetService {
         const glEntry = await AccountingService.createGLEntry(
           {
             clinic_id: clinicId,
+            branch_id: branchId || null,
             transaction_date: acquisitionDate,
             transaction_type: 'fixed_asset_acquisition',
             description: `Asset acquired - ${assetCode} - ${name}`,
@@ -181,6 +182,7 @@ class AssetService {
         const glEntry = await AccountingService.createGLEntry(
           {
             clinic_id: clinicId,
+            branch_id: branchId || null,
             transaction_date: acquisitionDate,
             transaction_type: 'fixed_asset_opening_balance',
             description: `Legacy asset opening balance - ${assetCode} - ${name}`,
@@ -341,6 +343,7 @@ class AssetService {
       const glEntry = await AccountingService.createGLEntry(
         {
           clinic_id: clinicId,
+          branch_id: branchId || null,
           transaction_date: periodEnd,
           transaction_type: 'fixed_asset_depreciation',
           description: `Depreciation run - ${period} (${perAsset.length} asset${perAsset.length === 1 ? '' : 's'})`,
@@ -476,6 +479,7 @@ class AssetService {
       const glEntry = await AccountingService.createGLEntry(
         {
           clinic_id: clinicId,
+          branch_id: asset.branch_id || null,
           transaction_date: disposalDate,
           transaction_type: 'fixed_asset_disposal',
           description: `Disposal - ${asset.asset_code} - ${asset.name}`,
@@ -547,6 +551,7 @@ class AssetService {
       const glEntry = await AccountingService.createGLEntry(
         {
           clinic_id: clinicId,
+          branch_id: asset.branch_id || null,
           transaction_date: new Date(),
           transaction_type: 'fixed_asset_revaluation',
           description: `Revaluation - ${asset.asset_code} - ${asset.name}${reason ? ` (${reason})` : ''}`,

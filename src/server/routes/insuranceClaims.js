@@ -528,9 +528,19 @@ router.put('/:id/status', authorize('claims.write'), async (req, res) => {
       if (!receivableAccount) {
         throw Object.assign(new Error('Payment not recorded: the receivable (1210/1200) account is missing or inactive in the Chart of Accounts. Nothing was changed.'), { statusCode: 422 });
       }
+      // A claim saved without a branch takes its bills' branch, so the payment
+      // shows in that branch's books and cash flow.
+      const [[claimBill]] = await sequelize.query(
+        `SELECT pb.branch_id FROM insurance_batch_claim_items ci
+           LEFT JOIN invoices i ON i.id::text = ci.invoice_id::text
+           JOIN patient_bills pb ON pb.id::text = COALESCE(ci.bill_id::text, i.bill_id::text)
+          WHERE ci.claim_id = ? AND pb.branch_id IS NOT NULL LIMIT 1`,
+        { replacements: [req.params.id], transaction: t });
+      const claimBillBranchId = claimBill?.branch_id || null;
       try {
         await AccountingService.createGLEntry({
           clinic_id: clinicId,
+          branch_id: claims[0].branch_id || claimBillBranchId || getCreateBranchId(req) || null,
           transaction_date: new Date(),
           transaction_type: 'insurance_claim_payment',
           description: `Insurance claim payment - ${claims[0].claim_number}`,

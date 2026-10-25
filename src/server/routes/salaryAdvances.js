@@ -353,6 +353,7 @@ router.post('/:id/disburse', authorize('salary_advances.disburse'), async (req, 
 
     const glEntry = await AccountingService.createGLEntry({
       clinic_id: clinicId,
+      branch_id: advance.branch_id || getCreateBranchId(req) || null,
       transaction_date: payDate,
       transaction_type: 'salary_advance_disbursement',
       description: `Salary advance ${advance.advance_number} disbursed to ${employeeLabel}`,
@@ -428,6 +429,7 @@ router.post('/:id/repay', authorize('hr.salary_advances.write'), async (req, res
     if (advancesAccount) {
       glEntry = await AccountingService.createGLEntry({
         clinic_id: clinicId,
+        branch_id: advance.branch_id || getCreateBranchId(req) || null,
         transaction_date: payDate,
         transaction_type: 'salary_advance_repayment',
         description: `Salary advance ${advance.advance_number} repayment — ${employeeLabel}`,

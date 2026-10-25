@@ -1875,6 +1875,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
       if (totalPrice > 0 && !billCoveredRevenue) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: cid,
+          branch_id: req.branchContext?.branchId || req.user?.branchId || null,
           transaction_date: new Date(),
           transaction_type: 'pharmacy_dispensing',
           description: `Pharmacy revenue: ${drug.drug_name} x${quantity_dispensed}`,
@@ -1915,6 +1916,7 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
 
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: cid,
+          branch_id: req.branchContext?.branchId || req.user?.branchId || null,
           transaction_date: new Date(),
           transaction_type: 'pharmacy_dispensing_cogs',
           description: selectedBatch?.unit_cost > 0
@@ -2211,6 +2213,7 @@ router.post('/returns', authorize('pharmacy.write'), async (req, res) => {
           const description = `Pharmacy refund ${retNum} — ${qty} unit(s) returned from ${record.dispensing_number} (${return_reason || 'unused'})`;
           const glEntry = await AccountingService.createGLEntry({
             clinic_id: cid,
+            branch_id: record.branch_id || req.branchContext?.branchId || req.user?.branchId || null,
             transaction_date: new Date().toISOString().split('T')[0],
             transaction_type: 'pharmacy_return_refund',
             description,

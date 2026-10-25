@@ -734,6 +734,7 @@ router.post('/consultant-bill-payment', authorize('consultant_bills.pay'), async
       ];
       glEntry = await AccountingService.createGLEntry({
         clinic_id: clinicId,
+        branch_id: bill.branch_id || getCreateBranchId(req) || null,
         transaction_date: payDate,
         transaction_type: 'consultant_bill_payment',
         description: `Consultant bill payment — ${bill.bill_number} to ${consultantLabel}`,

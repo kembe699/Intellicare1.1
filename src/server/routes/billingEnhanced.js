@@ -663,7 +663,7 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
       // credit_notes doesn't carry scheme_id/currency itself — look them up from the
       // bill this note is actually being applied against, same as discount/write-off above.
       const [targetBillRows] = await sequelize.query(
-        'SELECT scheme_id, bill_currency FROM patient_bills WHERE id = :billId',
+        'SELECT scheme_id, bill_currency, branch_id FROM patient_bills WHERE id = :billId',
         { replacements: { billId: targetBillId }, transaction: t }
       );
       const receivablesAccount = await AccountingService.getReceivableAccount(note.clinic_id, targetBillRows[0]?.scheme_id);
@@ -717,6 +717,7 @@ router.put('/credit-notes/:id/apply', authorize('billing.write'), async (req, re
       if (revenueLines.length > 0 && receivablesAccount) {
         const glEntry = await AccountingService.createGLEntry({
           clinic_id: note.clinic_id,
+          branch_id: targetBillRows[0]?.branch_id || getCreateBranchId(req) || null,
           transaction_date: new Date(),
           transaction_type: 'credit_note',
           description: `Credit Note ${note.credit_note_number} - ${note.reason || 'adjustment'}`,

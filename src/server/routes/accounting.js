@@ -334,6 +334,8 @@ router.post('/general-ledger', authorize('accounting.write'), async (req, res) =
 
     // Explicitly a draft: this screen creates an entry and posts it as a
     // separate, deliberate act (POST /general-ledger/:id/post below).
+    // Branch-scoped reports read account_ledger.branch_id; an entry with none drops out of them.
+    if (glData.branch_id == null) glData.branch_id = getCreateBranchId(req) || null;
     const glEntry = await AccountingService.createGLEntry(
       glData, 
       lineItems, 
@@ -726,6 +728,7 @@ router.post('/journal-entries/:id/post', authorize('accounting.write'), async (r
     const glEntry = await AccountingService.createGLEntry(
       {
         clinic_id: journalEntry.clinic_id,
+        branch_id: journalEntry.branch_id || getCreateBranchId(req) || null,
         transaction_date: journalEntry.entry_date,
         transaction_type: 'journal_entry',
         description: journalEntry.description,
