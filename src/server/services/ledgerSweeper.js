@@ -115,6 +115,10 @@ async function sweepCurrentTenant() {
  * model layer resolves to that tenant's schema.
  */
 async function sweepAllTenants() {
+  // Same switch syncBillRevenueToGL honours — skip the per-tenant scan entirely.
+  if (String(process.env.LEDGER_SWEEPER_REVENUE_SYNC ?? '').trim().toLowerCase() === 'false') {
+    return { tenants: 0, repaired: 0, corrected: 0, failed: 0, disabled: true };
+  }
   const { Client } = require('../models/platform');
   const { getTenantConnection } = require('../tenantDb');
 

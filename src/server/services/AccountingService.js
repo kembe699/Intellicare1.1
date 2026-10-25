@@ -11,6 +11,16 @@ const CurrencyService = require('./CurrencyService');
 const { v4: uuidv4 } = require('uuid');
 const { getNextDocumentNumber } = require('./DocumentNumberService');
 
+/**
+ * Kill switch for the bill-revenue sync (syncBillRevenueToGL), used by the
+ * ledger sweeper and by every bill edit in patientBills.js.
+ * LEDGER_SWEEPER_REVENUE_SYNC=false turns it off everywhere; unset or any other
+ * value leaves it on.
+ */
+function revenueSyncEnabled() {
+  return String(process.env.LEDGER_SWEEPER_REVENUE_SYNC ?? '').trim().toLowerCase() !== 'false';
+}
+
 class AccountingService {
   
   /**
@@ -619,6 +629,7 @@ class AccountingService {
     // (utils/billTax.js), so both count as "posted" against the bill.
     const { REVENUE_OR_TAX_ACCOUNT_SQL } = require('../utils/billTax');
     if (!billId) return 0;
+    if (!revenueSyncEnabled()) return 0;
 
     const [[bill]] = await sequelize.query(
       `SELECT id, clinic_id, branch_id, scheme_id, bill_number, bill_date, status,

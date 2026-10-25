@@ -1071,7 +1071,8 @@ async function startServer() {
     setImmediate(() => {
       const { sweepAllTenants } = require('./services/ledgerSweeper');
       const runLedgerSweep = () => sweepAllTenants()
-        .then(({ repaired, corrected, failed }) => {
+        .then(({ repaired, corrected, failed, disabled }) => {
+          if (disabled) { console.warn('⚠️  Ledger sweep: bill revenue sync is OFF (LEDGER_SWEEPER_REVENUE_SYNC=false).'); return; }
           if (repaired > 0) console.log(`🧾 Ledger sweep: repaired ${repaired} bill(s), ${corrected.toFixed(2)} adjusted.`);
           if (failed > 0) console.warn(`⚠️  Ledger sweep: ${failed} tenant(s) could not be swept.`);
         })
