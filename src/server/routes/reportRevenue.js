@@ -567,13 +567,13 @@ router.get('/patient-register', async (req, res) => {
 // groupBy=user|department|scheme|branch|item|week|month|bill
 //
 // The other "Revenue by …" breakdowns above add up receipts — cash
-// collected — so a bill on credit, or the unpaid part of one, never showed
-// as revenue. This counts every bill raised in the period (the revenue the
-// ledger books when the bill is created), whatever has been paid, with what
-// was paid and what is still outstanding alongside.
+// collected — so a balance invoiced on credit never showed as revenue. This
+// counts, for bills raised in the period, what was paid plus any balance
+// that was invoiced (invoice raised, scheme/insurer bill, or credit bill),
+// with paid and invoiced-unpaid alongside. Open bills nobody has paid or
+// invoiced yet are not counted.
 //
-//   - cancelled bills are left out; written-off bills still count (the
-//     revenue was earned — the write-off is a bad-debt expense)
+//   - cancelled bills are left out
 //   - amounts are converted from the bill's currency into the base currency
 //     at the bill-date rate
 //   - department and item split each bill's total across its lines (voided
@@ -595,7 +595,9 @@ router.get('/earned', async (req, res) => {
               pb.total_amount, pb.paid_amount, pb.balance_amount, pb.bill_currency, pb.clinic_id,
               pb.scheme_id, COALESCE(ps.scheme_name, pb.scheme_name) AS scheme_name,
               pb.branch_id, b.name AS branch_name,
-              pb.created_by, u.display_name AS created_by_name
+              pb.created_by, u.display_name AS created_by_name,
+              (pb.invoice_id IS NOT NULL OR pb.scheme_id IS NOT NULL OR COALESCE(pb.is_credit_bill, false)
+                 OR EXISTS (SELECT 1 FROM invoices i WHERE i.bill_id::text = pb.id::text)) AS invoiced
        FROM patient_bills pb
        LEFT JOIN patient_schemes ps ON ps.id = pb.scheme_id
        LEFT JOIN branches b ON b.id = pb.branch_id
@@ -653,15 +655,14 @@ router.get('/earned', async (req, res) => {
     const totals = { count: 0, earned: 0, paid: 0, outstanding: 0 };
     for (const bill of bills) {
       const rate = await toBase(bill);
-      // A discount reduces what the patient owes without always reducing
-      // total_amount; paid + balance is what was actually charged. A
-      // written-off bill keeps its full total (balance zeroed by the write-off).
-      const total = num(bill.total_amount);
-      const charged = num(bill.paid_amount) + num(bill.balance_amount);
-      const net = bill.status === 'written_off' || charged <= 0 ? total : Math.min(total, charged);
-      const earned = net * rate;
-      const paid = Math.min(num(bill.paid_amount) * rate, earned);
-      const outstanding = bill.status === 'written_off' ? 0 : Math.max(0, num(bill.balance_amount) * rate);
+      // Earned = what has been acted on: money received, plus a balance that
+      // was formally invoiced (an invoice raised, a scheme/insurer bill, or a
+      // credit bill). A bill nobody has paid or invoiced yet — still just an
+      // open bill — isn't revenue earned yet and adds nothing here.
+      const paid = Math.max(0, num(bill.paid_amount) * rate);
+      const outstanding = bill.invoiced && bill.status !== 'written_off' ? Math.max(0, num(bill.balance_amount) * rate) : 0;
+      const earned = paid + outstanding;
+      if (earned <= 0) continue;
       totals.count += 1; totals.earned += earned; totals.paid += paid; totals.outstanding += outstanding;
 
       if (groupBy === 'user') {

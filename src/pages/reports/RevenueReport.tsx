@@ -42,15 +42,15 @@ interface ReportOption {
 
 const REPORT_OPTIONS: ReportOption[] = [
   // Revenue EARNED — every bill raised in the period, paid or still owed.
-  { value: 'user', label: 'Revenue by User (Billed By)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'user' },
-  { value: 'department', label: 'Revenue by Department / Category', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'department' },
-  { value: 'scheme', label: 'Revenue by Scheme', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'scheme' },
-  { value: 'branch', label: 'Revenue by Branch', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'branch' },
-  { value: 'doctor', label: 'Revenue by Doctor (Consultations)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'doctor' },
-  { value: 'item', label: 'Revenue Detailed (By Item)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned', earnedGroupBy: 'item' },
-  { value: 'journal', label: 'Revenue Journal (All Bills)', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned-bills', earnedGroupBy: 'bill' },
-  { value: 'trend_week', label: 'Revenue — Weekly Trend', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned-trend', earnedGroupBy: 'week' },
-  { value: 'trend_month', label: 'Revenue — Monthly Trend', group: 'Revenue Earned (Paid + Unpaid)', mode: 'earned-trend', earnedGroupBy: 'month' },
+  { value: 'user', label: 'Revenue by User (Billed By)', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned', earnedGroupBy: 'user' },
+  { value: 'department', label: 'Revenue by Department / Category', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned', earnedGroupBy: 'department' },
+  { value: 'scheme', label: 'Revenue by Scheme', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned', earnedGroupBy: 'scheme' },
+  { value: 'branch', label: 'Revenue by Branch', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned', earnedGroupBy: 'branch' },
+  { value: 'doctor', label: 'Revenue by Doctor (Consultations)', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned', earnedGroupBy: 'doctor' },
+  { value: 'item', label: 'Revenue Detailed (By Item)', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned', earnedGroupBy: 'item' },
+  { value: 'journal', label: 'Revenue Journal (All Bills)', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned-bills', earnedGroupBy: 'bill' },
+  { value: 'trend_week', label: 'Revenue — Weekly Trend', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned-trend', earnedGroupBy: 'week' },
+  { value: 'trend_month', label: 'Revenue — Monthly Trend', group: 'Revenue Earned (Paid + Invoiced)', mode: 'earned-trend', earnedGroupBy: 'month' },
 
   // Collections — cash actually received (receipts), whichever bill it paid.
   { value: 'collect_user', label: 'Collections by Cashier', group: 'Collections (Cash Received)', mode: 'group' },
@@ -76,7 +76,7 @@ const REPORT_OPTIONS: ReportOption[] = [
   { value: 'patient_register', label: 'Patient Register (By Scheme)', group: 'Analysis', mode: 'register' },
 ];
 
-const OPTION_GROUPS = ['Revenue Earned (Paid + Unpaid)', 'Collections (Cash Received)', 'Patient Bills', 'Cancelled / Voided', 'Analysis'];
+const OPTION_GROUPS = ['Revenue Earned (Paid + Invoiced)', 'Collections (Cash Received)', 'Patient Bills', 'Cancelled / Voided', 'Analysis'];
 
 function thisMonthRange() {
   const now = new Date();
@@ -158,7 +158,9 @@ export default function RevenueReport() {
         const json = await res.json();
         setRows((json.doctors || []).map((d: any) => ({
           key: d.doctorId, label: d.doctorName, count: d.visits,
-          earned: d.revenueBilled, paid: d.revenueCollected, outstanding: Math.max(0, (d.revenueBilled || 0) - (d.revenueCollected || 0)),
+          // Doctor Performance can't tell an invoiced balance from an open bill,
+          // so only what was collected counts as earned here.
+          earned: d.revenueCollected, paid: d.revenueCollected, outstanding: 0,
         })));
       } else if (option.mode === 'earned' || option.mode === 'earned-bills' || option.mode === 'earned-trend') {
         const res = await authFetch(`/api/reports-v2/revenue/earned?${params}&groupBy=${option.earnedGroupBy}`);
@@ -269,13 +271,13 @@ export default function RevenueReport() {
       { key: 'count', header: countHeader, align: 'right', sortable: true, render: v => <span className="text-muted-foreground">{v != null ? fmtCount(v) : '—'}</span> },
       { key: 'earned', header: 'Revenue Earned', align: 'right', sortable: true, render: v => <span className="font-mono font-semibold">{fmtCurrency(v)}</span> },
       { key: 'paid', header: 'Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
-      { key: 'outstanding', header: 'Outstanding (Credit)', align: 'right', sortable: true, render: money },
+      { key: 'outstanding', header: 'Invoiced, Unpaid', align: 'right', sortable: true, render: money },
     ];
     csvColumns = [
       { header: firstHeader, key: 'label' }, { header: countHeader, key: 'count' },
       { header: 'Revenue Earned', key: 'earned', transform: v => fmtCurrency(v) },
       { header: 'Paid', key: 'paid', transform: v => fmtCurrency(v) },
-      { header: 'Outstanding (Credit)', key: 'outstanding', transform: v => fmtCurrency(v) },
+      { header: 'Invoiced, Unpaid', key: 'outstanding', transform: v => fmtCurrency(v) },
     ];
   } else if (option.mode === 'earned-bills') {
     keyExtractor = r => r.key;
@@ -289,7 +291,7 @@ export default function RevenueReport() {
       { key: 'status', header: 'Status', sortable: true, render: v => <span className="capitalize">{String(v || '').replace(/_/g, ' ')}</span> },
       { key: 'earned', header: 'Revenue Earned', align: 'right', sortable: true, render: v => <span className="font-mono font-semibold">{fmtCurrency(v)}</span> },
       { key: 'paid', header: 'Paid', align: 'right', sortable: true, render: v => <span className="font-mono text-success">{fmtCurrency(v)}</span> },
-      { key: 'outstanding', header: 'Outstanding', align: 'right', sortable: true, render: money },
+      { key: 'outstanding', header: 'Invoiced, Unpaid', align: 'right', sortable: true, render: money },
     ];
     csvColumns = [
       { header: 'Bill Date', key: 'date', transform: v => fmtDate(v) }, { header: 'Bill #', key: 'label' },
@@ -297,7 +299,7 @@ export default function RevenueReport() {
       { header: 'Billed By', key: 'billedBy' }, { header: 'Status', key: 'status' },
       { header: 'Revenue Earned', key: 'earned', transform: v => fmtCurrency(v) },
       { header: 'Paid', key: 'paid', transform: v => fmtCurrency(v) },
-      { header: 'Outstanding', key: 'outstanding', transform: v => fmtCurrency(v) },
+      { header: 'Invoiced, Unpaid', key: 'outstanding', transform: v => fmtCurrency(v) },
     ];
   } else if (option.mode === 'group') {
     columns = [
@@ -603,7 +605,7 @@ export default function RevenueReport() {
               {[
                 { label: 'Total revenue earned', value: rows.reduce((s, r) => s + (r.earned || 0), 0), strong: true },
                 { label: 'Paid', value: rows.reduce((s, r) => s + (r.paid || 0), 0) },
-                { label: 'Outstanding (on credit)', value: rows.reduce((s, r) => s + (r.outstanding || 0), 0) },
+                { label: 'Invoiced, not yet paid', value: rows.reduce((s, r) => s + (r.outstanding || 0), 0) },
               ].map((t) => (
                 <div key={t.label} className="bg-muted/20 px-4 py-2.5">
                   <p className="text-xs text-muted-foreground">{t.label}</p>
