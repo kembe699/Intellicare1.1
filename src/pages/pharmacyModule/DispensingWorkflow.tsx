@@ -983,7 +983,7 @@ export default function DispensingWorkflow() {
             paidAmount: parseFloat(activeBill.paid_amount) + amount, balanceAmount: parseFloat(activeBill.balance_amount) - amount,
             billDate: activeBill.bill_date, services: paidThisTime,
           },
-          payment: { amount, method: paymentForm.method, date: paymentForm.date, notes, from_lease: false, cashierName: user?.displayName },
+          payment: { amount, method: paymentForm.method, date: paymentForm.date, notes, from_lease: false, cashierName: user?.displayName, receiptNumber: result.receipt?.receipt_number },
         });
 
         // Fully settling the bill in this same step unblocks dispensing right away — dispense

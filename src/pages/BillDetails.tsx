@@ -720,7 +720,7 @@ export default function BillDetails() {
             totalAmount: amt(bill.total_amount), paidAmount: amt(bill.paid_amount) + amount,
             balanceAmount: amt(bill.balance_amount) - amount, billDate: bill.bill_date, services: paidThisTime,
           },
-          payment: { amount, method: paymentForm.method, date: paymentForm.date, notes, from_lease: false, cashierName: user?.displayName },
+          payment: { amount, method: paymentForm.method, date: paymentForm.date, notes, from_lease: false, cashierName: user?.displayName, receiptNumber: result.receipt?.receipt_number },
         });
         setPaymentForm({ amount: '', method: 'cash', date: toLocalDateStr(new Date()), reference: '', notes: '', paymentTerms: '30', schemeId: '' });
         setSelectedItems(new Set());

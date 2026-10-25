@@ -642,7 +642,7 @@ export default function PatientsBill() {
             paidAmount: parseFloat(selectedBill.paid_amount) + amount, balanceAmount: parseFloat(selectedBill.balance_amount) - amount,
             billDate: selectedBill.bill_date, services: paidThisTime,
           },
-          payment: { amount, method: paymentForm.method, date: paymentForm.date, notes, from_lease: false, cashierName: user?.displayName },
+          payment: { amount, method: paymentForm.method, date: paymentForm.date, notes, from_lease: false, cashierName: user?.displayName, receiptNumber: result.receipt?.receipt_number },
         });
         setSelectedBill(null);
         setSelectedItems(new Set());

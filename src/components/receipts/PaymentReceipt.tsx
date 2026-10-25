@@ -1,6 +1,8 @@
 import React from 'react';
 import { format } from 'date-fns';
+import Barcode from 'react-barcode';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 
 interface PaymentReceiptProps {
   bill: {
@@ -35,6 +37,8 @@ interface PaymentReceiptProps {
     lease_details?: string;
     cashierName?: string;
     cashierId?: string;
+    /** The real receipt number from the payment response — printed and barcoded. */
+    receiptNumber?: string;
   };
   clinicName?: string;
   facilityName?: string;
@@ -42,31 +46,20 @@ interface PaymentReceiptProps {
   receiptNumber?: string;
 }
 
-// Thermal-printer rules (from earlier fading complaints): solid black only —
-// these heads are effectively 1-bit, so greys print as nothing — and no
-// stroke lighter than weight 600. Rules are drawn with real borders (crisp
-// on any printer) instead of rows of dashes, every label/value pair is a
-// table row so it never wraps onto two lines, and there are only three
-// type sizes: 16px name, 12px body, 11px small print.
+// Layout follows the house thermal-receipt template: centred logo and
+// facility block, dashed rules, a barcode of the receipt number, an item
+// table, totals in the base and secondary currency (no rate printed), a tax
+// block, and the served-by / thank-you footer. Solid black only and weights
+// of 600+ — thermal heads are effectively 1-bit, so greys print as nothing.
 const INK = '#000';
 const BODY = 12;
 const SMALL = 11;
-const ruleSolid: React.CSSProperties = { borderTop: `1.5px solid ${INK}`, margin: '8px 0' };
-const ruleDashed: React.CSSProperties = { borderTop: `1px dashed ${INK}`, margin: '7px 0' };
-const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse' };
-const tdLabel: React.CSSProperties = { fontSize: BODY, fontWeight: 600, padding: '1.5px 0', verticalAlign: 'top', whiteSpace: 'nowrap', paddingRight: 8 };
-const tdValue: React.CSSProperties = { fontSize: BODY, fontWeight: 700, padding: '1.5px 0', textAlign: 'right', verticalAlign: 'top', wordBreak: 'break-word' };
-const heading: React.CSSProperties = { fontSize: SMALL, fontWeight: 800, letterSpacing: '1.5px', margin: '0 0 4px' };
+const dashed: React.CSSProperties = { borderTop: `1px dashed ${INK}`, margin: '6px 0' };
+const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: BODY, fontWeight: 700, lineHeight: 1.45 };
+const cell: React.CSSProperties = { fontSize: BODY, fontWeight: 700, padding: '2px 0', verticalAlign: 'top' };
+const head: React.CSSProperties = { fontSize: SMALL, fontWeight: 800, padding: '2px 0', verticalAlign: 'bottom' };
 
-const InfoRows = ({ rows }: { rows: [string, React.ReactNode][] }) => (
-  <table style={table}>
-    <tbody>
-      {rows.map(([label, value]) => (
-        <tr key={label}><td style={tdLabel}>{label}</td><td style={tdValue}>{value}</td></tr>
-      ))}
-    </tbody>
-  </table>
-);
+const num = (v: number) => (Number(v) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
   bill,
@@ -76,140 +69,169 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
   branchName,
   receiptNumber,
 }) => {
-  const displayName = facilityName || clinicName || 'IntelliCare HMIS';
-  const receiptId = receiptNumber || `RCP-${Date.now().toString().slice(-8)}`;
+  const facility = useFacilityInfo();
+  const { currency, secondaryCurrency, secondaryRate } = useCurrency();
+  const displayName = facilityName || facility.facilityName || clinicName || 'IntelliCare HMIS';
+  const receiptId = receiptNumber || payment.receiptNumber || '';
   const balanceDue = Math.max(0, (bill.totalAmount || 0) - (bill.paidAmount || 0));
-  const isPaid = balanceDue === 0;
   // No new cash/card/mobile money actually changed hands here — the patient's own prepaid
-  // deposit balance covered this instead, so it's clearly labeled as a settlement
-  // confirmation rather than presented as an ordinary payment receipt.
+  // deposit balance covered this instead, so it's labelled as a settlement, not a sale.
   const isDepositOffset = payment.method === 'deposit';
   const method = isDepositOffset ? 'Deposit offset' : payment.method.charAt(0).toUpperCase() + payment.method.slice(1).replace(/_/g, ' ');
-
-  const { fmt } = useCurrency();
+  const base = currency?.symbol || currency?.code || '';
+  const baseCode = currency?.code || '';
+  const money = (v: number) => `${base} ${num(v)}`.trim();
+  const hasSecondary = !!secondaryCurrency && secondaryRate != null && secondaryCurrency.code !== baseCode;
+  const secondary = (v: number) => hasSecondary
+    ? `${secondaryCurrency!.symbol || secondaryCurrency!.code} ${(v * (secondaryRate as number)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: secondaryCurrency!.decimal_places ?? 2 })}`
+    : '';
+  const address = [facility.branchAddress || facility.facilityAddress, facility.facilityCity].filter(Boolean).join(', ');
+  const phone = facility.branchPhone || facility.facilityPhone;
+  const items = bill.services || [];
+  const totalItems = items.reduce((t, svc) => t + (Number(svc.quantity) || 1), 0);
+  const paidAt = new Date(payment.date);
 
   const thermal: React.CSSProperties = {
     width: '302px',
     margin: '0 auto',
-    fontFamily: "Arial, Helvetica, sans-serif",
+    fontFamily: 'Arial, Helvetica, sans-serif',
     fontSize: BODY,
-    fontWeight: 600,
-    lineHeight: 1.4,
+    fontWeight: 700,
+    lineHeight: 1.35,
     color: INK,
     backgroundColor: '#fff',
-    padding: '12px 10px 14px',
+    padding: '10px 10px 12px',
     boxSizing: 'border-box',
   };
-
-  const infoRows: [string, React.ReactNode][] = [
-    ['Receipt No', receiptId],
-    ['Date', format(new Date(payment.date), 'dd MMM yyyy, HH:mm')],
-    ...(bill.billNumber && bill.billNumber !== receiptId ? [['Bill No', bill.billNumber] as [string, React.ReactNode]] : []),
-    ['Patient', bill.patientName || '—'],
-  ];
 
   return (
     <div className="thermal-receipt" style={thermal}>
 
-      {/* ── Header ── */}
+      {/* ── Facility ── */}
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.25 }}>{displayName}</div>
-        {branchName && branchName !== displayName && <div style={{ fontSize: SMALL, fontWeight: 600, marginTop: 2 }}>{branchName}</div>}
-        <div style={{ display: 'inline-block', marginTop: 8, padding: '3px 10px', border: `1.5px solid ${INK}`, fontSize: SMALL, fontWeight: 800, letterSpacing: '2px' }}>
-          {isDepositOffset ? 'DEPOSIT SETTLEMENT' : 'PAYMENT RECEIPT'}
-        </div>
+        {facility.facilityLogo && (
+          <img src={facility.facilityLogo} alt="" style={{ maxHeight: 44, maxWidth: 120, objectFit: 'contain', display: 'block', margin: '0 auto 6px' }} />
+        )}
+        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', lineHeight: 1.25 }}>{displayName}</div>
+        {branchName && branchName !== displayName && <div style={{ fontSize: SMALL, fontWeight: 700 }}>{branchName}</div>}
+        {address && <div style={{ fontSize: SMALL, fontWeight: 700 }}>{address}</div>}
+        {phone && <div style={{ fontSize: SMALL, fontWeight: 700 }}>{phone}</div>}
+        {facility.facilityEmail && <div style={{ fontSize: SMALL, fontWeight: 700 }}>{facility.facilityEmail}</div>}
       </div>
 
-      {isDepositOffset && (
-        <div style={{ textAlign: 'center', fontSize: SMALL, fontWeight: 700, marginTop: 6 }}>
-          No cash collected — settled from the patient's deposit
-        </div>
-      )}
+      <div style={dashed} />
 
-      <div style={ruleSolid} />
+      {/* ── Title, receipt number, barcode ── */}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.5px' }}>{isDepositOffset ? 'DEPOSIT SETTLEMENT' : 'PAYMENT RECEIPT'}</div>
+        {receiptId && <div style={{ fontSize: BODY, fontWeight: 800, marginTop: 2 }}>{receiptId}</div>}
+        {receiptId && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
+            <Barcode value={receiptId} format="CODE128" width={1.3} height={38} fontSize={10} margin={0} background="#fff" lineColor={INK} />
+          </div>
+        )}
+        {isDepositOffset && <div style={{ fontSize: SMALL, fontWeight: 700, marginTop: 4 }}>No cash collected — settled from the patient's deposit</div>}
+      </div>
 
-      {/* ── Receipt / patient ── */}
-      <InfoRows rows={infoRows} />
+      <div style={dashed} />
 
-      <div style={ruleDashed} />
+      {/* ── When / who ── */}
+      <div style={{ fontSize: BODY, fontWeight: 700, lineHeight: 1.5 }}>
+        <div>Date : {format(paidAt, 'M/d/yyyy, h:mm:ss a')}</div>
+        <div>Run Date : {format(new Date(), 'M/d/yyyy')}</div>
+        <div style={{ marginTop: 4 }}>Patient Name : {bill.patientName || '—'}</div>
+      </div>
+
+      <div style={dashed} />
 
       {/* ── Items ── */}
-      {bill.services && bill.services.length > 0 ? (
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={{ ...heading, textAlign: 'left', paddingBottom: 3 }}>ITEM</th>
-              <th style={{ ...heading, textAlign: 'center', width: 32, paddingBottom: 3 }}>QTY</th>
-              <th style={{ ...heading, textAlign: 'right', paddingBottom: 3 }}>AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bill.services.map((svc, i) => {
-              const name = svc.serviceName || svc.name || svc.service_name || (svc as any).test_name || 'Service';
-              const qty = svc.quantity || 1;
-              const unitPrice = svc.unitPrice || svc.unit_price || svc.price || 0;
-              const total = svc.totalPrice || svc.total_price || (unitPrice * qty);
-              return (
-                <tr key={(svc as any).id || i}>
-                  <td style={{ fontSize: BODY, fontWeight: 600, padding: '3px 4px 3px 0', verticalAlign: 'top' }}>
-                    {name}
-                    {qty > 1 && <div style={{ fontSize: SMALL, fontWeight: 600 }}>@ {fmt(unitPrice)}</div>}
-                    {svc.discountLabel && <div style={{ fontSize: SMALL, fontWeight: 600 }}>Discount: {svc.discountLabel}</div>}
-                  </td>
-                  <td style={{ fontSize: BODY, fontWeight: 700, padding: '3px 0', textAlign: 'center', verticalAlign: 'top' }}>{qty}</td>
-                  <td style={{ fontSize: BODY, fontWeight: 700, padding: '3px 0', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmt(total)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <div style={{ fontSize: SMALL, fontWeight: 600, fontStyle: 'italic' }}>No item details available</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ ...head, textAlign: 'left' }}>Item</th>
+            <th style={{ ...head, textAlign: 'right', width: 44 }}>Qty</th>
+            <th style={{ ...head, textAlign: 'right', width: 70 }}>Price<br />({base})</th>
+            <th style={{ ...head, textAlign: 'right', width: 74 }}>Amount<br />({base})</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colSpan={4} style={{ padding: 0 }}><div style={dashed} /></td></tr>
+          {items.length > 0 ? items.map((svc, i) => {
+            const name = svc.serviceName || svc.name || svc.service_name || (svc as any).test_name || 'Service';
+            const qty = Number(svc.quantity) || 1;
+            const unitPrice = svc.unitPrice || svc.unit_price || svc.price || 0;
+            const total = svc.totalPrice || svc.total_price || (unitPrice * qty);
+            return (
+              <tr key={(svc as any).id || i}>
+                <td style={{ ...cell, paddingRight: 4, wordBreak: 'break-word' }}>
+                  {name}
+                  {svc.discountLabel && <div style={{ fontSize: SMALL }}>Discount: {svc.discountLabel}</div>}
+                </td>
+                <td style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>{qty.toFixed(2)}</td>
+                <td style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>{num(unitPrice)}</td>
+                <td style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>{num(total)}</td>
+              </tr>
+            );
+          }) : (
+            <tr><td colSpan={4} style={{ ...cell, fontStyle: 'italic' }}>No item details available</td></tr>
+          )}
+        </tbody>
+      </table>
+
+      <div style={dashed} />
+
+      {/* ── Totals (base + secondary currency, no rate) ── */}
+      <div style={{ ...row, fontSize: 15, fontWeight: 800 }}><span>Total :</span><span>{money(bill.totalAmount || 0)}</span></div>
+      {hasSecondary && (
+        <div style={{ ...row, fontSize: SMALL, fontStyle: 'italic' }}><span>Total ({secondaryCurrency!.code}) :</span><span>{secondary(bill.totalAmount || 0)}</span></div>
       )}
+      <div style={row}><span>{method}</span><span>{money(payment.amount)}</span></div>
+      {hasSecondary && (
+        <div style={{ ...row, fontSize: SMALL, fontStyle: 'italic' }}><span>{method} ({secondaryCurrency!.code})</span><span>{secondary(payment.amount)}</span></div>
+      )}
+      <div style={row}><span>Balance Due :</span><span>{money(balanceDue)}</span></div>
+      <div style={row}><span>Total Items :</span><span>{num(totalItems)}</span></div>
 
-      <div style={ruleSolid} />
+      <div style={dashed} />
 
-      {/* ── Totals ── */}
-      <InfoRows rows={[
-        ['Bill total', fmt(bill.totalAmount || 0)],
-        ['Paid to date', fmt(bill.paidAmount || 0)],
-        ['This payment', fmt(payment.amount)],
-      ]} />
+      {/* ── Tax block ── */}
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ ...head, textAlign: 'left' }}>VAT</th>
+            <th style={{ ...head, textAlign: 'right' }}>Amt W/o VAT</th>
+            <th style={{ ...head, textAlign: 'right' }}>VAT Amt</th>
+            <th style={{ ...head, textAlign: 'right' }}>Net Amt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={cell}>Exempt</td>
+            <td style={{ ...cell, textAlign: 'right' }}>{num(bill.totalAmount || 0)}</td>
+            <td style={{ ...cell, textAlign: 'right' }}>0</td>
+            <td style={{ ...cell, textAlign: 'right' }}>{num(bill.totalAmount || 0)}</td>
+          </tr>
+        </tbody>
+      </table>
 
-      {/* Inverted band: prints as solid black on any thermal head. */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, padding: '5px 8px', background: INK, color: '#fff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-        <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.5px' }}>BALANCE DUE</span>
-        <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(balanceDue)}</span>
+      <div style={dashed} />
+
+      <div style={{ fontSize: BODY, fontWeight: 700, lineHeight: 1.5 }}>
+        {receiptId && <div>Receipt No : {receiptId}</div>}
+        {bill.billNumber && <div>Bill No : {bill.billNumber}</div>}
+        {payment.from_lease && <div>Type : Lease payment</div>}
+        {payment.notes && <div>Note : {payment.notes}</div>}
+        {payment.lease_details && <div>{payment.lease_details}</div>}
       </div>
 
-      {isPaid && (
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
-          <span style={{ display: 'inline-block', border: `2px solid ${INK}`, padding: '2px 12px', fontSize: BODY, fontWeight: 800, letterSpacing: '3px' }}>PAID IN FULL</span>
-        </div>
-      )}
-
-      <div style={ruleDashed} />
-
-      {/* ── Payment info ── */}
-      <InfoRows rows={[
-        ['Method', method],
-        ...(payment.cashierName ? [['Received by', payment.cashierName] as [string, React.ReactNode]] : []),
-        ...(payment.from_lease ? [['Type', 'Lease payment'] as [string, React.ReactNode]] : []),
-      ]} />
-
-      {(payment.notes || payment.lease_details) && (
-        <div style={{ fontSize: SMALL, fontWeight: 600, marginTop: 4 }}>
-          {payment.notes && <div>Note: {payment.notes}</div>}
-          {payment.lease_details && <div>{payment.lease_details}</div>}
-        </div>
-      )}
-
-      <div style={ruleSolid} />
+      <div style={dashed} />
 
       {/* ── Footer ── */}
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: BODY, fontWeight: 800 }}>Thank you for your visit</div>
-        <div style={{ fontSize: SMALL, fontWeight: 600, marginTop: 2 }}>Please keep this receipt for your records.</div>
+      <div style={{ fontSize: BODY, fontWeight: 700, lineHeight: 1.6 }}>
+        <div style={{ display: 'flex', gap: 4 }}><span>Received By :</span><span style={{ flex: 1, borderBottom: `1px solid ${INK}`, marginBottom: 4 }} /></div>
+        <div>You Were Served By : {(payment.cashierName || '—').toUpperCase()}</div>
+        <div>Thank You !!! Please Come Again....</div>
+        <div>Powered by IntelliCare HMIS</div>
       </div>
 
     </div>
