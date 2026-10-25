@@ -80,6 +80,9 @@ router.get('/drugs', authorize('pharmacy.read'), async (req, res) => {
     // than being silently dropped from the list.
     const locationJoin = location_id ? 'LEFT JOIN stock_by_location sbl ON sbl.item_id = i.id AND sbl.location_id = :locationId' : '';
     if (location_id) replacements.locationId = location_id;
+    // stocked_only: just what that store holds — the selling-store pickers
+    // list only items kept in the store being sold from.
+    if (location_id && req.query.stocked_only === 'true') where += ' AND sbl.item_id IS NOT NULL';
     const stockOnHandExpr = location_id ? 'COALESCE(sbl.quantity_on_hand, 0)' : 'i.quantity_on_hand';
     const availableExpr = location_id
       ? 'COALESCE(sbl.quantity_on_hand, 0) - COALESCE(sbl.reserved_quantity, 0)'
@@ -928,21 +931,23 @@ router.post('/prescriptions/:id/interaction-check', authorize('pharmacy.prescrib
 router.post('/prescriptions/:id/lines', authorize('pharmacy.prescribe'), async (req, res) => {
   try {
     const lineId = uuidv4();
-    const { drug_id, quantity_prescribed, unit_of_measure, dose_strength, frequency, duration_days, notes } = req.body;
+    const { drug_id, quantity_prescribed, unit_of_measure, dose_strength, frequency, duration_days, notes, location_id, location_name } = req.body;
 
     const [maxLine] = await sequelize.query('SELECT COALESCE(MAX(line_number), 0) AS mx FROM prescription_lines WHERE prescription_id = :id', { replacements: { id: req.params.id } });
     const lineNum = (maxLine[0]?.mx || 0) + 1;
 
     await sequelize.query(`
       INSERT INTO prescription_lines (id, prescription_id, line_number, drug_id, quantity_prescribed,
-        unit_of_measure, dose_strength, frequency, duration_days, notes)
-      VALUES (:id, :rxid, :ln, :did, :qty, :uom, :ds, :freq, :dur, :notes)
+        unit_of_measure, dose_strength, frequency, duration_days, notes, location_id, location_name)
+      VALUES (:id, :rxid, :ln, :did, :qty, :uom, :ds, :freq, :dur, :notes, :locationId, :locationName)
     `, {
       replacements: {
         id: lineId, rxid: req.params.id, ln: lineNum, did: drug_id,
         qty: quantity_prescribed || 1, uom: unit_of_measure || 'tablet',
         ds: dose_strength || null, freq: frequency || null, dur: duration_days || null,
-        notes: notes || null
+        notes: notes || null,
+        // The store it is dispensed from (the screen's selling store).
+        locationId: location_id || null, locationName: location_name || null,
       }
     });
 

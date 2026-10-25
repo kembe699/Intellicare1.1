@@ -750,6 +750,7 @@ router.get('/locations', authorize('inventory.read'), async (req, res) => {
            FROM stock_by_location sbl3
            JOIN inventory_items ii ON ii.id = sbl3.item_id
           WHERE sbl3.location_id = sl.id) AS stock_value
+      , (sl.id = (SELECT ps.default_pharmacy_location_id FROM pharmacy_settings ps WHERE ps.clinic_id = sl.clinic_id LIMIT 1)) AS is_default_selling
       FROM stock_locations sl
       LEFT JOIN departments d ON d.id = sl.department_id
       WHERE sl.clinic_id = ?${branchFilter.sql}
@@ -759,6 +760,57 @@ router.get('/locations', authorize('inventory.read'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching locations:', error);
     res.status(500).json({ error: 'Failed to fetch locations' });
+  }
+});
+
+// ── Default selling store ─────────────────────────────────────────────────
+// The store products are sold, prescribed and dispensed from unless the
+// person changes it on the screen. Kept in
+// pharmacy_settings.default_pharmacy_location_id — the setting the LIS
+// prescription picker and GET /pharmacy-module/locations already read.
+
+// Every signed-in user that bills or prescribes needs the list (a cashier
+// has neither inventory.read nor pharmacy.read), so no extra privilege.
+router.get('/selling-stores', async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const branchFilter = getBranchConditionSQL(req, 'sl');
+    const [rows] = await sequelize.query(`
+      SELECT sl.id, sl.location_name AS name, sl.location_type AS type, sl.location_code,
+             (sl.id = (SELECT ps.default_pharmacy_location_id FROM pharmacy_settings ps WHERE ps.clinic_id = sl.clinic_id LIMIT 1)) AS is_default
+        FROM stock_locations sl
+       WHERE sl.clinic_id = ? AND sl.is_active = true${branchFilter.sql}
+       ORDER BY sl.location_name`, { replacements: [clinicId, ...branchFilter.params] });
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing selling stores:', error);
+    res.status(500).json({ error: 'Failed to list stores' });
+  }
+});
+
+router.put('/locations/:id/default-selling', authorize('inventory.write'), async (req, res) => {
+  try {
+    const clinicId = BranchQueryFilter.resolveClinicId(req);
+    const [[loc]] = await sequelize.query(
+      'SELECT id, location_name, is_active FROM stock_locations WHERE id = :id AND clinic_id = :clinicId',
+      { replacements: { id: req.params.id, clinicId } });
+    if (!loc) return res.status(404).json({ error: 'Location not found' });
+    if (!loc.is_active) return res.status(400).json({ error: 'Activate this location before making it the selling store.' });
+    await sequelize.query(`
+      INSERT INTO pharmacy_settings (id, clinic_id, default_pharmacy_location_id)
+      VALUES (:id, :clinicId, :loc)
+      ON CONFLICT (clinic_id) DO UPDATE SET default_pharmacy_location_id = EXCLUDED.default_pharmacy_location_id`,
+      { replacements: { id: uuidv4(), clinicId, loc: loc.id } });
+    try {
+      const rr = require('./reports');
+      await rr.logAudit({ req, clinic_id: clinicId, user_id: req.user?.id, user_name: req.user?.displayName || req.user?.email, user_role: req.user?.role,
+        module: 'Inventory', action: 'DEFAULT_SELLING_STORE_SET', entity_type: 'StockLocation', entity_id: loc.id,
+        description: `Default selling store set to ${loc.location_name}`, ip_address: req.ip, status: 'success' });
+    } catch { /* audit is best-effort */ }
+    res.json({ success: true, id: loc.id, name: loc.location_name });
+  } catch (error) {
+    console.error('Error setting default selling store:', error);
+    res.status(500).json({ error: 'Failed to set the selling store' });
   }
 });
 

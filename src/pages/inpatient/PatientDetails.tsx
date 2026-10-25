@@ -174,7 +174,7 @@ export default function PatientDetails() {
   const { data: drugCatalog = [] } = useQuery({
     queryKey: ['ip-drug-catalog', clinicId, rxForm.location_id],
     queryFn: async () => {
-      const locationParam = rxForm.location_id ? `&location_id=${rxForm.location_id}` : '';
+      const locationParam = rxForm.location_id ? `&location_id=${rxForm.location_id}&stocked_only=true` : '';
       const r = await authFetch(`/api/pharmacy-module/drugs?clinic_id=${clinicId}&is_active=true${locationParam}`);
       return r.ok ? r.json() : [];
     },
@@ -197,6 +197,12 @@ export default function PatientDetails() {
 
   const drugOptions = drugCatalog.map((d: any) => ({ value: String(d.id), label: `${d.drug_name}${d.strength ? ` (${d.strength})` : ''}` }));
   const locationOptions = storeLocations.map((l: any) => ({ value: String(l.id), label: l.name }));
+  // Start on the default selling store until someone picks another.
+  const defaultStoreId = String(storeLocations.find((l: any) => l.is_default)?.id || '');
+  React.useEffect(() => {
+    if (defaultStoreId && !rxForm.location_id) setRxForm((f: any) => ({ ...f, location_id: defaultStoreId }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultStoreId]);
   const labOptions = labCatalog.map((t: any) => ({ value: String(t.id), label: t.test_name }));
   const serviceOptions = serviceCatalog.map((s: any) => ({ value: String(s.id), label: s.name }));
 
@@ -228,7 +234,7 @@ export default function PatientDetails() {
 
   const notesMut = useCreateMutation('/api/inpatient/doctor-notes', 'Doctor note saved', () => { setNoteForm({ clinical_assessment: '', examination_findings: '', treatment_plan: '', progress_status: 'stable' }); });
 
-  const resetRxForm = () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: '' }); setRxQtyTouched(false); setDispenseNow(false); };
+  const resetRxForm = () => { setRxForm({ drug_id: '', medication_name: '', unit_price: 0, unit_of_measure: '', dosage: '', frequency: '', duration: '', route: 'oral', instructions: '', quantity: '', dose_amount: '1', duration_days: '', is_external: false, external_drug_name: '', location_id: defaultStoreId }); setRxQtyTouched(false); setDispenseNow(false); };
 
   // Prescribing and dispensing are two separate real-world steps (same as
   // everywhere else in this app), so a failed dispense never rolls back an

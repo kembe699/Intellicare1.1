@@ -47,6 +47,7 @@ const PAID_PENDING_LINES = `
          COALESCE(ii.quantity_on_hand, 0)  AS stock,
          COALESCE(ii.selling_price, 0)     AS unit_price,
          COALESCE(NULLIF(ii.units_per_pack, 0), 1) AS units_per_pack,
+         pl.location_id,
          ii.cost_currency
     FROM prescription_lines pl
     JOIN pharmacy_prescriptions p ON p.id = pl.prescription_id
@@ -65,7 +66,21 @@ const PAID_PENDING_LINES = `
  * with several, there's no way to know which shelf it came off, so only the
  * total moves (the same rule approving a stock count uses).
  */
-async function deductSingleStore(sequelize, itemId, packQty, transaction) {
+async function deductSingleStore(sequelize, itemId, packQty, transaction, locationId = null) {
+  // The store the line was sold/prescribed from, when one was chosen.
+  if (locationId) {
+    const [[row]] = await sequelize.query(
+      'SELECT id FROM stock_by_location WHERE item_id = :iid AND location_id = :lid LIMIT 1',
+      { replacements: { iid: itemId, lid: locationId }, transaction }
+    );
+    if (row) {
+      await sequelize.query(
+        'UPDATE stock_by_location SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :id',
+        { replacements: { qty: packQty, id: row.id }, transaction }
+      );
+      return row.id;
+    }
+  }
   const [stores] = await sequelize.query(
     'SELECT id FROM stock_by_location WHERE item_id = :iid',
     { replacements: { iid: itemId }, transaction }
@@ -175,7 +190,7 @@ async function dispenseLine(sequelize, line, quantity, pharmacistId, transaction
     'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :id',
     { replacements: { qty: packQty, id: line.inventory_item_id }, transaction }
   );
-  await deductSingleStore(sequelize, line.inventory_item_id, packQty, transaction);
+  await deductSingleStore(sequelize, line.inventory_item_id, packQty, transaction, line.location_id || null);
 
   // Take the stock out of a batch as well as off the item.
   //
@@ -378,7 +393,7 @@ async function dispenseBilledProducts(sequelize, billId, pharmacistId = null) {
         'UPDATE inventory_items SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :id',
         { replacements: { qty: packQty, id: item.id }, transaction: t }
       );
-      await deductSingleStore(sequelize, item.id, packQty, t);
+      await deductSingleStore(sequelize, item.id, packQty, t, line.locationId || null);
       await deductBatches(sequelize, item.id, packQty, t);
       await sequelize.query(`
         INSERT INTO inventory_transactions (id, clinic_id, transaction_number, item_id, transaction_type,

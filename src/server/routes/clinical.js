@@ -1105,92 +1105,84 @@ router.get('/patient-visits-history', async (req, res) => {
     const dateFrom = from || (patient_id ? '1970-01-01' : new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]);
     const dateTo = to || new Date().toISOString().split('T')[0];
 
-    // Branch filter — non-admin users only see their branch's visits
-    const branchFilter = getBranchConditionSQL(req, 'v');
+    // Visits come from two places. Hospitals working the LIS flow (registration
+    // → queue → triage → doctor) record each visit as an lis_test_orders row
+    // against an lis_participants patient — that is where every real visit is;
+    // the general `visits` table was empty in every tenant, so this page showed
+    // nothing at all. Both are read, mapped to one shape.
+    const branchV = getBranchConditionSQL(req, 'v');
+    const branchO = getBranchConditionSQL(req, 'o');
+    const repl = { dateFrom, dateTo: `${dateTo} 23:59:59` };
+    if (branchV.params.length) repl.branchId = branchV.params[0];
+    const branchSqlV = branchV.sql ? ' AND v.branch_id = :branchId' : '';
+    const branchSqlO = branchO.sql ? ' AND o.branch_id = :branchId' : '';
 
-    let sql = `
-      SELECT 
-        v.id as visit_id,
-        v.visit_date,
-        'General' as visit_type,
-        v.chief_complaint,
-        v.diagnosis,
-        v.clinical_notes as notes,
-        v.status as visit_status,
-        v.created_at,
-        p.id as patient_id,
-        p.patient_id as patient_number,
-        p.first_name,
-        p.last_name,
-        p.date_of_birth,
-        p.gender,
-        p.phone_number as phone,
-        (COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')) as patient_name,
-        (EXTRACT(YEAR FROM AGE((CURRENT_DATE)::timestamp, (p.date_of_birth)::timestamp)))::int as age,
-        u.id as doctor_id,
-        u.display_name as doctor_name,
-        u.email as doctor_email,
-        (SELECT COUNT(*) FROM visits WHERE patient_id = p.id) as total_visits,
-        (SELECT MAX(visit_date) FROM visits WHERE patient_id = p.id AND id != v.id) as last_visit_date
-      FROM visits v
-      LEFT JOIN patients p ON v.patient_id = p.id
-      LEFT JOIN users u ON v.doctor_id = u.id
-      WHERE v.visit_date BETWEEN ? AND ?
-      ${branchFilter.sql}
-    `;
-
-    const params = [dateFrom, dateTo + ' 23:59:59', ...branchFilter.params];
-
-    if (search) {
-      sql += ` AND (
-        (p.first_name || ' ' || p.last_name) LIKE ? OR
-        p.patient_id LIKE ? OR
-        v.chief_complaint LIKE ? OR
-        v.diagnosis LIKE ?
+    const [[lis]] = await sequelize.query(
+      `SELECT (to_regclass(current_schema() || '.lis_test_orders') IS NOT NULL
+               AND to_regclass(current_schema() || '.lis_participants') IS NOT NULL) AS orders,
+              to_regclass(current_schema() || '.visit_diagnoses') IS NOT NULL AS dx`);
+    const lisDiagnosis = lis?.dx
+      ? `(SELECT string_agg(COALESCE(d.description, d.icd_code), '; ' ORDER BY d.is_primary DESC NULLS LAST)
+            FROM visit_diagnoses d WHERE d.order_id::text = o.id::text AND d.deleted_at IS NULL)`
+      : 'NULL';
+    const allVisits = `
+      WITH all_visits AS (
+        SELECT v.id::text AS visit_id, v.visit_date, 'General' AS visit_type,
+               v.chief_complaint, v.diagnosis, v.clinical_notes AS notes,
+               v.status::text AS visit_status, v.created_at,
+               p.id::text AS patient_id, p.patient_id AS patient_number, p.first_name, p.last_name,
+               p.date_of_birth, p.gender, p.phone_number AS phone,
+               v.doctor_id::text AS doctor_id, u.display_name AS doctor_name, u.email AS doctor_email
+          FROM visits v
+          LEFT JOIN patients p ON p.id::text = v.patient_id::text
+          LEFT JOIN users u ON u.id::text = v.doctor_id::text
+         WHERE v.visit_date BETWEEN :dateFrom AND :dateTo ${branchSqlV}
+        ${lis?.orders ? `UNION ALL
+        SELECT o.id::text, o.created_at, 'Outpatient',
+               o.clinical_notes,
+               ${lisDiagnosis},
+               NULL,
+               CASE WHEN o.status IN ('closed', 'completed') THEN 'completed'
+                    WHEN o.status = 'cancelled' THEN 'cancelled'
+                    ELSE 'pending' END,
+               o.created_at,
+               lp.id::text, lp.participant_number, lp.first_name, lp.last_name,
+               lp.date_of_birth, lp.gender, lp.phone,
+               COALESCE(o.doctor_id::text, o.consultant_id::text), du.display_name, du.email
+          FROM lis_test_orders o
+          LEFT JOIN lis_participants lp ON lp.id::text = o.participant_id::text
+          LEFT JOIN users du ON du.id::text = COALESCE(o.doctor_id::text, o.consultant_id::text)
+         WHERE o.created_at BETWEEN :dateFrom AND :dateTo ${branchSqlO}` : ''}
       )`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+
+    const where = [];
+    if (search) {
+      where.push(`((COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')) ILIKE :search OR patient_number ILIKE :search
+                   OR chief_complaint ILIKE :search OR diagnosis ILIKE :search)`);
+      repl.search = `%${search}%`;
     }
+    if (doctor_id) { where.push('doctor_id = :doctorId'); repl.doctorId = String(doctor_id); }
+    if (status) { where.push('visit_status = :status'); repl.status = status; }
+    if (patient_id) { where.push('patient_id = :patientId'); repl.patientId = String(patient_id); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    if (doctor_id) {
-      sql += ' AND v.doctor_id = ?';
-      params.push(doctor_id);
-    }
+    const [visits] = await sequelize.query(`${allVisits}
+      SELECT a.*,
+             (COALESCE(a.first_name, '') || ' ' || COALESCE(a.last_name, '')) AS patient_name,
+             (EXTRACT(YEAR FROM AGE(CURRENT_DATE::timestamp, a.date_of_birth::timestamp)))::int AS age,
+             (SELECT COUNT(*) FROM all_visits x WHERE x.patient_id = a.patient_id) AS total_visits,
+             (SELECT MAX(x.visit_date) FROM all_visits x WHERE x.patient_id = a.patient_id AND x.visit_id <> a.visit_id) AS last_visit_date
+        FROM all_visits a ${whereSql}
+       ORDER BY a.visit_date DESC, a.created_at DESC LIMIT 500`, { replacements: repl });
 
-    if (status) {
-      sql += ' AND v.status = ?';
-      params.push(status);
-    }
+    const [stats] = await sequelize.query(`${allVisits}
+      SELECT COUNT(DISTINCT visit_id) AS total_visits, COUNT(DISTINCT patient_id) AS unique_patients,
+             COUNT(DISTINCT doctor_id) AS doctors_involved, COUNT(DISTINCT DATE(visit_date)) AS visit_days
+        FROM all_visits ${whereSql}`, { replacements: repl });
 
-    if (patient_id) {
-      sql += ' AND v.patient_id = ?';
-      params.push(patient_id);
-    }
-
-    sql += ' ORDER BY v.visit_date DESC, v.created_at DESC LIMIT 500';
-
-    const [visits] = await sequelize.query(sql, { replacements: params });
-
-    // Get summary statistics (same branch filter)
-    const [stats] = await sequelize.query(`
-      SELECT 
-        COUNT(DISTINCT v.id) as total_visits,
-        COUNT(DISTINCT v.patient_id) as unique_patients,
-        COUNT(DISTINCT v.doctor_id) as doctors_involved,
-        COUNT(DISTINCT DATE(v.visit_date)) as visit_days
-      FROM visits v
-      WHERE v.visit_date BETWEEN ? AND ?
-      ${branchFilter.sql}
-    `, { replacements: [dateFrom, dateTo + ' 23:59:59', ...branchFilter.params] });
-
-    // Get doctors list for filter (same branch filter)
-    const [doctors] = await sequelize.query(`
-      SELECT DISTINCT u.id, u.display_name, u.email
-      FROM visits v
-      JOIN users u ON v.doctor_id = u.id
-      WHERE v.visit_date BETWEEN ? AND ?
-      ${branchFilter.sql}
-      ORDER BY u.display_name
-    `, { replacements: [dateFrom, dateTo + ' 23:59:59', ...branchFilter.params] });
+    const [doctors] = await sequelize.query(`${allVisits}
+      SELECT DISTINCT doctor_id AS id, doctor_name AS display_name, doctor_email AS email
+        FROM all_visits WHERE doctor_id IS NOT NULL ORDER BY doctor_name`, { replacements: repl });
 
     res.json({
       visits,

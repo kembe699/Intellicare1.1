@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSellingStore } from '@/hooks/useSellingStore';
+import { SellingStorePicker } from '@/components/inventory/SellingStorePicker';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -143,8 +145,15 @@ export default function PrescriptionManagement() {
     fetchPrescriptions();
     fetchPeople();
     fetchDoctors();
-    fetchDrugs();
   }, []);
+
+  // Drugs are prescribed from a store: only what it holds is listed, and the
+  // line is dispensed from it.
+  const sellingStore = useSellingStore();
+  useEffect(() => {
+    if (sellingStore.loaded) fetchDrugs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellingStore.loaded, sellingStore.storeId]);
 
   const fetchPrescriptions = async () => {
     setLoading(true);
@@ -182,7 +191,8 @@ export default function PrescriptionManagement() {
 
   const fetchDrugs = async () => {
     try {
-      const res = await authFetch(`${API}/drugs?clinic_id=${clinicId}&is_active=true`, { credentials: 'include' });
+      const store = sellingStore.storeId ? `&location_id=${sellingStore.storeId}&stocked_only=true` : '';
+      const res = await authFetch(`${API}/drugs?clinic_id=${clinicId}&is_active=true${store}`, { credentials: 'include' });
       if (res.ok) setDrugs(await res.json());
     } catch (e) {
       console.error('Failed to fetch drugs', e);
@@ -340,6 +350,7 @@ export default function PrescriptionManagement() {
         dose_amount: rxDoseAmount ? parseFloat(rxDoseAmount) : null, is_external: false,
         duration_days: parseInt(rxDuration, 10) || 0, notes: rxNotes.trim(),
         selling_price: parseFloat(drug.selling_price) || 0,
+        location_id: sellingStore.storeId || null, location_name: sellingStore.store?.name || null,
       }]);
     }
     resetRxDrugFields();
@@ -664,7 +675,12 @@ export default function PrescriptionManagement() {
                 </label>
 
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground">Drug *</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-semibold text-muted-foreground">Drug *</label>
+                    {!rxIsExternal && billingMode !== 'scheme' && (
+                      <SellingStorePicker stores={sellingStore.stores} value={sellingStore.storeId} onChange={(id) => { sellingStore.setStoreId(id); setRxDrugId(''); }} />
+                    )}
+                  </div>
                   {rxIsExternal ? (
                     <Input
                       placeholder="Medicine name e.g. Amoxicillin 500mg caps"

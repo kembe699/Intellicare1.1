@@ -123,7 +123,7 @@ export default function PatientVisitsHistory() {
         />
 
         {/* Filters */}
-        <div className="ic-card">
+        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
           <div className="ic-card-body">
             <div className="flex flex-wrap items-end gap-3">
               <div>
@@ -197,7 +197,7 @@ export default function PatientVisitsHistory() {
 
         {/* Summary KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="ic-card">
+          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="ic-card-body">
               <div className="flex items-center justify-between">
                 <div>
@@ -208,7 +208,7 @@ export default function PatientVisitsHistory() {
               </div>
             </div>
           </div>
-          <div className="ic-card">
+          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="ic-card-body">
               <div className="flex items-center justify-between">
                 <div>
@@ -219,7 +219,7 @@ export default function PatientVisitsHistory() {
               </div>
             </div>
           </div>
-          <div className="ic-card">
+          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="ic-card-body">
               <div className="flex items-center justify-between">
                 <div>
@@ -230,7 +230,7 @@ export default function PatientVisitsHistory() {
               </div>
             </div>
           </div>
-          <div className="ic-card">
+          <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="ic-card-body">
               <div className="flex items-center justify-between">
                 <div>
@@ -244,8 +244,8 @@ export default function PatientVisitsHistory() {
         </div>
 
         {/* Visits Table */}
-        <div className="ic-card">
-          <div className="ic-card-header">
+        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
+          <div className="ic-card-header bg-card">
             <span className="font-semibold text-sm text-foreground">Patient Visits ({visits.length})</span>
           </div>
           <div className="ic-card-body">

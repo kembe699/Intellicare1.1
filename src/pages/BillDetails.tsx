@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSellingStore } from '@/hooks/useSellingStore';
+import { SellingStorePicker } from '@/components/inventory/SellingStorePicker';
 import { pairedLineIndex } from '@/lib/billTaxLines';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -159,6 +161,9 @@ export default function BillDetails() {
   const [otherOutstanding, setOtherOutstanding] = useState<any[]>([]);
 
   const [itemType, setItemType] = useState<'service' | 'product'>('service');
+  // Products are sold from one store: only what it holds is listed, and the
+  // sale's stock comes out of it (see dispenseBilledProducts).
+  const sellingStore = useSellingStore();
   const [newItemCatalogId, setNewItemCatalogId] = useState('');
   const [newItemQty, setNewItemQty] = useState('1');
   const [priceOverride, setPriceOverride] = useState('');
@@ -189,11 +194,15 @@ export default function BillDetails() {
     if (billId) {
       fetchBill();
       fetchServices();
-      fetchInventoryItems();
       fetchShift();
       fetchSchemes();
     }
   }, [billId]);
+
+  useEffect(() => {
+    if (billId && sellingStore.loaded) fetchInventoryItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billId, sellingStore.loaded, sellingStore.storeId]);
 
   // Fires the print dialog the moment a payment succeeds — no "here's your receipt,
   // click Print" confirmation step first. Let the off-screen receipt paint, then print.
@@ -331,7 +340,8 @@ export default function BillDetails() {
 
   const fetchInventoryItems = async () => {
     try {
-      const res = await authFetch(`/api/inventory/items?clinic_id=${user?.clinic || 1}&is_active=true`, { credentials: 'include' });
+      const store = sellingStore.storeId ? `&location_id=${sellingStore.storeId}` : '';
+      const res = await authFetch(`/api/inventory/items?clinic_id=${user?.clinic || 1}&is_active=true${store}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setInventoryItems(Array.isArray(data) ? data : (data.items || []));
@@ -393,8 +403,9 @@ export default function BillDetails() {
         serviceId: product.id, serviceName: product.item_name, quantity: qty,
         unitPrice, totalPrice: unitPrice * qty, category: 'Pharmacy / Inventory',
         // Recorded as dispensed (and taken off stock) once this line is paid —
-        // see services/autoDispense.js dispenseBilledProducts.
+        // see services/autoDispense.js dispenseBilledProducts — from this store.
         dispenseOnPayment: true,
+        ...(sellingStore.store ? { locationId: sellingStore.store.id, locationName: sellingStore.store.name } : {}),
       };
     } else {
       const service = services.find(s => s.id === newItemCatalogId);
@@ -1029,6 +1040,14 @@ export default function BillDetails() {
               >
                 Product
               </button>
+              {itemType === 'product' && (
+                <SellingStorePicker
+                  className="ml-auto"
+                  stores={sellingStore.stores}
+                  value={sellingStore.storeId}
+                  onChange={(id) => { sellingStore.setStoreId(id); setNewItemCatalogId(''); }}
+                />
+              )}
             </div>
             {(() => {
               const catalog: any[] = itemType === 'service'

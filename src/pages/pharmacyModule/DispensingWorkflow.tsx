@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSellingStore } from '@/hooks/useSellingStore';
+import { SellingStorePicker } from '@/components/inventory/SellingStorePicker';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
@@ -187,10 +189,17 @@ export default function DispensingWorkflow() {
 
   useEffect(() => {
     fetchPeople();
-    fetchDrugs();
     fetchShift();
     fetchSchemes();
   }, []);
+
+  // Dispensing and direct sales come out of one store: only its items are
+  // listed and stock is taken from it.
+  const sellingStore = useSellingStore();
+  useEffect(() => {
+    if (sellingStore.loaded) fetchDrugs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellingStore.loaded, sellingStore.storeId]);
 
   const fetchShift = async () => {
     setCheckingShift(true);
@@ -293,7 +302,8 @@ export default function DispensingWorkflow() {
 
   const fetchDrugs = async () => {
     try {
-      const res = await authFetch(`${API}/drugs?clinic_id=${clinicId}&is_active=true`, { credentials: 'include' });
+      const store = sellingStore.storeId ? `&location_id=${sellingStore.storeId}&stocked_only=true` : '';
+      const res = await authFetch(`${API}/drugs?clinic_id=${clinicId}&is_active=true${store}`, { credentials: 'include' });
       if (res.ok) setDrugs(await res.json());
     } catch (e) {
       console.error('Failed to fetch drugs', e);
@@ -481,6 +491,7 @@ export default function DispensingWorkflow() {
           lines: [{
             drug_id: drug.id, quantity_prescribed: qty, unit_of_measure: drug.unit_of_measure || 'tablet',
             dose_strength: '', frequency: '', duration_days: 0, notes: '',
+            location_id: sellingStore.storeId || null, location_name: sellingStore.store?.name || null,
           }],
         }),
       });
@@ -1069,7 +1080,7 @@ export default function DispensingWorkflow() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ drug_id: drug.id, quantity_prescribed: qty, unit_of_measure: doseUnitLabel(drug) }),
+          body: JSON.stringify({ drug_id: drug.id, quantity_prescribed: qty, unit_of_measure: doseUnitLabel(drug), location_id: sellingStore.storeId || null, location_name: sellingStore.store?.name || null }),
         }),
         authFetch(`/api/patient-bills/active/${selectedRx.patient_id}/${clinicId}`, { credentials: 'include' }),
       ]);
@@ -1201,7 +1212,7 @@ export default function DispensingWorkflow() {
           drug_id: line.drug_id,
           pharmacist_id: user?.id,
           batch_id: '',
-          from_location_id: '',
+          from_location_id: sellingStore.storeId || '',
           quantity_dispensed: qty,
           unit_of_measure: line.unit_of_measure,
           unit_price: line.selling_price,
@@ -1272,6 +1283,7 @@ export default function DispensingWorkflow() {
             icon={<Pill />}
           />
           <div className="flex items-center gap-3">
+            <SellingStorePicker stores={sellingStore.stores} value={sellingStore.storeId} onChange={sellingStore.setStoreId} />
             {!checkingShift && (
               <span
                 className={cn(

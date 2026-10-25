@@ -511,12 +511,20 @@ export default function LISTestOrders() {
   const fetchPharmacyDrugs = async () => {
     try {
       const branchClinicId = user?.clinic || 1;
-      const res = await authFetch(`/api/pharmacy-module/drugs?clinic_id=${branchClinicId}&is_active=true`, { credentials: 'include' });
+      // Only what the chosen store holds (defaults to the selling store).
+      const store = rxLocationId ? `&location_id=${rxLocationId}&stocked_only=true` : '';
+      const res = await authFetch(`/api/pharmacy-module/drugs?clinic_id=${branchClinicId}&is_active=true${store}`, { credentials: 'include' });
       if (res.ok) setPharmacyDrugs(await res.json());
     } catch (e) {
       console.error('Failed to fetch pharmacy drugs', e);
     }
   };
+
+  // Re-list the drugs when the store changes (and once the default store is known).
+  useEffect(() => {
+    if (rxLocationId) fetchPharmacyDrugs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rxLocationId]);
 
   const fetchPharmacyLocations = async () => {
     try {
