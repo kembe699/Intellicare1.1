@@ -2182,12 +2182,28 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
             throw new Error(`Cannot post this ${billCurrency} payment — no original billing GL entry with an exchange rate was found for bill ${billId}.`);
           }
 
-          const bookedRate = parseFloat(originalBillGL.exchange_rate);
+          // The receivable was booked for the WHOLE bill — items added later
+          // included, all at the bill's booked rate (AccountingService
+          // .getBillBookedRate). Taking the first entry's base_total_debit
+          // instead counted only what the bill held when it was created, so a
+          // topped-up USD bill paid in full left part of its receivable open
+          // and posted the rest as an FX loss that never happened.
+          const bookedRate = await AccountingService.getBillBookedRate(currentBill, { transaction: t });
           const totalBillAmount = parseFloat(currentBill.total_amount) || payAmt;
-          const bookedBase = parseFloat(originalBillGL.base_total_debit) || AccountingService.convertAmount(totalBillAmount, bookedRate);
-          const bookedShare = totalBillAmount > 0
+          const bookedBase = AccountingService.convertAmount(totalBillAmount, bookedRate);
+          let bookedShare = totalBillAmount > 0
             ? Math.round(bookedBase * (payAmt / totalBillAmount) * 100) / 100
             : AccountingService.convertAmount(payAmt, bookedRate);
+          if (newBalanceAmount <= 0.01) {
+            // The payment that settles the bill clears what is left of its
+            // receivable exactly, so split payments leave no rounding residue.
+            const [[cleared]] = await sequelize.query(`
+              SELECT COALESCE(SUM(al.credit_amount) - SUM(al.debit_amount), 0)::float AS base
+                FROM account_ledger al JOIN general_ledger gl ON gl.id = al.transaction_id
+               WHERE gl.reference_id = :billId AND gl.reference_module = 'patient_bill_payment' AND al.account_id = :acct`,
+              { replacements: { billId: String(billId), acct: creditAccount.id }, transaction: t });
+            bookedShare = Math.round((bookedBase - (parseFloat(cleared?.base) || 0)) * 100) / 100;
+          }
 
           const todaysRate = await AccountingService.getExchangeRate(clinicId, billCurrency, baseCurrencyCode, today);
           const paymentBaseAmount = AccountingService.convertAmount(payAmt, todaysRate);
