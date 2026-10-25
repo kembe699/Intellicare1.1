@@ -277,21 +277,13 @@ router.get('/', async (req, res) => {
        ORDER BY cn.id`,
       { replacements: clinicRevenueRepl, type: QueryTypes.SELECT }
     );
-    // Still the legacy `visits` table: lis_test_orders cannot substitute here,
-    // because its clinic_id is a dr_clinics UUID and this widget keys on
-    // clinic_names.id (an int) — there is no join between the two dimensions.
-    // These per-clinic visit counts are therefore stale; the headline Total
-    // Visits KPI above is the accurate figure.
-    const clinicVisitRepl = { fromTs, toTs };
-    const branchSqlClinicVisits = branchScope(req, clinicVisitRepl);
-    const clinicVisitRows = await sequelize.query(
-      `SELECT clinic_id AS "clinicId", COUNT(*) AS cnt
-       FROM visits
-       WHERE visit_date BETWEEN :fromTs AND :toTs ${branchSqlClinicVisits}
-       GROUP BY clinic_id`,
-      { replacements: clinicVisitRepl, type: QueryTypes.SELECT }
-    );
-    const visitCountByClinic = new Map(clinicVisitRows.map(r => [parseInt(r.clinicId, 10), parseInt(r.cnt, 10) || 0]));
+    // Per-facility visits: LIS visits belong to this facility (lis_test_orders
+    // .clinic_id is the consulting clinic, a dr_clinics UUID, not clinic_names),
+    // the legacy `visits` table only for a period LIS has none — utils/visitCounts.js.
+    const clinicVisitRepl = {};
+    branchScope(req, clinicVisitRepl);
+    const { visitsByFacility } = require('../utils/visitCounts');
+    const visitCountByClinic = await visitsByFacility(sequelize, { from: fromTs, to: toTs, branchId: clinicVisitRepl.branchId || null, facilityClinicId: clinicId });
     const revenueByClinic = clinicRevenueRows.map(r => ({
       clinicId: parseInt(r.clinicId, 10),
       clinicName: r.clinicName,

@@ -109,20 +109,14 @@ router.get('/stats/:clinicId', async (req, res) => {
         }
       }),
 
+      // LIS visits (lis_test_orders); the legacy `visits` table only when LIS has none.
       (async () => {
         try {
-          return await Visit.count({
-            where: {
-              clinic_id: parseInt(clinicId),
-              ...branchWhere,
-              visit_date: {
-                [sequelize.Sequelize.Op.gte]: today,
-                [sequelize.Sequelize.Op.lt]: tomorrow
-              }
-            }
-          });
+          const { countVisits } = require('../utils/visitCounts');
+          const { total } = await countVisits(sequelize, { from: today, to: new Date(tomorrow.getTime() - 1), branchId: branchWhere.branch_id || null });
+          return total;
         } catch (error) {
-          console.log('Visit count error (table may not exist):', error.message);
+          console.log('Visit count error:', error.message);
           return 0;
         }
       })(),

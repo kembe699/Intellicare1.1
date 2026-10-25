@@ -151,6 +151,15 @@ router.get('/', async (req, res) => {
       }))
       .slice(0, 5);
     
+    // Visits from LIS (the legacy table above is kept for its complaint list,
+    // and is the count only when LIS has none) — utils/visitCounts.js.
+    const { countVisits } = require('../utils/visitCounts');
+    const visitTotal = (await countVisits(sequelize, {
+      from: dateFrom ? new Date(dateFrom) : new Date('1970-01-01'),
+      to: dateTo ? new Date(dateTo + 'T23:59:59') : new Date(),
+      branchId: branchWhere.branch_id || null,
+    })).total;
+
     const reportData = {
       totalPatients: patients.length,
       under5,
@@ -161,7 +170,7 @@ router.get('/', async (req, res) => {
       over5Female,
       totalMale,
       totalFemale,
-      totalVisits: visits.length,
+      totalVisits: visitTotal,
       labTests,
       dispensedDrugs,
       diagnoses,
@@ -777,8 +786,9 @@ router.get('/dashboard-summary', async (req, res) => {
       patientCount = pts[0]?.cnt || 0;
     } catch(e) {}
     try {
-      const [vis] = await sequelize.query(`SELECT COUNT(*) as cnt FROM visits WHERE visit_date BETWEEN ? AND ? ${bfVisits.sql}`, { replacements: [dateFrom, dateTo + ' 23:59:59', ...bfVisits.params] });
-      visitCount = vis[0]?.cnt || 0;
+      // LIS visits; the legacy table only when LIS has none (utils/visitCounts.js).
+      const { countVisits } = require('../utils/visitCounts');
+      visitCount = (await countVisits(sequelize, { from: dateFrom, to: dateTo + ' 23:59:59', branchId: bfVisits.params[0] || null })).total;
     } catch(e) {}
 
     // Revenue by department

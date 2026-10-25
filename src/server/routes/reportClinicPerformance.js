@@ -237,13 +237,10 @@ router.get('/', async (req, res) => {
     );
 
     // ── 2. Visit volume by clinic ────────────────────────────────────────
-    const visitRows = await sequelize.query(
-      `SELECT clinic_id AS "clinicId", COUNT(*) AS "visitCount"
-       FROM visits
-       WHERE visit_date BETWEEN :fromTs AND :toTs ${branchSql}
-       GROUP BY clinic_id`,
-      { replacements: repl, type: QueryTypes.SELECT }
-    );
+    // LIS visits, attributed to this facility (see utils/visitCounts.js); the
+    // legacy `visits` table only for a period LIS has none.
+    const { visitsByFacility } = require('../utils/visitCounts');
+    const visitByClinic = await visitsByFacility(sequelize, { from: fromTs, to: toTs, branchId: repl.branchId || null, facilityClinicId: req.user?.clinicId || 1 });
 
     // ── 3. Revenue collected by clinic (active receipts only) ───────────
     const revenueRows = await sequelize.query(
@@ -254,7 +251,6 @@ router.get('/', async (req, res) => {
       { replacements: repl, type: QueryTypes.SELECT }
     );
 
-    const visitByClinic = new Map(visitRows.map(r => [r.clinicId, parseInt(r.visitCount, 10) || 0]));
     const revenueByClinic = new Map(revenueRows.map(r => [r.clinicId, num(r.revenue)]));
 
     const byClinic = clinics.map(c => ({
