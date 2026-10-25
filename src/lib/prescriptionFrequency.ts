@@ -113,6 +113,27 @@ export function packEquivalent(doseQty: number, drug?: { units_per_pack?: number
   return doseQty / unitsPerPack;
 }
 
+/**
+ * A bill line for a drug prescribed in doses. Stock, cost and selling price are
+ * per PACK (a strip of units_per_pack tablets), so the line keeps the dose count
+ * the patient sees (quantity) and the pack equivalent the money and stock run on
+ * (packQuantity): total = pack price × packs. Billing doses × pack price
+ * overcharged by the pack size (24 Coartem tablets billed as 24 packs).
+ */
+export function drugBillLine(opts: {
+  drugId: string; drugName: string; doses: number; packPrice: number;
+  unitsPerPack?: number | string | null; currency?: string;
+}) {
+  const upp = Number(opts.unitsPerPack) || 1;
+  const packs = opts.doses / upp;
+  const total = Math.round(opts.packPrice * packs * 100) / 100;
+  return {
+    serviceId: opts.drugId, serviceName: opts.drugName, quantity: opts.doses, packQuantity: packs,
+    unitPrice: opts.doses ? Math.round((total / opts.doses) * 10000) / 10000 : 0, totalPrice: total,
+    category: 'Pharmacy / Inventory', ...(opts.currency ? { currency: opts.currency } : {}),
+  };
+}
+
 /** "1 tablet three times daily for 5 days" — the sig, for labels and printouts. */
 export function describeDosage(
   dose: number | string | null | undefined,

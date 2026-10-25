@@ -411,13 +411,18 @@ async function applySchemePrice(patientId, services, schemeId, req = null) {
     }
 
     const qty = svc.quantity || 1;
+    // A drug line billed in doses: the scheme's product price is per pack, so it
+    // is charged on the pack equivalent (packQuantity), not the dose count.
+    const billedQty = svc.packQuantity != null ? Number(svc.packQuantity) : qty;
+    const lineTotal = Math.round(sp.price * billedQty * 100) / 100;
+    const perUnit = svc.packQuantity != null && qty ? lineTotal / qty : sp.price;
     return {
       ...svc,
-      unitPrice: sp.price,
-      unit_price: sp.price,
-      price: sp.price * qty,
-      totalPrice: sp.price * qty,
-      total_price: sp.price * qty,
+      unitPrice: perUnit,
+      unit_price: perUnit,
+      price: lineTotal,
+      totalPrice: lineTotal,
+      total_price: lineTotal,
       currency: sp.currency,
       scheme_name: schemeName,
       original_base_price: svc.unitPrice || svc.unit_price || svc.price || 0

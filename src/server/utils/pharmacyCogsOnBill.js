@@ -142,7 +142,8 @@ async function postPharmacyCogsForBill(sequelize, { clinicId, branchId, billId, 
       : 0;
     if (unitCost <= 0) continue;
 
-    const qty = parseFloat(item.quantity) || 1;
+    // Cost is per pack; a drug line billed in doses carries its pack equivalent.
+    const qty = parseFloat(item.packQuantity ?? item.quantity) || 1;
     const cogsAmount = unitCost * qty;
     if (cogsAmount <= 0) continue;
 

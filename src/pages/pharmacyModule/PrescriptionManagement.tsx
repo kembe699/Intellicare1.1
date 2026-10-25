@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
-import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
+import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent , drugBillLine } from '@/lib/prescriptionFrequency';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from '@/lib/notify';
 import {
@@ -343,6 +343,7 @@ export default function PrescriptionManagement() {
         dose_amount: rxDoseAmount ? parseFloat(rxDoseAmount) : null, is_external: false,
         duration_days: parseInt(rxDuration, 10) || 0, notes: rxNotes.trim(),
         selling_price: parseFloat(drug.scheme_price) || 0, currency: drug.scheme_currency || baseCurrency.code,
+        units_per_pack: Number(drug.units_per_pack) || 1,
       }]);
     } else {
       setRxLines(prev => [...prev, {
@@ -351,6 +352,7 @@ export default function PrescriptionManagement() {
         dose_amount: rxDoseAmount ? parseFloat(rxDoseAmount) : null, is_external: false,
         duration_days: parseInt(rxDuration, 10) || 0, notes: rxNotes.trim(),
         selling_price: parseFloat(drug.selling_price) || 0,
+        units_per_pack: Number(drug.units_per_pack) || 1,
         location_id: sellingStore.storeId || null, location_name: sellingStore.store?.name || null,
       }]);
     }
@@ -368,7 +370,8 @@ export default function PrescriptionManagement() {
     try {
       const lineItems = lines
         .filter(l => l.selling_price > 0)
-        .map(l => ({ serviceId: l.drug_id, serviceName: l.drug_name, quantity: l.quantity_prescribed, unitPrice: l.selling_price, totalPrice: l.selling_price * l.quantity_prescribed, currency: l.currency || baseCurrency.code }));
+        // Priced per pack: doses ÷ pack size × pack price (see drugBillLine).
+        .map(l => drugBillLine({ drugId: l.drug_id, drugName: l.drug_name, doses: l.quantity_prescribed, packPrice: l.selling_price, unitsPerPack: l.units_per_pack, currency: l.currency || baseCurrency.code }));
       const schemeIdToSend = billingMode === 'scheme' ? selectedSchemeId : undefined;
       if (lineItems.length === 0 && lines.every(l => l.is_external)) {
         // Everything was prescribed for outside purchase, so there is genuinely

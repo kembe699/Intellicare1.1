@@ -363,7 +363,7 @@ async function dispenseBilledProducts(sequelize, billId, pharmacistId = null) {
       if (!item) continue;
       // Billed quantity is in packs — the bill screen prices a product at its
       // per-pack selling price.
-      const packQty = Number(line.quantity) || 1;
+      const packQty = Number(line.packQuantity ?? line.quantity) || 1;
       if (Number(item.quantity_on_hand) < packQty - 1e-9) {
         result.skipped.push({ drug: item.item_name, needed: packQty, stock: Number(item.quantity_on_hand), reason: 'insufficient stock' });
         continue;

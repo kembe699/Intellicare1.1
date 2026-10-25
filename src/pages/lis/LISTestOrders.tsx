@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { cn } from '@/lib/utils';
 import * as docTemplate from '@/utils/documentTemplate';
-import { FREQUENCY_OPTIONS, calculateQuantity, describeDosage, findFrequency, doseUnitLabel, packEquivalent } from '@/lib/prescriptionFrequency';
+import { FREQUENCY_OPTIONS, calculateQuantity, describeDosage, findFrequency, doseUnitLabel, packEquivalent, drugBillLine } from '@/lib/prescriptionFrequency';
 import { useFacilityInfo } from '@/hooks/useFacilityInfo';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -591,6 +591,7 @@ export default function LISTestOrders() {
       quantity_prescribed: qty, dose_amount: parseFloat(rxDoseAmount) || null,
       dose_strength: rxDose, frequency: rxFrequency,
       duration_days: duration, notes: rxNotes.trim(), selling_price: parseFloat(drug.selling_price) || 0,
+      units_per_pack: Number(drug.units_per_pack) || 1,
       location_id: rxLocation?.id || null, location_name: rxLocation?.name || null,
     }]);
     resetRxForm();
@@ -645,7 +646,9 @@ export default function LISTestOrders() {
         // external line is bought outside, so billing it here would charge the
         // patient twice for one medicine.
         for (const l of rxLines.filter(x => !x.is_external)) {
-          await addBillItem(`rx-${created.id}-${l.drug_id}`, l.drug_name, l.selling_price, patient, l.quantity_prescribed);
+          // Priced per pack: doses ÷ pack size × pack price (not doses × pack price).
+          await addBillItem(`rx-${created.id}-${l.drug_id}`, l.drug_name, l.selling_price, patient, l.quantity_prescribed, l.drug_id, undefined,
+            drugBillLine({ drugId: l.drug_id, drugName: l.drug_name, doses: l.quantity_prescribed, packPrice: l.selling_price, unitsPerPack: l.units_per_pack }));
         }
         const externalCount = rxLines.filter(x => x.is_external).length;
         if (externalCount > 0) {
@@ -1678,7 +1681,9 @@ export default function LISTestOrders() {
     patient?: { id: string; name: string },
     quantity: number = 1,
     serviceId?: string,
-    currency?: string
+    currency?: string,
+    // A ready-made line (drugs: doses + pack equivalent, see drugBillLine).
+    prebuiltLine?: any
   ) => {
     const patientId = patient?.id ?? selectedParticipant?.participant_id;
     const patientName = patient?.name ?? (selectedParticipant ? `${selectedParticipant.first_name} ${selectedParticipant.last_name}` : '');
@@ -1696,8 +1701,10 @@ export default function LISTestOrders() {
     // another in-flight call for the same patient — see billingQueueRef.
     const task = billingQueueRef.current.then(async () => {
       try {
-        const totalPrice = price * quantity;
-        const lineItem = { serviceId, serviceName: label, quantity, unitPrice: price, totalPrice, currency: currency || baseCurrency.code };
+        const lineItem = prebuiltLine
+          ? { currency: currency || baseCurrency.code, ...prebuiltLine }
+          : { serviceId, serviceName: label, quantity, unitPrice: price, totalPrice: price * quantity, currency: currency || baseCurrency.code };
+        const totalPrice = lineItem.totalPrice;
         const branchClinicId = user?.clinic || 1;
         const schemeIdToSend = billingMode === 'scheme' ? selectedSchemeId : undefined;
 
