@@ -46,10 +46,13 @@ interface IncomeStatementData {
   expenseSections?: ExpenseSections;
   dailyBreakdown?: DailyRow[] | null;
   dailyRangeTruncated?: boolean;
+  /** Tax collected for the tax authority (e.g. 2300 VAT Payable) — a liability, not revenue. */
+  taxCollected?: AccountLine[];
   totals: {
     totalRevenue: number;
     totalExpenses: number;
     netIncome: number;
+    taxCollected?: number;
   };
 }
 
@@ -110,6 +113,8 @@ export default function IncomeStatementReport() {
   const totalExpenses = data?.totals?.totalExpenses ?? 0;
   const netIncome = data?.totals?.netIncome ?? 0;
   const netPositive = netIncome >= 0;
+  const taxLines = data?.taxCollected || [];
+  const taxTotal = data?.totals?.taxCollected ?? 0;
 
   const csvRows = view === 'daily'
     ? daily.map(d => ({ section: d.date, account_code: '', account_name: `Rev ${fmtCurrency(d.totalRevenue)} · COGS ${fmtCurrency(d.totalCostOfGoodsSold)} · OpEx ${fmtCurrency(d.totalOperatingExpenses)} · Misc ${fmtCurrency(d.totalMiscellaneous)}`, amount: d.netIncome }))
@@ -125,6 +130,7 @@ export default function IncomeStatementReport() {
         { section: '', account_code: '', account_name: 'Total Miscellaneous', amount: sections?.miscellaneous.total ?? 0 },
         { section: '', account_code: '', account_name: 'Total Expenses', amount: totalExpenses },
         { section: '', account_code: '', account_name: 'Net Income', amount: netIncome },
+        ...taxLines.map(t => ({ section: 'Tax collected (liability, not revenue)', account_code: t.account_code, account_name: t.account_name, amount: t.amount })),
       ];
   const csvColumns: CsvColumn[] = [
     { header: 'Section', key: 'section' },
@@ -395,6 +401,23 @@ export default function IncomeStatementReport() {
                   {fmtCurrency(netIncome)}
                 </td>
               </tr>
+
+              {/* ── Tax collected: owed to the tax authority, outside revenue and net income ── */}
+              {taxTotal !== 0 && (
+                <>
+                  <tr className="border-t">
+                    <td className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground" colSpan={2}>
+                      Tax collected — owed, not revenue
+                    </td>
+                  </tr>
+                  {taxLines.map(t => (
+                    <tr key={t.account_id || t.account_code}>
+                      <td className="px-4 py-1.5 pl-8 text-muted-foreground">{t.account_code} {t.account_name}</td>
+                      <td className="px-4 py-1.5 text-right font-mono tabular-nums text-muted-foreground">{fmtCurrency(t.amount)}</td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
         </div>

@@ -27,6 +27,9 @@ try {
            VALUES ($1, $2, $3, $4, 1, 280000, 280000, 0, 'paid', $5, $5, $6, $7, 'SSP', 'T05 fixture', 1, NOW(), NOW())`,
     [billId, `T05-${billId.slice(0, 8)}`, patient.id, `${patient.first_name} ${patient.last_name}`, day,
      JSON.stringify([{ serviceName: 'T05 Scheme Item', quantity: 1, unitPrice: 280000, totalPrice: 280000 }]), randomUUID()]);
+  // Revenue by item is cash received (receipts, invoice and claim payments): the paid bill's receipt.
+  await q(`INSERT INTO receipts (id, receipt_number, bill_id, patient_id, patient_name, clinic_id, payment_amount, payment_method, payment_date, status, branch_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'T05', 1, 280000, 'cash', $5, 'active', 1, NOW(), NOW())`, [randomUUID(), `T05R-${billId.slice(0, 8)}`, billId, patient.id, day]);
   await q("UPDATE currencies SET is_base_currency = (code = 'USD')");
 
   const beforeRev = await revenueByItem(BEFORE);
@@ -42,6 +45,7 @@ try {
   check('after: deposit with no currency recorded in the base currency (USD)', afterDep.status < 300 && afterDep.currency === 'USD', JSON.stringify(afterDep));
 } finally {
   await q("UPDATE currencies SET is_base_currency = (code = 'SSP')");
+  await q('DELETE FROM receipts WHERE bill_id = $1', [billId]);
   await q('DELETE FROM patient_bills WHERE id = $1', [billId]);
 }
 

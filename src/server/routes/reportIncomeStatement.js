@@ -46,6 +46,7 @@ const { authorize } = require('../middleware/authorize');
 router.use(authorize('pages.reports.view'));
 
 const { sequelize } = require('../models');
+const { cashReceived } = require('../services/cashRevenue');
 
 // Auth is applied globally in index.js via `app.use('/api', authenticateToken)`,
 // so req.user is already populated by the time requests reach this router.
@@ -181,137 +182,102 @@ function waterfallAllocate(target, lines) {
   return out;
 }
 
-async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
-  // Each bill's revenue lines, in a fixed order (account_code), for bills that
-  // took money in the period — the waterfall below fills them in this order.
-  const billRevenueReplacements = { clinicId, dateFrom, dateTo };
-  const branchSqlAl = branchScope(req, billRevenueReplacements, 'al');
-  // branchScope() stamped `branchId` into the replacements object above already;
-  // reuse it (rather than calling branchScope again, which would just recompute
-  // the same value) for the two receipts subqueries below.
-  const branchSqlReceipts = billRevenueReplacements.branchId ? ' AND r.branch_id = :branchId' : '';
-  const [billRevenueRows] = await sequelize.query(
-    `WITH bill_revenue AS (
-       SELECT gl.reference_id AS bill_id,
-              al.account_id,
-              SUM(al.credit_amount - al.debit_amount) AS amount
-         FROM account_ledger al
-         JOIN general_ledger gl ON gl.id = al.transaction_id
-         JOIN chart_of_accounts c ON c.id = al.account_id
-          AND c.account_type = 'revenue'
-        WHERE al.is_posted = true
-          AND al.clinic_id = :clinicId
-          AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
-          ${branchSqlAl}
-        GROUP BY 1, 2
-       HAVING SUM(al.credit_amount - al.debit_amount) <> 0
-     )
-     SELECT br.bill_id, coa.id AS account_id, coa.account_code, coa.account_name, coa.sub_account_type, br.amount
-       FROM bill_revenue br
-       JOIN chart_of_accounts coa ON coa.id = br.account_id
-      WHERE coa.is_active = true
-        AND br.bill_id IN (
-              SELECT DISTINCT bill_id::text FROM (
-                SELECT r.bill_id FROM receipts r
-                 WHERE r.clinic_id = :clinicId AND r.status = 'active'
-                   AND r.bill_id IS NOT NULL AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
-                   ${branchSqlReceipts}
-                UNION
-                SELECT r.bill_id FROM receipts r
-                 WHERE r.clinic_id = :clinicId AND COALESCE(r.refund_amount, 0) > 0
-                   AND r.bill_id IS NOT NULL AND r.refund_date::date BETWEEN :dateFrom AND :dateTo
-                   ${branchSqlReceipts}
-              ) x
-            )
-      ORDER BY br.bill_id, coa.account_code ASC`,
-    { replacements: billRevenueReplacements }
-  );
+/**
+ * Cash received in the period — patient receipts, invoice payments and insurer
+ * claim payments (services/cashRevenue.js) — split into revenue, spread over
+ * the revenue accounts each bill posted to, and tax collected, spread over the
+ * bill's tax accounts. Tax is a liability, never revenue. Returns
+ * { revenue: [...lines], tax: [...lines] }.
+ */
+async function fetchCash(clinicId, dateFrom, dateTo, req) {
+  const scope = {};
+  branchScope(req, scope);
+  const { movements } = await cashReceived(sequelize, { clinicId, dateFrom, dateTo, branchId: scope.branchId || null });
 
-  // What was actually taken in on each of those bills during the period —
-  // payments in, refunds out — this is the amount the lines above must sum to.
-  const collectedReplacements = { clinicId, dateFrom, dateTo };
-  const branchSqlCollected = branchScope(req, collectedReplacements, 'r');
-  const [collectedRows] = await sequelize.query(
-    `WITH movements AS (
-       SELECT r.bill_id::text AS bill_id,
-              SUM(COALESCE(NULLIF(r.base_currency_amount, 0), r.payment_amount)) AS amount
-         FROM receipts r
-        WHERE r.clinic_id = :clinicId
-          AND r.status = 'active'
-          AND r.bill_id IS NOT NULL
-          AND r.payment_date::date BETWEEN :dateFrom AND :dateTo
-          ${branchSqlCollected}
-        GROUP BY 1
-       UNION ALL
-       SELECT r.bill_id::text AS bill_id,
-              -SUM(COALESCE(r.refund_amount, 0)) AS amount
-         FROM receipts r
-        WHERE r.clinic_id = :clinicId
-          AND COALESCE(r.refund_amount, 0) > 0
-          AND r.bill_id IS NOT NULL
-          AND r.refund_date::date BETWEEN :dateFrom AND :dateTo
-          ${branchSqlCollected}
-        GROUP BY 1
-     )
-     SELECT bill_id, SUM(amount) AS amount FROM movements GROUP BY 1`,
-    { replacements: collectedReplacements }
-  );
+  const perBill = new Map();
+  for (const m of movements) {
+    const b = perBill.get(m.billId) || { revenue: 0, tax: 0 };
+    b.revenue = round2(b.revenue + m.revenue);
+    b.tax = round2(b.tax + m.tax);
+    perBill.set(m.billId, b);
+  }
+  const billIds = [...perBill.keys()];
+  if (!billIds.length) return { revenue: [], tax: [] };
 
-  const linesByBill = new Map();
-  for (const r of billRevenueRows) {
-    const bill = linesByBill.get(r.bill_id) || [];
-    bill.push({ key: r.account_id, capacity: Number(r.amount) || 0, account_code: r.account_code, account_name: r.account_name, sub_account_type: r.sub_account_type });
-    linesByBill.set(r.bill_id, bill);
+  // Each bill's revenue and tax lines on the ledger, in a fixed order — the
+  // waterfall below fills revenue lines in this order.
+  const [ledgerRows] = await sequelize.query(
+    `SELECT gl.reference_id AS bill_id, coa.id AS account_id, coa.account_code, coa.account_name, coa.sub_account_type,
+            (coa.account_type = 'revenue') AS is_revenue,
+            SUM(al.credit_amount - al.debit_amount) AS amount
+       FROM account_ledger al
+       JOIN general_ledger gl ON gl.id = al.transaction_id
+       JOIN chart_of_accounts coa ON coa.id = al.account_id
+        AND (coa.account_type = 'revenue' OR coa.id::text IN (SELECT account_id::text FROM tax_rates WHERE account_id IS NOT NULL))
+      WHERE al.is_posted = true AND al.clinic_id = :clinicId AND coa.is_active = true
+        AND gl.reference_module IN ('patient_billing', 'bill_item_void', 'bill_revenue_adjustment')
+        AND gl.reference_id IN (:billIds)
+      GROUP BY 1, 2, 3, 4, 5, 6
+     HAVING SUM(al.credit_amount - al.debit_amount) <> 0
+      ORDER BY gl.reference_id, coa.account_code ASC`,
+    { replacements: { clinicId, billIds } }
+  );
+  const byBill = new Map();
+  for (const r of ledgerRows) {
+    const b = byBill.get(r.bill_id) || { revenue: [], tax: [] };
+    (r.is_revenue ? b.revenue : b.tax).push({ key: r.account_id, capacity: Number(r.amount) || 0, account_code: r.account_code, account_name: r.account_name, sub_account_type: r.sub_account_type });
+    byBill.set(r.bill_id, b);
   }
 
-  const totalsByAccount = new Map();
-  for (const c of collectedRows) {
-    const lines = linesByBill.get(c.bill_id);
-    if (!lines || lines.length === 0) continue;
-    const allocated = waterfallAllocate(Number(c.amount) || 0, lines);
-    for (const a of allocated) {
-      if (a.amount === 0) continue;
-      const line = lines.find((l) => l.key === a.key);
-      const running = totalsByAccount.get(a.key) || { account_id: a.key, account_code: line.account_code, account_name: line.account_name, sub_account_type: line.sub_account_type, amount: 0 };
-      running.amount = round2(running.amount + a.amount);
-      totalsByAccount.set(a.key, running);
+  const totals = { revenue: new Map(), tax: new Map() };
+  const add = (kind, line, amount) => {
+    if (!amount) return;
+    const running = totals[kind].get(line.key) || { account_id: line.key, account_code: line.account_code, account_name: line.account_name, sub_account_type: line.sub_account_type, amount: 0 };
+    running.amount = round2(running.amount + amount);
+    totals[kind].set(line.key, running);
+  };
+  for (const [billId, got] of perBill) {
+    const lines = byBill.get(billId);
+    // A bill whose ledger entry is missing contributes nothing rather than
+    // landing in a catch-all account — the ledger sweeper repairs those.
+    if (!lines) continue;
+    if (lines.revenue.length) {
+      for (const a of waterfallAllocate(got.revenue, lines.revenue)) add('revenue', lines.revenue.find((l) => l.key === a.key), a.amount);
+    }
+    if (got.tax) {
+      const taxLines = lines.tax.length ? lines.tax : lines.revenue.slice(0, 1);
+      const cap = taxLines.reduce((s, l) => s + l.capacity, 0);
+      let left = got.tax;
+      taxLines.forEach((l, i) => {
+        const amount = i === taxLines.length - 1 ? left : round2(got.tax * (cap ? l.capacity / cap : 1 / taxLines.length));
+        left = round2(left - amount);
+        add(lines.tax.length ? 'tax' : 'revenue', l, amount);
+      });
     }
   }
-
-  const rows = [...totalsByAccount.values()]
+  const shape = (m) => [...m.values()]
     .filter((r) => Math.abs(r.amount) > 0.001)
-    .sort((a, b) => String(a.account_code).localeCompare(String(b.account_code)));
+    .sort((a, b) => String(a.account_code).localeCompare(String(b.account_code)))
+    .map((r) => ({ account_id: r.account_id, account_code: r.account_code, account_name: r.account_name, subAccountType: r.sub_account_type || null, amount: r.amount }));
+  return { revenue: shape(totals.revenue), tax: shape(totals.tax) };
+}
 
-  const lines = rows.map((r) => ({
-    account_id: r.account_id,
-    account_code: r.account_code,
-    account_name: r.account_name,
-    subAccountType: r.sub_account_type || null,
-    exact: parseFloat(r.amount) || 0,
-    amount: Math.round((parseFloat(r.amount) || 0) * 100) / 100,
-  }));
+async function fetchCashRevenue(clinicId, dateFrom, dateTo, req) {
+  return (await fetchCash(clinicId, dateFrom, dateTo, req)).revenue;
+}
 
-  // A safety net, not the primary mechanism now that allocation is a waterfall
-  // of whole amounts rather than a ratio.
-  //
-  // Genuinely fractional prices (a scheme rate, a currency conversion) can still
-  // leave floating-point noise after many additions — round2() at each step
-  // keeps that from accumulating, but this catches anything that slips through
-  // by putting it on the largest line, where a cent is least significant and
-  // which is certain to be big enough to absorb it. On whole-number prices this
-  // fires never; it existed as the whole fix before the waterfall replaced the
-  // ratio split, which is why a day's takings of 2,009,500.00 once came out as
-  // 2,009,499.99.
-  const exactTotal = Math.round(lines.reduce((sum, l) => sum + l.exact, 0) * 100) / 100;
-  const roundedTotal = Math.round(lines.reduce((sum, l) => sum + l.amount, 0) * 100) / 100;
-  const remainder = Math.round((exactTotal - roundedTotal) * 100) / 100;
-
-  if (remainder !== 0 && lines.length > 0) {
-    const largest = lines.reduce((a, b) => (Math.abs(b.amount) > Math.abs(a.amount) ? b : a));
-    largest.amount = Math.round((largest.amount + remainder) * 100) / 100;
-  }
-
-  return lines.map(({ exact, ...line }) => line);
+/** Tax collected on the accrual basis: what was posted to the tax accounts in the period. */
+async function fetchAccrualTax(clinicId, dateFrom, dateTo, req) {
+  const replacements = { clinicId, dateFrom, dateTo };
+  const branchSql = branchScope(req, replacements, 'al');
+  const [rows] = await sequelize.query(
+    `SELECT coa.id AS account_id, coa.account_code, coa.account_name, SUM(al.credit_amount - al.debit_amount) AS amount
+       FROM account_ledger al JOIN chart_of_accounts coa ON coa.id = al.account_id
+      WHERE al.clinic_id = :clinicId AND al.is_posted = true AND al.transaction_date BETWEEN :dateFrom AND :dateTo ${branchSql}
+        AND coa.id::text IN (SELECT account_id::text FROM tax_rates WHERE account_id IS NOT NULL)
+      GROUP BY 1, 2, 3 HAVING ABS(SUM(al.credit_amount - al.debit_amount)) > 0.001 ORDER BY 2`,
+    { replacements });
+  return rows.map((r) => ({ account_id: r.account_id, account_code: r.account_code, account_name: r.account_name, amount: round2(r.amount) }));
 }
 
 // Splits the flat expense-account list into the three sections a reader
@@ -399,13 +365,15 @@ router.get('/', async (req, res) => {
     const basis = String(req.query.basis || 'cash').toLowerCase() === 'accrual' ? 'accrual' : 'cash';
     const wantsDaily = String(req.query.daily || '').toLowerCase() === 'true';
 
-    const [revenue, expenses, dailyBreakdown] = await Promise.all([
+    const [income, expenses, dailyBreakdown] = await Promise.all([
       basis === 'cash'
-        ? fetchCashRevenue(clinicId, dateFrom, dateTo, req)
-        : fetchSection(clinicId, 'revenue', dateFrom, dateTo, req),
+        ? fetchCash(clinicId, dateFrom, dateTo, req)
+        : Promise.all([fetchSection(clinicId, 'revenue', dateFrom, dateTo, req), fetchAccrualTax(clinicId, dateFrom, dateTo, req)])
+          .then(([revenue, tax]) => ({ revenue, tax })),
       fetchSection(clinicId, 'expense', dateFrom, dateTo, req),
       wantsDaily ? fetchDailyBreakdown(clinicId, dateFrom, dateTo, basis, req) : Promise.resolve(null),
     ]);
+    const { revenue, tax: taxCollected } = income;
 
     const totalRevenue = revenue.reduce((sum, r) => sum + r.amount, 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -418,12 +386,16 @@ router.get('/', async (req, res) => {
       revenue,
       expenses,
       expenseSections,
+      // Tax collected on the customer's behalf — a liability (e.g. 2300 VAT
+      // Payable), shown beside the statement, never counted as revenue.
+      taxCollected,
       dailyBreakdown,
       dailyRangeTruncated: wantsDaily && dateRangeDays(dateFrom, dateTo, MAX_DAILY_RANGE + 1).length > MAX_DAILY_RANGE,
       totals: {
         totalRevenue,
         totalExpenses,
         netIncome,
+        taxCollected: round2(taxCollected.reduce((sum, t) => sum + t.amount, 0)),
       },
     });
   } catch (err) {

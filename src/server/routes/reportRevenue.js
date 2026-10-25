@@ -154,99 +154,80 @@ function patientTypeConditionSQL(patientType) {
 
 const PATIENT_TYPE_NOTE = 'Outpatient / Inpatient / Discharged is inferred from whether an inpatient_admissions record for the same patient overlaps the bill date — patient_bills has no stored visit-type column, so this is a best-effort classification rather than a verified field.';
 
-// ── GET /  — groupBy=scheme|branch|payment_mode|item (receipts-based "Revenue by ...") ──
+// ── GET /  — groupBy=scheme|branch|payment_mode|item|department: cash revenue ("Revenue by ...") ──
+// All money received in the period — patient receipts, invoice payments and
+// insurer claim payments — with tax collected taken out (a liability, reported
+// in totals.taxCollected). Every grouping starts from the same per-payment
+// revenue (services/cashRevenue.js), so they all add up to the same total.
 router.get('/', async (req, res) => {
   try {
-    const groupBy = ['scheme', 'branch', 'payment_mode', 'item'].includes(req.query.groupBy) ? req.query.groupBy : 'scheme';
+    const groupBy = ['scheme', 'branch', 'payment_mode', 'item', 'department'].includes(req.query.groupBy) ? req.query.groupBy : 'scheme';
     const today = todayISO();
     const dateFrom = isValidDate(req.query.dateFrom) ? req.query.dateFrom : today;
     const dateTo = isValidDate(req.query.dateTo) ? req.query.dateTo : today;
     const clinicId = req.query.clinic_id ? parseInt(req.query.clinic_id, 10) : null;
-    const clinicSQL = clinicId ? ' AND r.clinic_id = ?' : '';
-    const clinicParams = clinicId ? [clinicId] : [];
     const branch = getBranchConditionSQL(req, 'r');
+    const branchId = branch.params[0] || null;
 
-    let rows;
-    if (groupBy === 'branch') {
-      [rows] = await sequelize.query(
-        `SELECT COALESCE(r.branch_id::text, 'none') AS group_key, r.branch_id,
-                COALESCE(b.name, CASE WHEN r.branch_id IS NULL THEN 'No Branch Assigned' ELSE 'Branch ' || r.branch_id END) AS group_label,
-                COUNT(*) AS transaction_count, COALESCE(SUM(r.payment_amount), 0) AS total_collected
-         FROM receipts r LEFT JOIN branches b ON b.id = r.branch_id
-         WHERE r.status = 'active' AND DATE(r.payment_date) BETWEEN ? AND ? ${clinicSQL} ${branch.sql}
-         GROUP BY r.branch_id, b.name ORDER BY total_collected DESC`,
-        { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params] }
-      );
-    } else if (groupBy === 'payment_mode') {
-      [rows] = await sequelize.query(
-        `SELECT COALESCE(r.payment_method, 'unknown') AS group_key, COALESCE(INITCAP(r.payment_method), 'Unknown') AS group_label,
-                COUNT(*) AS transaction_count, COALESCE(SUM(r.payment_amount), 0) AS total_collected
-         FROM receipts r
-         WHERE r.status = 'active' AND DATE(r.payment_date) BETWEEN ? AND ? ${clinicSQL} ${branch.sql}
-         GROUP BY r.payment_method ORDER BY total_collected DESC`,
-        { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params] }
-      );
-    } else if (groupBy === 'item') {
-      // No per-item FK to a catalog here (unlike reportClinicPerformance.js's
-      // category rollup) — grouped directly on the billed item's own name, so
-      // every line item counts, catalog match or not.
-      const branchBills = getBranchConditionSQL(req);
-      const clinicBillSQL = clinicId ? ' AND clinic_id = ?' : '';
-      const [bills] = await sequelize.query(
-        `SELECT id, total_amount, paid_amount, status, bill_date, services, scheme_id, bill_currency
-         FROM patient_bills
-         WHERE DATE(bill_date) BETWEEN ? AND ? ${clinicBillSQL} ${branchBills.sql}`,
-        { replacements: [dateFrom, dateTo, ...clinicParams, ...branchBills.params] }
-      );
-      const byItem = new Map();
-      const rateCache = new Map();
-      for (const bill of bills) {
-        let items = [];
-        try {
-          const parsed = typeof bill.services === 'string' ? JSON.parse(bill.services) : bill.services;
-          if (Array.isArray(parsed)) items = parsed;
-        } catch { continue; }
-        const billTotal = num(bill.total_amount);
-        const billPaid = num(bill.paid_amount);
-        const billPaidRatio = billTotal > 0 ? Math.min(billPaid / billTotal, 1) : 0;
-        const billForResolve = { schemeId: bill.scheme_id, billCurrency: bill.bill_currency, billDay: bill.bill_date, status: bill.status };
-        for (const item of items) {
-          const rawName = (item?.serviceName || item?.name || item?.service_name || '').trim();
-          if (!rawName) continue;
-          const { amount: itemTotal } = await resolveItemAmount(item, billForResolve, rateCache, clinicId || 1);
-          const collected = collectedForItem(item, billForResolve, itemTotal, billPaidRatio);
-          const row = byItem.get(rawName) || { label: rawName, transactionCount: 0, totalCollected: 0, totalBilled: 0 };
-          row.transactionCount += 1;
-          row.totalBilled += itemTotal;
-          row.totalCollected += collected;
-          byItem.set(rawName, row);
+    const { cashReceived, spreadOverLines, accountDepartments, round2 } = require('../services/cashRevenue');
+    const { movements, bills } = await cashReceived(sequelize, { clinicId, dateFrom, dateTo, branchId });
+
+    const groups = new Map();
+    const add = (key, label, amount, count = 1, id = key) => {
+      const g = groups.get(key) || { key, id, label, transactionCount: 0, totalCollected: 0 };
+      g.transactionCount += count;
+      g.totalCollected = round2(g.totalCollected + amount);
+      groups.set(key, g);
+    };
+    const METHOD_LABELS = { insurance: 'Insurance claim', refund: 'Refunds' };
+    let branchNames = null;
+    let resolveAccount = null;
+    let departments = null;
+    for (const m of movements) {
+      const bill = bills.get(m.billId) || {};
+      if (groupBy === 'scheme') {
+        add(bill.scheme_id || 'none', bill.scheme_name || 'Cash / No Scheme', m.revenue, 1, bill.scheme_id || 'none');
+      } else if (groupBy === 'branch') {
+        if (!branchNames) {
+          const [rows] = await sequelize.query('SELECT id, name FROM branches');
+          branchNames = new Map(rows.map((r) => [String(r.id), r.name]));
+        }
+        const b = m.branchId ?? bill.branch_id;
+        add(b == null ? 'none' : String(b), b == null ? 'No Branch Assigned' : (branchNames.get(String(b)) || `Branch ${b}`), m.revenue, 1, b ?? 'none');
+      } else if (groupBy === 'payment_mode') {
+        const method = String(m.method || 'unknown').toLowerCase();
+        add(method, METHOD_LABELS[method] || method.replace(/(^|_)(\w)/g, (_, s, c) => (s ? ' ' : '') + c.toUpperCase()), m.revenue);
+      } else {
+        const parts = spreadOverLines(bill, m.revenue);
+        if (groupBy === 'item') {
+          for (const p of parts) {
+            const name = String(p.line.serviceName || p.line.name || p.line.service_name || 'Unclassified').trim();
+            add(name, name, p.amount);
+          }
+        } else {
+          if (!resolveAccount) {
+            resolveAccount = require('../utils/resolveRevenueAccount').resolveRevenueAccountForLine;
+            departments = await accountDepartments(sequelize, clinicId || 1);
+          }
+          for (const p of parts) {
+            const acct = p.line.revenue_account_id || await resolveAccount(p.line, clinicId || 1).catch(() => null);
+            const dept = (acct && departments.get(String(acct))) || 'General';
+            add(dept, dept, p.amount);
+          }
         }
       }
-      rows = Array.from(byItem.values())
-        .sort((a, b) => b.totalCollected - a.totalCollected)
-        .map(r => ({ group_key: r.label, group_label: r.label, transaction_count: r.transactionCount, total_collected: r.totalCollected }));
-    } else {
-      [rows] = await sequelize.query(
-        `SELECT COALESCE(pb.scheme_id, 'none') AS group_key, pb.scheme_id,
-                COALESCE(ps.scheme_name, 'Cash / No Scheme') AS group_label,
-                COUNT(*) AS transaction_count, COALESCE(SUM(r.payment_amount), 0) AS total_collected
-         FROM receipts r
-         LEFT JOIN patient_bills pb ON pb.id = r.bill_id
-         LEFT JOIN patient_schemes ps ON ps.id = pb.scheme_id
-         WHERE r.status = 'active' AND DATE(r.payment_date) BETWEEN ? AND ? ${clinicSQL} ${branch.sql}
-         GROUP BY pb.scheme_id, ps.scheme_name ORDER BY total_collected DESC`,
-        { replacements: [dateFrom, dateTo, ...clinicParams, ...branch.params] }
-      );
     }
 
-    const totalCollected = rows.reduce((sum, r) => sum + (parseFloat(r.total_collected) || 0), 0);
+    const rows = [...groups.values()].sort((a, b) => b.totalCollected - a.totalCollected);
+    const sum = (k) => round2(movements.reduce((s, m) => s + m[k], 0));
     res.json({
       groupBy, period: { dateFrom, dateTo },
-      rows: rows.map((r) => ({
-        key: r.group_key, id: r.branch_id ?? r.scheme_id ?? r.group_key, label: r.group_label,
-        transactionCount: parseInt(r.transaction_count, 10) || 0, totalCollected: parseFloat(r.total_collected) || 0,
-      })),
-      totals: { totalCollected },
+      rows,
+      totals: {
+        totalCollected: sum('revenue'),   // revenue received, tax excluded
+        taxCollected: sum('tax'),         // owed to the tax authority (a liability)
+        cashReceived: sum('amount'),      // everything received, tax included
+      },
     });
   } catch (err) {
     console.error('Revenue report error:', err);
