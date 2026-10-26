@@ -1237,35 +1237,54 @@ router.post('/exchange-rates', authorize('accounting.rates.write'), async (req, 
       return res.status(400).json({ error: 'from_currency and to_currency must be different' });
     }
 
-    // Deactivate any existing active rate for this pair that would overlap
-    await ExchangeRate.update(
-      { is_active: false },
-      {
+    // A new rate takes over from its effective date; earlier rates END the day
+    // before it (expiry_date) and stay active, so anything dated before then
+    // keeps converting at the rate that applied on its own date. This used to
+    // deactivate every earlier rate for the pair: a bill dated last week would
+    // then find no rate for its day and convert at whatever was left (the
+    // inverse pair, or a much older rate).
+    const from = from_currency.toUpperCase();
+    const to = to_currency.toUpperCase();
+    const dayBefore = (d) => { const x = new Date(`${String(d).slice(0, 10)}T00:00:00Z`); x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); };
+    const newStart = String(effective_date).slice(0, 10);
+    const t = await sequelize.transaction();
+    let exchangeRate;
+    try {
+      // Same pair, same start day: the new rate replaces it.
+      await ExchangeRate.update({ is_active: false }, {
+        where: { clinic_id, from_currency: from, to_currency: to, is_active: true, effective_date: newStart }, transaction: t });
+      // Earlier rates still open on the new start day end the day before it.
+      await ExchangeRate.update({ expiry_date: dayBefore(newStart) }, {
         where: {
-          clinic_id,
-          from_currency,
-          to_currency,
-          is_active: true,
-          effective_date: { [Op.lte]: effective_date },
-          [Op.or]: [
-            { expiry_date: null },
-            { expiry_date: { [Op.gte]: effective_date } }
-          ]
-        }
-      }
-    );
+          clinic_id, from_currency: from, to_currency: to, is_active: true,
+          effective_date: { [Op.lt]: newStart },
+          [Op.or]: [{ expiry_date: null }, { expiry_date: { [Op.gte]: newStart } }],
+        },
+        transaction: t,
+      });
+      // A rate added behind a later one ends the day before that later rate starts.
+      const next = await ExchangeRate.findOne({
+        where: { clinic_id, from_currency: from, to_currency: to, is_active: true, effective_date: { [Op.gt]: newStart } },
+        order: [['effective_date', 'ASC']], transaction: t });
+      const nextEnd = next ? dayBefore(next.effective_date) : null;
+      const ownEnd = expiry_date ? String(expiry_date).slice(0, 10) : null;
 
-    const exchangeRate = await ExchangeRate.create({
-      clinic_id,
-      from_currency: from_currency.toUpperCase(),
-      to_currency: to_currency.toUpperCase(),
-      rate: parseFloat(rate),
-      effective_date,
-      expiry_date: expiry_date || null,
-      source: source || 'manual',
-      is_active: true,
-      created_by: req.user?.id || 'system'
-    });
+      exchangeRate = await ExchangeRate.create({
+        clinic_id,
+        from_currency: from,
+        to_currency: to,
+        rate: parseFloat(rate),
+        effective_date: newStart,
+        expiry_date: ownEnd && nextEnd ? (ownEnd < nextEnd ? ownEnd : nextEnd) : (ownEnd || nextEnd),
+        source: source || 'manual',
+        is_active: true,
+        created_by: req.user?.id || 'system'
+      }, { transaction: t });
+      await t.commit();
+    } catch (e) {
+      await t.rollback();
+      throw e;
+    }
 
     res.status(201).json(exchangeRate);
   } catch (error) {
