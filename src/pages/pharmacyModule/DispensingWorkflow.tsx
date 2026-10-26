@@ -2066,7 +2066,9 @@ export default function DispensingWorkflow() {
               { key: 'quantity_dispensed', header: 'Qty', sortable: true, render: (v) => <span className="whitespace-nowrap">{v}</span> },
               {
                 key: '__amount', header: 'Amount', align: 'right',
-                render: (_v, h) => <span className="font-medium whitespace-nowrap">{fmt((parseFloat(h.unit_price) || 0) * (h.quantity_dispensed || 0))}</span>,
+                // The record's own total (base currency). unit_price is per PACK and quantity is in
+                // doses, so multiplying them charged a whole pack per tablet (24 × 20,000).
+                render: (_v, h) => <span className="font-medium whitespace-nowrap">{fmt(parseFloat(h.total_price_base ?? h.total_price) || 0)}</span>,
               },
               { key: 'pharmacist_name', header: 'Pharmacist', render: (v) => <span className="text-muted-foreground">{v || '—'}</span> },
               { key: 'dispensing_date', header: 'Date', sortable: true, render: (v) => <span className="text-muted-foreground whitespace-nowrap">{v ? formatDate(v) : '—'}</span> },

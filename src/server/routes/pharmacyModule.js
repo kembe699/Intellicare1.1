@@ -1807,6 +1807,26 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
     let chargeId = null;
     if (billCoveredRevenue) {
       console.log(`Dispensing ${dispId}: no charge or revenue — ${drug.drug_name} is already on the patient's bill.`);
+      // Record what the bill charged for these doses (an insurer's price, in base
+      // currency at the bill's booked rate), not the counter's cash price — so the
+      // dispensing history agrees with revenue.
+      const { bookedRateSql } = require('../utils/bookedRate');
+      const [[billed]] = await sequelize.query(`
+        SELECT SUM(CASE WHEN s->>'totalPrice' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (s->>'totalPrice')::numeric ELSE 0 END * ${bookedRateSql('b')}) AS value,
+               SUM(CASE WHEN s->>'quantity' ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                     (s->>'quantity')::numeric * CASE WHEN s->>'packQuantity' IS NOT NULL THEN 1 ELSE :upp END ELSE 0 END) AS doses
+          FROM patient_bills b, LATERAL jsonb_array_elements(b.services::jsonb) s
+         WHERE b.patient_id::text = :pid AND b.status <> 'cancelled'
+           AND s->>'serviceId' = :iid AND COALESCE((s->>'isVoided')::boolean, false) = false`,
+        { replacements: { pid: String(cleanPatientId), iid: String(inventoryItemId), upp: unitsPerPack }, transaction: t });
+      const perDose = parseFloat(billed?.doses) > 0 ? parseFloat(billed.value) / parseFloat(billed.doses) : null;
+      if (perDose != null) {
+        const value = Math.round(perDose * parseFloat(quantity_dispensed) * 100) / 100;
+        const { code: base } = await require('../services/CurrencyService').getBaseCurrency();
+        await sequelize.query(
+          `UPDATE dispensing_records SET unit_price = :unit, total_price = :value, total_price_base = :value, currency_code = :base, exchange_rate = 1 WHERE id = :id`,
+          { replacements: { unit: packQty > 0 ? Math.round((value / packQty) * 100) / 100 : value, value, base, id: dispId }, transaction: t });
+      }
     } else if (totalPrice > 0) {
       chargeId = uuidv4();
       const chargeNum = `CHG-${dispensingNumber}`;
