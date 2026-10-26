@@ -1589,6 +1589,9 @@ router.post('/dispensing', authorize('pharmacy.write'), async (req, res) => {
     // Highest issued, not how many exist — a gap in the sequence otherwise puts
     // this on a number already taken, and the dispense fails on the unique
     // transaction_number of the inventory movement it writes.
+    // Serialised with every other dispense in this tenant (same lock as
+    // services/autoDispense.js): two at once would read the same highest number.
+    await sequelize.query(`SELECT pg_advisory_xact_lock(hashtext(current_schema() || ':dispensing_number'))`, { transaction: t });
     const [dispCount] = await sequelize.query(
       `SELECT COALESCE(MAX(NULLIF(regexp_replace(dispensing_number, '^.*-', ''), '')::int), 0) AS cnt
          FROM dispensing_records

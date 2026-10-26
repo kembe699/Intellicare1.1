@@ -61,10 +61,13 @@ const PAID_PENDING_LINES = `
 `;
 
 /**
- * Store stock (stock_by_location) moves with the item total. When no store
- * was chosen, an item kept in exactly one store is taken from that store;
- * with several, there's no way to know which shelf it came off, so only the
- * total moves (the same rule approving a stock count uses).
+ * Store stock (stock_by_location) moves with the item total. The store is the
+ * one the line was sold from; when none was chosen, the pharmacy's default
+ * selling store if the item is kept there, else the one ACTIVE store holding
+ * it, else its only store. Only when none of those picks a single store does
+ * the total move alone. (Ignoring inactive stores matters: a tenant that
+ * retired its old store and opened a new one had every item in both, so no
+ * sale ever came off the new store's shelf count.)
  */
 async function deductSingleStore(sequelize, itemId, packQty, transaction, locationId = null) {
   // The store the line was sold/prescribed from, when one was chosen.
@@ -81,16 +84,30 @@ async function deductSingleStore(sequelize, itemId, packQty, transaction, locati
       return row.id;
     }
   }
+  // Checked first rather than caught: a failed statement would abort the
+  // caller's whole transaction.
+  const [[setting]] = await sequelize.query(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+                     AND table_name = 'pharmacy_settings' AND column_name = 'default_pharmacy_location_id') AS ok`,
+    { transaction });
+  const isDefault = setting?.ok
+    ? `(sbl.location_id::text = (SELECT default_pharmacy_location_id::text FROM pharmacy_settings LIMIT 1))`
+    : 'false';
   const [stores] = await sequelize.query(
-    'SELECT id FROM stock_by_location WHERE item_id = :iid',
-    { replacements: { iid: itemId }, transaction }
-  );
-  if (stores.length !== 1) return null;
+    `SELECT sbl.id, COALESCE(sl.is_active, true) AS active, COALESCE(${isDefault}, false) AS is_default
+       FROM stock_by_location sbl LEFT JOIN stock_locations sl ON sl.id::text = sbl.location_id::text
+      WHERE sbl.item_id = :iid`,
+    { replacements: { iid: itemId }, transaction });
+  const active = stores.filter((s) => s.active);
+  const pick = stores.find((s) => s.is_default && s.active)
+    || (active.length === 1 ? active[0] : null)
+    || (stores.length === 1 ? stores[0] : null);
+  if (!pick) return null;
   await sequelize.query(
     'UPDATE stock_by_location SET quantity_on_hand = GREATEST(0, quantity_on_hand - :qty) WHERE id = :id',
-    { replacements: { qty: packQty, id: stores[0].id }, transaction }
+    { replacements: { qty: packQty, id: pick.id }, transaction }
   );
-  return stores[0].id;
+  return pick.id;
 }
 
 /** Takes packQty out of the item's batches, earliest expiry first. */
@@ -122,6 +139,11 @@ async function deductBatches(sequelize, itemId, packQty, transaction) {
 }
 
 async function nextDispensingNumber(sequelize, transaction) {
+  // Two payments at the same moment both read the same highest number and
+  // collide on the unique dispensing_number — the second dispense then rolls
+  // back, and its drugs never leave stock. Serialised per tenant schema for the
+  // rest of this transaction.
+  await sequelize.query(`SELECT pg_advisory_xact_lock(hashtext(current_schema() || ':dispensing_number'))`, { transaction });
   const now = new Date();
   const prefix = `DISP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [[seqRow]] = await sequelize.query(

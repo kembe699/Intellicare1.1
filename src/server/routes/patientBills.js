@@ -2320,8 +2320,17 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
 
         }
 
-        // Drugs added straight onto this bill (no prescription) — dispensed now
-        // they're paid, so they reach Dispensing History and leave the shelf.
+      } catch (autoErr) {
+
+        console.error(`Auto-dispense after payment on ${currentBill.bill_number} failed:`, autoErr.message);
+
+      }
+
+      // Drugs added straight onto this bill (no prescription) — dispensed now
+      // they're paid, so they reach Dispensing History and leave the shelf.
+      // Its own try: a failure dispensing the patient's prescriptions above
+      // used to skip this too, and the bill's drugs never left stock.
+      try {
         const { dispenseBilledProducts } = require('../services/autoDispense');
         const billed = await dispenseBilledProducts(sequelize, currentBill.id, req.user?.id || null);
         if (billed.dispensed.length) {
@@ -2330,11 +2339,8 @@ router.post('/:billId/payments', authorize('bills.collect_payment'), async (req,
         for (const s of billed.skipped) {
           console.warn(`Billed product not dispensed on ${currentBill.bill_number} — ${s.drug}: ${s.reason}, needed ${s.needed}, stock ${s.stock}`);
         }
-
-      } catch (autoErr) {
-
-        console.error(`Auto-dispense after payment on ${currentBill.bill_number} failed:`, autoErr.message);
-
+      } catch (billedErr) {
+        console.error(`Dispensing billed products after payment on ${currentBill.bill_number} failed:`, billedErr.message);
       }
 
     }
