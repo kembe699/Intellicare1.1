@@ -978,8 +978,8 @@ async function openingBalance() {
 
 /**
  * Today's USD→SSP rate in force (7,800), and the stale SSP→USD 7,500 row switched off. Safe to run
- * before every demo. A new rate is added only when none applies today: adding one switches off
- * every earlier rate for the pair, which would change conversions for the demo day itself.
+ * before every demo. A new rate is added only when none applies today (a new rate ends the
+ * previous one the day before it starts, so earlier days keep their own rate).
  */
 async function rates() {
   step('Exchange rates');
