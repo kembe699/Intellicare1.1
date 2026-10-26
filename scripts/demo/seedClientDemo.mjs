@@ -754,7 +754,7 @@ async function step4() {
       if (out <= 0) continue;
       await api(as('pharmacy'), 'POST', '/pharmacy-module/dispensing', {
         clinic_id: CLINIC_ID, prescription_id: P.rxId, prescription_line_id: l.id, patient_id: P.id, drug_id: l.drug_id, pharmacist_id: state.users.pharmacy.id,
-        batch_id: '', from_location_id: state.pharmacyStore.id, quantity_dispensed: out, unit_of_measure: l.unit_of_measure, unit_price: 0,
+        batch_id: '', from_location_id: state.pharmacyStore.id, quantity_dispensed: out, unit_of_measure: l.unit_of_measure, unit_price: Number(l.selling_price) || 0, // as the counter sends it
         dispensing_notes: TAG, patient_counselling_provided: true, counselling_notes: 'Complete the full 3-day course; take with food.' }, { allow: [409] });
     }
     mark('p1Dispense'); log('dispensed');
@@ -867,7 +867,7 @@ async function step5() {
       if (out <= 0) continue;
       await api(as('pharmacy'), 'POST', '/pharmacy-module/dispensing', {
         clinic_id: CLINIC_ID, prescription_id: P.rxId, prescription_line_id: l.id, patient_id: P.id, drug_id: l.drug_id, pharmacist_id: state.users.pharmacy.id,
-        batch_id: '', from_location_id: state.pharmacyStore.id, quantity_dispensed: out, unit_of_measure: l.unit_of_measure, unit_price: 0,
+        batch_id: '', from_location_id: state.pharmacyStore.id, quantity_dispensed: out, unit_of_measure: l.unit_of_measure, unit_price: Number(l.selling_price) || 0, // as the counter sends it
         dispensing_notes: TAG, patient_counselling_provided: true, counselling_notes: 'Amoxicillin three times a day for 5 days; finish the course.' }, { allow: [409] });
     }
     mark('p2Dispense'); log('dispensed');
