@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
-import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent , drugBillLine } from '@/lib/prescriptionFrequency';
+import { FREQUENCY_OPTIONS, calculateQuantity, findFrequency, doseUnitLabel, packEquivalent , drugBillLine, describeDosage } from '@/lib/prescriptionFrequency';
 import { exportCSV } from '@/utils/reportUtils';
 import { toast } from '@/lib/notify';
 import {
@@ -90,7 +90,8 @@ export default function PrescriptionManagement() {
       lines: (rx.lines || []).map((l: any) => ({
         drugName: l.drug_name,
         doseStrength: l.dose_strength,
-        frequency: l.frequency,
+        // Same as the LIS print: the full "2 tablets twice a day for 5 days", not the bare code.
+        frequency: describeDosage(l.dose_amount, l.unit_of_measure, l.frequency, l.duration_days),
         quantity: l.quantity_prescribed,
         unit: l.unit_of_measure,
       })),
@@ -951,7 +952,19 @@ export default function PrescriptionManagement() {
                         keyExtractor={(l) => l.id}
                         columns={[
                           { key: 'drug_name', header: 'Drug' },
-                          { key: 'dose_strength', header: 'Dose', render: (v, l) => <span className="text-muted-foreground">{v}{l.frequency ? ` · ${l.frequency}` : ''}</span> },
+                          {
+                            key: 'dose_strength', header: 'Dose',
+                            // Full instruction (dose × frequency × duration + notes), as the doctor wrote it.
+                            render: (v, l) => {
+                              const dosage = describeDosage(l.dose_amount, l.unit_of_measure, l.frequency, l.duration_days);
+                              return (
+                                <span className="text-muted-foreground">
+                                  {[v, dosage !== '—' ? dosage : null].filter(Boolean).join(' · ') || '—'}
+                                  {l.notes && <span className="block text-xs italic">{l.notes}</span>}
+                                </span>
+                              );
+                            },
+                          },
                           { key: 'quantity_prescribed', header: 'Qty', align: 'right' },
                           { key: 'status', header: 'Status', render: (v) => statusBadge(v) },
                         ]}
