@@ -24,7 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { PaymentReceipt, printThermalReceipt, printReceiptWhenPainted } from '@/components/receipts/PaymentReceipt';
 import { AdvancedDataTable } from '@/components/common/DataTable/AdvancedDataTable';
-import { doseUnitLabel, packEquivalent , drugBillLine } from '@/lib/prescriptionFrequency';
+import { doseUnitLabel, packEquivalent , drugBillLine, describeDosage } from '@/lib/prescriptionFrequency';
 import { formatDate } from '@/lib/format';
 
 const API = '/api/pharmacy-module';
@@ -1833,14 +1833,20 @@ export default function DispensingWorkflow() {
                                   },
                                   {
                                     key: 'drug_name', header: 'Medication',
-                                    render: (v, l) => (
-                                      <>
-                                        <p className="font-medium">{v}</p>
-                                        {(l.dose_strength || l.frequency) && (
-                                          <p className="text-xs text-muted-foreground mt-0.5">{[l.dose_strength, l.frequency].filter(Boolean).join(' · ')}</p>
-                                        )}
-                                      </>
-                                    ),
+                                    render: (v, l) => {
+                                      // The doctor's full instruction — dose, frequency, duration and
+                                      // notes — not just strength + frequency code, or the pharmacist
+                                      // can't tell "2 tabs BID for 5 days" from "1 tab BID".
+                                      const dosage = describeDosage(l.dose_amount, l.unit_of_measure, l.frequency, l.duration_days);
+                                      const instruction = [l.dose_strength, dosage !== '—' ? dosage : null].filter(Boolean).join(' · ');
+                                      return (
+                                        <>
+                                          <p className="font-medium">{v}</p>
+                                          {instruction && <p className="text-xs text-muted-foreground mt-0.5">{instruction}</p>}
+                                          {l.notes && <p className="text-xs text-muted-foreground mt-0.5 italic">{l.notes}</p>}
+                                        </>
+                                      );
+                                    },
                                   },
                                   { key: 'unit_of_measure', header: 'UOM', render: (v) => <span className="whitespace-nowrap text-muted-foreground">{v || 'unit'}</span> },
                                   {
