@@ -88,6 +88,19 @@ const COMMON_RESULT_PRESETS: Record<string, Record<string, string>> = {
   },
 };
 
+// Older copies of these panels carry a different test_code (demo's "Urine General" is
+// LB04) and a few misspelled component names, so the preset is also found by test name
+// and those components by their spelling in the standard panel.
+const PRESET_BY_TEST_NAME: Record<string, string> = {
+  'urine general': 'URINEGEN',
+  'stool general': 'STOOLGEN',
+};
+const PRESET_COMPONENT_ALIASES: Record<string, string> = {
+  Crysal: 'Crystal',
+  Othres: 'Others',
+  Bile: 'Bilirubin',
+};
+
 export default function LISResultsEntry() {
   const { user } = useAuth();
   const facilityInfo = useFacilityInfo();
@@ -412,7 +425,10 @@ export default function LISResultsEntry() {
     ? labTests.find(t => t.test_code === selectedSpecimen.test_code)
     : null;
 
-  const commonResultsPreset = selectedTestSchema ? COMMON_RESULT_PRESETS[selectedTestSchema.test_code] : null;
+  const commonResultsPreset = selectedTestSchema
+    ? COMMON_RESULT_PRESETS[selectedTestSchema.test_code]
+      ?? COMMON_RESULT_PRESETS[PRESET_BY_TEST_NAME[String(selectedTestSchema.test_name || '').trim().toLowerCase()]]
+    : null;
 
   // Fills every component that has a preset value defined — anything not covered (or
   // already typed in) is left alone, so this is safe to click even after starting to
@@ -421,7 +437,7 @@ export default function LISResultsEntry() {
     if (!commonResultsPreset || !selectedTestSchema?.components) return;
     const newValues = { ...resultValues };
     for (const comp of selectedTestSchema.components) {
-      const preset = commonResultsPreset[comp.name];
+      const preset = commonResultsPreset[comp.name] ?? commonResultsPreset[PRESET_COMPONENT_ALIASES[comp.name]];
       if (preset !== undefined) newValues[comp.id] = preset;
     }
     setResultValues(newValues);
