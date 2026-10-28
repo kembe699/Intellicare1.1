@@ -59,7 +59,8 @@ const GENDER_OPTIONS = [
 // rather than a fetched image, so there's no external asset/licensing
 // dependency and it matches the rest of the app's icon style.
 const GENERAL_EXAM_FIELDS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { key: 'abdomen', label: 'Abdomen', icon: Egg },
+  // Key stays 'abdomen' so findings saved under the old label still show.
+  { key: 'abdomen', label: 'Systematic Examination', icon: Egg },
   { key: 'cardiovascular_system', label: 'Cardiovascular System', icon: HeartPulse },
   { key: 'central_nervous_system', label: 'Central Nervous System', icon: Brain },
   { key: 'respiratory_system', label: 'Respiratory System', icon: Wind },
@@ -1230,8 +1231,8 @@ export default function LISTestOrders() {
       plainNote('Allergies', v.allergies),
       gynaeHTML,
       generalExamHTML,
-      plainNote('Clinical Notes', getPlainNotes(s.clinical_notes)),
       plainNote('Impressions', v.impressions),
+      plainNote('Clinical Notes', getPlainNotes(s.clinical_notes)),
       '<div class="ic-section-title">Tests Ordered</div>',
       testsHTML,
       resultSectionsHTML,
@@ -2385,17 +2386,6 @@ export default function LISTestOrders() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
-                    <Textarea
-                      placeholder="Enter your impression..."
-                      className="resize-none mt-1"
-                      rows={2}
-                      value={vitals.impressions}
-                      onChange={e => setVitals({ ...vitals, impressions: e.target.value })}
-                    />
-                  </div>
-
                   {selectedParticipant?.gender?.toLowerCase() === 'female' && (
                     <GynaeFields value={vitals.gynae} onChange={(gynae) => setVitals({ ...vitals, gynae })} />
                   )}
@@ -2421,6 +2411,17 @@ export default function LISTestOrders() {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
+                    <Textarea
+                      placeholder="Enter your impression..."
+                      className="resize-none mt-1"
+                      rows={2}
+                      value={vitals.impressions}
+                      onChange={e => setVitals({ ...vitals, impressions: e.target.value })}
+                    />
                   </div>
 
                   <div className="sticky bottom-0 -mx-4 -mb-4 px-4 pb-4 pt-4 flex justify-end border-t mt-4 bg-background">
@@ -3285,10 +3286,6 @@ export default function LISTestOrders() {
                               <Textarea placeholder="Enter allergy" className="resize-none mt-1" rows={2} value={clinicalNotesForm.allergies} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, allergies: e.target.value })} />
                             </div>
                           </div>
-                          <div>
-                            <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
-                            <Textarea placeholder="Enter your impression..." className="resize-none mt-1" rows={2} value={clinicalNotesForm.impressions} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, impressions: e.target.value })} />
-                          </div>
 
                           {selectedSummary.gender?.toLowerCase() === 'female' && (
                             <GynaeFields value={clinicalNotesForm.gynae} onChange={(gynae) => setClinicalNotesForm({ ...clinicalNotesForm, gynae })} />
@@ -3315,6 +3312,10 @@ export default function LISTestOrders() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
+                            <Textarea placeholder="Enter your impression..." className="resize-none mt-1" rows={2} value={clinicalNotesForm.impressions} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, impressions: e.target.value })} />
                           </div>
 
                           <div className="flex justify-end gap-2 pt-1">
@@ -3360,13 +3361,6 @@ export default function LISTestOrders() {
                         </div>
                       )}
 
-                      {!editingClinicalNotes && selectedSummary.vitals?.impressions && (
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Impressions</p>
-                          <p className="text-sm p-3 border rounded-lg bg-card">{selectedSummary.vitals.impressions}</p>
-                        </div>
-                      )}
-
                       {!editingClinicalNotes && <GynaeFieldsReadOnly value={selectedSummary.vitals?.gynae || {}} />}
 
                       {!editingClinicalNotes && (
@@ -3382,6 +3376,13 @@ export default function LISTestOrders() {
                               </div>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {!editingClinicalNotes && selectedSummary.vitals?.impressions && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Impressions</p>
+                          <p className="text-sm p-3 border rounded-lg bg-card">{selectedSummary.vitals.impressions}</p>
                         </div>
                       )}
 
