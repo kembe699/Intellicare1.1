@@ -462,7 +462,9 @@ const Services: React.FC = () => {
 
     if (saving) return;
 
-    if (!serviceName.trim() || !category || !price) {
+    // The category picker sets categoryId; `category` (the old free-text name)
+    // is only filled when editing a service saved before categories existed.
+    if (!serviceName.trim() || !(categoryId || category) || !price) {
       toast.error('Please fill in all required fields');
       return;
     }
