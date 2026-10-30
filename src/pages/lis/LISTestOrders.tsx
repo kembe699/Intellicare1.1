@@ -59,8 +59,10 @@ const GENDER_OPTIONS = [
 // rather than a fetched image, so there's no external asset/licensing
 // dependency and it matches the rest of the app's icon style.
 const GENERAL_EXAM_FIELDS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  // Key stays 'abdomen' so findings saved under the old label still show.
-  { key: 'abdomen', label: 'Systematic Examination', icon: Egg },
+  // 'abdomen' was briefly relabelled Systematic Examination (Oct 28-30); it's
+  // Abdomen again so the findings saved under it before that read correctly.
+  { key: 'abdomen', label: 'Abdomen', icon: Egg },
+  { key: 'systematic_examination', label: 'Systematic Examination', icon: ClipboardList },
   { key: 'cardiovascular_system', label: 'Cardiovascular System', icon: HeartPulse },
   { key: 'central_nervous_system', label: 'Central Nervous System', icon: Brain },
   { key: 'respiratory_system', label: 'Respiratory System', icon: Wind },
@@ -71,7 +73,7 @@ const EMPTY_GENERAL_EXAM: Record<string, string> = Object.fromEntries(GENERAL_EX
 
 const EMPTY_CLINICAL_NOTES_FORM = {
   history_of_presenting_illness: '', medical_history: '', surgical_history: '',
-  family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '',
+  family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '', general_examination_notes: '',
   gynae: EMPTY_GYNAE_INFO as GynaeInfo,
   general_examination: { ...EMPTY_GENERAL_EXAM },
 };
@@ -93,6 +95,7 @@ function buildClinicalNotesForm(existingVitals: any) {
     economic_history: v.economic_history || '',
     allergies: v.allergies || '',
     impressions: v.impressions || '',
+    general_examination_notes: v.general_examination_notes || '',
     gynae: { ...EMPTY_GYNAE_INFO, ...(v.gynae || {}) },
     general_examination: { ...EMPTY_GENERAL_EXAM, ...(v.general_examination || {}) },
   };
@@ -167,7 +170,7 @@ export default function LISTestOrders() {
     blood_pressure: '', temperature: '', pulse: '', weight: '',
     height: '', respiratory_rate: '', spo2: '', fasting_status: 'No', chief_complaints: [] as string[],
     history_of_presenting_illness: '', medical_history: '', surgical_history: '',
-    family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '',
+    family_history: '', social_history: '', economic_history: '', allergies: '', impressions: '', general_examination_notes: '',
     gynae: EMPTY_GYNAE_INFO as GynaeInfo,
     general_examination: { ...EMPTY_GENERAL_EXAM },
   };
@@ -1231,6 +1234,7 @@ export default function LISTestOrders() {
       plainNote('Allergies', v.allergies),
       gynaeHTML,
       generalExamHTML,
+      plainNote('General Examination', v.general_examination_notes),
       plainNote('Impressions', v.impressions),
       plainNote('Clinical Notes', getPlainNotes(s.clinical_notes)),
       '<div class="ic-section-title">Tests Ordered</div>',
@@ -2413,15 +2417,27 @@ export default function LISTestOrders() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
-                    <Textarea
-                      placeholder="Enter your impression..."
-                      className="resize-none mt-1"
-                      rows={2}
-                      value={vitals.impressions}
-                      onChange={e => setVitals({ ...vitals, impressions: e.target.value })}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">General Examination</label>
+                      <Textarea
+                        placeholder="Enter general examination findings..."
+                        className="resize-none mt-1"
+                        rows={2}
+                        value={vitals.general_examination_notes}
+                        onChange={e => setVitals({ ...vitals, general_examination_notes: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
+                      <Textarea
+                        placeholder="Enter your impression..."
+                        className="resize-none mt-1"
+                        rows={2}
+                        value={vitals.impressions}
+                        onChange={e => setVitals({ ...vitals, impressions: e.target.value })}
+                      />
+                    </div>
                   </div>
 
                   <div className="sticky bottom-0 -mx-4 -mb-4 px-4 pb-4 pt-4 flex justify-end border-t mt-4 bg-background">
@@ -3313,9 +3329,15 @@ export default function LISTestOrders() {
                               ))}
                             </div>
                           </div>
-                          <div>
-                            <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
-                            <Textarea placeholder="Enter your impression..." className="resize-none mt-1" rows={2} value={clinicalNotesForm.impressions} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, impressions: e.target.value })} />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">General Examination</label>
+                              <Textarea placeholder="Enter general examination findings..." className="resize-none mt-1" rows={2} value={clinicalNotesForm.general_examination_notes} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, general_examination_notes: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-muted-foreground">Impressions</label>
+                              <Textarea placeholder="Enter your impression..." className="resize-none mt-1" rows={2} value={clinicalNotesForm.impressions} onChange={e => setClinicalNotesForm({ ...clinicalNotesForm, impressions: e.target.value })} />
+                            </div>
                           </div>
 
                           <div className="flex justify-end gap-2 pt-1">
@@ -3379,10 +3401,17 @@ export default function LISTestOrders() {
                         </div>
                       )}
 
-                      {!editingClinicalNotes && selectedSummary.vitals?.impressions && (
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Impressions</p>
-                          <p className="text-sm p-3 border rounded-lg bg-card">{selectedSummary.vitals.impressions}</p>
+                      {!editingClinicalNotes && (selectedSummary.vitals?.general_examination_notes || selectedSummary.vitals?.impressions) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                          {[
+                            ['General Examination', selectedSummary.vitals?.general_examination_notes],
+                            ['Impressions', selectedSummary.vitals?.impressions],
+                          ].filter(([, value]) => value).map(([label, value]) => (
+                            <div key={label as string}>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">{label}</p>
+                              <p className="p-3 border rounded-lg bg-card">{value}</p>
+                            </div>
+                          ))}
                         </div>
                       )}
 
