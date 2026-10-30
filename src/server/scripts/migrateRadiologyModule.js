@@ -39,6 +39,15 @@ async function migrateRadiologyModule() {
     console.error('  ❌ Error creating radiology_requests:', err.message);
   }
 
+  // Which part/region the exam is for ("Abdomen, Pelvis"), chosen by the
+  // requesting doctor and shown to the radiologist.
+  try {
+    await sequelize.query(`ALTER TABLE radiology_requests ADD COLUMN IF NOT EXISTS body_part VARCHAR(255)`);
+    console.log('  ✅ radiology_requests.body_part ready');
+  } catch (err) {
+    console.error('  ❌ Error adding radiology_requests.body_part:', err.message);
+  }
+
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_radiology_requests_participant ON radiology_requests(participant_id)',
     'CREATE INDEX IF NOT EXISTS idx_radiology_requests_status ON radiology_requests(status)',

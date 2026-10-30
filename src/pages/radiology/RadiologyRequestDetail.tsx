@@ -17,6 +17,7 @@ interface RadiologyRequestItem {
   id: string;
   request_number: string;
   exam_name: string;
+  body_part: string | null;
   status: string;
   urgent: boolean;
   request_date: string;
@@ -56,6 +57,7 @@ function buildPrintHtml(request: RadiologyRequestItem, facilityInfo: ReturnType<
     { cells: ['Gender', request.gender || 'N/A'] },
     { cells: ['Date of Birth', request.date_of_birth ? formatDate(request.date_of_birth) : 'N/A'] },
     { cells: ['Exam', request.exam_name], bold: true },
+    ...(request.body_part ? [{ cells: ['Part / Region', request.body_part], bold: true }] : []),
     { cells: ['Requested By', request.doctor_name || '-'] },
     { cells: ['Request Date', new Date(request.request_date).toLocaleString()] },
     { cells: ['Reported By', request.reported_by_name || '-'] },
@@ -133,7 +135,10 @@ function RequestCard({ request, canWrite, onChanged }: { request: RadiologyReque
     <Card className="overflow-hidden">
       <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center gap-2">
         <Scan className="h-4 w-4 text-primary" />
-        <h4 className="font-semibold text-sm text-foreground">{request.exam_name}</h4>
+        <h4 className="font-semibold text-sm text-foreground">
+          {request.exam_name}
+          {request.body_part && <span className="font-normal text-muted-foreground"> — {request.body_part}</span>}
+        </h4>
         <span className="text-xs text-muted-foreground font-mono">{request.request_number}</span>
         {request.urgent && (
           <span className="flex items-center gap-1 text-xs font-medium text-destructive">
@@ -151,6 +156,12 @@ function RequestCard({ request, canWrite, onChanged }: { request: RadiologyReque
               <td className="py-2 pr-4 w-36 shrink-0 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Requested</td>
               <td className="py-2 font-medium text-foreground">{new Date(request.request_date).toLocaleString()}</td>
             </tr>
+            {request.body_part && (
+              <tr className="border-b border-border">
+                <td className="py-2 pr-4 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Part / Region</td>
+                <td className="py-2 font-semibold text-foreground break-words">{request.body_part}</td>
+              </tr>
+            )}
             {request.clinical_indication && (
               <tr className="border-b border-border">
                 <td className="py-2 pr-4 align-top text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">Clinical Indication</td>

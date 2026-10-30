@@ -3,6 +3,7 @@ import { offerCashBilling } from '@/lib/schemeCashFallback';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/common';
+import { RadiologyBodyPartPicker } from '@/components/radiology/RadiologyBodyPartPicker';
 import { TestTube2, CheckCircle2, FlaskConical, Search, Plus, Activity, ArrowRight, ArrowLeft, ArrowLeftRight, FileText, ClipboardList, Printer, ChevronsUpDown, Check, X, History, Calendar, Loader2, Download, Pill, BedDouble, Save, UserPlus, Send, Scan, Syringe, CalendarClock, Egg, HeartPulse, Brain, Wind, Bone, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -216,6 +217,8 @@ export default function LISTestOrders() {
   // is submitted.
   const [radiologyExamTypes, setRadiologyExamTypes] = useState<any[]>([]);
   const [selectedRadiologyIds, setSelectedRadiologyIds] = useState<string[]>([]);
+  // Part/region per selected exam ("Abdomen, Pelvis"), keyed by exam id.
+  const [radiologyBodyParts, setRadiologyBodyParts] = useState<Record<string, string>>({});
   const [radiologyPopoverOpen, setRadiologyPopoverOpen] = useState(false);
   const [searchRadiology, setSearchRadiology] = useState('');
   const [billedItemKeys, setBilledItemKeys] = useState<Set<string>>(new Set());
@@ -331,6 +334,7 @@ export default function LISTestOrders() {
   // level for the Place Order screen's own picker) — rather than a second,
   // separate radiology control.
   const [reqServiceMode, setReqServiceMode] = useState<'other' | 'radiology'>('other');
+  const [reqRadiologyBodyParts, setReqRadiologyBodyParts] = useState<Record<string, string>>({});
   const [requestingService, setRequestingService] = useState(false);
 
   useEffect(() => {
@@ -421,7 +425,7 @@ export default function LISTestOrders() {
     setSelectedSummary(summary);
     setRxLines([]);
     setRxDrugId(''); setRxQty('1'); setRxDose(''); setRxFrequency(''); setRxDuration('');
-    setReqServiceSelected([]); setReqServiceQuery('');
+    setReqServiceSelected([]); setReqServiceQuery(''); setReqRadiologyBodyParts({});
     setEditingClinicalNotes(false);
     setClinicalNotesForm(buildClinicalNotesForm(summary.vitals));
     fetchPharmacyDrugs();
@@ -778,6 +782,7 @@ export default function LISTestOrders() {
     setReqServiceSelected(prev =>
       prev.some(x => x.key === item.key) ? prev.filter(x => x.key !== item.key) : [...prev, item]
     );
+    if (isSelected) setReqRadiologyBodyParts(({ [item.key]: _, ...rest }) => rest);
   };
 
   // A confirmatory/follow-up test or service requested directly from an open Visit Summary —
@@ -807,7 +812,7 @@ export default function LISTestOrders() {
             participant_id: selectedSummary.participant_id,
             order_id: selectedSummary.order_id,
             doctor_id: selectedSummary.doctor_id || user?.id,
-            items: radiologyItems.map(i => ({ service_id: i.examId, exam_name: i.name })),
+            items: radiologyItems.map(i => ({ service_id: i.examId, exam_name: i.name, body_part: reqRadiologyBodyParts[i.key] || null })),
           }),
         });
         if (!res.ok) {
@@ -842,6 +847,7 @@ export default function LISTestOrders() {
 
       toast.success(`Requested ${reqServiceSelected.length} item${reqServiceSelected.length > 1 ? 's' : ''}`);
       setReqServiceSelected([]);
+      setReqRadiologyBodyParts({});
       setReqServiceQuery('');
       await refreshSelectedSummary();
     } finally {
@@ -1163,12 +1169,12 @@ export default function LISTestOrders() {
       '<div class="ic-section-title">Radiology</div>',
       docTemplate.buildTable(
         [{ label: 'Exam' }, { label: 'Status' }],
-        summaryRadiology.map((r: any) => ({ cells: [r.exam_name, r.status.replace(/_/g, ' ')] }))
+        summaryRadiology.map((r: any) => ({ cells: [r.body_part ? `${r.exam_name} (${r.body_part})` : r.exam_name, r.status.replace(/_/g, ' ')] }))
       ),
       ...summaryRadiology
         .filter((r: any) => r.status === 'completed')
         .map((r: any) => `
-          <div class="ic-section-title">Radiology Report: ${r.exam_name} <span>${r.request_number}</span></div>
+          <div class="ic-section-title">Radiology Report: ${r.exam_name}${r.body_part ? ` (${r.body_part})` : ''} <span>${r.request_number}</span></div>
           <div style="font-size:12px;line-height:1.6;margin-bottom:12px;">${r.report_html || ''}</div>
         `),
     ].join('\n') : '';
@@ -1775,6 +1781,7 @@ export default function LISTestOrders() {
   const toggleRadiology = (exam: any) => {
     const isSelected = selectedRadiologyIds.includes(exam.id);
     setSelectedRadiologyIds(prev => isSelected ? prev.filter(id => id !== exam.id) : [...prev, exam.id]);
+    if (isSelected) setRadiologyBodyParts(({ [exam.id]: _, ...rest }) => rest);
   };
 
   // Bills every selected test + service in ONE combined add-services (or
@@ -1911,7 +1918,7 @@ export default function LISTestOrders() {
           const radiologyItems = selectedRadiologyIds
             .map(id => radiologyExamTypes.find((e: any) => e.id === id))
             .filter(Boolean)
-            .map((exam: any) => ({ service_id: exam.id, exam_name: exam.name }));
+            .map((exam: any) => ({ service_id: exam.id, exam_name: exam.name, body_part: radiologyBodyParts[exam.id] || null }));
           try {
             const radRes = await authFetch('/api/radiology/requests', {
               method: 'POST',
@@ -1933,6 +1940,7 @@ export default function LISTestOrders() {
         setSelectedTests([]);
         setSelectedServiceIds([]);
         setSelectedRadiologyIds([]);
+        setRadiologyBodyParts({});
         setBilledItemKeys(new Set());
         setMiddleStep(1);
         setBillingMode('cash');
@@ -2657,17 +2665,24 @@ export default function LISTestOrders() {
                     </Popover>
 
                     {selectedRadiologyIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <div className="space-y-2 mt-2">
                         {selectedRadiologyIds.map(id => {
                           const exam = radiologyExamTypes.find((e: any) => e.id === id);
                           if (!exam) return null;
                           return (
-                            <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                              {exam.name}
-                              <button type="button" onClick={() => toggleRadiology(exam)} className="hover:bg-primary/20 rounded-full p-0.5">
-                                <X className="w-3 h-3" />
-                              </button>
-                            </span>
+                            <div key={id} className="rounded-md border p-2.5 space-y-2 bg-card">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-medium text-primary truncate">{exam.name}</span>
+                                <button type="button" onClick={() => toggleRadiology(exam)} className="hover:bg-muted rounded-full p-0.5 shrink-0" aria-label={`Remove ${exam.name}`}>
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <RadiologyBodyPartPicker
+                                examName={exam.name}
+                                value={radiologyBodyParts[id] || ''}
+                                onChange={part => setRadiologyBodyParts(prev => ({ ...prev, [id]: part }))}
+                              />
+                            </div>
                           );
                         })}
                       </div>
@@ -2764,7 +2779,10 @@ export default function LISTestOrders() {
                         if (!exam) return null;
                         return (
                           <div key={id} className="flex justify-between items-center gap-2 p-2 border rounded-md text-sm bg-card">
-                            <span className="truncate">{exam.name}</span>
+                            <span className="min-w-0">
+                              <span className="block truncate">{exam.name}</span>
+                              {radiologyBodyParts[id] && <span className="block text-xs text-muted-foreground truncate">{radiologyBodyParts[id]}</span>}
+                            </span>
                             <span className="text-xs text-muted-foreground shrink-0">Not billed</span>
                           </div>
                         );
@@ -3541,7 +3559,10 @@ export default function LISTestOrders() {
                             {summaryRadiology.map((r: any) => (
                               <div key={r.id} className="border rounded-lg overflow-hidden">
                                 <div className="flex justify-between items-center px-3 py-2 bg-muted/30 gap-2">
-                                  <span className="font-medium text-sm truncate">{r.exam_name}</span>
+                                  <span className="min-w-0">
+                                    <span className="block font-medium text-sm truncate">{r.exam_name}</span>
+                                    {r.body_part && <span className="block text-xs text-muted-foreground truncate">{r.body_part}</span>}
+                                  </span>
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className={cn(
                                       "text-xs font-bold px-2 py-0.5 rounded-full capitalize whitespace-nowrap",
@@ -3866,6 +3887,16 @@ export default function LISTestOrders() {
                               </Command>
                             </PopoverContent>
                           </Popover>
+                          {reqServiceSelected.filter(item => item.type === 'radiology').map(item => (
+                            <div key={`part-${item.key}`} className="rounded-md border p-2.5 space-y-2 bg-card">
+                              <p className="text-sm font-medium text-primary truncate">{item.name}</p>
+                              <RadiologyBodyPartPicker
+                                examName={item.name}
+                                value={reqRadiologyBodyParts[item.key] || ''}
+                                onChange={part => setReqRadiologyBodyParts(prev => ({ ...prev, [item.key]: part }))}
+                              />
+                            </div>
+                          ))}
                           {reqServiceSelected.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
                               {reqServiceSelected.map(item => (

@@ -71,17 +71,18 @@ router.post('/requests', authorize('lis.clinical.write'), async (req, res) => {
       const id = uuidv4();
       await sequelize.query(
         `INSERT INTO radiology_requests (id, clinic_id, branch_id, request_number, participant_id, order_id,
-          service_id, exam_name, doctor_id, requested_by_name, request_date, clinical_indication, urgent, status)
+          service_id, exam_name, body_part, doctor_id, requested_by_name, request_date, clinical_indication, urgent, status)
          VALUES (:id, :clinicId, :branchId, :requestNumber, :participantId, :orderId,
-          :serviceId, :examName, :doctorId, :requestedByName, :requestDate, :clinicalIndication, :urgent, 'pending')`,
+          :serviceId, :examName, :bodyPart, :doctorId, :requestedByName, :requestDate, :clinicalIndication, :urgent, 'pending')`,
         { replacements: {
           id, clinicId, branchId, requestNumber, participantId: participant_id, orderId: order_id || null,
-          serviceId: item.service_id || null, examName: item.exam_name, doctorId: doctor_id || null,
+          serviceId: item.service_id || null, examName: item.exam_name,
+          bodyPart: String(item.body_part || '').trim().slice(0, 255) || null, doctorId: doctor_id || null,
           requestedByName, requestDate: now, clinicalIndication: item.clinical_indication || null,
           urgent: !!item.urgent,
         } }
       );
-      created.push({ id, request_number: requestNumber, exam_name: item.exam_name });
+      created.push({ id, request_number: requestNumber, exam_name: item.exam_name, body_part: item.body_part || null });
     }
 
     if (created.length === 0) return res.status(400).json({ error: 'No valid exam items to request' });
@@ -98,7 +99,7 @@ router.get('/requests', authorize('radiology.read'), async (req, res) => {
     const replacements = {};
     const branchSQL = branchScope(req, replacements, 'rr');
     let sql = `
-      SELECT rr.id, rr.request_number, rr.exam_name, rr.status, rr.urgent, rr.request_date,
+      SELECT rr.id, rr.request_number, rr.exam_name, rr.body_part, rr.status, rr.urgent, rr.request_date,
         rr.clinical_indication, rr.doctor_id, rr.requested_by_name, rr.report_html,
         rr.confirmed_by_name, rr.confirmed_at, rr.reported_by_name, rr.reported_at,
         p.participant_number, p.first_name, p.last_name,
